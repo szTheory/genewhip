@@ -40,10 +40,10 @@ def main():
                                       'z80_include': 'tests/devices/roms/z80/driver.inc'}}]}
         (root / 'fixtures/manifest.json').write_text(json.dumps(doc))
         script = root / 'scripts/fixtures/build-original-roms.sh'
-        subprocess.run(['bash', str(script), '--update', 'nested'], check=True, capture_output=True)
+        subprocess.run(['bash', str(script), '--update', 'nested'], check=True)
         data = (root / 'tests/devices/roms/nested.bin').read_bytes()
         assert data[0x200:0x206] == bytes.fromhex('00 3e 42 c3 34 12'), 'nested Z80 bytes mismatch'
-        subprocess.run(['bash', str(script), '--verify-reproducible', 'nested'], check=True, capture_output=True)
+        subprocess.run(['bash', str(script), '--verify-reproducible', 'nested'], check=True)
         include = root / 'tests/devices/roms/z80/driver.inc'
         include.write_text(include.read_text() + '\n.byte 0\n')
         altered = include.read_bytes()

@@ -23,7 +23,7 @@ LOCK="$ROOT/tools/evidence/fm_compare/refs.lock.json"
 REFS="$ROOT/build/audio-refs"
 TMP="$REFS/.fetch-$$"
 BIN="$REFS/bin"
-mkdir -p "$TMP/nuked" "$TMP/ymfm" "$BIN"
+mkdir -p "$TMP/nuked" "$TMP/ymfm" "$REFS/nuked" "$REFS/ymfm-81aec25" "$BIN"
 trap 'rm -rf "$TMP"' EXIT
 
 check_file() {
