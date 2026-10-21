@@ -208,6 +208,27 @@ def _gh(args: list[str], timeout: int = 60) -> str:
     return result.stdout
 
 
+def _gh_api_json(endpoint: str, timeout: int = 60) -> Any:
+    """Preserve read-only API status classes needed for effective-policy checks."""
+    try:
+        result = subprocess.run(["gh", "api", endpoint], cwd=ROOT, text=True,
+                                capture_output=True, timeout=timeout, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        raise repository_preflight.ServiceError("transport_error") from None
+    if result.returncode:
+        match = re.search(r"\(HTTP ([0-9]{3})\)", result.stderr)
+        status = int(match.group(1)) if match else None
+        if status == 404:
+            raise repository_preflight.ServiceError("not_found", status)
+        if status in (401, 403):
+            raise repository_preflight.ServiceError("permission_denied", status)
+        raise repository_preflight.ServiceError("transport_error")
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError:
+        raise repository_preflight.ServiceError("transport_error") from None
+
+
 def _gh_json(args: list[str], timeout: int = 60) -> Any:
     try:
         return json.loads(_gh(args, timeout))
@@ -238,10 +259,7 @@ def _check_preflight(path: pathlib.Path, repository: str) -> dict[str, Any]:
 
 def _inspect_live_repository(repository: str, expected_head: str, expected_base: str) -> dict[str, Any]:
     def get_json(path: str) -> Any:
-        try:
-            return _gh_json(["api", path])
-        except DeliveryError:
-            raise repository_preflight.ServiceError("transport_error") from None
+        return _gh_api_json(path)
     observed = repository_preflight.inspect_repository(
         repository, repository_preflight.GitHubClient(get_json), expected_head, expected_base)
     if observed.get("blockers"):

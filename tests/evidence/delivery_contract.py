@@ -6,6 +6,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -13,6 +14,13 @@ from scripts.release import qualify_delivery as delivery
 
 
 class DeliveryContract(unittest.TestCase):
+    def test_github_api_404_is_distinguished_from_transport_failure(self):
+        result = delivery.subprocess.CompletedProcess([], 1, "", "gh: Branch not protected (HTTP 404)\n")
+        with unittest.mock.patch.object(delivery.subprocess, "run", return_value=result):
+            with self.assertRaises(delivery.repository_preflight.ServiceError) as caught:
+                delivery._gh_api_json("repos/szTheory/genewhip/branches/main/protection")
+        self.assertEqual(caught.exception.status, 404)
+
     def test_preflight_requires_selected_public_destination_and_clean_copy(self):
         packet = {
             "schema": "genewhip.publication-readiness-packet.v1",
@@ -55,6 +63,16 @@ class DeliveryContract(unittest.TestCase):
         run["jobs"] = run["jobs"][:-1]
         self.assertEqual(delivery.validate_main_run(run, "d" * 40),
                          ["main-run-qualification-job-missing"])
+
+    def test_hosted_checkout_preserves_history_for_provenance_scan(self):
+        for workflow in (ROOT / ".github/workflows/ci.yml",
+                         ROOT / ".github/workflows/release.yml"):
+            text = workflow.read_text()
+            blocks = text.split("uses: actions/checkout@")
+            self.assertGreater(len(blocks), 1)
+            for block in blocks[1:]:
+                checkout = block.split("\n      - ", 1)[0].split("\n      uses:", 1)[0]
+                self.assertIn("fetch-depth: 0", checkout, workflow.name)
 
     def test_hosted_runs_are_bound_to_the_authored_workflow_path(self):
         run = {"path": ".github/workflows/ci.yml", "head_sha": "a" * 40,

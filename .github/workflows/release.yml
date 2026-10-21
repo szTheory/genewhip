@@ -34,6 +34,7 @@ jobs:
         with:
           ref: main
           persist-credentials: false
+          fetch-depth: 0
       - name: Assert publisher code came from the protected default branch
         run: |
           test "$GITHUB_REF" = refs/heads/main
