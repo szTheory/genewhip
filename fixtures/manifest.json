@@ -551,7 +551,7 @@
       "status": "admitted",
       "outcome": "pass",
       "project": "Genewhip",
-      "revision": "802eebb590cd553e7fb83679a9bf22d985f9f076",
+      "revision": "7a2f3df7460a7a4c9ea1f11a52ab11747026bd2d",
       "source": "fixtures/independent-game-v2/src/game.s",
       "source_sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe",
       "license": "MIT",
@@ -567,7 +567,7 @@
       },
       "sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb",
       "rom": "fixtures/independent-game-v2/game.bin",
-      "evidence_sha256": "50365004d85f95cf15e2dc10bb7887d2f77231c23996b3c996986687e0c08d95",
+      "evidence_sha256": "1dbd848110894016c1a557f397db7a27e60cced2f34d3598b2250369eae763f7",
       "oracle": "genewhip-independent-game-v2-source-oracle-v1",
       "profile": "VA3-NTSC-U",
       "input": "genewhip-independent-game-v2"
