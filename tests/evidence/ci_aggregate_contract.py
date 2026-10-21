@@ -158,7 +158,7 @@ class AggregateContract(unittest.TestCase):
                             f"action-not-immutable:{action}")
         self.assertRegex(text, r"(?m)^permissions:\n  contents: read\s*$",
                          "workflow-token-not-minimal")
-        self.assertIn("macos-15", text, "current-arm64-macos-runner-not-selected")
+        self.assertIn("macos-26", text, "locked-arm64-macos-runner-not-selected")
 
     def test_attestation_permissions_are_isolated_to_trusted_main_job(self):
         text = WORKFLOW.read_text()
