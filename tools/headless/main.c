@@ -20,6 +20,7 @@ static int usage(void)
     fputs("usage: gw_headless ROM --fields N [--replay LOG] [--record LOG] [--port-device P1 P2]\n"
           "                 [--dump-fields DIR] [--peek ADDRESS LENGTH]\n"
           "                 [--audio-rate N] [--dump-audio FILE] [--dump-audio-trace FILE]\n"
+          "                 [--dump-instruction-trace FILE]\n"
           "  devices: pad3 | none\n", stderr);
     return 2;
 }
@@ -74,6 +75,46 @@ static int dump_audio_trace(const gw_machine *machine, const char *path)
     return fclose(out) != 0;
 }
 
+static int dump_instruction_trace(const gw_machine *machine, const char *path)
+{
+    gw_diagnostic_event events[GW_DIAGNOSTIC_CAPACITY];
+    size_t count = 0;
+    uint64_t dropped = 0;
+    FILE *out = fopen(path, "wb");
+    if (!out) return 1;
+    if (gw_get_diagnostic_events(machine, events, GW_DIAGNOSTIC_CAPACITY, &count, &dropped) != GW_OK) {
+        fclose(out);
+        return 1;
+    }
+    for (size_t i = 0; i < count; ++i) {
+        const gw_diagnostic_event *r = &events[i];
+        if (fprintf(out, "{\"tick\":%llu,\"pc\":%u,\"opcode\":%u,\"stop_reason\":%u,\"fault_address\":%u}\n",
+            (unsigned long long)r->tick, (unsigned)r->instruction_address,
+            (unsigned)r->opcode, (unsigned)r->stop_reason, (unsigned)r->fault_address) < 0) {
+            fclose(out);
+            return 1;
+        }
+    }
+    gw_diagnostic_record state;
+    memset(&state, 0, sizeof(state));
+    state.struct_size = sizeof(state);
+    state.version = GW_API_VERSION;
+    if (gw_get_diagnostics(machine, &state) != GW_OK) { fclose(out); return 1; }
+    if (fprintf(out, "{\"count\":%zu,\"dropped\":%llu,\"state\":{\"tick\":%llu,\"pc\":%u,\"sr\":%u,\"d\":[",
+        count, (unsigned long long)dropped, (unsigned long long)state.tick,
+        (unsigned)state.pc, (unsigned)state.sr) < 0) { fclose(out); return 1; }
+    for (size_t i = 0; i < 8; ++i)
+        if (fprintf(out, "%s%u", i ? "," : "", (unsigned)state.d[i]) < 0) { fclose(out); return 1; }
+    if (fputs("],\"a\":[", out) == EOF) { fclose(out); return 1; }
+    for (size_t i = 0; i < 8; ++i)
+        if (fprintf(out, "%s%u", i ? "," : "", (unsigned)state.a[i]) < 0) { fclose(out); return 1; }
+    if (fprintf(out, "],\"stop_reason\":%u}}\n", (unsigned)state.stop_reason) < 0) {
+        fclose(out);
+        return 1;
+    }
+    return fclose(out) != 0;
+}
+
 /* Writes field-<sequence>.bin (height rows of width*4 bytes, pitch removed, each pixel
  * 0x00RRGGBB as four little-endian bytes) and field-<sequence>.json into an existing
  * directory. File names come from the integer sequence only. Returns 0 on success. */
@@ -125,7 +166,7 @@ int main(int argc, char **argv)
     gw_session session;
     gw_input_log log;
     const char *rom_path = NULL, *replay_path = NULL, *record_path = NULL, *reason = NULL, *dump_dir = NULL;
-    const char *dump_audio_path = NULL, *dump_trace_path = NULL;
+    const char *dump_audio_path = NULL, *dump_trace_path = NULL, *dump_instruction_path = NULL;
     FILE *audio_out = NULL;
     unsigned long long fields = 0, peek_address = 0, peek_length = 0;
     int have_peek = 0;
@@ -162,6 +203,9 @@ int main(int argc, char **argv)
             dump_audio_path = argv[++i];
         } else if (!strcmp(argv[i], "--dump-audio-trace") && i + 1 < argc) {
             dump_trace_path = argv[++i];
+        } else if (!strcmp(argv[i], "--dump-instruction-trace") && i + 1 < argc) {
+            dump_instruction_path = argv[++i];
+            config.diagnostics = 1;
         } else if (!strcmp(argv[i], "--port-device") && i + 2 < argc) {
             if (!parse_device(argv[i + 1], &config.port_device[0]) ||
                 !parse_device(argv[i + 2], &config.port_device[1])) return usage();
@@ -234,6 +278,10 @@ int main(int argc, char **argv)
     if (audio_out && fclose(audio_out) != 0) exit_code = 1;
     if (dump_trace_path && dump_audio_trace(session.machine, dump_trace_path) != 0) {
         fputs("ERROR: could not write audio trace\n", stderr);
+        exit_code = 1;
+    }
+    if (dump_instruction_path && dump_instruction_trace(session.machine, dump_instruction_path) != 0) {
+        fputs("ERROR: could not write instruction trace\n", stderr);
         exit_code = 1;
     }
     if (record_path) {

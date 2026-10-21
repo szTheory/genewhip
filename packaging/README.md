@@ -1,62 +1,35 @@
-# Local SDK/diagnostic preview
+# SDL-free API 4 SDK archive
 
-This is a native-host SDK/diagnostic preview, version 0.1.0 and C API 4. It
-contains the tested diagnostic core and deterministic PSG/FM/DAC paths from
-original Genewhip fixtures. FM is an attributed BSD-3-Clause ymfm port; its
-comparison deviations and model limits are recorded in the Phase 3 evidence
-and reset amendment. Exact VA3 FM reset wiring remains unknown. No game audio
-compatibility or performance claim is made. Pong remains rejected and no
-independently authored playable game is admitted. The package is unsigned and
-unnotarized; checksum identity is not authentication.
+The local SDK package is built from a committed source snapshot and qualified against its exact archive bytes. Read its adjacent `.qualification.json` receipt for the filename, source revision, checksum, inventory identity, and measured consumer results. Old snapshots may remain for historical evidence; only the current receipt-backed identity should be recommended for adoption.
 
-The package carries the MIT notice, upstream SingleStepTests notice and
-`THIRD-PARTY-ymfm.txt`. It contains no upstream vectors, decoder, LGPL reference
-implementation or playable ROM. Only the original manifest-admitted diagnostic
-bytes are bundled.
+It includes the original diagnostic and API 4 core, not the playable game ROM. API 4 is the public source/structure version; 0.1.0 is the package version. Recompile consumers when the pre-1.0 API changes. Input-log format version 1 is independent of both. The package is native macOS arm64, unsigned and unnotarized. It was exercised on macOS 26.6.2; no older deployment target or other OS/architecture is claimed. Checksum identity does not authenticate a publisher.
 
-From a clean checkout with CMake 3.27+, a C17/C++11 compiler, Python 3.8+ and Git:
+Download the complete 0.1.0 release inventory, then select the SDK archive by its inventory entry. The same commands are exercised against the published bytes during release verification:
 
 ```sh
-bash scripts/ci/required-gate.sh
+gh release download v0.1.0 --repo szTheory/genewhip --dir "$ARTIFACT_DIR"
+SDK_ARCHIVE="$(python3 -c 'import json,os; d=json.load(open(os.path.join(os.environ["ARTIFACT_DIR"],"inventory.json"))); print(next(n for n in d["assets"] if "sdk-diagnostic" in n and n.endswith(".tar.gz")))')"
+```
+
+The local commands below verify and extract the exact downloaded archive.
+
+<a id="sdk-local-verify-extract"></a>
+
+```sh
+cd "$ARTIFACT_DIR"
+shasum -a 256 -c "$SDK_ARCHIVE.sha256"
+mkdir -p "$EXTRACT_DIR"
+tar -xzf "$ARTIFACT_DIR/$SDK_ARCHIVE" -C "$EXTRACT_DIR"
+```
+
+The archive itself contains the checked `metadata.json` and complete `checksums.json`. The offline CMake consumer uses `Genewhip::core` and the public C++ header; the smoke relocates the install prefix, runs the diagnostic, and rejects API incompatibility. For a fresh local archive from the checkout, run:
+
+<a id="sdk-package-smoke"></a>
+
+```sh
 cmake -DPROJECT_SOURCE_DIR="$PWD" -P tests/package/package_smoke.cmake
 ```
 
-The package script builds in a fresh temporary directory, rejects dirty inputs
-and revision changes during the build, validates clean diagnostic evidence,
-then checks and exercises the exact archive in another temporary directory.
-Only a passing archive and its SHA-256 sidecar are copied to `artifacts/`.
-Archive names include version, OS, architecture and source revision.
-`metadata.json` records the exact revision, build configuration identity,
-toolchain and native OS. `checksums.json` inventories every payload file;
-tar/gzip ownership and timestamps are normalized. Repeatability is scoped to
-the same source and toolchain; this does not claim cross-toolchain or cross-host
-byte reproducibility.
+That build writes a new exact package under `artifacts/`; it requires a clean source identity, CMake 3.27+, C17/C++11 compilers, Python 3.8+, and Git. It does not claim two-clean-build byte reproducibility. The checked-in example and API contract are in [`tests/consumer`](../tests/consumer) and [`docs/core.md`](../docs/core.md).
 
-After checking the sidecar with `shasum -a 256 -c ARCHIVE.tar.gz.sha256`,
-extract the archive and run `bin/gw_diagnostic_runner
-share/genewhip/diagnostic.bin`. `bin/gw_validate_evidence
-share/genewhip/diagnostic-evidence.json` checks the included six-case
-diagnostic evidence. The SDK can be moved; set `CMAKE_PREFIX_PATH` to the
-extracted root and link `Genewhip::core` using
-`find_package(Genewhip 0.1.0 EXACT CONFIG REQUIRED)`.
-`share/genewhip/consumer` is a runnable external C/C++ example. Test hooks are
-off.
-
-See `core.md` for CPU, bus, time and profile limits. Execution on other OS
-versions or architectures remains unqualified until separately recorded;
-runner image selection in CI is configuration, not proof of execution.
-
-The local required gate covers native, ASan/UBSan, hooks-off and relocated
-consumer tests plus public-source hygiene and four seeded failures. Apple ASan
-does not provide LeakSanitizer; Darwin runs explicitly disable leak detection.
-The scanner detects common credential/path patterns and rejects ROM/save file
-extensions, not every possible secret encoding or renamed private asset.
-Preserve upstream notices exactly. Do not include local logs, caches, private
-ROMs or save files.
-
-`bash scripts/ci/extended-gate.sh` separately fetches hash-pinned NOP/MOVEQ
-vectors and runs a fixed 4,096-case sanitizer fuzz budget. Reports preserve all
-5,000 selected-family records (including unsupported states) and disclose 125
-unrun families with unknown record counts. Fuzz passes mean bounded
-deterministic API behavior, not hardware accuracy. Required PR tests need no
-network downloads.
+The original project MIT notice and upstream ymfm/SingleStepTests notices are retained in the package. Do not strip or replace those notices. No upstream vector corpus, decoder, LGPL implementation, private ROM/save data, or local logs are included.

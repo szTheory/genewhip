@@ -1,0 +1,42 @@
+{
+  "schema": "genewhip-phase4-host-controls",
+  "version": 1,
+  "sessions": {
+    "independent-game-v2": {
+      "fixture_id": "genewhip-independent-game-v2",
+      "rom": "fixtures/independent-game-v2/game.bin",
+      "scenario": "fixtures/independent-game-v2/scenario.json",
+      "scenario_case": "sustained-play",
+      "emulated_fields": 720,
+      "controls": [
+        {"id": "pause", "frame": 500, "command": "pause"},
+        {"id": "resume", "frame": 510, "command": "resume"},
+        {"id": "mute", "frame": 520, "command": "mute"},
+        {"id": "unmute", "frame": 530, "command": "unmute"},
+        {"id": "reset", "frame": 600, "command": "reset"},
+        {"id": "reject-cartridge", "frame": 650, "command": "drop", "target": "missing"},
+        {"id": "exit", "frame": 730, "command": "quit"},
+        {"id": "replace", "frame": 20, "command": "drop", "target": "other-fixture"},
+        {"id": "drop", "frame": 50, "command": "drop", "target": "primary-fixture"}
+      ]
+    },
+    "sounded-diagnostic": {
+      "fixture_id": "genewhip-raster-toy-v1",
+      "rom": "fixtures/raster-toy/toy.bin",
+      "scenario": "fixtures/raster-toy/scenario.json",
+      "scenario_case": null,
+      "emulated_fields": 120,
+      "controls": [
+        {"id": "pause", "frame": 80, "command": "pause"},
+        {"id": "resume", "frame": 90, "command": "resume"},
+        {"id": "mute", "frame": 95, "command": "mute"},
+        {"id": "unmute", "frame": 105, "command": "unmute"},
+        {"id": "reset", "frame": 110, "command": "reset"},
+        {"id": "reject-cartridge", "frame": 115, "command": "drop", "target": "missing"},
+        {"id": "exit", "frame": 130, "command": "quit"},
+        {"id": "replace", "frame": 20, "command": "drop", "target": "other-fixture"},
+        {"id": "drop", "frame": 50, "command": "drop", "target": "primary-fixture"}
+      ]
+    }
+  }
+}

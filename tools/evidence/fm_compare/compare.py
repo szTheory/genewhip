@@ -50,6 +50,23 @@ def run(args, **kwargs):
     return subprocess.run(args, check=True, text=True, **kwargs)
 
 
+def child_environment(build_tools=False):
+    """Small environment for adapters and the pinned reference build.
+
+    Adapters get path/locale/temp/platform essentials. The build additionally
+    gets explicit compiler and Apple SDK selectors; credentials and arbitrary
+    caller variables are never forwarded.
+    """
+    allowed = ("PATH", "TMPDIR", "TMP", "TEMP", "SYSTEMROOT", "WINDIR")
+    env = {name: os.environ[name] for name in allowed if name in os.environ}
+    env["LC_ALL"] = "C"
+    if build_tools:
+        for name in ("CC", "CXX", "SDKROOT", "DEVELOPER_DIR", "MACOSX_DEPLOYMENT_TARGET"):
+            if name in os.environ:
+                env[name] = os.environ[name]
+    return env
+
+
 def capture(seam_runner, directory):
     outputs = {}
     for name, (ticks, expected_count) in SCRIPTS.items():
@@ -74,7 +91,8 @@ def capture(seam_runner, directory):
 
 def run_adapter(exe, trace, directory, port_runner=None):
     binary = pathlib.Path(port_runner) if exe == "port_replay" else BIN / exe
-    proc = run([str(binary), str(trace)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc = run([str(binary), str(trace)], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+               env=child_environment())
     samples = []
     for line_no, line in enumerate(proc.stdout.splitlines(), 1):
         fields = line.split()
@@ -308,7 +326,7 @@ def main():
     args = parser.parse_args()
     try:
         if args.fetch or args.build:
-            run(["bash", str(HERE / "build_refs.sh")])
+            run(["bash", str(HERE / "build_refs.sh")], env=child_environment(build_tools=True))
         if args.check_tolerance_precedes_ledger:
             check_tolerance_precedes_ledger(); return 0
         if not any((args.fidelity, args.model, args.calibrate, args.negative_control, args.repeat)):

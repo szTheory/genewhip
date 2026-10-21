@@ -1,4 +1,4 @@
-name: Diagnostic SDK checks
+name: Required preview checks
 on:
   pull_request:
   push:
@@ -10,37 +10,219 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: diagnostic-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  group: preview-ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  required-gate:
+  safety:
     if: github.event_name != 'schedule'
-    runs-on: macos-14
-    timeout-minutes: 15
+    runs-on: macos-15
+    timeout-minutes: 45
+    outputs:
+      source_sha: ${{ github.sha }}
+      head_sha: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+      base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || github.sha }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+      - name: Verify event integration checkout
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - run: bash scripts/ci/required-gate.sh
       - run: cmake -DPROJECT_SOURCE_DIR="$PWD" -P tests/package/package_smoke.cmake
+  gameplay:
+    if: github.event_name != 'schedule'
+    runs-on: macos-15
+    timeout-minutes: 30
+    outputs:
+      source_sha: ${{ github.sha }}
+      head_sha: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+      base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || github.sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify event integration checkout
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Build current public clients
+        run: |
+          cmake -S . -B build/gameplay -DCMAKE_BUILD_TYPE=Release -DGENEWHIP_BUILD_DESKTOP=ON
+          cmake --build build/gameplay --parallel 2
+      - name: Exercise frozen gameplay cases and both public clients
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: disk
+          SDL_AUDIO_DISK_OUTPUT_FILE: build/gameplay/phase4-game-disk.raw
+        run: >-
+          python3 tests/fixtures/phase4_game.py
+          build/gameplay/tools/session/gw_headless
+          build/gameplay/tools/desktop/genewhip-desktop
+          --report build/gameplay/evidence/phase4-gameplay.json
+      - name: Check report and named gameplay mutations
+        run: python3 tests/evidence/phase4_report_contract.py
   desktop:
-    # Separate, non-required lane: opts into SDL3 (fetched at configure time, pinned by URL_HASH).
-    # scripts/ci/required-gate.sh stays SDL-free and offline.
-    runs-on: macos-14
-    timeout-minutes: 20
+    if: github.event_name != 'schedule'
+    runs-on: macos-15
+    timeout-minutes: 60
+    outputs:
+      source_sha: ${{ github.sha }}
+      head_sha: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+      base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || github.sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify event integration checkout
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Build SDL desktop tests
+        run: |
+          cmake -S . -B build/desktop -DCMAKE_BUILD_TYPE=Release -DGENEWHIP_BUILD_DESKTOP=ON
+          cmake --build build/desktop --parallel 2
+      - name: Exercise software video, input, audio, pacing and presentation contracts
+        run: >-
+          ctest --test-dir build/desktop --output-on-failure --no-tests=error
+          -E '^(phase4_host_live|runner_live_display|runner_live_audio)$'
+      - name: Require native Cocoa and CoreAudio qualification
+        env:
+          GENEWHIP_LIVE_DISPLAY: '1'
+          GENEWHIP_LIVE_AUDIO: '1'
+        run: >-
+          python3 tests/desktop/phase4_sessions.py live
+          --headless build/desktop/tools/session/gw_headless
+          --desktop build/desktop/tools/desktop/genewhip-desktop
+          --build build/desktop
+          --out build/desktop/evidence/phase4-host-live.json
+  package:
+    if: github.event_name != 'schedule'
+    runs-on: macos-15
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    outputs:
+      source_sha: ${{ github.sha }}
+      head_sha: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+      base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || github.sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify event integration checkout
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - run: python3 scripts/package_sdk.py
+      - run: python3 scripts/package_desktop.py
+      - run: python3 tests/package/docs_commands.py --local-artifacts artifacts
+      - name: Assemble exact qualified package inventory
+        run: >-
+          python3 scripts/release/promote.py prepare
+          --input-dir artifacts --output-dir build/release-assets --source-sha "$GITHUB_SHA"
+      - name: Bind package inputs to this workflow run
+        run: python3 scripts/ci/verify_attestation_inputs.py write-identity --directory build/ci-identity
+      - name: Export immutable run and attempt scoped package inputs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-input-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/release-assets/*.tar.gz
+            build/release-assets/*.tar.gz.sha256
+            build/release-assets/*.tar.gz.qualification.json
+            build/release-assets/inventory.json
+            build/release-assets/SHA256SUMS
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Export run identity separately from release files
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-identity-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/ci-identity/_ci-identity.json
+          if-no-files-found: error
+          retention-days: 30
+  attestation:
+    name: attestation
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [package]
+    runs-on: macos-15
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      attestations: write
+      id-token: write
+    outputs:
+      source_sha: ${{ github.sha }}
+      head_sha: ${{ github.sha }}
+      base_sha: ${{ github.event.before || github.sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Download immutable package data from this run attempt
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-input-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/release-assets
+      - name: Download matching run identity from this attempt
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-identity-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/ci-identity
+      - name: Verify run identity, source and exact inventory before attesting
+        run: >-
+          python3 scripts/ci/verify_attestation_inputs.py verify
+          --directory build/release-assets --identity-directory build/ci-identity
+      - name: Attest exact package archives and inventory
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: 'build/release-assets/*.tar.gz,build/release-assets/inventory.json'
+  performance:
+    if: github.event_name != 'schedule'
+    runs-on: macos-15
+    timeout-minutes: 30
+    outputs:
+      source_sha: ${{ github.sha }}
+      head_sha: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+      base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || github.sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify event integration checkout
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Build optimized benchmark with private accounting hooks
+        run: |
+          cmake -S . -B build/performance -DCMAKE_BUILD_TYPE=Release -DGENEWHIP_TEST_HOOKS=ON
+          cmake --build build/performance --target gw_core_benchmark --parallel 2
+      - name: Require measurement and output contract; keep timings informational
+        run: python3 tests/evidence/benchmark_contract.py --build build/performance
+      - name: Save bounded timing sample without a release threshold
+        run: >-
+          python3 tools/evidence/core_benchmark.py --build build/performance
+          --out build/performance/ci-quick-report.json --quick
+  required-aggregate:
+    name: required-ci
+    if: always() && github.event_name != 'schedule'
+    needs: [safety, gameplay, desktop, package, performance, attestation]
+    runs-on: macos-15
+    timeout-minutes: 5
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-      - run: cmake -S . -B build/desktop -DCMAKE_BUILD_TYPE=Release -DGENEWHIP_BUILD_DESKTOP=ON
-      - run: cmake --build build/desktop
-      - run: SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy GENEWHIP_LIVE_DISPLAY=1 ctest --test-dir build/desktop -R runner_ --output-on-failure
+      - name: Verify aggregate source checkout
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Reject incomplete or stale required lanes
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+          EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || github.sha }}
+        run: python3 scripts/ci/aggregate.py
   extended:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: macos-14
-    timeout-minutes: 20
+    runs-on: macos-15
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:

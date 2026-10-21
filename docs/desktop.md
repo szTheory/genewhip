@@ -1,10 +1,13 @@
 # Desktop runner
 
 `genewhip-desktop` is an opt-in SDL3 runner. The core never depends on it: a default configure, build
-and install stays offline and SDL-free. The exercised audio-capable diagnostic desktop preview is
-unsigned and unnotarized and was run on macOS arm64 only; other hosts remain unqualified. It plays
-PSG/FM/DAC sound from the original Genewhip raster toy. No game audio compatibility or performance
-claim is made.
+and install stays offline and SDL-free. The current local playable preview is unsigned and
+unnotarized and was exercised on macOS 26.6.2 arm64; no other OS/architecture or older deployment
+target is qualified. It bundles the corrected independent-game-v2 and the original PSG/FM/DAC
+raster diagnostic. The game result is bounded to six source-derived cases/840 fields plus a
+720-field scenario; it does not establish broad game or game-audio compatibility. Physical scanout,
+actual vsync, acoustic quality, and latency remain unknown. Package identities and checksums are in
+[`packaging/desktop/README.md`](../packaging/desktop/README.md).
 
 ## Build
 
@@ -28,7 +31,7 @@ The pin and its identity evidence are recorded in `packaging/dependencies/sdl3.j
 
 ```text
 genewhip-desktop [--fields N] [--scale N] [--host-script FILE] [--record LOG | --replay LOG]
-                 [--print-field-hashes] [--stats FILE] [--stats-interval N]
+                 [--dump-audio FILE] [--print-field-hashes] [--stats FILE] [--stats-interval N]
                  [--port1 SRC] [--port2 SRC] ROM
 ```
 
@@ -41,6 +44,10 @@ display.
 The runner opens a separate 48 kHz, stereo, signed 16-bit SDL audio stream when available. After
 each successful field step it pulls that field's PCM from `gw_session` and queues it, including each
 catch-up field. Audio queue depth never gates stepping and never enters core state or field hashes.
+`--dump-audio FILE` writes those unmodified core samples as interleaved little-endian signed 16-bit
+stereo frames before runner drift correction, in bounded synchronous chunks. A failed open, write or
+close reports `ERROR: could not write audio dump` or `ERROR: could not finish audio dump` and exits
+nonzero. The capture is diagnostic output; it does not change playback or machine state.
 On exit the runner prints `fields=N paused_fields=M resets=K` followed by audio counters. A pacing
 frame is one field period: `fields` counts stepped fields, `paused_fields` counts frames spent paused.
 
@@ -52,20 +59,68 @@ the oldest frames are drained and counted as overruns and dropped frames. The co
 integer C in `tools/session/rate_ctl.c`; only the runner converts its ppm output to SDL's float
 ratio. This controls drift without host time entering the core.
 
-The exit line includes `audio`, `queued_frames`, `queued_frames_min`, `queued_frames_max`, `ratio`,
-`ratio_min`, `ratio_max`, `underruns`, `overruns`, `dropped_frames`, `produced_frames`,
-`consumed_frames`, `core_frames`, `core_lost` and `core_clipped`. Host timing counters vary with the
-driver and are checked through `produced_frames = consumed_frames + queued_frames + dropped_frames`
-and the ratio bound, not compared between runs. Core counters and field hashes are replay-stable.
+The exit line includes legacy `queued_frames`, `underruns`, `overruns`, `dropped_frames`,
+`produced_frames`, `consumed_frames`, `core_frames`, `core_lost` and `core_clipped`, plus the
+versioned source-queue and loss counters described below. Host timing counters vary with the driver
+and are checked through
+`produced_frames = consumed_frames + queued_frames + dropped_frames` and the ratio bound, not
+compared between runs. Core counters and field hashes are replay-stable. Queue accounting uses
+SDL's queued input bytes, which are the exact data put into the stream in its input format; they are
+not device-converted output bytes. In this runner the stream input is stereo signed 16-bit PCM, so
+one source frame is four bytes. Each observation reconciles the expected source-frame depth with the
+observed depth; after enqueue, the expectation includes the newly submitted source frames so
+backend drain during that interval is counted. The desktop contract injects a drain between those
+observations by calling `runner_audio_put_field` with a fake SDL stream, and a negative control
+using the former post-enqueue snapshot behavior fails the counter assertion. See SDL's
+[`SDL_GetAudioStreamQueued`](https://wiki.libsdl.org/SDL3/SDL_GetAudioStreamQueued) documentation.
+Overrun removal and stream clearing serialize their queue observation and removal with
+[`SDL_LockAudioStream`](https://wiki.libsdl.org/SDL3/SDL_LockAudioStream), so frames intentionally
+discarded by those operations remain distinct from frames drained by the playback backend.
 If SDL audio initialization or stream startup fails, the runner prints exactly one
 `audio: disabled (<sanitized reason>)` stderr line, reports `audio=off` and continues video-only;
 the core remains configured at 48 kHz, so machine results remain the same.
 
-`--stats FILE` writes one JSON object at exit with exactly the audio-counter keys on the exit line.
-`--stats-interval N` writes the same `key=value` fields to stderr every N pacing frames; stdout
-remains available for hashes and the exit summary. Reports contain counters only, never file paths
-or environment values. The title appends `A:{depth}ms`, where depth is the current queued audio
-converted at 48 kHz.
+Audio statistics identify `queue_source_unit` as SDL input bytes and stereo source frames. The
+current/min/max depth is reported as both `queue_source_bytes` and `queue_source_frames`; six bounded
+histogram buckets cover zero, one, up to one target, up to two targets, up to the four-target cap,
+and over-cap depth. `queue_samples` is the number of producer or serialized queue observations, and
+`queue_exposure_ns` is the monotonic interval from the first to last observation. This describes
+software queue depth over exposure, not device consumption, acoustic output, or latency.
+
+`underruns` remains compatible and equals `producer_starvation_observations`: the producer observed
+zero queued source frames after priming while neither paused nor intentionally priming. It is not a
+physical playback-gap count. `core_lost_frames` and `core_clipped_frames` are the core-reported
+cumulative totals. `host_cap_overruns` and `host_cap_dropped_frames` count oldest source frames
+removed above the queue cap. `intentional_clear_frames` partitions into `pause_clear_frames` and
+`reprime_clear_frames`; stream shutdown/failure discards are separately recorded as
+`stream_failure_dropped_frames`. These drop categories sum to `dropped_frames`, the conservation
+term. `pause_ramp_frames`, `reprime_silence_frames`, `audio_paused`, `audio_muted` and
+`mute_transitions` expose host control behavior; silence and ramp frames are submitted source frames,
+not core-produced audio. If audio is unavailable, `audio_available` is zero and `queue_samples` is
+zero. A required audio qualification must reject that row; video-only fallback is not an audio pass.
+
+`--stats FILE` writes one JSON object at exit. Schema version 2 adds host-only scheduler and
+presentation observations to the audio counters. `scheduled_deadlines` and `lateness_samples` count
+each due scheduler slot; lateness is `max(observed_monotonic_ns - scheduled_deadline_ns, 0)`, with
+total, maximum and eight bounded buckets (exactly zero, then upper bounds of 100/250/500 us and 1/2/4
+ms, then greater than 4 ms). `clock_exposure_ns` is monotonic wall-clock time from runner start to
+stats capture. Counters saturate at `UINT64_MAX`; `stats_saturated` makes that visible.
+
+`emulated_fields` counts successful core field steps. `catchup_fields` counts steps after the first
+due slot in a scheduler pump. `discarded_wall_ns` is wall-clock debt discarded after the four-field
+catch-up cap; it does not represent skipped machine time or monitor frames. `present_calls` counts
+attempts for a non-empty core field, `present_successes` counts successful SDL texture/render/present
+calls, and `present_errors` counts failed attempts. `last_presented_field_id` is the latest successful
+core field sequence. `superseded_fields` counts an unpresented identity displaced by a newer core
+field; `repeated_field_ids` counts consecutive attempts with the same identity. Pixel equality is
+not used. `last_present_error` retains the most recent SDL failure detail and `presentation_error`
+signals whether such a detail is present. These are software observations, not scanout or physical
+display evidence.
+
+`--stats-interval N` writes the same numeric `key=value` fields to stderr every N pacing frames;
+stdout remains available for hashes and the exit summary. Reports contain counters and sanitized
+SDL error text, never file paths or environment values. The title appends `A:{depth}ms`, where depth
+is the current queued audio converted at 48 kHz.
 
 ## Controls
 
@@ -196,15 +251,15 @@ Skipped, not Passed. The job is not part of
 `scripts/ci/required-gate.sh`, which stays SDL-free and offline. The repository has no remote yet, so
 this job has never run on hosted CI; it is written and structure-checked locally only.
 
-## Audio-capable desktop archive
+## Historical Phase 3 audio desktop archive
 
 `bash scripts/package-desktop.sh` (from a clean checkout; the script rejects dirty sources) builds
 `artifacts/genewhip-0.1.0-desktop-audio-preview-darwin-arm64-<rev12>.tar.gz` and a `.sha256` sidecar.
-The exact archive contains `bin/genewhip-desktop`, `bin/gw_headless`, the original raster toy and a
-recorded A/B/C input log, the Phase 3 evidence report, and MIT, SDL3 zlib, ymfm BSD-3-Clause and
-fixture notices. It is unsigned and unnotarized, and is not a game-compatible or published release.
-No signed, notarized, multi-architecture or released claim is made. See
-`packaging/desktop/README.md` for archive verification and run instructions.
+That historical archive contains `bin/genewhip-desktop`, `bin/gw_headless`, the original raster toy
+and a recorded A/B/C input log, the Phase 3 evidence report, and MIT, SDL3 zlib, ymfm BSD-3-Clause
+and fixture notices. It did not contain the independent game. It was unsigned and unnotarized and
+was not a published release. The current archive identity and use instructions are in
+[`packaging/desktop/README.md`](../packaging/desktop/README.md).
 
 The script builds in fresh temporary directories, then runs `tests/package/desktop_smoke.py` on the
 exact archive bytes before copying anything to `artifacts/`. The smoke checks the archive SHA-256,
@@ -222,10 +277,10 @@ differences. These are model comparisons and do not establish hardware truth. Re
 follows the approved model amendment; exact VA3 reset wiring remains unknown. See `docs/audio.md`
 and `03-FM-RESET-AMENDMENT.md` for the bounded evidence and assumptions.
 
-Two observations remain human-only for phase closeout: (1) subjective quality of the toy's PSG, FM
-and DAC sound, and (2) any audible pop/click during at least 60 seconds of A/B/C activity including
-mute, pause/resume and reset. These require a listener and physical audio output; counters already
-establish underrun accounting. Automation does not prove game audio compatibility.
+Subjective listening of the toy's PSG/FM/DAC sound and audible pop/click quality remain optional
+unknown observations under the settled Phase 3 UAT disposition. They are not mandatory phase or
+release acceptance checks. Counters and captured PCM establish bounded automated behavior, not
+listener preference or physical output quality.
 
 ## Limitations
 
@@ -233,6 +288,6 @@ establish underrun accounting. Automation does not prove game audio compatibilit
   Both pads are three-button pads; keyboard, gamepad and drag-and-drop
   paths are covered by script tests. The display path is also checked on a real Cocoa window
   (`runner_live_display`, local macOS arm64), but no physical keyboard or gamepad is exercised.
-- The real-URL download was exercised on one macOS arm64 machine. Signature, digest and notice
-  re-verification passed locally; the hosted CI desktop job has not run.
+- The pinned SDL3 source archive was downloaded and its digest/notices verified during the local
+  build. No Genewhip release URL exists; the hosted CI desktop job has not run.
 - A rejected file never opens a window, so the error appears only on stderr.

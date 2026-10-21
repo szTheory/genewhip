@@ -64,6 +64,24 @@ else()
 endif()
 add_dependencies(audio_chunk_equivalence gw_psg_sweep_rom)
 
+# Required public gameplay roster and call-chunking equivalence (GW-04-05).
+add_executable(game_chunking ${PROJECT_SOURCE_DIR}/tests/fixtures/game_chunking.c)
+target_include_directories(game_chunking PRIVATE ${PROJECT_SOURCE_DIR}/tests/api ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(game_chunking PRIVATE Genewhip::core)
+set_target_properties(game_chunking PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
+if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(game_chunking PRIVATE -Wall -Wextra -Wpedantic -Wshadow)
+endif()
+add_test(NAME phase4_game_chunking COMMAND game_chunking
+  ${PROJECT_SOURCE_DIR}/fixtures/independent-game-v2/game.bin)
+set_tests_properties(phase4_game_chunking PROPERTIES TIMEOUT 600)
+
+add_test(NAME phase4_game COMMAND ${Python3_EXECUTABLE} -I
+  ${PROJECT_SOURCE_DIR}/tests/fixtures/phase4_game.py $<TARGET_FILE:gw_headless>)
+add_test(NAME phase4_game_negative_control COMMAND ${Python3_EXECUTABLE} -I
+  ${PROJECT_SOURCE_DIR}/tests/fixtures/phase4_game.py $<TARGET_FILE:gw_headless> --negative-control)
+set_tests_properties(phase4_game phase4_game_negative_control PROPERTIES TIMEOUT 900)
+
 add_executable(z80_arbitration_contract z80_arbitration_contract.c)
 target_include_directories(z80_arbitration_contract PRIVATE ${PROJECT_SOURCE_DIR}/tests/api ${PROJECT_SOURCE_DIR}/src)
 target_link_libraries(z80_arbitration_contract PRIVATE Genewhip::core)
@@ -305,6 +323,9 @@ if(GENEWHIP_BUILD_TOOLS AND GENEWHIP_TEST_HOOKS)
   add_test(NAME phase3_report_contract COMMAND ${Python3_EXECUTABLE} -I
     ${PROJECT_SOURCE_DIR}/tests/evidence/phase3_report_contract.py ${PROJECT_SOURCE_DIR} ${PROJECT_BINARY_DIR})
   set_tests_properties(phase3_report_contract PROPERTIES TIMEOUT 600)
+add_test(NAME phase4_report_contract COMMAND ${Python3_EXECUTABLE} -I
+  ${PROJECT_SOURCE_DIR}/tests/evidence/phase4_report_contract.py)
+set_tests_properties(phase4_report_contract PROPERTIES TIMEOUT 30)
 endif()
 
 add_test(NAME independent_game_audio_smoke COMMAND ${Python3_EXECUTABLE} -I

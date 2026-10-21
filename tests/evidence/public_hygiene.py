@@ -6,6 +6,8 @@ import json
 import shutil
 import sys
 import tempfile
+from unittest.mock import patch
+from types import SimpleNamespace
 
 
 sys.dont_write_bytecode = True
@@ -21,7 +23,18 @@ with tempfile.TemporaryDirectory(prefix="gw-public-hygiene-") as temporary:
     shutil.copytree(ROOT / "tests/vectors", root / "tests/vectors")
     shutil.copytree(ROOT / "fixtures/independent-game", root / "fixtures/independent-game")
     shutil.copy(ROOT / "fixtures/manifest.json", root / "fixtures/manifest.json")
-    (root / "evidence").mkdir()
+    shutil.copytree(ROOT / "fixtures/independent-game-v2", root / "fixtures/independent-game-v2")
+    (root / "tools").mkdir()
+    shutil.copytree(ROOT / "tools/evidence", root / "tools/evidence")
+    for relative in (
+        "tests/fixtures/game_successor_reference.py",
+        "tests/evidence/game_successor_admission.py",
+        "evidence/independent-game-v2.json",
+    ):
+        target = root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(ROOT / relative, target)
+    (root / "evidence").mkdir(exist_ok=True)
     shutil.copy(ROOT / "evidence/independent-game.json", root / "evidence/independent-game.json")
 
     candidate = "fixtures/independent-game/game.bin"
@@ -29,6 +42,60 @@ with tempfile.TemporaryDirectory(prefix="gw-public-hygiene-") as temporary:
         "the exact admitted versioned ROM with current rights/evidence identity must be public"
     )
     print("PASS: admitted versioned ROM with current evidence identity is public")
+
+    successor = "fixtures/independent-game-v2/game.bin"
+    manifest_path = root / "fixtures/manifest.json"
+    manifest_bytes = manifest_path.read_bytes()
+    manifest = json.loads(manifest_bytes)
+    successor_row = next(row for row in manifest["fixtures"]
+                         if row.get("id") == "genewhip-independent-game-v2")
+
+    def fake_git_revision(command, **_kwargs):
+        if len(command) > 3 and command[0] == "git" and command[1] == "-C" and Path(command[2]).resolve() == root.resolve() and "log" in command:
+            return SimpleNamespace(stdout=successor_row["revision"] + "\n")
+        raise AssertionError(f"unexpected process in offline public-fixture validation: {command!r}")
+
+    with patch("subprocess.run", side_effect=fake_git_revision):
+        assert hygiene.inspect(root, [successor]) == [], (
+            "the exact admitted v2 successor with its complete production evidence must be public"
+        )
+        print("PASS: admitted v2 ROM with current rights/build/reference identities is public")
+
+        # Each control passes through inspect(), which is also used by the actual
+        # public-hygiene command. No path-prefix exception or fixture allowlist is used.
+        rom_path = root / successor
+        original_rom = rom_path.read_bytes()
+        rom_path.write_bytes(original_rom[:-1] + bytes([original_rom[-1] ^ 1]))
+        assert hygiene.inspect(root, [successor]) == [(successor, "unverified-public-binary")], (
+            "tampered successor bytes must lose the public-binary exception"
+        )
+        rom_path.write_bytes(original_rom)
+        print("PASS: tampered v2 ROM bytes are rejected")
+
+        successor_row["outcome"] = "unknown"
+        manifest_path.write_text(json.dumps(manifest))
+        assert hygiene.inspect(root, [successor]) == [(successor, "unverified-public-binary")], (
+            "a non-pass v2 admission must not receive the public-binary exception"
+        )
+        manifest_path.write_bytes(manifest_bytes)
+        print("PASS: non-pass v2 admission is rejected")
+
+        manifest = json.loads(manifest_bytes)
+        successor_row = next(row for row in manifest["fixtures"]
+                             if row.get("id") == "genewhip-independent-game-v2")
+        evidence_path = root / "evidence/independent-game-v2.json"
+        evidence_bytes = evidence_path.read_bytes()
+        evidence = json.loads(evidence_bytes)
+        evidence["outcome_counts"]["unknown"] = 1
+        evidence_path.write_text(json.dumps(evidence))
+        successor_row["evidence_sha256"] = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+        manifest_path.write_text(json.dumps(manifest))
+        assert hygiene.inspect(root, [successor]) == [(successor, "unverified-public-binary")], (
+            "refreshing the evidence digest must not hide an unknown v2 reference outcome"
+        )
+        evidence_path.write_bytes(evidence_bytes)
+        manifest_path.write_bytes(manifest_bytes)
+        print("PASS: digest-current evidence with an unknown result is rejected")
 
     untrusted = "fixtures/independent-game/unreviewed.bin"
     (root / untrusted).write_bytes(bytes(32))
@@ -84,4 +151,4 @@ with tempfile.TemporaryDirectory(prefix="gw-public-hygiene-") as temporary:
     )
     print("PASS: personal-path privacy control remains active")
 
-print("public hygiene regressions: 6/6 passed")
+print("public hygiene regressions: 10/10 passed")

@@ -10,8 +10,14 @@
  */
 #include <genewhip/genewhip.h>
 #include <stdint.h>
+#include <inttypes.h>
+#include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#ifdef GW_TEST_HOOKS
+extern uint64_t gw_test_allocation_count(const gw_machine *machine);
+#endif
 static uint32_t state=0x47573105u;
 static uint32_t next(void) { state^=state<<13; state^=state>>17; state^=state<<5; return state; }
 static int load_mode(void)
@@ -324,8 +330,9 @@ static int audio_calls_mode(void)
     unsigned pass=0,fail=0,unknown=0,skipped=0;
     state=0x41554443u;
     for(unsigned i=0;i<ITERATIONS;++i) {
-        uint32_t rate=(i%8u==0u)?0u:(i%8u==1u)?GW_AUDIO_MIN_RATE_HZ-1u:
-            (i%8u==2u)?GW_AUDIO_MAX_RATE_HZ+1u:(i%8u==3u)?UINT32_MAX:
+        uint32_t rate=(i%10u==0u)?0u:(i%10u==1u)?GW_AUDIO_MIN_RATE_HZ-1u:
+            (i%10u==2u)?GW_AUDIO_MIN_RATE_HZ:(i%10u==3u)?GW_AUDIO_MAX_RATE_HZ:
+            (i%10u==4u)?GW_AUDIO_MAX_RATE_HZ+1u:(i%10u==5u)?UINT32_MAX:
             GW_AUDIO_MIN_RATE_HZ+next()%(GW_AUDIO_MAX_RATE_HZ-GW_AUDIO_MIN_RATE_HZ+1u);
         gw_config c={sizeof(c),GW_API_VERSION,GW_PROFILE_VA3_NTSC_U,GW_RESET_DETERMINISTIC_ZERO,0,{0,0},rate};
         gw_machine *m=NULL; unsigned char rom[1024]; int ok=1;
@@ -391,13 +398,129 @@ static int audio_calls_mode(void)
     return fail?1:0;
 }
 
+typedef struct safety_options {
+    uint32_t seed, cases, output_cap;
+    uint64_t step_budget, tick_budget;
+} safety_options;
+
+static int parse_u64(const char *text, uint64_t *value)
+{
+    char *end = NULL;
+    unsigned long long parsed;
+    if (!text || !*text || *text == '-') return 0;
+    errno = 0;
+    parsed = strtoull(text, &end, 0);
+    if (errno || !end || *end) return 0;
+    *value = (uint64_t)parsed;
+    return 1;
+}
+
+static int safety_mode(int argc, char **argv)
+{
+    safety_options options = { UINT32_C(0x47573105), 16u, 128u, 8u, 180000u };
+    unsigned pass = 0, fail = 0, guards = 0, returned = 0, steps = 0;
+    uint64_t max_tick = 0, alloc_peak = 0, steady_allocations = 0;
+    int instrumented = 0;
+    for (int i = 2; i < argc; ++i) {
+        uint64_t value;
+        if (i + 1 >= argc || !parse_u64(argv[++i], &value)) return 2;
+        if (!strcmp(argv[i - 1], "--seed") && value <= UINT32_MAX) options.seed = (uint32_t)value;
+        else if (!strcmp(argv[i - 1], "--cases") && value > 0 && value <= 4096) options.cases = (uint32_t)value;
+        else if (!strcmp(argv[i - 1], "--step-budget") && value > 0 && value <= 64) options.step_budget = value;
+        else if (!strcmp(argv[i - 1], "--tick-budget") && value > 0 && value <= GW_MAX_TARGET_TICK) options.tick_budget = value;
+        else if (!strcmp(argv[i - 1], "--output-cap") && value > 0 && value <= 256) options.output_cap = (uint32_t)value;
+        else return 2;
+    }
+    state = options.seed ? options.seed : UINT32_C(0x9e3779b9);
+    for (uint32_t i = 0; i < options.cases; ++i) {
+        uint8_t rom[1024], control_ram[GW_RAM_SIZE], candidate_ram[GW_RAM_SIZE];
+        int16_t guarded[2u * 256u + 2u];
+        gw_config config = { sizeof(config), GW_API_VERSION, GW_PROFILE_VA3_NTSC_U,
+            GW_RESET_DETERMINISTIC_ZERO, 0, { GW_DEVICE_PAD3, GW_DEVICE_PAD3 }, GW_AUDIO_MIN_RATE_HZ };
+        gw_machine *candidate = NULL, *control = NULL;
+        int ok = 1;
+        uint64_t alloc_before = 0, alloc_after = 0;
+        memset(rom, 0, sizeof(rom));
+        { const uint8_t vectors[] = { 0,0xff,0xff,0,0,0,2,0 };
+          memcpy(rom, vectors, sizeof(vectors)); rom[512] = 0x60; rom[513] = 0xfe; }
+        if (gw_create(&config, &candidate) != GW_OK || gw_create(&config, &control) != GW_OK ||
+            gw_load_rom(candidate, rom, sizeof(rom)) != GW_OK || gw_load_rom(control, rom, sizeof(rom)) != GW_OK) {
+            gw_destroy(candidate); gw_destroy(control); ++fail; continue;
+        }
+#ifdef GW_TEST_HOOKS
+        instrumented = 1;
+        alloc_before = gw_test_allocation_count(candidate);
+        if (alloc_before > 2u) ok = 0;
+#endif
+        for (uint64_t step = 0; step < options.step_budget && ok; ++step) {
+            const size_t bad_sizes[] = { 0u, 1u, GW_MIN_ROM_SIZE - 1u, GW_MAX_ROM_SIZE + 1u, SIZE_MAX };
+            const size_t bad_size = bad_sizes[next() % (sizeof(bad_sizes) / sizeof(bad_sizes[0]))];
+            if (gw_load_rom(candidate, rom, bad_size) != GW_ERROR_ROM) ok = 0;
+            ++steps;
+            /* A rejected load promises no mutation; compare future public observations. */
+            {
+                gw_run_result a = {0}, b = {0};
+                const uint64_t usable_ticks = options.tick_budget > 1024u ? options.tick_budget - 1024u : options.tick_budget;
+                const uint64_t target = (step + 1u) * (usable_ticks / options.step_budget);
+                a.struct_size = b.struct_size = sizeof(a); a.version = b.version = GW_API_VERSION;
+                a.flags = b.flags = GW_RUN_CONTINUE_PAST_FIELD;
+                if (gw_run_until(candidate, target, &a) != GW_OK || gw_run_until(control, target, &b) != GW_OK ||
+                    a.actual_tick != b.actual_tick || a.stop_reason != b.stop_reason ||
+                    a.instruction_address != b.instruction_address || a.opcode != b.opcode) ok = 0;
+                if (a.actual_tick > max_tick) max_tick = a.actual_tick;
+            }
+        }
+        if (gw_peek_memory(candidate, 0xff0000u, candidate_ram, sizeof(candidate_ram)) != GW_OK ||
+            gw_peek_memory(control, 0xff0000u, control_ram, sizeof(control_ram)) != GW_OK ||
+            memcmp(candidate_ram, control_ram, sizeof(candidate_ram)) != 0) ok = 0;
+        memset(guarded, 0x5a, sizeof(guarded));
+        {
+            int16_t control_samples[2u * 256u];
+            gw_audio_read_result result = {0}, control_result = {0};
+            result.struct_size = control_result.struct_size = sizeof(result);
+            result.version = control_result.version = GW_API_VERSION;
+            memset(control_samples, 0x5a, sizeof(control_samples));
+            if (gw_audio_read(candidate, &guarded[1], options.output_cap, &result) != GW_OK ||
+                gw_audio_read(control, control_samples, options.output_cap, &control_result) != GW_OK ||
+                result.produced > options.output_cap || result.produced > GW_AUDIO_QUEUE_FRAMES ||
+                result.produced != control_result.produced || result.first_index != control_result.first_index ||
+                result.lost != control_result.lost ||
+                memcmp(&guarded[1], control_samples, (size_t)result.produced * 2u * sizeof(int16_t)) != 0) ok = 0;
+            ++guards;
+            if (guarded[0] != (int16_t)0x5a5a || guarded[2u * 256u + 1u] != (int16_t)0x5a5a) ok = 0;
+            returned += result.produced;
+        }
+#ifdef GW_TEST_HOOKS
+        alloc_after = gw_test_allocation_count(candidate);
+        if (alloc_after > 2u) ok = 0;
+        if (alloc_after != alloc_before) ++steady_allocations;
+        if (alloc_after > alloc_peak) alloc_peak = alloc_after;
+#else
+        (void)alloc_before; (void)alloc_after;
+#endif
+        gw_destroy(candidate); gw_destroy(control);
+        if (ok) ++pass; else { ++fail; fprintf(stderr, "safety: case %" PRIu32 " failed\n", i); }
+    }
+    printf("{\"mode\":\"safety\",\"seed\":\"%08" PRIx32 "\",\"denominator\":%" PRIu32
+           ",\"pass\":%u,\"fail\":%u,\"unknown\":0,\"skipped\":0,\"step_budget\":%" PRIu64
+           ",\"steps\":%u,\"tick_budget\":%" PRIu64 ",\"max_tick\":%" PRIu64
+           ",\"output_cap\":%" PRIu32 ",\"returned_frames\":%u,\"guards_checked\":%u,"
+           "\"continuation_match\":%s,\"allocation_instrumented\":%s,\"allocation_count_peak\":%" PRIu64
+           ",\"steady_allocations\":%" PRIu64 "}\n",
+           options.seed, options.cases, pass, fail, options.step_budget, steps, options.tick_budget,
+           max_tick, options.output_cap, returned, guards, fail ? "false" : "true",
+           instrumented ? "true" : "false", alloc_peak, steady_allocations);
+    return fail ? 1 : 0;
+}
+
 int main(int argc, char **argv)
 {
     if (argc==1) return load_mode();
+    if (argc>=2 && strcmp(argv[1],"safety")==0) return safety_mode(argc,argv);
     if (argc==2 && strcmp(argv[1],"vdp-stream")==0) return vdp_stream_mode();
     if (argc==2 && strcmp(argv[1],"sprite-table")==0) return sprite_table_mode();
     if (argc==2 && strcmp(argv[1],"z80-stream")==0) return z80_stream_mode();
     if (argc==2 && strcmp(argv[1],"audio-calls")==0) return audio_calls_mode();
-    fputs("usage: gw_bounded_fuzz [vdp-stream|sprite-table|z80-stream|audio-calls]\n",stderr);
+    fputs("usage: gw_bounded_fuzz [safety --seed N --cases N --step-budget N --tick-budget N --output-cap N|vdp-stream|sprite-table|z80-stream|audio-calls]\n",stderr);
     return 2;
 }

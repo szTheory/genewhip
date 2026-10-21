@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -14,6 +15,7 @@ import urllib.request
 
 DIAGNOSTIC_ID = "genewhip-diagnostic-v1"
 GAME_ID = "genewhip-independent-game-v1"
+SUCCESSOR_GAME_ID = "genewhip-independent-game-v2"
 ORIGINAL_ROM_KIND = "original-rom"
 ORIGINAL_ROM_BUILD_SCRIPT = "scripts/fixtures/build-original-roms.sh"
 ORIGINAL_ROM_TOOLCHAIN = "fixtures/independent-game/toolchain.lock"
@@ -462,6 +464,104 @@ def _validate_game(row: dict, root: Path, evidence: dict | None = None) -> str:
     return "ok"
 
 
+def _successor_reference_module(root: Path):
+    script = root / "tests/fixtures/game_successor_reference.py"
+    spec = importlib.util.spec_from_file_location("gw_game_successor_reference", script)
+    if spec is None or spec.loader is None:
+        raise ImportError("successor reference validator unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _validate_successor(row: dict, root: Path, evidence: dict | None = None) -> str:
+    """Validate the separately versioned successor without changing v1 alias rules."""
+    required = {"id", "status", "outcome", "project", "revision", "source", "source_sha256",
+                "license", "notices", "assets", "build", "sha256", "rom", "oracle", "profile",
+                "input", "evidence_sha256"}
+    if not required <= row.keys() or row.get("id") != SUCCESSOR_GAME_ID:
+        return "successor-fields"
+    if row.get("status") not in ("candidate", "admitted"):
+        return "successor-status"
+    if row.get("status") == "candidate" and row.get("outcome") != "unknown":
+        return "successor-outcome"
+    if row.get("status") == "admitted" and row.get("outcome") != "pass":
+        return "successor-admission"
+    if row.get("project") != "Genewhip" or row.get("license") != "MIT" or row.get("assets") != []:
+        return "successor-rights"
+    paths = {"source":"fixtures/independent-game-v2/src/game.s",
+             "rom":"fixtures/independent-game-v2/game.bin"}
+    for field, expected in paths.items():
+        if row.get(field) != expected or not public_path(row.get(field)):
+            return "successor-path"
+    if not isinstance(row.get("notices"), list) or "fixtures/independent-game-v2/NOTICES.md" not in row["notices"]:
+        return "successor-notice"
+    try:
+        for rel in row["notices"]:
+            if not public_path(rel) or not (root / rel).is_file():
+                return "successor-notice"
+        source, rom, notice = root / paths["source"], root / paths["rom"], root / "fixtures/independent-game-v2/NOTICES.md"
+        scenario_path, oracle_path = root / "fixtures/independent-game-v2/scenario.json", root / "fixtures/independent-game-v2/oracle.json"
+        if digest(source) != row.get("source_sha256"):
+            return "successor-source"
+        revision = subprocess.run(["git", "-C", str(root), "log", "--follow", "--format=%H", "-1", "--", paths["source"]],
+                                  check=True, capture_output=True, text=True, timeout=10).stdout.strip()
+        if not re.fullmatch(r"[0-9a-f]{40}", revision) or revision != row.get("revision"):
+            return "successor-revision"
+        if not re.fullmatch(r"[0-9a-f]{64}", str(row.get("sha256", ""))) or digest(rom) != row["sha256"]:
+            return "successor-rom"
+        scenario, oracle = _json(scenario_path), _json(oracle_path)
+        if not scenario or not oracle or scenario.get("rom", {}).get("sha256") != row["sha256"]:
+            return "successor-scenario"
+        if scenario.get("source", {}).get("sha256") != row["source_sha256"] or oracle.get("source_sha256") != row["source_sha256"]:
+            return "successor-source"
+        if row.get("profile") != scenario.get("profile") or row.get("input") != scenario.get("fixture_id") or row.get("oracle") != oracle.get("oracle_id"):
+            return "successor-scenario"
+        build = row.get("build")
+        if (not isinstance(build, dict) or build.get("source") != "fixtures/independent-game-v2/build.sh"
+                or build.get("sha256") != digest(root / build["source"])
+                or build.get("toolchain") != "GNU Binutils 2.47 source-built m68k-elf-as"
+                or build.get("command") != "fixtures/independent-game-v2/build.sh --verify-reproducible"):
+            return "successor-build"
+        if row.get("evidence_sha256") != digest(root / "evidence/independent-game-v2.json"):
+            return "successor-evidence-digest"
+        current_evidence = evidence if evidence is not None else _json(root / "evidence/independent-game-v2.json")
+        if not isinstance(current_evidence, dict):
+            return "successor-evidence"
+        reference = _successor_reference_module(root)
+        evidence_status = reference.validate_evidence(current_evidence, require_admitted=row.get("status") == "admitted")
+        if evidence_status != "ok":
+            return "successor-reference:" + evidence_status
+        identities = current_evidence.get("identities", {})
+        joins = {"source_revision":revision,"source_sha256":row["source_sha256"],"build_sha256":build["sha256"],
+                 "notices_sha256":digest(notice),"rom_sha256":row["sha256"],"scenario_sha256":digest(scenario_path),
+                 "oracle_sha256":digest(oracle_path),"profile":row["profile"]}
+        if any(identities.get(key) != value for key, value in joins.items()):
+            return "successor-identity-join"
+        if row.get("status") == "admitted":
+            consumer = current_evidence.get("consumer", {})
+            if consumer.get("status") != "pass" or consumer.get("passed") != 6 or consumer.get("required") != 6:
+                return "successor-consumer"
+        return "ok"
+    except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError, ImportError):
+        return "successor-evidence"
+
+
+def validate_current_successor(document: dict, root: Path) -> str:
+    result = validate(document, root, root / "build/ci/native/diagnostic.bin")
+    if result != "ok":
+        return result
+    row = next((r for r in document.get("fixtures", []) if isinstance(r, dict) and r.get("id") == SUCCESSOR_GAME_ID), None)
+    if not row or row.get("status") != "admitted":
+        return "successor-admission"
+    try:
+        module = _successor_reference_module(Path(root).resolve())
+        status = module.validate_evidence(_json(Path(root) / "evidence/independent-game-v2.json"), require_admitted=True)
+        return "ok" if status == "ok" else "successor-reference:" + status
+    except (OSError, TypeError, ValueError, ImportError):
+        return "successor-reference"
+
+
 def _validate_original_rom(row: dict, root: Path) -> str:
     """Admit an original assembled ROM only with complete, offline-checkable provenance.
 
@@ -548,6 +648,10 @@ def validate(document, root, rom, *, candidate_evidence=None):
         elif row["id"] == GAME_ID:
             game_seen = True
             result = _validate_game(row, root, candidate_evidence)
+            if result != "ok":
+                return result
+        elif row["id"] == SUCCESSOR_GAME_ID:
+            result = _validate_successor(row, root)
             if result != "ok":
                 return result
         elif row.get("kind") == ORIGINAL_ROM_KIND:
@@ -641,6 +745,8 @@ def require_admitted(root, manifest_path, fixture_id, diagnostic_rom):
             raise ValueError("admission")
         if row.get("id") == GAME_ID:
             result = validate_current_game(document, root, resolved_diagnostic)
+        elif row.get("id") == SUCCESSOR_GAME_ID:
+            result = validate_current_successor(document, root)
         else:
             result = validate(document, root, resolved_diagnostic)
         if result != "ok":

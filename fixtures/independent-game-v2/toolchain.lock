@@ -1,0 +1,762 @@
+{
+  "schema_version": 1,
+  "purpose": "candidate fixture tool identities; unknown required values block qualification",
+  "assembler": {
+    "name": "GNU Binutils assembler",
+    "version": "2.47",
+    "source_url": "https://ftp.gnu.org/gnu/binutils/binutils-2.47.tar.bz2",
+    "source_revision": "binutils-2.47 official release archive; extracted source tree SHA-256 7b2b4f3a271745bacec91336a38689218dbbe7a01371dbfdfb11e0e933e47a09",
+    "source_archive_sha256": "3068128c75cda9f898ccb4211d360246e8e195ffcc9dfb655b23ae23a54800e8",
+    "signature": {
+      "url": "https://ftp.gnu.org/gnu/binutils/binutils-2.47.tar.bz2.sig",
+      "sha256": "133e31f4eedfe16cd47fa30a15ceef7a953cb8027766028d0a00d5b5a9e14a28",
+      "keyring_url": "https://ftp.gnu.org/gnu/gnu-keyring.gpg",
+      "keyring_sha256": "0fe55175b96a8ea1c4b670cc3fe11d56b341e4eff81b161ea49958ae550be6ca",
+      "primary_fingerprint": "3A24BC1E8FB409FA9F14371813FCEF89DD9E3C4F",
+      "signing_fingerprint": "3A24BC1E8FB409FA9F14371813FCEF89DD9E3C4F",
+      "timestamp_unix": 1785086752,
+      "outcome": "GOODSIG and VALIDSIG; no expired, revoked, bad-signature, or missing-key status",
+      "release_announcement": "https://sourceware.org/pipermail/binutils/2026-July/150520.html"
+    },
+    "license": "GNU GPL-3.0-or-later for GNU assembler; upstream exact notices retained in source archive and identified below; no Binutils source or executable redistributed",
+    "upstream_license_notices": [
+      {
+        "path": "COPYING",
+        "sha256": "231f7edcc7352d7734a96eef0b8030f77982678c516876fcb81e25b32d68564c",
+        "license": "GNU GPL-3.0-or-later; exact notice retained in upstream release source"
+      },
+      {
+        "path": "COPYING3",
+        "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+        "license": "GNU GPL-3.0-or-later; exact notice retained in upstream release source"
+      },
+      {
+        "path": "COPYING3.LIB",
+        "sha256": "a853c2ffec17057872340eee242ae4d96cbf2b520ae27d903e1b2fef1a5f9d1c",
+        "license": "GNU GPL-3.0-or-later; exact notice retained in upstream release source"
+      },
+      {
+        "path": "gas/COPYING",
+        "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+        "license": "GNU GPL-3.0-or-later; exact notice retained in upstream release source"
+      },
+      {
+        "path": "bfd/COPYING",
+        "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+        "license": "GNU GPL-3.0-or-later; exact notice retained in upstream release source"
+      }
+    ],
+    "host": {
+      "os": "macOS 26.6.2",
+      "os_build": "25G83",
+      "architecture": "arm64",
+      "xcode": "Xcode 26.6;Build version 17F113",
+      "sdk_version": "26.5",
+      "sdk_build": "25F70",
+      "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+      "make": "GNU Make 3.81"
+    },
+    "flags": [
+      "target=m68k-elf",
+      "configure=--prefix=/usr/local --target=m68k-elf --disable-nls --disable-werror --disable-gdb --disable-gdbserver --disable-gprofng --disable-gold --disable-ld --disable-sim --disable-shared --disable-plugins --disable-libctf --disable-readline --disable-tui --disable-gdbtk --disable-compressed-debug-sections --without-system-zlib --without-zstd; CFLAGS=-O2 -g0 -ffile-prefix-map=<BUILD_ROOT>=.; SOURCE_DATE_EPOCH=1785086752",
+      "build=make -j4 all-gas && make DESTDIR=<BUILD_ROOT>/stage install-gas"
+    ],
+    "build_dependencies": [
+      {
+        "name": "Apple Xcode and macOS SDK",
+        "identity": "Xcode 26.6; Build version 17F113; , macOS SDK 26.5 (25F70)",
+        "license": "Apple proprietary host tools; not redistributed"
+      },
+      {
+        "name": "Apple clang driver",
+        "command": "gcc",
+        "identity": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+        "sha256": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9",
+        "license": "Apple Xcode toolchain; host compiler only"
+      },
+      {
+        "name": "Apple GNU Make",
+        "identity": "GNU Make 3.81",
+        "license": "Apple command-line developer tools; host build only"
+      },
+      {
+        "name": "GNU Coreutils install tools",
+        "version": "9.12",
+        "source_archive_sha256": "a480198559733e9b3da999e90543ac6f888a2caa544d8d664c5a1f17e528e210",
+        "formula_sha256": "f848718bf51057fdab142563e402ff91654863a83eb7202b695b324eeeacb12f",
+        "license": "GPL-3.0-or-later",
+        "license_notice_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+        "executables": [
+          {
+            "name": "gmkdir",
+            "sha256": "373ed79b89e246b6363a82661c8d57b88ffe6121b328449fd10ba9aaac6e2fdc",
+            "linked_images": [
+              "/usr/lib/libSystem.B.dylib"
+            ]
+          },
+          {
+            "name": "ginstall",
+            "sha256": "6d80e5848a519e13edeeda2ba1cd2c8ac0f2b7952305f7394fec686971361b50",
+            "linked_images": [
+              "/usr/lib/libSystem.B.dylib"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "GNU Binutils release verifier gpgv",
+        "identity": "gpgv (GnuPG) 2.5.19",
+        "sha256": "5835ef9a6b97acb87feeee30fb07ebae1926207820f8141ca3bfca631794e43f",
+        "file_type": "Mach-O 64-bit executable arm64",
+        "license": "GnuPG GPL-3.0-or-later; verification only, not linked into assembler",
+        "linked_images": [
+          {
+            "image": "libz.1.dylib",
+            "identity": "Apple system image, macOS build 25G83",
+            "license": "Apple macOS system component"
+          },
+          {
+            "image": "libbz2.1.0.dylib",
+            "identity": "Apple system image, macOS build 25G83",
+            "license": "Apple macOS system component"
+          },
+          {
+            "image": "libintl.8.dylib",
+            "package": "gettext",
+            "version": "1.0",
+            "sha256": "0c6d618e75fea85cc3d631e164a71766fba9341d19ce1f723300c52e63037c51",
+            "license": "LGPL-2.1-or-later"
+          },
+          {
+            "image": "CoreFoundation",
+            "identity": "Apple system image, macOS build 25G83",
+            "license": "Apple macOS system component"
+          },
+          {
+            "image": "CoreServices",
+            "identity": "Apple system image, macOS build 25G83",
+            "license": "Apple macOS system component"
+          },
+          {
+            "image": "libgcrypt.20.dylib",
+            "package": "libgcrypt",
+            "version": "1.12.2",
+            "sha256": "949a342e6afbf8a4fc0dc8ea90841fa52511ca6f33fd0ef77705cf0ca39b7439",
+            "license": "LGPL-2.1-or-later"
+          },
+          {
+            "image": "libassuan.9.dylib",
+            "package": "libassuan",
+            "version": "3.0.2",
+            "sha256": "21b69386f11bae635b5d374e4299068718c11530be06d67b41d70c21214d283d",
+            "license": "LGPL-2.1-or-later"
+          },
+          {
+            "image": "libnpth.0.dylib",
+            "package": "npth",
+            "version": "1.8",
+            "sha256": "ddf2d31c3466025163e0092835cc2af29c5c5282074ba7a6b1facae53a05d927",
+            "license": "LGPL-3.0-or-later"
+          },
+          {
+            "image": "libgpg-error.0.dylib",
+            "package": "libgpg-error",
+            "version": "1.60",
+            "sha256": "b68d9e690017dae2875d349c783039812153499de6f5f33402015badddd8f8f6",
+            "license": "LGPL-2.1-or-later"
+          },
+          {
+            "image": "libiconv.2.dylib",
+            "identity": "Apple system image, macOS build 25G83",
+            "license": "Apple macOS system component"
+          },
+          {
+            "image": "libSystem.B.dylib",
+            "identity": "Apple system image, macOS build 25G83",
+            "license": "Apple macOS system component"
+          }
+        ]
+      }
+    ],
+    "candidate_builder": {
+      "name": "Python candidate builder and identity recorder",
+      "version": "Python 3.14.4",
+      "file_type": "Mach-O 64-bit executable arm64",
+      "sha256": "5c3ea934d18a7979253ca08ff16151db78a896be29dbc37fd9bf7e7c549593b8",
+      "source_url": "https://www.python.org/ftp/python/3.14.4/Python-3.14.4.tgz",
+      "source_archive_sha256": "b4c059d5895f030e7df9663894ce3732bfa1b32cd3ab2883980266a45ce3cb3b",
+      "formula_sha256": "1cbbebf565f36051bd7d712c9665829f91d20545667d1268560377693039632f",
+      "license": "Python-2.0",
+      "license_notice_sha256": "b0e25a78cffb43f4d92de8b61ccfa1f1f98ecbc22330b54b5251e7b6ba010231",
+      "framework_sha256": "0e7e6963bf2b6c0a71b2703ed91b8fd204e479e1ca475b019ac5037cc87a1a42",
+      "package_tree_sha256": "c463b6a0c0a4d9f192d5ebf16870f5a563f6f9bb549aea1756685046c7a16626",
+      "linked_images": [
+        {
+          "image": "Python",
+          "package": "python@3.14",
+          "version": "3.14.4",
+          "sha256": "0e7e6963bf2b6c0a71b2703ed91b8fd204e479e1ca475b019ac5037cc87a1a42",
+          "license": "Python-2.0"
+        },
+        {
+          "image": "libSystem.B.dylib",
+          "identity": "Apple system image, macOS build 25G83",
+          "license": "Apple macOS system component"
+        }
+      ]
+    },
+    "inputs": [
+      "official GNU Binutils 2.47 archive SHA-256 3068128c75cda9f898ccb4211d360246e8e195ffcc9dfb655b23ae23a54800e8",
+      "detached signature SHA-256 133e31f4eedfe16cd47fa30a15ceef7a953cb8027766028d0a00d5b5a9e14a28",
+      "official GNU keyring SHA-256 0fe55175b96a8ea1c4b670cc3fe11d56b341e4eff81b161ea49958ae550be6ca",
+      "extracted source tree SHA-256 7b2b4f3a271745bacec91336a38689218dbbe7a01371dbfdfb11e0e933e47a09",
+      "No assembler-linked non-system libraries; linked images: /usr/lib/libSystem.B.dylib"
+    ],
+    "executable": {
+      "name": "m68k-elf-as",
+      "version_output": "GNU assembler (GNU Binutils) 2.47.20260726\nCopyright (C) 2026 Free Software Foundation, Inc.\nThis program is free software; you may redistribute it under the terms of\nthe GNU General Public License version 3 or later.\nThis program has absolutely no warranty.\nThis assembler was configured for a target of `m68k-elf'.",
+      "target": "m68k-elf",
+      "file_type": "Mach-O 64-bit executable arm64",
+      "sha256": "e43fcbed8b8f78b921f1e4f173cce089e6960ebaffa6debc5cabfd702db552d6",
+      "linked_images": [
+        {
+          "path": "/usr/lib/libSystem.B.dylib",
+          "identity": "Apple system image bound to recorded macOS build"
+        }
+      ]
+    },
+    "disposition": "source-built from official archive; no Homebrew Binutils bottle used"
+  },
+  "mame": {
+    "name": "MAME Genesis qualification executable",
+    "version": "0.289",
+    "executable_version": "0.289 (mame0289-dirty)",
+    "source_url": "https://github.com/mamedev/mame",
+    "source_revision": "tag mame0289; commit f34f02505e32c1993c6a782b6814232cbfc74e36; signed tag object d0b7160e54874fa58f553614db373d73100d5ecb",
+    "source_archive_sha256": "0929cc749afabcef892900e10dd90bd8b05f94a7dde8f367ac6a5d2082589f84",
+    "source_signature": {
+      "status": "pass",
+      "tag": "mame0289",
+      "tag_object": "d0b7160e54874fa58f553614db373d73100d5ecb",
+      "tag_signature_sha256": "4e6943da913b68f395c3785e5e94e82803668fb37938e3369dc8819502a945c2",
+      "signer_fingerprint": "D0362DB01844E0433ADBBFBAC174B1018C40710E",
+      "signer_key_source": "https://api.github.com/users/cuavas/gpg_keys (key ID C174B1018C40710E)",
+      "signer_key_sha256": "dada893db9dc7c1fdf7b138059d54451274cf882891b38243c24d7987d92aea4",
+      "verification": "isolated GNUPGHOME import; full fingerprint independently matched; git verify-tag passed"
+    },
+    "license": "MAME source distribution is GPL-2.0-or-later overall; the patched Genesis files carry BSD-3-Clause headers. Upstream license and legal notices remain in the non-redistributed source checkout.",
+    "status": "pass",
+    "host_observed": {
+      "os": "macOS 26.6.2",
+      "os_build": "25G83",
+      "architecture": "arm64",
+      "xcode": "Xcode 26.6; build 17F113",
+      "sdk_version": "26.5",
+      "sdk_build": "25F70",
+      "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+      "make": "GNU Make 3.81",
+      "python": "Python 3.14.4",
+      "cmake": {
+        "path_class": "host-tool",
+        "version": "cmake version 4.4.3",
+        "sha256": "01bb5214684f5390e96e0d6aef7aafd7415b77ecbcfd59f6b55b018d8de0d9a2"
+      },
+      "ninja": {
+        "path_class": "host-tool",
+        "version": "1.13.2",
+        "sha256": "48761628046784f59bd789f5a72b88da99205c5849e5d19ae4d317854ae09e83"
+      }
+    },
+    "flags": [
+      "targetos=macosx",
+      "architecture=arm64",
+      "configuration=Release",
+      "SUBTARGET=genewhip",
+      "SOURCES=src/mame/sega/mdconsole.cpp,src/mame/sega/megadriv.cpp",
+      "OSD=sdl3",
+      "USE_LIBSDL=1",
+      "REGENIE=1",
+      "NO_USE_MIDI=1",
+      "NO_USE_PORTAUDIO=1",
+      "NO_USE_PULSEAUDIO=1",
+      "NO_USE_PIPEWIRE=1",
+      "SDL_HIDAPI_LIBUSB=OFF",
+      "CMAKE_OSX_ARCHITECTURES=arm64",
+      "CMAKE_OSX_DEPLOYMENT_TARGET=15.0"
+    ],
+    "build_dependencies": [
+      {
+        "name": "SDL",
+        "version": "3.4.12",
+        "source_url": "https://github.com/libsdl-org/SDL/releases/download/release-3.4.12/SDL3-3.4.12.tar.gz",
+        "source_archive_sha256": "f07b958a9ac5020fb7a44cadb957f658b2149c3c8abb4f63145fac9303249db7",
+        "license": "Zlib",
+        "configuration": "shared library; no framework; HIDAPI libusb disabled; tests/examples disabled; source install under work root"
+      },
+      {
+        "name": "pkg-config adapter",
+        "version": "project-local SDL3 flag adapter",
+        "sha256": "395ad02d04528dd503b9aa721538de234cf7a1beeb98b2465dc7d3769c523276",
+        "license": "Genewhip build-script logic; no external package"
+      },
+      {
+        "name": "MAME bundled static components",
+        "identity": "from the pinned MAME source archive; source archive SHA-256 binds all bundled versions and notices",
+        "license": "individual upstream notices retained in source archive; no non-system dynamic images except SDL"
+      }
+    ],
+    "build_tooling": [
+      {
+        "name": "CMake",
+        "version": "cmake version 4.4.3",
+        "sha256": "01bb5214684f5390e96e0d6aef7aafd7415b77ecbcfd59f6b55b018d8de0d9a2",
+        "license": "BSD-3-Clause; build host tool only"
+      },
+      {
+        "name": "Ninja",
+        "version": "1.13.2",
+        "sha256": "48761628046784f59bd789f5a72b88da99205c5849e5d19ae4d317854ae09e83",
+        "license": "Apache-2.0; build host tool only"
+      }
+    ],
+    "configuration": [
+      "make -j8 SUBTARGET=genewhip SOURCES=src/mame/sega/mdconsole.cpp,src/mame/sega/megadriv.cpp OSD=sdl3 USE_LIBSDL=1 REGENIE=1 NO_USE_MIDI=1 NO_USE_PORTAUDIO=1 NO_USE_PULSEAUDIO=1 NO_USE_PIPEWIRE=1",
+      "CMake Release; arm64; SDL_FRAMEWORK=OFF; SDL_SHARED=ON; SDL_STATIC=OFF; SDL_HIDAPI_LIBUSB=OFF; SDL_TESTS=OFF; SDL_EXAMPLES=OFF"
+    ],
+    "build_script_sha256": "b8001305ebed413aafd015efb59643498719ba723ab7f01315b3afa2e637eff4",
+    "patch_sha256": "323f00f433f730ea682a26aaf4c142430538072d7389dd6fe8292477d0b6ac73",
+    "source_configuration_files": [
+      {
+        "path": "build/projects/sdl3/mamegenewhip/gmake-osx-clang/Makefile",
+        "sha256": "f329308ae68cef13032766299b86b3b2547d5ed41c145d32cb9a4c2c94c9d713"
+      },
+      {
+        "path": "build/projects/sdl3/mamegenewhip/gmake-osx-clang/mame_genewhip.make",
+        "sha256": "ab06fbd0e1e6170d347f645e3995dd118d82ca9c61d0ede9090b4a9227a1e6e3"
+      },
+      {
+        "path": "build/projects/sdl3/mamegenewhip/gmake-osx-clang/osd_sdl3.make",
+        "sha256": "10c96010d65fc38dc8b59d45adb9b4990ac4d459f8ee207d69cff78a2d1d2794"
+      },
+      {
+        "path": "build/projects/sdl3/mamegenewhip/gmake-osx-clang/genewhip.make",
+        "sha256": "73dcb85478473fefd01623eb6bd702c7602132dbbf675206e0f4111c7e49875c"
+      },
+      {
+        "path": "build/generated/mame/genewhip/drivlist.cpp",
+        "sha256": "3aff12f268f3a793e7db8c6f7a8d7f83045d020a863036e74e841605d8001008"
+      }
+    ],
+    "source_configuration_identity": "d456d7fb268d9ea19091f18ba522b42a59fc749dc30c4916822cfe55bca35baf",
+    "executable_path": "<MAME_SOURCE_DIR>/genewhip",
+    "executable_file_type": "Mach-O 64-bit executable arm64",
+    "executable_build_sha256": "07e811e49b38a5e2378ccf070fad5b6b48008dcfe5bcc746c6941dd8fe06b5bb",
+    "linked_images": [
+      {
+        "image": "/System/Library/Frameworks/QuartzCore.framework/Versions/A/QuartzCore",
+        "kind": "host system image",
+        "identity": "macOS build 25G83",
+        "license": "Apple system component; not redistributed"
+      },
+      {
+        "image": "/System/Library/Frameworks/OpenGL.framework/Versions/A/OpenGL",
+        "kind": "host system image",
+        "identity": "macOS build 25G83",
+        "license": "Apple system component; not redistributed"
+      },
+      {
+        "image": "/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit",
+        "kind": "host system image",
+        "identity": "macOS build 25G83",
+        "license": "Apple system component; not redistributed"
+      },
+      {
+        "image": "/System/Library/Frameworks/Metal.framework/Versions/A/Metal",
+        "kind": "host system image",
+        "identity": "macOS build 25G83",
+        "license": "Apple system component; not redistributed"
+      },
+      {
+        "image": "/usr/lib/libSystem.B.dylib",
+        "kind": "host system image",
+        "identity": "macOS build 25G83",
+        "license": "Apple system component; not redistributed"
+      },
+      {
+        "image": "/System/Library/Frameworks/Cocoa.framework/Versions/A/Cocoa",
+        "kind": "host system image",
+        "identity": "macOS build 25G83",
+        "license": "Apple system component; not redistributed"
+      },
+      {
+        "image": "@rpath/libSDL3.0.dylib",
+        "kind": "source-built dependency",
+        "package": "SDL",
+        "version": "3.4.12",
+        "source_archive_sha256": "f07b958a9ac5020fb7a44cadb957f658b2149c3c8abb4f63145fac9303249db7",
+        "sha256": "4a5d6e75bb9c85663a074a1589ecf7fc96d5e1d7f35ed0976a9d4537de866868",
+        "license": "Zlib; upstream notice retained in source archive"
+      },
+      {
+        "image": "/System/Library/Frameworks/AudioUnit.framework/Versions/A/AudioUnit",
+        "kind": "host system image",
+        "identity": "macOS build 25G83",
+        "license": "Apple system component; not redistributed"
+      },
+      {
+        "image": "/System/Library/Frameworks/AudioToolbox.framework/Versions/A/AudioToolbox",
+        "kind": "host system image",
+        "identity": "macOS build 25G83",
+        "license": "Apple system component; not redistributed"
+      },
+      {
+        "image": "/System/Library/Frameworks/CoreAudio.framework/Versions/A/CoreAudio",
+        "kind": "host system image",
+        "identity": "macOS build 25G83",
+        "license": "Apple system component; not redistributed"
+      },
+      {
+        "image": "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
+        "kind": "host system image",
+        "identity": "macOS build 25G83",
+        "license": "Apple system component; not redistributed"
+      },
+      {
+        "image": "/usr/lib/libc++.1.dylib",
+        "kind": "host system image",
+        "identity": "macOS build 25G83",
+        "license": "Apple system component; not redistributed"
+      },
+      {
+        "image": "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
+        "kind": "host system image",
+        "identity": "macOS build 25G83",
+        "license": "Apple system component; not redistributed"
+      },
+      {
+        "image": "/System/Library/Frameworks/ApplicationServices.framework/Versions/A/ApplicationServices",
+        "kind": "host system image",
+        "identity": "macOS build 25G83",
+        "license": "Apple system component; not redistributed"
+      },
+      {
+        "image": "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "kind": "host system image",
+        "identity": "macOS build 25G83",
+        "license": "Apple system component; not redistributed"
+      },
+      {
+        "image": "/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics",
+        "kind": "host system image",
+        "identity": "macOS build 25G83",
+        "license": "Apple system component; not redistributed"
+      },
+      {
+        "image": "/System/Library/Frameworks/CoreText.framework/Versions/A/CoreText",
+        "kind": "host system image",
+        "identity": "macOS build 25G83",
+        "license": "Apple system component; not redistributed"
+      },
+      {
+        "image": "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation",
+        "kind": "host system image",
+        "identity": "macOS build 25G83",
+        "license": "Apple system component; not redistributed"
+      },
+      {
+        "image": "/usr/lib/libobjc.A.dylib",
+        "kind": "host system image",
+        "identity": "macOS build 25G83",
+        "license": "Apple system component; not redistributed"
+      }
+    ],
+    "runtime_dependency": "SDL3 shared library; source archive, Zlib notice and exact image digest recorded above",
+    "inputs": [
+      "candidate ROM intentionally excluded from MAME toolchain build; MAME source and patch only"
+    ]
+  },
+  "assembler_z80": {
+    "name": "GNU Binutils assembler",
+    "version": "2.47",
+    "source_url": "https://ftp.gnu.org/gnu/binutils/binutils-2.47.tar.bz2",
+    "source_revision": "binutils-2.47 official release archive; extracted source tree SHA-256 7b2b4f3a271745bacec91336a38689218dbbe7a01371dbfdfb11e0e933e47a09",
+    "source_archive_sha256": "3068128c75cda9f898ccb4211d360246e8e195ffcc9dfb655b23ae23a54800e8",
+    "signature": {
+      "url": "https://ftp.gnu.org/gnu/binutils/binutils-2.47.tar.bz2.sig",
+      "sha256": "133e31f4eedfe16cd47fa30a15ceef7a953cb8027766028d0a00d5b5a9e14a28",
+      "keyring_url": "https://ftp.gnu.org/gnu/gnu-keyring.gpg",
+      "keyring_sha256": "0fe55175b96a8ea1c4b670cc3fe11d56b341e4eff81b161ea49958ae550be6ca",
+      "primary_fingerprint": "3A24BC1E8FB409FA9F14371813FCEF89DD9E3C4F",
+      "signing_fingerprint": "3A24BC1E8FB409FA9F14371813FCEF89DD9E3C4F",
+      "timestamp_unix": 1785086752,
+      "outcome": "GOODSIG and VALIDSIG; no expired, revoked, bad-signature, or missing-key status",
+      "release_announcement": "https://sourceware.org/pipermail/binutils/2026-July/150520.html"
+    },
+    "license": "GNU GPL-3.0-or-later for GNU assembler; upstream exact notices retained in source archive and identified below; no Binutils source or executable redistributed",
+    "upstream_license_notices": [
+      {
+        "path": "COPYING",
+        "sha256": "231f7edcc7352d7734a96eef0b8030f77982678c516876fcb81e25b32d68564c",
+        "license": "GNU GPL-3.0-or-later; exact notice retained in upstream release source"
+      },
+      {
+        "path": "COPYING3",
+        "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+        "license": "GNU GPL-3.0-or-later; exact notice retained in upstream release source"
+      },
+      {
+        "path": "COPYING3.LIB",
+        "sha256": "a853c2ffec17057872340eee242ae4d96cbf2b520ae27d903e1b2fef1a5f9d1c",
+        "license": "GNU GPL-3.0-or-later; exact notice retained in upstream release source"
+      },
+      {
+        "path": "gas/COPYING",
+        "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+        "license": "GNU GPL-3.0-or-later; exact notice retained in upstream release source"
+      },
+      {
+        "path": "bfd/COPYING",
+        "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+        "license": "GNU GPL-3.0-or-later; exact notice retained in upstream release source"
+      }
+    ],
+    "host": {
+      "os": "macOS 26.6.2",
+      "os_build": "25G83",
+      "architecture": "arm64",
+      "xcode": "Xcode 26.6;Build version 17F113",
+      "sdk_version": "26.5",
+      "sdk_build": "25F70",
+      "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+      "make": "GNU Make 3.81"
+    },
+    "flags": [
+      "target=z80-elf",
+      "configure=--prefix=/usr/local --target=z80-elf --disable-nls --disable-werror --disable-gdb --disable-gdbserver --disable-gprofng --disable-gold --disable-ld --disable-sim --disable-shared --disable-plugins --disable-libctf --disable-readline --disable-tui --disable-gdbtk --disable-compressed-debug-sections --without-system-zlib --without-zstd; CFLAGS=-O2 -g0 -ffile-prefix-map=<BUILD_ROOT>=.; SOURCE_DATE_EPOCH=1785086752",
+      "build=make -j4 all-gas && make DESTDIR=<BUILD_ROOT>/stage install-gas"
+    ],
+    "build_dependencies": [
+      {
+        "name": "Apple Xcode and macOS SDK",
+        "identity": "Xcode 26.6; Build version 17F113; , macOS SDK 26.5 (25F70)",
+        "license": "Apple proprietary host tools; not redistributed"
+      },
+      {
+        "name": "Apple clang driver",
+        "command": "gcc",
+        "identity": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+        "sha256": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9",
+        "license": "Apple Xcode toolchain; host compiler only"
+      },
+      {
+        "name": "Apple GNU Make",
+        "identity": "GNU Make 3.81",
+        "license": "Apple command-line developer tools; host build only"
+      },
+      {
+        "name": "GNU Coreutils install tools",
+        "version": "9.12",
+        "source_archive_sha256": "a480198559733e9b3da999e90543ac6f888a2caa544d8d664c5a1f17e528e210",
+        "formula_sha256": "f848718bf51057fdab142563e402ff91654863a83eb7202b695b324eeeacb12f",
+        "license": "GPL-3.0-or-later",
+        "license_notice_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+        "executables": [
+          {
+            "name": "gmkdir",
+            "sha256": "373ed79b89e246b6363a82661c8d57b88ffe6121b328449fd10ba9aaac6e2fdc",
+            "linked_images": [
+              "/usr/lib/libSystem.B.dylib"
+            ]
+          },
+          {
+            "name": "ginstall",
+            "sha256": "6d80e5848a519e13edeeda2ba1cd2c8ac0f2b7952305f7394fec686971361b50",
+            "linked_images": [
+              "/usr/lib/libSystem.B.dylib"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "GNU Binutils release verifier gpgv",
+        "identity": "gpgv (GnuPG) 2.5.19",
+        "sha256": "5835ef9a6b97acb87feeee30fb07ebae1926207820f8141ca3bfca631794e43f",
+        "file_type": "Mach-O 64-bit executable arm64",
+        "license": "GnuPG GPL-3.0-or-later; verification only, not linked into assembler",
+        "linked_images": [
+          {
+            "image": "libz.1.dylib",
+            "identity": "Apple system image, macOS build 25G83",
+            "license": "Apple macOS system component"
+          },
+          {
+            "image": "libbz2.1.0.dylib",
+            "identity": "Apple system image, macOS build 25G83",
+            "license": "Apple macOS system component"
+          },
+          {
+            "image": "libintl.8.dylib",
+            "package": "gettext",
+            "version": "1.0",
+            "sha256": "0c6d618e75fea85cc3d631e164a71766fba9341d19ce1f723300c52e63037c51",
+            "license": "LGPL-2.1-or-later"
+          },
+          {
+            "image": "CoreFoundation",
+            "identity": "Apple system image, macOS build 25G83",
+            "license": "Apple macOS system component"
+          },
+          {
+            "image": "CoreServices",
+            "identity": "Apple system image, macOS build 25G83",
+            "license": "Apple macOS system component"
+          },
+          {
+            "image": "libgcrypt.20.dylib",
+            "package": "libgcrypt",
+            "version": "1.12.2",
+            "sha256": "949a342e6afbf8a4fc0dc8ea90841fa52511ca6f33fd0ef77705cf0ca39b7439",
+            "license": "LGPL-2.1-or-later"
+          },
+          {
+            "image": "libassuan.9.dylib",
+            "package": "libassuan",
+            "version": "3.0.2",
+            "sha256": "21b69386f11bae635b5d374e4299068718c11530be06d67b41d70c21214d283d",
+            "license": "LGPL-2.1-or-later"
+          },
+          {
+            "image": "libnpth.0.dylib",
+            "package": "npth",
+            "version": "1.8",
+            "sha256": "ddf2d31c3466025163e0092835cc2af29c5c5282074ba7a6b1facae53a05d927",
+            "license": "LGPL-3.0-or-later"
+          },
+          {
+            "image": "libgpg-error.0.dylib",
+            "package": "libgpg-error",
+            "version": "1.60",
+            "sha256": "b68d9e690017dae2875d349c783039812153499de6f5f33402015badddd8f8f6",
+            "license": "LGPL-2.1-or-later"
+          },
+          {
+            "image": "libiconv.2.dylib",
+            "identity": "Apple system image, macOS build 25G83",
+            "license": "Apple macOS system component"
+          },
+          {
+            "image": "libSystem.B.dylib",
+            "identity": "Apple system image, macOS build 25G83",
+            "license": "Apple macOS system component"
+          }
+        ]
+      }
+    ],
+    "candidate_builder": {
+      "name": "Python candidate builder and identity recorder",
+      "version": "Python 3.14.4",
+      "file_type": "Mach-O 64-bit executable arm64",
+      "sha256": "5c3ea934d18a7979253ca08ff16151db78a896be29dbc37fd9bf7e7c549593b8",
+      "source_url": "https://www.python.org/ftp/python/3.14.4/Python-3.14.4.tgz",
+      "source_archive_sha256": "b4c059d5895f030e7df9663894ce3732bfa1b32cd3ab2883980266a45ce3cb3b",
+      "formula_sha256": "1cbbebf565f36051bd7d712c9665829f91d20545667d1268560377693039632f",
+      "license": "Python-2.0",
+      "license_notice_sha256": "b0e25a78cffb43f4d92de8b61ccfa1f1f98ecbc22330b54b5251e7b6ba010231",
+      "framework_sha256": "0e7e6963bf2b6c0a71b2703ed91b8fd204e479e1ca475b019ac5037cc87a1a42",
+      "package_tree_sha256": "c463b6a0c0a4d9f192d5ebf16870f5a563f6f9bb549aea1756685046c7a16626",
+      "linked_images": [
+        {
+          "image": "Python",
+          "package": "python@3.14",
+          "version": "3.14.4",
+          "sha256": "0e7e6963bf2b6c0a71b2703ed91b8fd204e479e1ca475b019ac5037cc87a1a42",
+          "license": "Python-2.0"
+        },
+        {
+          "image": "libSystem.B.dylib",
+          "identity": "Apple system image, macOS build 25G83",
+          "license": "Apple macOS system component"
+        }
+      ]
+    },
+    "inputs": [
+      "official GNU Binutils 2.47 archive SHA-256 3068128c75cda9f898ccb4211d360246e8e195ffcc9dfb655b23ae23a54800e8",
+      "detached signature SHA-256 133e31f4eedfe16cd47fa30a15ceef7a953cb8027766028d0a00d5b5a9e14a28",
+      "official GNU keyring SHA-256 0fe55175b96a8ea1c4b670cc3fe11d56b341e4eff81b161ea49958ae550be6ca",
+      "extracted source tree SHA-256 7b2b4f3a271745bacec91336a38689218dbbe7a01371dbfdfb11e0e933e47a09",
+      "No assembler-linked non-system libraries; linked images: /usr/lib/libSystem.B.dylib"
+    ],
+    "executable": {
+      "name": "z80-elf-as",
+      "version_output": "GNU assembler (GNU Binutils) 2.47.20260726\nCopyright (C) 2026 Free Software Foundation, Inc.\nThis program is free software; you may redistribute it under the terms of\nthe GNU General Public License version 3 or later.\nThis program has absolutely no warranty.\nThis assembler was configured for a target of `z80-elf'.",
+      "target": "z80-elf",
+      "file_type": "Mach-O 64-bit executable arm64",
+      "sha256": "ac03d9553108a296de9f3877d7ec8fc0d0dd6804af5e20e21e9405c9eeebe21e",
+      "linked_images": [
+        {
+          "path": "/usr/lib/libSystem.B.dylib",
+          "identity": "Apple system image bound to recorded macOS build"
+        }
+      ]
+    },
+    "disposition": "source-built from official archive; no Homebrew Binutils bottle used"
+  },
+  "successor_schema": "genewhip-independent-game-v2-toolchain-v1",
+  "reference_capability": {
+    "status": "pass",
+    "route_status": "pass",
+    "sentinels": {
+      "sram_storage_read": {
+        "status": "pass",
+        "count": 1
+      },
+      "sram_storage_write": {
+        "status": "pass",
+        "count": 1
+      },
+      "sram_enable_read": {
+        "status": "pass",
+        "count": 1
+      },
+      "sram_enable_write": {
+        "status": "pass",
+        "count": 1
+      },
+      "cpu_space_ack": {
+        "status": "pass",
+        "count": 2
+      },
+      "program_fetch": {
+        "status": "pass",
+        "count": 1611302
+      },
+      "controller_read": {
+        "status": "pass",
+        "count": 4374
+      },
+      "vdp_write": {
+        "status": "pass",
+        "count": 2050
+      }
+    },
+    "sram_trace_sha256": "db50957c59e23da497ed813a6108c536291e3e282cb1102523368d936052b42a",
+    "gameplay_trace_sha256": "2c5d7fb62fbf447dc3a010a86807b0b9be0807e29db79176c84627c685cc372c",
+    "sram_rom_sha256": "3763e7b5813da793a346d4ce4120fe7b8cc130926621c3a97445915974204786",
+    "game_rom_sha256": "c17ad98e22d3237feac4f2dfe9d96295f32398a9ce8e4cf0b0542b1035bb0fc1",
+    "scenario_sha256": "8949a289075920ebe61aea40f98a9189190c7c1e57303f7a3c4ca5cd2bd38d71",
+    "route_audit_sha256": "74f720fe5a524549c6f49a90ed68ddaf54ae7d372e8628e3e54cd46771ac69dc",
+    "build_process": {
+      "status": "pass",
+      "command": "fixtures/independent-game/mame_build.sh --build",
+      "log_relative_path": "build/tool-cache/mame0289/mame-build.log",
+      "log_bytes": 6908,
+      "log_sha256": "c0ffbe47498b0cab086f10f0e8982f6effb5bd38ec4e63c39d63f398fc737fdd",
+      "exit_code": 0,
+      "timeout_seconds": 14400,
+      "max_log_bytes": 67108864,
+      "parallel_jobs": 8,
+      "cache_relative_path": "build/tool-cache/mame0289"
+    },
+    "preparer_sha256": "2b109c9b7d77c57d1ca31b24df3e485169c423a397fc0495d6b109e45cc05c94"
+  }
+}

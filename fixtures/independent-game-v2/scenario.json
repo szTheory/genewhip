@@ -1,0 +1,285 @@
+{
+  "schema_version": 1,
+  "fixture_id": "genewhip-independent-game-v2",
+  "profile": "VA3-NTSC-U",
+  "machine": {
+    "driver": "genesis",
+    "region": "NTSC-U",
+    "cartridge": "ordinary-linear",
+    "controller": "three-button"
+  },
+  "rom": {
+    "relative_path": "fixtures/independent-game-v2/game.bin",
+    "sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb"
+  },
+  "source": {
+    "relative_path": "fixtures/independent-game-v2/src/game.s",
+    "sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe"
+  },
+  "budget": {
+    "max_trace_bytes": 2250000000,
+    "max_trace_rows": 36000000,
+    "hard_timeout_seconds": 600
+  },
+  "sustained_policy": {
+    "scenario_id": "sustained-play",
+    "warmup_fields": 120,
+    "measured_fields": 600,
+    "minimum_total_fields_per_fresh_run": 720,
+    "reset_policy": "fresh MAME process and machine for each run; guest reset vector executed before input schedule"
+  },
+  "cases": [
+    {
+      "id": "title-no-start",
+      "frames": 12,
+      "input_schedule": [],
+      "expect": {
+        "play_state": 0,
+        "position_min": 0,
+        "position_max": 0,
+        "geometry": {
+          "title_row": {
+            "start": 49152,
+            "cells": 10,
+            "tile": 1
+          },
+          "marker": {
+            "address": 49792,
+            "present": false
+          }
+        },
+        "psg_writes": []
+      }
+    },
+    {
+      "id": "start-idle",
+      "frames": 20,
+      "input_schedule": [
+        {
+          "frame": 1,
+          "control": "P1 Start",
+          "asserted": true
+        },
+        {
+          "frame": 2,
+          "control": "P1 Start",
+          "asserted": false
+        }
+      ],
+      "expect": {
+        "play_state": 1,
+        "position_min": 0,
+        "position_max": 0,
+        "geometry": {
+          "title_row": {
+            "start": 49152,
+            "cells": 10,
+            "tile": 0
+          },
+          "marker": {
+            "address": 49792,
+            "column": 0,
+            "tile": 2
+          }
+        },
+        "psg_writes": []
+      }
+    },
+    {
+      "id": "start-move",
+      "frames": 40,
+      "input_schedule": [
+        {
+          "frame": 1,
+          "control": "P1 Start",
+          "asserted": true
+        },
+        {
+          "frame": 2,
+          "control": "P1 Start",
+          "asserted": false
+        },
+        {
+          "frame": 4,
+          "control": "P1 Right",
+          "asserted": true
+        },
+        {
+          "frame": 14,
+          "control": "P1 Right",
+          "asserted": false
+        }
+      ],
+      "expect": {
+        "play_state": 1,
+        "position_min": 1,
+        "position_max": 39,
+        "geometry": {
+          "title_row": {
+            "start": 49152,
+            "cells": 10,
+            "tile": 0
+          },
+          "marker": {
+            "address": 49792,
+            "column": "RAM:0xFF0002",
+            "tile": 2
+          }
+        },
+        "psg_writes": []
+      }
+    },
+    {
+      "id": "action-sound",
+      "frames": 24,
+      "input_schedule": [
+        {
+          "frame": 1,
+          "control": "P1 Start",
+          "asserted": true
+        },
+        {
+          "frame": 2,
+          "control": "P1 Start",
+          "asserted": false
+        },
+        {
+          "frame": 4,
+          "control": "P1 B",
+          "asserted": true
+        },
+        {
+          "frame": 8,
+          "control": "P1 B",
+          "asserted": false
+        }
+      ],
+      "expect": {
+        "play_state": 1,
+        "position_min": 0,
+        "position_max": 0,
+        "geometry": {
+          "title_row": {
+            "start": 49152,
+            "cells": 10,
+            "tile": 0
+          },
+          "marker": {
+            "address": 49792,
+            "column": 0,
+            "tile": 2
+          }
+        },
+        "psg_writes": [
+          132,
+          2,
+          144
+        ],
+        "sound_trigger": "one PSG tone-0 note on B press edge"
+      }
+    },
+    {
+      "id": "action-no-trigger",
+      "frames": 24,
+      "input_schedule": [
+        {
+          "frame": 1,
+          "control": "P1 Start",
+          "asserted": true
+        },
+        {
+          "frame": 2,
+          "control": "P1 Start",
+          "asserted": false
+        },
+        {
+          "frame": 4,
+          "control": "P1 Right",
+          "asserted": true
+        },
+        {
+          "frame": 8,
+          "control": "P1 Right",
+          "asserted": false
+        }
+      ],
+      "expect": {
+        "play_state": 1,
+        "position_min": 1,
+        "position_max": 39,
+        "geometry": {
+          "title_row": {
+            "start": 49152,
+            "cells": 10,
+            "tile": 0
+          },
+          "marker": {
+            "address": 49792,
+            "column": "RAM:0xFF0002",
+            "tile": 2
+          }
+        },
+        "psg_writes": []
+      }
+    },
+    {
+      "id": "sustained-play",
+      "frames": 720,
+      "input_schedule": [
+        {
+          "frame": 1,
+          "control": "P1 Start",
+          "asserted": true
+        },
+        {
+          "frame": 2,
+          "control": "P1 Start",
+          "asserted": false
+        },
+        {
+          "frame": 4,
+          "control": "P1 Right",
+          "asserted": true
+        },
+        {
+          "frame": 84,
+          "control": "P1 Right",
+          "asserted": false
+        },
+        {
+          "frame": 121,
+          "control": "P1 B",
+          "asserted": true
+        },
+        {
+          "frame": 122,
+          "control": "P1 B",
+          "asserted": false
+        }
+      ],
+      "expect": {
+        "play_state": 1,
+        "position_min": 39,
+        "position_max": 39,
+        "geometry": {
+          "title_row": {
+            "start": 49152,
+            "cells": 10,
+            "tile": 0
+          },
+          "marker": {
+            "address": 49792,
+            "column": "RAM:0xFF0002",
+            "tile": 2
+          }
+        },
+        "psg_writes": [
+          132,
+          2,
+          144
+        ],
+        "sound_trigger": "one PSG tone-0 note on B press edge"
+      }
+    }
+  ]
+}

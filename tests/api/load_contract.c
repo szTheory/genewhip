@@ -16,10 +16,41 @@ static void rejected(gw_machine *m, const void *rom, size_t size, gw_status expe
     CHECK(memcmp(old_rom, new_rom, sizeof(old_rom)) == 0, "rejected load preserves ROM");
 }
 
+static gw_machine *audio_machine(void)
+{
+    gw_config c = { sizeof(c), GW_API_VERSION, GW_PROFILE_VA3_NTSC_U,
+        GW_RESET_DETERMINISTIC_ZERO, 1, { GW_DEVICE_PAD3, GW_DEVICE_PAD3 }, 22050 };
+    gw_machine *m = NULL;
+    CHECK(gw_create(&c, &m) == GW_OK, "audio-enabled control create");
+    return m;
+}
+
+static void compare_future_observations(gw_machine *a, gw_machine *b)
+{
+    int16_t aa[GW_AUDIO_QUEUE_FRAMES * 2u], ba[GW_AUDIO_QUEUE_FRAMES * 2u];
+    gw_audio_read_result ar = {0}, br = {0};
+    uint8_t am[GW_RAM_SIZE], bm[GW_RAM_SIZE];
+    gw_run_result ra = run(a, 2u * (uint64_t)GW_FIELD_TICKS);
+    gw_run_result rb = run(b, 2u * (uint64_t)GW_FIELD_TICKS);
+    CHECK(ra.actual_tick == rb.actual_tick && ra.stop_reason == rb.stop_reason,
+        "rejected load continuation tick and stop");
+    same(a, b);
+    CHECK(gw_peek_memory(a, 0xff0000u, am, sizeof(am)) == GW_OK &&
+          gw_peek_memory(b, 0xff0000u, bm, sizeof(bm)) == GW_OK &&
+          memcmp(am, bm, sizeof(am)) == 0, "rejected load future RAM");
+    same_video(a, b);
+    ar.struct_size = br.struct_size = sizeof(ar); ar.version = br.version = GW_API_VERSION;
+    CHECK(gw_audio_read(a, aa, GW_AUDIO_QUEUE_FRAMES, &ar) == GW_OK &&
+          gw_audio_read(b, ba, GW_AUDIO_QUEUE_FRAMES, &br) == GW_OK, "rejected load future PCM read");
+    CHECK(ar.produced == br.produced && ar.first_index == br.first_index && ar.lost == br.lost &&
+          memcmp(aa, ba, (size_t)ar.produced * 2u * sizeof(int16_t)) == 0,
+          "rejected load future PCM");
+}
+
 int main(void)
 {
     uint8_t rom[1024], bad[1024], *large;
-    gw_machine *m = machine(), *peer = machine(), *out;
+    gw_machine *m = audio_machine(), *peer = audio_machine(), *out;
     gw_config c = {sizeof(c), GW_API_VERSION, GW_PROFILE_VA3_NTSC_U, GW_RESET_DETERMINISTIC_ZERO, 1};
     gw_event e = {sizeof(e), GW_API_VERSION, 500, GW_EVENT_CONSOLE_RESET, 0};
     rom_init(rom, sizeof(rom));
@@ -47,7 +78,7 @@ int main(void)
       for (size_t i=0; i<sizeof(sps)/sizeof(sps[0]); ++i) {
         memcpy(bad, rom, sizeof(bad)); put32(bad, sps[i]); rejected(m, bad, sizeof(bad), GW_ERROR_ROM);
       } }
-    (void)run(m, 1000); (void)run(peer, 1000); same(m, peer); /* Queue also survived. */
+    compare_future_observations(m, peer); /* Rejected loads preserve later RAM/video/PCM. */
     { uint8_t memory[GW_RAM_SIZE+1];
       CHECK(gw_peek_memory(m,0xff0000,memory,GW_RAM_SIZE-1)==GW_OK,"peek below capacity");
       CHECK(gw_peek_memory(m,0xff0000,memory,GW_RAM_SIZE)==GW_OK,"peek at capacity");

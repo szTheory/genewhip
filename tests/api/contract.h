@@ -20,7 +20,7 @@ static inline void rom_init(uint8_t *rom, size_t size)
 static inline gw_machine *machine(void)
 {
     gw_machine *m = NULL;
-    gw_config c = {sizeof(c), GW_API_VERSION, GW_PROFILE_VA3_NTSC_U, GW_RESET_DETERMINISTIC_ZERO, 1, {0, 0}};
+    gw_config c = {sizeof(c), GW_API_VERSION, GW_PROFILE_VA3_NTSC_U, GW_RESET_DETERMINISTIC_ZERO, 1, {0, 0}, 0};
     CHECK(gw_create(&c, &m) == GW_OK, "create");
     return m;
 }
@@ -51,5 +51,23 @@ static inline void same(gw_machine *a, gw_machine *b)
     CHECK(gw_peek_memory(a, 0xff0000, ax, sizeof(ax)) == GW_OK, "read RAM a");
     CHECK(gw_peek_memory(b, 0xff0000, bx, sizeof(bx)) == GW_OK, "read RAM b");
     CHECK(memcmp(ax, bx, sizeof(ax)) == 0, "same RAM");
+}
+/* Compare the complete borrowed raster immediately, while both API pointers
+ * remain valid. Only the defined width-by-height pixels enter the comparison. */
+static inline void same_video(gw_machine *a, gw_machine *b)
+{
+    gw_video_field af = {0}, bf = {0};
+    const uint32_t *ap = NULL, *bp = NULL;
+    af.struct_size = bf.struct_size = sizeof(af);
+    af.version = bf.version = GW_API_VERSION;
+    CHECK(gw_get_video_field(a, &af, &ap) == GW_OK &&
+          gw_get_video_field(b, &bf, &bp) == GW_OK, "video available");
+    CHECK(af.pixel_format == bf.pixel_format && af.width == bf.width && af.height == bf.height &&
+          af.pitch_bytes == bf.pitch_bytes && af.start_tick == bf.start_tick &&
+          af.end_tick == bf.end_tick && af.sequence == bf.sequence, "same video metadata");
+    for (uint32_t y = 0; y < af.height; ++y)
+        CHECK(memcmp((const uint8_t *)ap + (size_t)y * af.pitch_bytes,
+                     (const uint8_t *)bp + (size_t)y * bf.pitch_bytes,
+                     (size_t)af.width * sizeof(*ap)) == 0, "same defined borrowed video pixels");
 }
 #endif

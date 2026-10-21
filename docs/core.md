@@ -1,17 +1,53 @@
 # Diagnostic core contract and limits
 
-This SDK executes the original `tests/diagnostic/diagnostic.S` guest through an
-instance-owned 68000 subset and ROM/RAM bus. It has a VDP path (see
-[video.md](video.md)), deterministic PSG PCM, and a three-button controller path
-(see [input.md](input.md)). An instance-owned Z80 instruction subset has pinned
-functional vectors but is not connected to the Genesis sound bus or scheduler.
-FM/DAC, bus arbitration, cartridge save devices and broad game compatibility remain
-unimplemented or unqualified.
+The C17 API 4 core executes original diagnostic and independent-game guests through
+an instance-owned 68000 subset, ROM/RAM bus, bounded VDP path, two controller ports,
+connected Z80 sound path, PSG, discrete YM2612 FM/timers/status/DAC, and deterministic
+PCM. See [video](video.md), [input](input.md), and [audio](audio.md) for component
+contracts. A corrected independent MIT game v2 passes six source-derived Genewhip
+public-client cases (840 requested fields) plus a separate 720-field scenario. This
+is bounded evidence for that guest and profile; broad game compatibility remains
+unproven.
 
 The explicit profile is Model 1 VA3 NTSC-U, pre-TMSS. The nominal 53,693,175 Hz
 master clock and CPU divider 7 are emulator conventions. Zeroed cold RAM and
 registers are deterministic Genewhip policies, not power-on hardware claims.
 No firmware, TMSS bypass, environment configuration or runtime dependency is used.
+
+## Integrator contract (API 4)
+
+`GW_API_VERSION` is 4 and is independent of package version 0.1.0 and the input-log
+format string `genewhip-input-log 1`. Configuration/event/result structures must be
+zero-initialized with `struct_size = sizeof(value)` and the current version; exact
+size/version mismatches return `GW_ERROR_VERSION`. Unknown flags/invalid pointers,
+overlapping caller buffers, invalid lengths and malformed events return
+`GW_ERROR_ARGUMENT`; unsupported profile/reset/device choices return
+`GW_ERROR_PROFILE` or `GW_ERROR_UNSUPPORTED`; malformed ROM reset vectors return
+`GW_ERROR_ROM`; missing loaded content returns `GW_ERROR_NOT_LOADED`; time and
+capacity bounds return `GW_ERROR_TIME` and `GW_ERROR_CAPACITY`; an absent video field
+returns `GW_ERROR_EMPTY`. Check the returned `gw_status` and, for a successful run,
+also inspect the `gw_run_result.stop_reason`: unsupported guest execution is a
+reported stop, not a C API failure.
+
+The caller owns the `gw_machine` after successful `gw_create` and must call
+`gw_destroy` exactly once. `gw_load_rom` copies 514 bytes through 4 MiB of even-sized
+ROM input and the caller may release its buffer after return. Failed replacement
+leaves the existing machine unchanged. One host thread may use an instance at a
+time; callers serialize access. Independent instances may run concurrently. The
+core reads no host clock, environment, filesystem, network, or device service.
+Create/load allocate; ordinary run/query/event/audio calls are bounded and
+allocation-free.
+
+All outputs are copied except the read-only pixel pointer from
+`gw_get_video_field`. That pointer is core-owned and remains valid until the next
+run, load, cold init, console reset, or destroy on that instance. Audio output is
+copied interleaved native-endian `int16_t` stereo frames; master ticks use the
+53,693,175 Hz model clock. `gw_audio_read` reports produced frames, first sample
+index, lost oldest frames, and clipping through `gw_audio_read_result`. Buffers
+must be suitably aligned, valid for the stated size, and non-overlapping with one
+another or machine storage. Native structure layout is not a file format; no
+cross-compiler binary ABI, snapshot, or replay compatibility is promised. Because
+this is pre-1.0, rebuild consumers whenever the API version or header changes.
 
 ## CPU and video contracts
 
@@ -20,6 +56,13 @@ in [cpu.md](cpu.md). Video, VDP timing and the field contract are specified in
 [video.md](video.md). Unsupported encodings, odd word/long accesses and unmapped
 addresses stop with an unsupported-instruction or unsupported-address reason;
 address-error and bus-error frames are not modeled.
+
+Phase 4's corrected independent v2 successor completed all six frozen schedules
+through the public headless client without an unsupported stop. This is a bounded
+guest result, not a general game-compatibility claim; the separate v1 command-code
+7 stop remains unsupported. Public VDP bus contracts also exercise a legal control
+port mirror word write and split long write, plus explicit byte-lane and odd-word
+stops (`gameplay_bus_contract`).
 
 ROM maps at zero up to its copied length, at most 4 MiB. Work RAM is 64 KiB,
 mirrored in the 0xe00000–0xffffff region. CPU addresses are masked to 24 bits.
@@ -150,30 +193,32 @@ copy. Create/load allocate; all other calls stay allocation-free.
 ## API 4 audio additions
 
 `gw_config.audio_rate_hz` selects PCM output from 8,000 through 192,000 Hz; zero
-disables PCM production while PSG state still advances. `gw_audio_read` copies
-interleaved native-endian `int16_t` stereo frames from a bounded queue. Frame
-production follows `floor(actual_tick * rate / GW_MASTER_HZ)` across run splits;
-queue overflow drops the oldest frames and reports `lost` and `first_index`.
-`GW_MIX_V1` currently mixes PSG channels equally into left and right, with a bipolar
-peak of 2048 per channel and a 2 dB integer attenuation table. The first PSG port
-slice accepts only byte writes to `0xC00011`; reads, wider accesses and unverified
-mirrors stop as unsupported addresses. PSG tone/noise output is implemented. FM/DAC
-sound and the Genesis Z80 bus connection are not implemented. The resampler kernel and its hash check are
-described by `tests/audio/resampler_kernel_hash.py`. The complete PCM queue, count,
-trace and current audio limitations contract is in [audio.md](audio.md).
+disables PCM production while chip state still advances. `gw_audio_read` copies
+interleaved native-endian `int16_t` stereo frames from a bounded 8,192-frame queue.
+Frame production follows `floor(actual_tick * rate / GW_MASTER_HZ)` across run
+splits; overflow drops the oldest frames and reports `lost` and `first_index`.
+The current deterministic mix contains PSG, FM and DAC sources; YM writes can be
+copied from a bounded optional trace. PSG/FM comparator deviations, fixed model
+choices and exact VA3 reset-wiring uncertainty are documented in [audio.md](audio.md)
+and `evidence/fm-deviation-ledger.json`. These implementation and fixture results
+do not establish broad game audio compatibility or exact silicon reset behavior.
+The resampler kernel and its hash check are described by
+`tests/audio/resampler_kernel_hash.py`.
 
 `gw_config.port_device[2]` and `GW_EVENT_PAD_STATE` drive the I/O device
 (see [input.md](input.md)): `GW_DEVICE_NONE` and `GW_DEVICE_PAD3` are accepted at
-creation and any other value returns `GW_ERROR_UNSUPPORTED`. The VDP supports a backdrop
-path only; unsupported modes stop with `GW_STOP_UNSUPPORTED_STATE`
-(see [video.md](video.md) and [cpu.md](cpu.md)). `tests/consumer/main.c` pulls a field
+creation and any other value returns `GW_ERROR_UNSUPPORTED`. The VDP supports the
+documented subset described in [video.md](video.md); unsupported modes stop with
+`GW_STOP_UNSUPPORTED_STATE` (see also [cpu.md](cpu.md)). `tests/consumer/main.c` pulls a field
 from the installed SDK. API 4 adds `audio_rate_hz`, `gw_audio_read_result`,
 `gw_audio_read`, `gw_audio_write`, `gw_configure_audio_trace` and
-`gw_get_audio_writes`; all outputs are copied and introduce no borrowed pointer.
+`gw_get_audio_writes`; audio outputs are copied. The video-field pixel pointer is
+the sole borrowed output.
 Z80 fault encodings follow [z80.md](z80.md): bit 30 marks Z80 faults, unsupported
 instructions use `0x40000000 | z80_pc` with `opcode = prefix<<8 | byte`, and
 unsupported addresses use `0x40000000 | z80_address`. No broad game compatibility,
-full audio-chip coverage, cycle accuracy or published release is claimed.
+complete audio-chip coverage, cycle accuracy, physical host-quality claim, or
+published release is claimed.
 
 ### Phase 1 contract amendments (API 3, historical)
 
@@ -336,11 +381,11 @@ still no public snapshot, so native layouts must not be serialized.
 Guest `RESET` resets neither the VDP, I/O devices nor PSG. Session state (input log,
 held masks, field cadence) belongs to the host layer, not the core (`docs/desktop.md`).
 
-## Consolidated limitations (Phase 2)
+## Consolidated limitations (Phase 2/4)
 
 Each item links to the document that states the details and what is, and is not, independently
 checked. Evidence counts, including every unknown, unsupported and skipped outcome, are in
-the Phase 2 report described in `evidence/README.md`.
+the source-bound Phase 4 reports described in `evidence/README.md`.
 
 - CPU ([docs/cpu.md](cpu.md)): a subset of the 68000 instruction set; unsupported forms stop
   fail-closed. In the full pinned vector corpus 41097 of 210000 records pass and 168903 are
@@ -353,15 +398,20 @@ the Phase 2 report described in `evidence/README.md`.
   peripherals; no controller settling delay; TH does not raise an interrupt.
 - Desktop ([docs/desktop.md](desktop.md)): PSG playback is automated through the SDL stream; keyboard and gamepad paths are covered by
   scripts, not physical devices; the display path also passes an opt-in real-window lane locally;
-  the hosted desktop job has not run.
-- Game compatibility: none is claimed. The admitted independent game currently stops the core
-  with an unsupported-address stop on its first field (non-gating smoke), so its row is
-  `unsupported`; broader compatibility, FM/DAC audio, performance and other hosts remain unproven.
+  the hosted desktop job has not run. Actual vsync, renderer readback, physical scanout,
+  acoustic quality and latency remain unknown.
+- Game compatibility: the corrected independent-game-v2 has a separate six-case,
+  840-requested-field Genewhip gameplay result and a 720-field sustained case through
+  headless and desktop clients. That exact guest/profile/scenario result does not imply
+  broad compatibility; CPU/VDP subsets, other games, hardware timing and other hosts
+  remain unproven. See the current report in `evidence/phase4-gameplay.json` and its
+  identity-qualified package copy.
 - Evidence environment: the independent-game admission and consumer checks (CTest label `mame`)
-  need a local MAME 0.289 build at `build/tool-cache/mame0289/source` (ignored) or
-  `GENEWHIP_MAME_SOURCE_DIR`. Without it they still run the recorded-evidence rejection checks,
-  then report Skipped (exit 77) with the build command. A skip is an infrastructure gap, not a
-  pass: the fresh MAME route checks are not re-verified on this host.
+  were run against a source-built signed MAME 0.289 for the corrected v2 fixture. The
+  exact v1 executable is no longer available for a fresh historical probe: its current
+  probe reports 2 skipped and 77 unknown, which is not a pass. The unresolved BUSREQ
+  status-polarity conflict between two Sega primary manuals also remains visible in
+  [z80.md](z80.md); current seam outcomes are model-conformance evidence, not hardware truth.
 
 ## Development and portability
 

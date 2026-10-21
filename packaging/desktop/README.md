@@ -1,63 +1,42 @@
-# Genewhip audio-capable diagnostic desktop preview
+# Playable desktop preview
 
-This unsigned, unnotarized archive is a macOS arm64 diagnostic preview, version
-0.1.0 and C API 4. It runs the original Genewhip raster toy and its scripted
-PSG, FM and DAC inputs. The core has deterministic PCM and the runner exposes
-host audio counters. This is not a game-compatible release: no game audio
-compatibility or performance claim is made. macOS arm64 is the only exercised
-platform.
+The local desktop package is built from a committed source snapshot and qualified against its exact archive bytes. Read its adjacent `.qualification.json` receipt for the filename, source revision, checksum, inventory identity, and measured scenario results. Old snapshots may remain for historical evidence; only the current receipt-backed identity should be recommended for adoption.
 
-FM is the attributed BSD-3-Clause ymfm port. The Phase 3 report records known
-model comparison deviations: 54,925 of 54,991 FM samples and 87 of 239 DAC
-samples differ from an alternate reference model; 22 FM and 34 DAC status
-readings also differ. These comparisons do not establish hardware truth. Exact
-VA3 FM reset wiring remains uncertain; the adopted reset behavior is a model
-choice. The report keeps unsupported, skipped and unknown evidence outcomes
-visible.
+The package version is 0.1.0 and the core API is version 4. The corrected MIT game v2 is admitted for its bounded MAME reference contract and separately exercised by Genewhip over six frozen cases and a 720-field sustained scenario. This does not establish general game compatibility or hardware accuracy. The raster toy provides PSG/FM/DAC diagnostics, not commercial-game audio compatibility. FM comparator deviations and exact VA3 reset wiring remain documented unknowns.
 
-## Contents
+The package was exercised on macOS 26.6.2 arm64. Its build deployment target was not explicitly set, so the tested OS does not establish a minimum supported macOS version. It is unsigned and unnotarized. The checksum identifies bytes, not publisher identity.
 
-| Path | What |
-|---|---|
-| `bin/genewhip-desktop` | SDL3 3.4.18 static runner with audio enabled |
-| `bin/gw_headless` | SDL-free replay client |
-| `share/genewhip/raster-toy.bin` | Original 32 KiB Genewhip diagnostic cartridge |
-| `share/genewhip/raster-toy-demo.log` | Scripted A/B/C PSG/FM/DAC input schedule |
-| `share/genewhip/phase3-evidence.json` | Versioned Phase 3 evidence for this source revision |
-| `share/genewhip/LICENSE`, `SDL3-LICENSE.txt`, `THIRD-PARTY-ymfm.txt`, `raster-toy-NOTICES.md` | MIT, SDL3 zlib, ymfm BSD-3-Clause and fixture provenance/notices |
-| `metadata.json`, `checksums.json` | Source revision, toolchain, archive label and per-file SHA-256 inventory |
-
-## Verify and run
-
-Check the supplied `.sha256` sidecar, extract the archive, then run:
+Download the complete 0.1.0 release inventory, then select the desktop archive by its inventory entry. The same commands are exercised against the published bytes during release verification:
 
 ```sh
-bin/genewhip-desktop share/genewhip/raster-toy.bin
+gh release download v0.1.0 --repo szTheory/genewhip --dir "$ARTIFACT_DIR"
+DESKTOP_ARCHIVE="$(python3 -c 'import json,os; d=json.load(open(os.path.join(os.environ["ARTIFACT_DIR"],"inventory.json"))); print(next(n for n in d["assets"] if "playable-preview" in n and n.endswith(".tar.gz")))')"
 ```
 
-Press A, B and C to trigger the toy's PSG, FM and DAC voices. M toggles mute,
-P or Space pauses/resumes, and R resets. The process exit line reports audio
-and buffering counters. The exact archive smoke replays the bundled log for
-240 fields under SDL dummy drivers, verifies `audio=on`, checks
-`produced_frames = consumed_frames + queued_frames + dropped_frames` and
-`core_lost=0`, and compares every field hash with `gw_headless` replaying the
-same log. It also validates the archive checksum and inventory, detects a
-named tamper, and repeats execution after relocating the extracted directory.
+The local commands below verify, extract and run the exact downloaded archive.
 
-The archive is unsigned and unnotarized. A checksum identifies bytes but does
-not authenticate their origin. No signed, notarized, multi-architecture or
-published release is claimed.
+<a id="desktop-local-verify-extract-run"></a>
 
-## Human-only observations for phase closeout
+```sh
+cd "$ARTIFACT_DIR"
+shasum -a 256 -c "$DESKTOP_ARCHIVE.sha256"
+mkdir -p "$EXTRACT_DIR"
+tar -xzf "$ARTIFACT_DIR/$DESKTOP_ARCHIVE" -C "$EXTRACT_DIR"
+PACKAGE_DIR="$EXTRACT_DIR/${DESKTOP_ARCHIVE%.tar.gz}"
+"$PACKAGE_DIR/bin/genewhip-desktop" --fields 120 \
+  "$PACKAGE_DIR/share/genewhip/independent-game-v2.bin"
+```
 
-Automation establishes deterministic activity and counter integrity. It cannot
-establish these two physical-output observations:
+Keyboard controls use arrows and Z/X/C for directions and A/B/C; Return maps to Start. A connected gamepad uses its D-pad, west/south/east face buttons, and Start. P pauses/resumes, R resets, M toggles mute, and Escape quits. Dragging a cartridge onto the window loads it; a failed drop prints a sanitized `REJECT:` reason and keeps the current session. With no usable audio device the runner continues video-only and reports that audio is unavailable. The runner does not claim physical scanout, achieved vsync, acoustic quality, or latency.
 
-1. On a physical macOS audio device, assess the subjective quality of the toy's
-   PSG, FM and DAC sounds.
-2. Listen for any audible pop or click during at least 60 seconds of A/B/C
-   presses, including mute, pause/resume and reset transitions.
+The extracted package includes the exact manifest, fixture source and notices, input logs, evidence reports, SDL3 and ymfm notices, metadata, and member inventory. Preserve upstream notices in any copy or redistribution. The bounded smoke also checks incompatible input-log version rejection, missing/truncated cartridge handling, drop/reload, exact inventory and notice identity.
 
-These are perceptual checks requiring a listener and physical output. Structural
-underrun accounting is already automated. They do not establish game audio
-compatibility.
+For a fresh local archive from this checkout, use:
+
+<a id="desktop-package-smoke"></a>
+
+```sh
+cmake -DPROJECT_SOURCE_DIR="$PWD" -P tests/package/desktop_package_smoke.cmake
+```
+
+The command needs a reviewed/pinned SDL3 archive or network access for its pinned source archive, plus CMake 3.27+, C17/C++11 compilers, Python 3.8+, and Git. It builds and qualifies new bytes under `artifacts/`; it does not mutate a published release. See [desktop runner details](../../docs/desktop.md) and [fixture evidence](../../fixtures/README.md).

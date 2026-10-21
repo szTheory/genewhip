@@ -1,5 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# This script is also an entry point when invoked directly. Re-enter Bash with
+# an explicit environment so neither arbitrary variables nor exported shell
+# functions can reach curl, compilers, or other build children.
+if [[ "${GW_FM_BUILD_ENV_PID:-}" != "$$" ]]; then
+  CLEAN_ENV=("PATH=${PATH:-/usr/bin:/bin}" "GW_FM_BUILD_ENV_PID=$$")
+  for name in TMPDIR TMP TEMP CC CXX SDKROOT DEVELOPER_DIR MACOSX_DEPLOYMENT_TARGET SYSTEMROOT WINDIR; do
+    if [[ "${!name+x}" == x ]]; then CLEAN_ENV+=("$name=${!name}"); fi
+  done
+  exec /usr/bin/env -i "${CLEAN_ENV[@]}" /bin/bash "$0" "$@"
+fi
+unset GW_FM_BUILD_ENV_PID
+CC=${CC:-cc}
+CXX=${CXX:-c++}
+if [[ "${1:-}" == "--test-compiler-env" ]]; then
+  "$CC" --genewhip-env-probe
+  "$CXX" --genewhip-env-probe
+  exit 0
+fi
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 LOCK="$ROOT/tools/evidence/fm_compare/refs.lock.json"
 REFS="$ROOT/build/audio-refs"
@@ -58,8 +76,6 @@ cp "$TMP/nuked/"* "$REFS/nuked/"
 cp "$TMP/ymfm/"* "$REFS/ymfm-81aec25/"
 echo "Pinned reference hashes verified; compiling offline evidence adapters."
 
-CC=${CC:-cc}
-CXX=${CXX:-c++}
 "$CC" -std=c17 -O2 -Wall -Wextra -Wpedantic -I"$REFS/nuked" \
   "$ROOT/tools/evidence/fm_compare/nuked_replay.c" "$REFS/nuked/ym3438.c" -o "$BIN/nuked_replay"
 "$CXX" -std=c++17 -O2 -w -I"$REFS/ymfm-81aec25" \
