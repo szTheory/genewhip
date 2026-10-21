@@ -10,6 +10,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 class CIDependencyContract(unittest.TestCase):
     def test_prepare_script_builds_each_locked_evidence_dependency(self):
         script = (ROOT / "scripts/ci/prepare_evidence_dependencies.sh").read_text()
+        self.assertIn("brew install coreutils", script, "missing-macos-coreutils-bootstrap")
+        self.assertIn("bash scripts/fixtures/z80-as.sh", script)
         self.assertIn("bash scripts/fixtures/z80-as.sh", script)
         self.assertIn("bash scripts/fixtures/m68k-as.sh", script)
         self.assertIn("python3 tools/evidence/fm_compare/compare.py --fetch --build", script)
