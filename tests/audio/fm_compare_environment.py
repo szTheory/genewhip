@@ -5,6 +5,7 @@ import json
 import os
 import pathlib
 import subprocess
+import shlex
 import tempfile
 import unittest
 
@@ -45,15 +46,10 @@ class ChildEnvironmentTests(unittest.TestCase):
         marker_result = self.directory / "compiler-marker.txt"
         fake_compiler = self.directory / "fake-cc"
         fake_compiler.write_text(
-            "#!/usr/bin/env python3\n"
-            "import json, os, pathlib\n"
-            f"p = pathlib.Path({str(marker_result)!r})\n"
-            "rows = json.loads(p.read_text()) if p.exists() else []\n"
-            f"rows.append({{'marker': {MARKER!r} in os.environ, "
-            "'function': 'BASH_FUNC_GW_SYNTHETIC_AUDIT_FN%%' in os.environ, "
-            "'sdkroot': os.environ.get('SDKROOT'), "
-            "'developer_dir': os.environ.get('DEVELOPER_DIR')})\n"
-            "p.write_text(json.dumps(rows))\n"
+            "#!/bin/bash\n"
+            f"marker=0; [[ ${{{MARKER}+x}} == x ]] && marker=1\n"
+            "function=0; [[ $(type -t GW_SYNTHETIC_AUDIT_FN 2>/dev/null || true) == function ]] && function=1\n"
+            f"printf '%s\\t%s\\t%s\\t%s\\n' \"$marker\" \"$function\" \"${{SDKROOT-}}\" \"${{DEVELOPER_DIR-}}\" >> {shlex.quote(str(marker_result))}\n"
         )
         fake_compiler.chmod(0o755)
         env = os.environ.copy()
@@ -69,13 +65,13 @@ class ChildEnvironmentTests(unittest.TestCase):
             env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        rows = json.loads(marker_result.read_text())
+        rows = [line.split("\t") for line in marker_result.read_text().splitlines()]
         self.assertEqual(len(rows), 2, "CC and CXX both run through the clean environment")
-        for row in rows:
-            self.assertFalse(row["marker"])
-            self.assertFalse(row["function"])
-            self.assertEqual(row["sdkroot"], "/synthetic/sdk")
-            self.assertEqual(row["developer_dir"], "/synthetic/developer")
+        for marker, function, sdkroot, developer_dir in rows:
+            self.assertEqual(marker, "0")
+            self.assertEqual(function, "0")
+            self.assertEqual(sdkroot, "/synthetic/sdk")
+            self.assertEqual(developer_dir, "/synthetic/developer")
 
 
 if __name__ == "__main__":
