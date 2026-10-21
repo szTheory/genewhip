@@ -51,6 +51,9 @@ class DeliveryContract(unittest.TestCase):
             {"name": "required-ci", "conclusion": "SUCCESS"}]), [])
         self.assertEqual(delivery.validate_status_checks([
             {"name": "required-ci", "conclusion": "FAILURE"}]), ["required-ci-not-success"])
+        self.assertEqual(delivery.validate_status_checks([
+            {"name": "required-ci", "status": "IN_PROGRESS", "conclusion": None}]),
+            ["required-ci-pending"])
         self.assertEqual(delivery.validate_status_checks([]), ["required-ci-missing"])
 
     def test_main_run_requires_current_sha_and_all_qualification_lanes(self):

@@ -59,6 +59,9 @@ def validate_status_checks(checks: Any) -> list[str]:
         name = check.get("name") or check.get("context")
         conclusion = check.get("conclusion") or check.get("state")
         if name == "required-ci":
+            status = str(check.get("status", "")).upper()
+            if status and status != "COMPLETED" and not conclusion:
+                return ["required-ci-pending"]
             required.append(str(conclusion).upper())
     if not required:
         return ["required-ci-missing"]
@@ -279,8 +282,26 @@ def prepare_merge(args: argparse.Namespace) -> dict[str, Any]:
     if problems:
         raise DeliveryError(problems[0])
     _inspect_live_repository(repository, args.expected_head, args.expected_base)
-    _gh(["pr", "checks", str(args.pull_request), "--repo", repository, "--watch", "--fail-fast"],
-        timeout=args.timeout_seconds)
+    def aggregate_check():
+        current = _gh_json(["pr", "view", str(args.pull_request), "--repo", repository,
+                            "--json", fields])
+        problems = validate_pull_request(current, args.expected_head, args.expected_base,
+                                         check_status=False)
+        if problems:
+            raise DeliveryError(problems[0])
+        checks = current.get("statusCheckRollup")
+        if not isinstance(checks, list) or not any(
+                isinstance(check, dict) and (check.get("name") or check.get("context")) == "required-ci"
+                for check in checks):
+            return None
+        problems = validate_status_checks(checks)
+        if problems == ["required-ci-pending"]:
+            return None
+        if problems:
+            raise DeliveryError(problems[0])
+        return current
+
+    _wait_for(aggregate_check, args.timeout_seconds)
     pr = _gh_json(["pr", "view", str(args.pull_request), "--repo", repository,
                    "--json", fields + ",autoMergeRequest"])
     problems = validate_pull_request(pr, args.expected_head, args.expected_base)
