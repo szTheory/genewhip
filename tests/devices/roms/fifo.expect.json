@@ -1,0 +1,67 @@
+{
+  "seam": "vdp-fifo",
+  "rom": "tests/devices/roms/fifo.bin",
+  "run_ticks": 300000,
+  "ram_offset": 0,
+  "ram_length": 512,
+  "cases": [
+    {
+      "id": "fifo-burst-order",
+      "oracle_class": "documented",
+      "citation": "plutiedev vdp-commands (VRAM write command, data-port writes land at consecutive auto-increment addresses); Sega documentation (the write FIFO preserves order). Eight words 0x1111..0x8888 written to VRAM 0x1000 read back in that order",
+      "offset": 260,
+      "length": 16,
+      "expected": "11112222333344445555666677778888"
+    },
+    {
+      "id": "fifo-full-flag-in-burst",
+      "oracle_class": "documented",
+      "citation": "Sega documentation (status bit 8 = write FIFO full; four entries); gendev t=851 Nemesis VRAM-access measurements (the VDP accepts a data-port word only at an external-access slot, 16 per active H32 line, so back-to-back 68000 writes fill the FIFO and stall the CPU). The status read immediately follows a sustained eight-word burst in active display; only bit 8 is judged",
+      "offset": 256,
+      "length": 2,
+      "expected": "0100",
+      "mask": "0100"
+    },
+    {
+      "id": "fifo-empty-flag-after-wait",
+      "oracle_class": "documented",
+      "citation": "Sega documentation (status bit 9 = write FIFO empty, bit 8 = full): after polling until bit 9 reads set, the FIFO is empty and not full",
+      "offset": 258,
+      "length": 2,
+      "expected": "0200",
+      "mask": "0300"
+    },
+    {
+      "id": "fifo-no-full-in-blanking",
+      "oracle_class": "documented",
+      "citation": "gendev t=851 Nemesis VRAM-access measurements (external-access slots per line: 16 active versus 166 blank for H32, so blanking drains far faster than active display); the same eight-word burst with the display off leaves bit 8 (FIFO full) clear",
+      "offset": 276,
+      "length": 2,
+      "expected": "0000",
+      "mask": "0100"
+    },
+    {
+      "id": "fifo-address-change-pending",
+      "oracle_class": "documented",
+      "citation": "Sega documentation (each FIFO entry carries its own address and data): two words written at VRAM 0x1200 and 0x1202 are not redirected by a new VRAM address command issued while they are queued; the word written after the command lands at 0x1300",
+      "offset": 278,
+      "length": 6,
+      "expected": "aaaabbbbcccc"
+    },
+    {
+      "id": "fifo-status-per-write",
+      "oracle_class": "unknown",
+      "citation": "Number of guest instructions before the full flag first reads set depends on Genewhip instruction timing and the unmeasured slot schedule; observed bytes are reported only (twelve status words, one after each write)",
+      "offset": 288,
+      "length": 24
+    },
+    {
+      "id": "completion-marker",
+      "oracle_class": "documented",
+      "citation": "ROM control flow reached the final store (no stop before the last wait)",
+      "offset": 510,
+      "length": 2,
+      "expected": "600d"
+    }
+  ]
+}

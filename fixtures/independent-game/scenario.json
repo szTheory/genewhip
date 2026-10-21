@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "scenario_id": "genewhip-independent-game-start-right-ntscu-v1",
+  "machine": {
+    "driver": "genesis",
+    "software_region": "NTSC-U",
+    "profile": "VA3-NTSC-U"
+  },
+  "rom": {
+    "relative_path": "fixtures/independent-game/game.bin",
+    "sha256": "c17ad98e22d3237feac4f2dfe9d96295f32398a9ce8e4cf0b0542b1035bb0fc1"
+  },
+  "budget": {
+    "frames": 60,
+    "hard_timeout_seconds": 30,
+    "max_trace_bytes": 134217728,
+    "max_trace_rows": 3000000
+  },
+  "input_schedule": [
+    {
+      "frame": 1,
+      "control": "P1 Start",
+      "asserted": true
+    },
+    {
+      "frame": 20,
+      "control": "P1 Start",
+      "asserted": false
+    },
+    {
+      "frame": 25,
+      "control": "P1 Right",
+      "asserted": true
+    },
+    {
+      "frame": 50,
+      "control": "P1 Right",
+      "asserted": false
+    }
+  ],
+  "oracle": {
+    "kind": "independent-work-ram-progression",
+    "address": "0xFF0002",
+    "expected_minimum": 3,
+    "expected_maximum": 39,
+    "ancestry": "candidate source logic and input schedule; not derived from the MAME trace"
+  },
+  "forbidden_cartridge_sram": {
+    "storage_start": "0x200000",
+    "storage_end": "0x20FFFF",
+    "enable_control_start": "0xA130F0",
+    "enable_control_end": "0xA130F1",
+    "basis": "standard Genesis cartridge SRAM aperture and enable register, including both 16-bit bus lanes; candidate advertises no SRAM"
+  }
+}

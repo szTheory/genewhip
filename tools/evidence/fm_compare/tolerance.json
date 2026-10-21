@@ -1,0 +1,32 @@
+{
+  "schema": "genewhip-fm-tolerance",
+  "version": 1,
+  "classes": {
+    "exact": {"code": 0, "criterion": "left and right samples are identical"},
+    "within_lsb": {"code": 1, "n": 1, "criterion": "maximum absolute channel error is at most 1 LSB"},
+    "dac-discontinuity": {"code": 2, "criterion": "sample falls within one native sample of a recorded DAC-enable or DAC-data write"},
+    "deviating": {"code": 3, "criterion": "all other non-exact samples"}
+  },
+  "alignment": {
+    "nuked_index_offset": 0,
+    "method": "first key-on sample exceeding 4x its pre-event baseline (minimum 4 LSB), paired from a single-key-on calibration; no waveform-fit search",
+    "calibration": {
+      "port_keyon_onset_sample": 15,
+      "nuked_keyon_onset_sample": 15,
+      "port_baseline": [504, 504],
+      "nuked_baseline": [1, 1],
+      "port_to_nuked_amplitude_ratio_after_source_derived_rational": 1.072,
+      "port_mean_abs": 6181.315,
+      "nuked_mean_abs_after_source_derived_rational": 5765.315,
+      "port_ymfm_exact_samples": 262,
+      "paired_samples": 248,
+      "finding": "Apply source-derived output-stage rational 8192/1170 to the six-slot raw sum: Nuked mol/mor are x3-scaled; divide by three, average the six channels, then apply ymfm's 128*64/(6*65) output stage. The measured residual 1.072 ratio is retained as model deviation, not fitted."
+    }
+  },
+  "normalization": "For each 24-step Nuked frame, sum six valid multiplex outputs (mol/mor, each x3); apply exact source-derived scale 8192/1170 = (1/3) * (1/6) * (128*64/65), truncating toward zero once. The last factor is ymfm's YM2612 output stage after 9-bit channel clipping.",
+  "provenance": {
+    "variant": "YM2612 discrete, VA3 Model 1",
+    "variant_source_url": "https://i.imgur.com/wrmj9Pa.jpg",
+    "variant_source_sha256": "61f923b534fe0d46e23a4e124e093ced09252ee4fcfa1911d8957bbee375ddb5"
+  }
+}

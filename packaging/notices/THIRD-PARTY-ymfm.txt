@@ -1,0 +1,107 @@
+YMFM YM2612 C17 port
+
+Upstream: https://github.com/aaronsgiles/ymfm
+Revision: 81aec25ccbb98f4873a255f7551ac4dadac59b4a
+License: BSD-3-Clause
+Port: src/ym2612.c and src/ym2612.h
+
+Fetched files (SHA-256, pinned raw URL root below):
+2d2e9213c170a9866c616fa85b6da993a6724e10befc61f468ed9bfb84c4691c  LICENSE
+f5ab6fed63c8669abab8403e0e93132e1dad0ae4d8e4954e7836ab9e5b228405  ymfm.h
+1b27bfb7fa4963d7c54cb06fd9bf659450362d8ed496c6af7d487b068cac45c9  ymfm_fm.h
+4fb7fe59d4494a19e9f9c7888eb644a63d86e109fdefb27a8117bf6a5f6ab4b9  ymfm_fm.ipp
+1950990c3ea0c6d492a20f66a683a372a7367ef39f7830aa65b20a20d1bcbef5  ymfm_opn.h
+8734c6d5a6e1bf49a08eeb33d260d39c17cd1d26f5db506e5d0d3e416913b489  ymfm_opn.cpp
+
+URL root: https://raw.githubusercontent.com/aaronsgiles/ymfm/81aec25ccbb98f4873a255f7551ac4dadac59b4a/
+Paths: LICENSE; src/ymfm.h; src/ymfm_fm.h; src/ymfm_fm.ipp;
+src/ymfm_opn.h; src/ymfm_opn.cpp. The ignored local cache stores flat names.
+Only these six pinned files were read for this port.
+
+Function mapping (ported -> upstream file/function):
+- bitfield, clamp -> ymfm.h bitfield, clamp
+- effective_rate -> ymfm_fm.h fm_registers_base::effective_rate
+- abs_sin_attenuation, attenuation_to_volume, attenuation_increment,
+  detune_adjustment, opn_lfo_pm_phase_adjustment -> ymfm_fm.ipp same functions
+- reg_byte, reg_word and reg_* accessors -> ymfm_opn.h
+  opn_registers_base<true> (alias opna_registers) corresponding accessors
+- reg_reset, reg_write, reg_clock_noise_and_lfo, reg_lfo_am_offset,
+  reg_cache_operator_data, reg_compute_phase_step -> ymfm_opn.cpp
+  opn_registers_base<IsOpnA> corresponding methods, specialized IsOpnA=true
+- op_reset, op_prepare, op_clock, op_compute_volume, op_keyonoff,
+  op_start_attack, op_start_release, op_clock_keystate, op_clock_ssg_eg_state,
+  op_clock_envelope, op_clock_phase, op_envelope_attenuation -> ymfm_fm.ipp
+  fm_operator<opna_registers> corresponding methods
+- ch_reset, ch_keyonoff, ch_prepare, ch_clock, ch_output_4op -> ymfm_fm.ipp
+  fm_channel<opna_registers> corresponding methods
+- ch_add_to_output -> ymfm_fm.h fm_channel::add_to_output (two outputs)
+- engine_check_interrupts, engine_set_reset_status, engine_update_timer,
+  engine_mode_write, engine_write, engine_reset, engine_clock,
+  engine_output, engine_timer_expired -> ymfm_fm.h/.ipp fm_engine_base
+  corresponding methods (engine_output emits one OPN2 channel)
+- gw_ym2612_cold_init -> ymfm_opn.cpp ym2612 constructor,
+  opn_registers_base constructor, ymfm_fm.ipp engine/channel/operator
+  constructors, assign_operators; ymfm_opn.h channel/operator_offset;
+  ymfm_opn.cpp opn_registers_base<true>::operator_map
+- gw_ym2612_generate -> ymfm_opn.cpp ym2612::generate
+- dac_discontinuity -> ymfm_opn.h ym2612::dac_discontinuity
+- gw_ym2612_write_at -> ymfm_opn.cpp ym2612::write, write_address,
+  write_address_hi, write_data, write_data_hi, plus Genewhip timestamp/trace
+- gw_ym2612_read_status -> ymfm_opn.cpp ym2612::read_status,
+  ymfm_fm.ipp fm_engine_base::status, plus Genewhip busy deadline
+
+Specialization/integration ledger:
+- Concrete instance-owned C17 arrays replace C++ templates, references and
+  heap-owned operator/channel objects. Immutable logarithmic sine/power,
+  envelope, detune and LFO tables are preserved verbatim from the pinned files.
+- OPNA register layout is retained for the six-channel OPN2. Other chips,
+  ADPCM/SSG engines, OPL rhythm/2-op and OPM noise are not part of the port.
+  Debug formatting/wav writing and C++ save_restore are omitted; Genewhip's
+  test digest explicitly serializes the chip state without pointers/padding.
+- C17 asr supplies defined arithmetic-right-shift behavior. Narrowing and
+  signed/unsigned conversions are explicit with the same masked/wrapped values.
+- One YM sample per 1008 master ticks. Interface timers and busy use master/7
+  clock deadlines; timer expiry precedes a coincident sample. IRQ state is
+  maintained but is not connected to a Genesis CPU. No host clock is involved.
+- Native output, including the discontinuity and DAC low test bit, is unchanged.
+  The Genewhip stereo mix separately applies integer 3/4 (32768 -> 24576).
+- The approved 03-FM-RESET-AMENDMENT.md wrapper applies upstream engine reset
+  once on assertion, holds output silent and ignores writes while held. It
+  preserves upstream-retained address/DAC/LFO/counters/busy state, master time,
+  global sample grid, queued PCM and resampler continuation. Releasing reset
+  does not restore FM keys; retained enabled DAC data may resume its DC level.
+  Console-reset assertion is a model choice. Exact VA3 reset fidelity is unknown.
+- References to other authors inside upstream comments describe upstream
+  provenance, not additional sources read for this port.
+
+Verbatim upstream license:
+
+BSD 3-Clause License
+
+Copyright (c) 2021, Aaron Giles
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

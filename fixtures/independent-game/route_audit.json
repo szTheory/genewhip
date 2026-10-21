@@ -1,0 +1,564 @@
+{
+  "applicable_transactions": {
+    "AS_CPU_SPACE": {
+      "bits": 24,
+      "end": "0xFFFFFF",
+      "hook": "genewhip_trace",
+      "start": "0x000000",
+      "transactions": [
+        "interrupt_acknowledge_read"
+      ]
+    },
+    "AS_PROGRAM": {
+      "bits": 24,
+      "end": "0xFFFFFF",
+      "hook": "genewhip_trace",
+      "start": "0x000000",
+      "transactions": [
+        "opcode_fetch",
+        "data_read",
+        "data_write",
+        "memory_mapped_io_read",
+        "memory_mapped_io_write"
+      ]
+    }
+  },
+  "build": {
+    "executable_build_sha256": "6c056b1dfd38a409e531f37f2650d4b4c37ef63241f0991c3888cdc50681cb03",
+    "hook": "md_cons_state::install_cartslot/genewhip_trace",
+    "hook_range": "after cartridge overlays, each configured address_space [0, addrmask] for R/W",
+    "patch_sha256": "323f00f433f730ea682a26aaf4c142430538072d7389dd6fe8292477d0b6ac73",
+    "source_configuration_identity": "794aaeb429a59e8f146e6f0711e46925e2c104e979cda58234bfc72ba3857194"
+  },
+  "errors": [],
+  "hook_proof": {
+    "read_and_write_cache_invalidation": true,
+    "root_passthrough_taps": true,
+    "sentinels_required_in_runtime": [
+      "AS_PROGRAM opcode fetch",
+      "AS_PROGRAM data read",
+      "AS_PROGRAM data write",
+      "AS_CPU_SPACE interrupt acknowledge"
+    ],
+    "tap_callbacks_delegate_to_original_handler": true,
+    "tap_node_direct_read_pointer": "nullptr"
+  },
+  "machine": {
+    "cpu": "M68000, 16-bit data, 24-bit program and cpu-space address masks",
+    "driver": "genesis (Genesis USA, NTSC); machine ms_megadriv; software-list filter NTSC-U",
+    "map_entries": [
+      {
+        "access": [
+          "read",
+          "write"
+        ],
+        "end": "0xA01FFF",
+        "function": "megadriv_68k_base_map",
+        "line": 309,
+        "mapping": ".before_delay(NAME([](offs_t) { return 1; })).rw(FUNC(md_base_state::megadriv_68k_read_z80_ram), FUNC(md_base_state::megadriv_68k_write_z80_ram));",
+        "start": "0xA00000"
+      },
+      {
+        "access": [
+          "write"
+        ],
+        "end": "0xA03FFF",
+        "function": "megadriv_68k_base_map",
+        "line": 310,
+        "mapping": ".before_delay(NAME([](offs_t) { return 1; })).w(FUNC(md_base_state::megadriv_68k_write_z80_ram));",
+        "start": "0xA02000"
+      },
+      {
+        "access": [
+          "read",
+          "write"
+        ],
+        "end": "0xA04003",
+        "function": "megadriv_68k_base_map",
+        "line": 311,
+        "mapping": ".before_delay(NAME([](offs_t) { return 1; })).rw(FUNC(md_base_state::megadriv_68k_YM2612_read), FUNC(md_base_state::megadriv_68k_YM2612_write));",
+        "start": "0xA04000"
+      },
+      {
+        "access": [
+          "write"
+        ],
+        "end": "0xA06001",
+        "function": "megadriv_68k_base_map",
+        "line": 313,
+        "mapping": ".before_delay(NAME([](offs_t) { return 1; })).w(FUNC(md_base_state::megadriv_68k_z80_bank_write));",
+        "start": "0xA06000"
+      },
+      {
+        "access": [
+          "read"
+        ],
+        "end": "0xA10001",
+        "function": "megadriv_68k_base_map",
+        "line": 315,
+        "mapping": ".r(FUNC(md_base_state::m68k_version_read));",
+        "start": "0xA10000"
+      },
+      {
+        "access": [
+          "read",
+          "write"
+        ],
+        "end": "0xA10007",
+        "function": "megadriv_68k_base_map",
+        "line": 316,
+        "mapping": ".rw(FUNC(md_base_state::m68k_ioport_data_read), FUNC(md_base_state::m68k_ioport_data_write));",
+        "start": "0xA10002"
+      },
+      {
+        "access": [
+          "read",
+          "write"
+        ],
+        "end": "0xA1000D",
+        "function": "megadriv_68k_base_map",
+        "line": 317,
+        "mapping": ".rw(FUNC(md_base_state::m68k_ioport_ctrl_read), FUNC(md_base_state::m68k_ioport_ctrl_write));",
+        "start": "0xA10008"
+      },
+      {
+        "access": [
+          "read",
+          "write"
+        ],
+        "end": "0xA1000F",
+        "function": "megadriv_68k_base_map",
+        "line": 318,
+        "mapping": ".rw(FUNC(md_base_state::m68k_ioport_txdata_read<0>), FUNC(md_base_state::m68k_ioport_txdata_write<0>));",
+        "start": "0xA1000E"
+      },
+      {
+        "access": [
+          "read"
+        ],
+        "end": "0xA10011",
+        "function": "megadriv_68k_base_map",
+        "line": 319,
+        "mapping": ".r(FUNC(md_base_state::m68k_ioport_rxdata_read<0>));",
+        "start": "0xA10010"
+      },
+      {
+        "access": [
+          "read",
+          "write"
+        ],
+        "end": "0xA10013",
+        "function": "megadriv_68k_base_map",
+        "line": 320,
+        "mapping": ".rw(FUNC(md_base_state::m68k_ioport_s_ctrl_read<0>), FUNC(md_base_state::m68k_ioport_s_ctrl_write<0>));",
+        "start": "0xA10012"
+      },
+      {
+        "access": [
+          "read",
+          "write"
+        ],
+        "end": "0xA10015",
+        "function": "megadriv_68k_base_map",
+        "line": 321,
+        "mapping": ".rw(FUNC(md_base_state::m68k_ioport_txdata_read<1>), FUNC(md_base_state::m68k_ioport_txdata_write<1>));",
+        "start": "0xA10014"
+      },
+      {
+        "access": [
+          "read"
+        ],
+        "end": "0xA10017",
+        "function": "megadriv_68k_base_map",
+        "line": 322,
+        "mapping": ".r(FUNC(md_base_state::m68k_ioport_rxdata_read<1>));",
+        "start": "0xA10016"
+      },
+      {
+        "access": [
+          "read",
+          "write"
+        ],
+        "end": "0xA10019",
+        "function": "megadriv_68k_base_map",
+        "line": 323,
+        "mapping": ".rw(FUNC(md_base_state::m68k_ioport_s_ctrl_read<1>), FUNC(md_base_state::m68k_ioport_s_ctrl_write<1>));",
+        "start": "0xA10018"
+      },
+      {
+        "access": [
+          "read",
+          "write"
+        ],
+        "end": "0xA1001B",
+        "function": "megadriv_68k_base_map",
+        "line": 324,
+        "mapping": ".rw(FUNC(md_base_state::m68k_ioport_txdata_read<2>), FUNC(md_base_state::m68k_ioport_txdata_write<2>));",
+        "start": "0xA1001A"
+      },
+      {
+        "access": [
+          "read"
+        ],
+        "end": "0xA1001D",
+        "function": "megadriv_68k_base_map",
+        "line": 325,
+        "mapping": ".r(FUNC(md_base_state::m68k_ioport_rxdata_read<2>));",
+        "start": "0xA1001C"
+      },
+      {
+        "access": [
+          "read",
+          "write"
+        ],
+        "end": "0xA1001F",
+        "function": "megadriv_68k_base_map",
+        "line": 326,
+        "mapping": ".rw(FUNC(md_base_state::m68k_ioport_s_ctrl_read<2>), FUNC(md_base_state::m68k_ioport_s_ctrl_write<2>));",
+        "start": "0xA1001E"
+      },
+      {
+        "access": [
+          "read",
+          "write"
+        ],
+        "end": "0xA11101",
+        "function": "megadriv_68k_base_map",
+        "line": 328,
+        "mapping": ".rw(FUNC(md_base_state::megadriv_68k_check_z80_bus), FUNC(md_base_state::megadriv_68k_req_z80_bus));",
+        "start": "0xA11100"
+      },
+      {
+        "access": [
+          "write"
+        ],
+        "end": "0xA11201",
+        "function": "megadriv_68k_base_map",
+        "line": 329,
+        "mapping": ".w(FUNC(md_base_state::megadriv_68k_req_z80_reset));",
+        "start": "0xA11200"
+      },
+      {
+        "access": [
+          "read",
+          "write"
+        ],
+        "end": "0xC0001F",
+        "function": "megadriv_68k_base_map",
+        "line": 331,
+        "mapping": ".rw(m_vdp, FUNC(sega315_5313_device::vdp_r), FUNC(sega315_5313_device::vdp_w));",
+        "start": "0xC00000"
+      },
+      {
+        "access": [
+          "read",
+          "write"
+        ],
+        "end": "0xD0001F",
+        "function": "megadriv_68k_base_map",
+        "line": 332,
+        "mapping": ".rw(m_vdp, FUNC(sega315_5313_device::vdp_r), FUNC(sega315_5313_device::vdp_w)); // the earth defend",
+        "start": "0xD00000"
+      },
+      {
+        "access": [
+          "read",
+          "write"
+        ],
+        "end": "0xE0FFFF",
+        "function": "megadriv_68k_base_map",
+        "line": 333,
+        "mapping": ".ram().mirror(0x1f0000).share(\"megadrive_ram\");",
+        "start": "0xE00000"
+      },
+      {
+        "access": [
+          "read",
+          "write"
+        ],
+        "end": "0x3FFFFF",
+        "function": "megadriv_68k_map",
+        "line": 342,
+        "mapping": ".rom();",
+        "start": "0x000000"
+      },
+      {
+        "access": [
+          "read"
+        ],
+        "end": "0xFFFFF3",
+        "function": "cpu_space_map",
+        "line": 734,
+        "mapping": ".before_time(m_maincpu, FUNC(m68000_device::vpa_sync)).after_delay(m_maincpu, FUNC(m68000_device::vpa_after)).lr8(NAME([] () -> u8 { return 25; }));",
+        "start": "0xFFFFF3"
+      },
+      {
+        "access": [
+          "read"
+        ],
+        "end": "0xFFFFF5",
+        "function": "cpu_space_map",
+        "line": 736,
+        "mapping": ".before_time(m_maincpu, FUNC(m68000_device::vpa_sync)).after_delay(m_maincpu, FUNC(m68000_device::vpa_after)).lr8(NAME([] () -> u8 { return 26; }));",
+        "start": "0xFFFFF5"
+      },
+      {
+        "access": [
+          "read"
+        ],
+        "end": "0xFFFFF7",
+        "function": "cpu_space_map",
+        "line": 737,
+        "mapping": ".before_time(m_maincpu, FUNC(m68000_device::vpa_sync)).after_delay(m_maincpu, FUNC(m68000_device::vpa_after)).lr8(NAME([] () -> u8 { return 27; }));",
+        "start": "0xFFFFF7"
+      },
+      {
+        "access": [
+          "read"
+        ],
+        "end": "0xFFFFF9",
+        "function": "cpu_space_map",
+        "line": 741,
+        "mapping": ".before_time(m_maincpu, FUNC(m68000_device::vpa_sync)).after_delay(m_maincpu, FUNC(m68000_device::vpa_after)).lr8(NAME([this] () -> u8 { m_vdp->irq_ack(); return 28; }));",
+        "start": "0xFFFFF9"
+      },
+      {
+        "access": [
+          "read"
+        ],
+        "end": "0xFFFFFB",
+        "function": "cpu_space_map",
+        "line": 742,
+        "mapping": ".before_time(m_maincpu, FUNC(m68000_device::vpa_sync)).after_delay(m_maincpu, FUNC(m68000_device::vpa_after)).lr8(NAME([] () -> u8 { return 29; }));",
+        "start": "0xFFFFFB"
+      },
+      {
+        "access": [
+          "read"
+        ],
+        "end": "0xFFFFFD",
+        "function": "cpu_space_map",
+        "line": 746,
+        "mapping": ".before_time(m_maincpu, FUNC(m68000_device::vpa_sync)).after_delay(m_maincpu, FUNC(m68000_device::vpa_after)).lr8(NAME([this] () -> u8 { m_vdp->irq_ack(); return 30; }));",
+        "start": "0xFFFFFD"
+      },
+      {
+        "access": [
+          "read"
+        ],
+        "end": "0xFFFFFF",
+        "function": "cpu_space_map",
+        "line": 747,
+        "mapping": ".before_time(m_maincpu, FUNC(m68000_device::vpa_sync)).after_delay(m_maincpu, FUNC(m68000_device::vpa_after)).lr8(NAME([] () -> u8 { return 31; }));",
+        "start": "0xFFFFFF"
+      },
+      {
+        "access": [
+          "read"
+        ],
+        "end": "0x7FFFFF",
+        "function": "install_cartslot",
+        "line": 92,
+        "mapping": "cartridge read delegate",
+        "start": "0x000000"
+      },
+      {
+        "access": [
+          "write"
+        ],
+        "end": "0x7FFFFF",
+        "function": "install_cartslot",
+        "line": 93,
+        "mapping": "cartridge write delegate",
+        "start": "0x000000"
+      },
+      {
+        "access": [
+          "read",
+          "write"
+        ],
+        "end": "0xA130FF",
+        "function": "install_cartslot",
+        "line": 94,
+        "mapping": "cartridge A13 read/write registers",
+        "start": "0xA13000"
+      },
+      {
+        "access": [
+          "read",
+          "write"
+        ],
+        "end": "0xA150FF",
+        "function": "install_cartslot",
+        "line": 95,
+        "mapping": "cartridge A15 read/write registers",
+        "start": "0xA15000"
+      }
+    ],
+    "map_source": "src/mame/sega/megadriv.cpp::megadriv_68k_base_map + megadriv_68k_map + cpu_space_map; src/mame/sega/mdconsole.cpp::ms_megadriv + install_cartslot",
+    "program_range": "0x000000-0xFFFFFF"
+  },
+  "routes": [
+    {
+      "helper": "m68000-sdp.cpp: m_opcodes.read_interruptible",
+      "hook": "AS_PROGRAM read tap",
+      "proof": "m68000_device::device_start binds m_r_opcodes from the configured or aliased opcode space; root tap prevents direct handler bypass",
+      "route": "opcode fetch",
+      "space": "AS_OPCODES alias AS_PROGRAM"
+    },
+    {
+      "helper": "m68000-sdp.cpp: m_program.read_interruptible",
+      "hook": "AS_PROGRAM read tap",
+      "proof": "standard non-MMU handler selected by m68000_device::device_start; specific accessor is bound to AS_PROGRAM",
+      "route": "normal data read",
+      "space": "AS_PROGRAM"
+    },
+    {
+      "helper": "m68000-sdp.cpp: m_program.write_interruptible",
+      "hook": "AS_PROGRAM write tap",
+      "proof": "standard non-MMU handler selected by m68000_device::device_start; specific accessor is bound to AS_PROGRAM",
+      "route": "normal data write",
+      "space": "AS_PROGRAM"
+    },
+    {
+      "helper": "same m_program32 specific read/write methods against Genesis device map callbacks",
+      "hook": "AS_PROGRAM read/write tap",
+      "proof": "Genesis controllers, YM, VDP, Z80 control and cartridge registers are mapped in AS_PROGRAM; there is no separate M68000 AS_IO",
+      "route": "memory-mapped I/O read/write",
+      "space": "AS_PROGRAM"
+    },
+    {
+      "helper": "m_s_uprogram aliases m_s_program absent map",
+      "hook": "AS_PROGRAM read/write tap",
+      "proof": "space fallback uses same hooked program space",
+      "route": "user data read/write",
+      "space": "AS_USER_PROGRAM alias AS_PROGRAM"
+    },
+    {
+      "helper": "m_s_uopcodes aliases opcode/program absent maps",
+      "hook": "AS_PROGRAM read tap",
+      "proof": "space fallback uses same hooked program space",
+      "route": "user opcode fetch",
+      "space": "AS_USER_OPCODES alias AS_PROGRAM"
+    },
+    {
+      "helper": "m68000-sdp.cpp: m_cpu_space.read_interruptible; base implementation: m_cpu_space->read_word(0xfffffff0 | (int_level << 1))",
+      "hook": "AS_CPU_SPACE read tap",
+      "proof": "CPU-space specific accessor is bound to configured CPU-space; 24-bit mask is 0xfffff0-0xfffffe",
+      "route": "interrupt acknowledge",
+      "space": "AS_CPU_SPACE"
+    }
+  ],
+  "schema_version": 1,
+  "source": {
+    "archive_sha256": "0929cc749afabcef892900e10dd90bd8b05f94a7dde8f367ac6a5d2082589f84",
+    "commit": "f34f02505e32c1993c6a782b6814232cbfc74e36",
+    "files_sha256": {
+      "src/devices/cpu/m68000/m68000-sdp.cpp": "975ea0f571da9e776a803476915b0ce30596db249688fea75567c83be2d35664",
+      "src/devices/cpu/m68000/m68000.cpp": "a1d4daea1f61cdc4779822c7e59d561ff48c7337aaa7f920854fe2c624d70883",
+      "src/devices/cpu/m68000/m68000.h": "cdfb07d21b62dbf042cdebccd0d57d1be61cf84b8be257b3173408ab307425fb",
+      "src/devices/cpu/m68000/m68kcommon.h": "da6e4ad19fd6549e817888dd6c7e71dc113a03b859d7d2ec417420a42afc8d2a",
+      "src/devices/cpu/m68000/m68kcpu.cpp": "2aaee6d1134ee27013af98ef31ca7290e42bf12f695cf053ed624424258c8784",
+      "src/emu/emumem.cpp": "2d0d247e44348b27cbda8b2d8114a1378edfe5df5f99584eaf306fc1e2626294",
+      "src/emu/emumem.h": "8d9426908670fcfba40884427953a801be640322e103c29abd0ad7fb313b1e54",
+      "src/emu/emumem_aspace.cpp": "2b7411f12eb6305070070f16ff781b5b80a14e52160a59eefc09c018c4bda03c",
+      "src/emu/emumem_het.cpp": "3353901ee8f7add6cbe889a2a5951012e7d2c29607ddb47172399665aecc03d3",
+      "src/emu/emumem_het.h": "fd4f75259e2244a1abf1cf89153d88d137d12085da051a5a4d416199cebe02a9",
+      "src/mame/sega/mdconsole.cpp": "d851f8ba3c9df54a6e4385cf8a477642ed688ba20bb6db1479a40fbfca9e38f2",
+      "src/mame/sega/megadriv.cpp": "3623ae57192fdd68c12d8cd09f93612c7c6a9b7d74cb4b7a043809ad76c9b48a"
+    },
+    "source_anchors": {
+      "Genesis CPU map": {
+        "file": "src/mame/sega/megadriv.cpp",
+        "line": 732,
+        "symbol": "void md_core_state::cpu_space_map(address_map &map)"
+      },
+      "Genesis NTSC-U machine": {
+        "file": "src/mame/sega/mdconsole.cpp",
+        "line": 221,
+        "symbol": "void md_cons_slot_state::ms_megadriv(machine_config &config)"
+      },
+      "Genesis base map": {
+        "file": "src/mame/sega/megadriv.cpp",
+        "line": 305,
+        "symbol": "void md_base_state::megadriv_68k_base_map(address_map &map)"
+      },
+      "Genesis program map": {
+        "file": "src/mame/sega/megadriv.cpp",
+        "line": 338,
+        "symbol": "void md_base_state::megadriv_68k_map(address_map &map)"
+      },
+      "cart overlays": {
+        "file": "src/mame/sega/mdconsole.cpp",
+        "line": 87,
+        "symbol": "void md_cons_state::install_cartslot()"
+      },
+      "instruction and CPU bus": {
+        "file": "src/devices/cpu/m68000/m68kcpu.cpp",
+        "line": 2531,
+        "symbol": "/* Acknowledge the interrupt by reading the cpu space. */"
+      },
+      "interrupt acknowledge": {
+        "file": "src/devices/cpu/m68000/m68kcpu.cpp",
+        "line": 2531,
+        "symbol": "/* Acknowledge the interrupt by reading the cpu space. */"
+      },
+      "m68000 logical spaces": {
+        "file": "src/devices/cpu/m68000/m68000.cpp",
+        "line": 183,
+        "symbol": "device_memory_interface::space_config_vector m68000_device::memory_logical_space_config() const"
+      },
+      "standard M68000 generated handlers": {
+        "file": "src/devices/cpu/m68000/m68000-sdp.cpp",
+        "line": 8,
+        "symbol": "m68000_device::state_reset_dp"
+      }
+    },
+    "tag": "mame0289"
+  },
+  "spaces": [
+    {
+      "hooked_alias": null,
+      "source_disposition": "Genesis map + cartridge overlays; handles 68000 supervisor/program data and instruction fetches across the full 24-bit mask",
+      "space": "AS_PROGRAM",
+      "status": "configured"
+    },
+    {
+      "hooked_alias": "AS_PROGRAM",
+      "source_disposition": "no opcode map configured; m68000 device aliases opcode accesses to AS_PROGRAM",
+      "space": "AS_OPCODES",
+      "status": "alias"
+    },
+    {
+      "hooked_alias": "AS_PROGRAM",
+      "source_disposition": "generic MAME enum exists but M68000 logical-space configuration does not enumerate AS_DATA; CPU data helpers use program space",
+      "space": "AS_DATA",
+      "status": "inapplicable"
+    },
+    {
+      "hooked_alias": "AS_PROGRAM",
+      "source_disposition": "generic MAME enum exists but M68000 logical-space configuration does not enumerate AS_IO; Genesis 68000 I/O devices are mapped on AS_PROGRAM",
+      "space": "AS_IO",
+      "status": "inapplicable"
+    },
+    {
+      "hooked_alias": "AS_PROGRAM",
+      "source_disposition": "no user-program map configured; m68000 device aliases it to AS_PROGRAM",
+      "space": "AS_USER_PROGRAM",
+      "status": "alias"
+    },
+    {
+      "hooked_alias": "AS_PROGRAM",
+      "source_disposition": "no user-opcode map configured; m68000 device aliases it to AS_PROGRAM through user-program fallback",
+      "space": "AS_USER_OPCODES",
+      "status": "alias"
+    },
+    {
+      "hooked_alias": null,
+      "source_disposition": "Genesis config sets explicit CPU-space map; M68000 16-bit, 24-bit mask",
+      "space": "AS_CPU_SPACE",
+      "status": "configured"
+    }
+  ],
+  "status": "pass"
+}

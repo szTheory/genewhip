@@ -1,0 +1,55 @@
+name: Diagnostic SDK checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+  merge_group:
+  schedule:
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: diagnostic-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  required-gate:
+    if: github.event_name != 'schedule'
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - run: bash scripts/ci/required-gate.sh
+      - run: cmake -DPROJECT_SOURCE_DIR="$PWD" -P tests/package/package_smoke.cmake
+  desktop:
+    # Separate, non-required lane: opts into SDL3 (fetched at configure time, pinned by URL_HASH).
+    # scripts/ci/required-gate.sh stays SDL-free and offline.
+    runs-on: macos-14
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - run: cmake -S . -B build/desktop -DCMAKE_BUILD_TYPE=Release -DGENEWHIP_BUILD_DESKTOP=ON
+      - run: cmake --build build/desktop
+      - run: SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy GENEWHIP_LIVE_DISPLAY=1 ctest --test-dir build/desktop -R runner_ --output-on-failure
+  extended:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - run: bash scripts/ci/extended-gate.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: extended-outcomes
+          path: build/extended/reports/
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,195 @@
+{
+  "seam": "vdp-irq",
+  "rom": "tests/devices/roms/irq.bin",
+  "run_ticks": 25000000,
+  "ram_offset": 0,
+  "ram_length": 1024,
+  "cases": [
+    {
+      "id": "vint-count-3",
+      "oracle_class": "documented",
+      "citation": "plutiedev vdp-registers (register 1 bit 5, IE0: vertical interrupt enable) and Sega documentation (VINT is raised once per field at the start of vertical blanking). The guest enables IE0, lowers the mask and masks interrupts again once its handler has run three times; one interrupt per field means the handler count is exactly 3",
+      "offset": 272,
+      "length": 2,
+      "expected": "0003"
+    },
+    {
+      "id": "vint-at-vblank-start",
+      "oracle_class": "documented",
+      "citation": "Sega documentation (VINT is raised at the start of vertical blanking, line 224 of the 224-line NTSC display) and Charles MacDonald genvdp.txt (V counter 0xE0 on line 224). Each of the first three handler entries (unmasked, so accepted within a few instructions) reads the HV counter word; only the V byte is judged, the H byte is a model-scoped value",
+      "offset": 578,
+      "length": 6,
+      "expected": "e000e000e000",
+      "mask": "ff00ff00ff00"
+    },
+    {
+      "id": "vint-handler-sr",
+      "oracle_class": "documented",
+      "citation": "MC68000UM exception processing: the status register seen by the handler has S set, T clear and the interrupt mask raised to the accepted level; Sega documentation (VINT is level 6). The upper SR byte read inside the VINT handler is 0x26",
+      "offset": 264,
+      "length": 2,
+      "expected": "2600",
+      "mask": "ff00"
+    },
+    {
+      "id": "hint-handler-sr",
+      "oracle_class": "documented",
+      "citation": "MC68000UM exception processing (mask raised to the accepted level, S set, T clear); Sega documentation (HINT is level 4). The upper SR byte read inside the HINT handler is 0x24",
+      "offset": 266,
+      "length": 2,
+      "expected": "2400",
+      "mask": "ff00"
+    },
+    {
+      "id": "hint-count-reg10-0",
+      "oracle_class": "REF-derived",
+      "citation": "Assumption A3, community hardware-observation sources (SpritesMind forum posts, Sega Retro VDP article), which disagree on the exact line range and are not independent primary evidence: the counter decrements on lines 0..224, fires on expiry and reloads from register 10, and reloads on lines 225..261. With register 10 = 0 that is one HINT per line on 225 lines. Entries counted between two consecutive VINT entries; REF-derived, not counted as documented hardware evidence",
+      "offset": 274,
+      "length": 2,
+      "expected": "00e1"
+    },
+    {
+      "id": "hint-count-reg10-7",
+      "oracle_class": "REF-derived",
+      "citation": "Assumption A3 (see hint-count-reg10-0): a period of 8 lines over lines 0..224 fires on lines 7, 15 ... 223, which is 28 entries between two consecutive VINT entries; the sources disagree on the line range, so the absolute count is REF-derived",
+      "offset": 276,
+      "length": 2,
+      "expected": "001c"
+    },
+    {
+      "id": "hint-count-reg10-223",
+      "oracle_class": "REF-derived",
+      "citation": "Assumption A3 (see hint-count-reg10-0): a period of 224 lines fires once, on line 223, per field; the sources disagree on the line range, so the absolute count is REF-derived",
+      "offset": 278,
+      "length": 2,
+      "expected": "0001"
+    },
+    {
+      "id": "hint-count-next-window",
+      "oracle_class": "REF-derived",
+      "citation": "Assumption A3: the second window after the register-10 write repeats the first (counter reloaded on the vertical blanking lines), 225, 28 and 1 for register 10 = 0, 7 and 223; REF-derived like the first window",
+      "offset": 280,
+      "length": 6,
+      "expected": "00e1001c0001"
+    },
+    {
+      "id": "hint-count-order-and-range",
+      "oracle_class": "documented",
+      "citation": "plutiedev vdp-registers (register 10 is the HINT counter: one horizontal interrupt every register-10 + 1 lines) and Sega documentation (HINT happens on active display lines). Where the community sources disagree only on the exact line range (off by at most one), the guest's own flags are judged: the counts strictly decrease with the period and stay nonzero, register 10 = 0 gives 223..225 entries, register 10 = 7 gives 27..29, register 10 = 223 gives 1 or 2",
+      "offset": 288,
+      "length": 2,
+      "expected": "0001"
+    },
+    {
+      "id": "hint-count-range-flags",
+      "oracle_class": "documented",
+      "citation": "plutiedev vdp-registers (register 10: one HINT every register-10 + 1 lines over the active display of at most 225 lines): flags for register 10 = 0 (223..225), 7 (27..29) and 223 (1..2)",
+      "offset": 290,
+      "length": 6,
+      "expected": "000100010001"
+    },
+    {
+      "id": "vint-priority-over-hint",
+      "oracle_class": "documented",
+      "citation": "MC68000UM (the highest pending interrupt level is recognized first) and Sega documentation (VINT is level 6, HINT level 4). With both pending and the mask lowered from 7 to 0, no HINT handler ran before the VINT handler (0 HINT entries between the lowering and the first VINT entry), and the pending HINT ran after the VINT handler returned (flag 1)",
+      "offset": 304,
+      "length": 4,
+      "expected": "00000001"
+    },
+    {
+      "id": "mask-6-blocks-vint-status-set",
+      "oracle_class": "documented",
+      "citation": "Sega documentation (status bit 7 reads set once VINT has occurred). With SR mask 6 the guest polls until the VINT bit reads set; the first status snapshot therefore has bit 0x80",
+      "offset": 320,
+      "length": 2,
+      "expected": "0080",
+      "mask": "0080"
+    },
+    {
+      "id": "mask-6-blocks-vint-count",
+      "oracle_class": "documented",
+      "citation": "MC68000UM (an interrupt whose level is lower than or equal to the current processor priority is postponed): a long delay with SR mask 6 and VINT pending (and enabled) gives 0 handler entries",
+      "offset": 324,
+      "length": 2,
+      "expected": "0000"
+    },
+    {
+      "id": "mask-6-status-after-delay",
+      "oracle_class": "unknown",
+      "citation": "Whether the status VINT bit keeps reading set while the interrupt is pending but masked, or is cleared by the earlier status read, is not independently established by the cited sources; Genewhip keeps it set until acknowledgement (model-scoped). Observed status word reported only",
+      "offset": 322,
+      "length": 2
+    },
+    {
+      "id": "mask-lowered-takes-vint",
+      "oracle_class": "documented",
+      "citation": "MC68000UM (pending interrupts are detected between instruction executions and taken once their level exceeds the priority mask): after MOVE to SR lowers the mask from 6 to 0 and a settle delay of about 500 clocks, the pending VINT has been taken exactly once",
+      "offset": 326,
+      "length": 2,
+      "expected": "0001"
+    },
+    {
+      "id": "mask-lowered-latency-instructions",
+      "oracle_class": "unknown",
+      "citation": "Latency in instructions between lowering the mask and the handler entry: hardware measurements (gendev forum t=2202) distinguish this case from enabling a pending interrupt and report instruction latency, which is not independently re-read here. Genewhip takes the interrupt at the next instruction boundary (model-scoped). Handler entries counted immediately after the SR write reported only",
+      "offset": 328,
+      "length": 2
+    },
+    {
+      "id": "disabled-vint-not-taken",
+      "oracle_class": "documented",
+      "citation": "plutiedev vdp-registers (register 1 bit 5, IE0, gates the vertical interrupt): with IE0 clear and the mask at 0, a pending VINT is not taken during a long delay (0 handler entries)",
+      "offset": 336,
+      "length": 2,
+      "expected": "0000"
+    },
+    {
+      "id": "enable-pending-vint-taken",
+      "oracle_class": "documented",
+      "citation": "plutiedev vdp-registers (IE0) and MC68000UM: enabling IE0 while VINT is pending raises the interrupt request, and with the mask at 0 it is taken once within a settle delay of about 500 clocks",
+      "offset": 338,
+      "length": 2,
+      "expected": "0001"
+    },
+    {
+      "id": "enable-pending-latency-instructions",
+      "oracle_class": "unknown",
+      "citation": "Hardware measurements (gendev forum t=2202) report an instruction latency after enabling an already-pending VDP interrupt that is not independently re-read here; Genewhip takes it at the next instruction boundary (model-scoped). Handler entries counted immediately after the IE0 write reported only",
+      "offset": 340,
+      "length": 2
+    },
+    {
+      "id": "marker-order-across-rte",
+      "oracle_class": "documented",
+      "citation": "MC68000UM (RTE restores the status register and program counter from the exception frame, so the interrupted program continues after the handler): the log reads main marker 0x1111, handler marker 0x0006, then main marker 0x2222 written after the handler returned",
+      "offset": 352,
+      "length": 6,
+      "expected": "111100062222"
+    },
+    {
+      "id": "rte-restores-mask",
+      "oracle_class": "documented",
+      "citation": "MC68000UM (RTE restores the status register saved at entry): after the handler returns, SR read by the interrupted program has S set and mask 0 again, upper byte 0x20",
+      "offset": 360,
+      "length": 2,
+      "expected": "2000",
+      "mask": "ff00"
+    },
+    {
+      "id": "stop-wake-vint",
+      "oracle_class": "documented",
+      "citation": "MC68000UM STOP: the processor loads the immediate into SR, stops, and resumes when an interrupt above the mask is accepted; the handler runs and RTE returns to the instruction after STOP. Sega documentation (VINT once per field, level 6). After a sync on a handler run the next VINT is a field away, so exactly two handler entries have occurred when the instruction after the first STOP stores its marker, and three after the second STOP",
+      "offset": 368,
+      "length": 6,
+      "expected": "000233330003"
+    },
+    {
+      "id": "completion-marker",
+      "oracle_class": "documented",
+      "citation": "ROM control flow reached the final store after every phase (no unsupported stop)",
+      "offset": 510,
+      "length": 2,
+      "expected": "600d"
+    }
+  ]
+}

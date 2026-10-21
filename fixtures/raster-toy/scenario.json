@@ -1,0 +1,1036 @@
+{
+ "schema_version": 1,
+ "scenario_id": "genewhip-raster-toy-v1",
+ "oracle": "guest-source-derived-arithmetic",
+ "rom": {
+  "path": "fixtures/raster-toy/toy.bin",
+  "rom_bytes": 32768,
+  "source": "fixtures/raster-toy/src/toy.s"
+ },
+ "screen": {
+  "width": 320,
+  "height": 224,
+  "mode": "H40 V28"
+ },
+ "rom_offsets": {
+  "palette": "0x0600",
+  "tiles": "0x0700",
+  "plane_b": "0x1000",
+  "plane_a": "0x2000",
+  "window": "0x3000",
+  "hscroll_cell": "0x3800",
+  "hscroll_line": "0x3300",
+  "vscroll_2cell": "0x3700"
+ },
+ "palette": {
+  "note": "CRAM words: entry 0 backdrop 0x0a60; entry 16p+i has b=(i+3p)&7, g=(7-(i&7)+p)&7, r=(5i+2p)&7, word=(b<<9)+(g<<5)+(r<<1)",
+  "words": [
+   2656,
+   714,
+   1188,
+   1678,
+   2152,
+   2626,
+   3116,
+   3590,
+   224,
+   714,
+   1188,
+   1678,
+   2152,
+   2626,
+   3116,
+   3590,
+   1540,
+   2286,
+   2760,
+   3234,
+   3724,
+   102,
+   576,
+   1066,
+   1540,
+   2286,
+   2760,
+   3234,
+   3724,
+   102,
+   576,
+   1066,
+   3112,
+   3586,
+   236,
+   710,
+   1184,
+   1674,
+   2148,
+   2638,
+   3112,
+   3586,
+   236,
+   710,
+   1184,
+   1674,
+   2148,
+   2638,
+   588,
+   1062,
+   1536,
+   2282,
+   2756,
+   3246,
+   3720,
+   98,
+   588,
+   1062,
+   1536,
+   2282,
+   2756,
+   3246,
+   3720,
+   98
+  ]
+ },
+ "tiles": {
+  "note": "8 tiles of 8 rows x 8 pixel indices; 0 empty, 1-4 solid 1-4, 5 gradient (x+y)&7, 6 solid 9, 7 solid 15",
+  "pixels": [
+   [
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ]
+   ],
+   [
+    [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ]
+   ],
+   [
+    [
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2
+    ],
+    [
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2
+    ],
+    [
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2
+    ],
+    [
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2
+    ],
+    [
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2
+    ],
+    [
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2
+    ],
+    [
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2
+    ],
+    [
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2
+    ]
+   ],
+   [
+    [
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3
+    ],
+    [
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3
+    ],
+    [
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3
+    ],
+    [
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3
+    ],
+    [
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3
+    ],
+    [
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3
+    ],
+    [
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3
+    ],
+    [
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3
+    ]
+   ],
+   [
+    [
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4
+    ],
+    [
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4
+    ],
+    [
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4
+    ],
+    [
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4
+    ],
+    [
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4
+    ],
+    [
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4
+    ],
+    [
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4
+    ],
+    [
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4
+    ]
+   ],
+   [
+    [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7
+    ],
+    [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     0
+    ],
+    [
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     0,
+     1
+    ],
+    [
+     3,
+     4,
+     5,
+     6,
+     7,
+     0,
+     1,
+     2
+    ],
+    [
+     4,
+     5,
+     6,
+     7,
+     0,
+     1,
+     2,
+     3
+    ],
+    [
+     5,
+     6,
+     7,
+     0,
+     1,
+     2,
+     3,
+     4
+    ],
+    [
+     6,
+     7,
+     0,
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    [
+     7,
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6
+    ]
+   ],
+   [
+    [
+     9,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9
+    ],
+    [
+     9,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9
+    ],
+    [
+     9,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9
+    ],
+    [
+     9,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9
+    ],
+    [
+     9,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9
+    ],
+    [
+     9,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9
+    ],
+    [
+     9,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9
+    ],
+    [
+     9,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9
+    ]
+   ],
+   [
+    [
+     15,
+     15,
+     15,
+     15,
+     15,
+     15,
+     15,
+     15
+    ],
+    [
+     15,
+     15,
+     15,
+     15,
+     15,
+     15,
+     15,
+     15
+    ],
+    [
+     15,
+     15,
+     15,
+     15,
+     15,
+     15,
+     15,
+     15
+    ],
+    [
+     15,
+     15,
+     15,
+     15,
+     15,
+     15,
+     15,
+     15
+    ],
+    [
+     15,
+     15,
+     15,
+     15,
+     15,
+     15,
+     15,
+     15
+    ],
+    [
+     15,
+     15,
+     15,
+     15,
+     15,
+     15,
+     15,
+     15
+    ],
+    [
+     15,
+     15,
+     15,
+     15,
+     15,
+     15,
+     15,
+     15
+    ],
+    [
+     15,
+     15,
+     15,
+     15,
+     15,
+     15,
+     15,
+     15
+    ]
+   ]
+  ]
+ },
+ "plane_b": {
+  "vram": "0xE000",
+  "cells": [
+   64,
+   32
+  ],
+  "rule": "rows 20-23: tile 0; else tile=1+((col+row)&3), palette=(col>>4)&3, high priority when rows 10-13 and cols 14-29"
+ },
+ "samples": [
+  {
+   "test": "sound",
+   "fields": [
+    1,
+    75
+   ]
+  },
+  {
+   "test": "planes",
+   "full_frames": [
+    3,
+    81
+   ]
+  },
+  {
+   "test": "scroll",
+   "full_frames": [
+    3,
+    10,
+    20,
+    37,
+    50,
+    66
+   ],
+   "grid_fields": [
+    1,
+    69
+   ],
+   "grid_stride": [
+    11,
+    7
+   ],
+   "moving_fields": [
+    1,
+    15
+   ]
+  },
+  {
+   "test": "sprites",
+   "fields": [
+    1,
+    40
+   ]
+  }
+ ],
+ "registers": {
+  "2": "0x30 plane A at VRAM 0xC000",
+  "3": "0x28 window at 0xA000",
+  "4": "0x07 plane B at 0xE000",
+  "7": "0x00 backdrop CRAM 0",
+  "12": "0x81 H40",
+  "13": "0x2e hscroll at 0xB800",
+  "16": "0x01 64x32 cells (phases below change it)",
+  "17": "0x00",
+  "18": "0x03 window rows above line 24",
+  "5": "0x78 sprite table at VRAM 0xF000"
+ },
+ "plane_a": {
+  "vram": "0xC000",
+  "rule": "default tile 0; rows 4-7 cols 4-9 tile 5 palette 1 hflip=col&1 vflip=row&1 low; rows 10-11 cols 10-19 tile 6 palette 2 low; rows 12-13 cols 10-19 tile 6 palette 2 high; rows 20-21 cols 20-27 tile 5 palette 3 low"
+ },
+ "window": {
+  "vram": "0xA000",
+  "cells": [
+   64,
+   3
+  ],
+  "rule": "tile 5 where (col+row) even else 6; palette 3; low priority; region = rows above line 24 (register 18 = 3, register 17 = 0)"
+ },
+ "scroll_step_per_field": {
+  "plane_b_hscroll_px": 3,
+  "plane_a_vscroll_px": 2,
+  "note": "VINT run count c equals the field sequence s for s >= 1; full-screen mode while c < 16"
+ },
+ "phases": [
+  {
+   "from_count": 0,
+   "register_11": 0,
+   "register_16": 1,
+   "hscroll": "full: plane B = 3c (mod 1024), plane A 0",
+   "vscroll": "full: plane A = 2c, plane B 0"
+  },
+  {
+   "from_count": 16,
+   "register_11": 2,
+   "hscroll": "cell table (line layout, first slot of each 8-line cell): A=6*(k&3), B=5k+3 for 8-line cell k; the other slots are decoys A=0x155, B=0x2aa",
+   "vscroll": "full: plane A = 2c"
+  },
+  {
+   "from_count": 32,
+   "register_11": 7,
+   "hscroll": "line table: A=(1024-(y&15))&0x3ff, B=(3y+7)&0x3ff",
+   "vscroll": "2-cell table: column pair k A=9k, B=13k+3"
+  },
+  {
+   "from_count": 48,
+   "register_16": 0,
+   "note": "planes 32x32 cells; same VRAM bytes reinterpreted"
+  },
+  {
+   "from_count": 64,
+   "register_16": 3,
+   "note": "planes 128x32 cells"
+  }
+ ],
+ "coverage_planes": [
+  "backdrop",
+  "window",
+  "A-lo-over-B",
+  "B-hi-over-A-lo",
+  "A-hi-over-B-hi",
+  "hflip",
+  "vflip",
+  "pal0",
+  "pal1",
+  "pal2",
+  "pal3",
+  "shadow",
+  "sh-normal"
+ ],
+ "sprites": {
+  "note": "Two 8x8 high-priority sprites (tile 7, solid colour 15) linked 0 -> 1 in the table at VRAM 0xF000 (entry 0 at 0xF000, entry 1 at 0xF008). Both entries are written off screen (Y = 0) at start-up and rewritten by the VINT handler only on runs in which their own port shows a pressed direction, so a sprite is first drawn in the field after its first pressed run. Sprite 0 follows port 1 (palette 0 colour 15), sprite 1 follows port 2 (palette 2 colour 15). Neither colour is used by any other layer. Colour 15 equals colour 7 of its palette line (palette formula), so a line is only usable when no layer draws colour 7 on it: lines 0 and 2.",
+  "vram": "0xF000",
+  "items": [
+   {
+    "sprite": 0,
+    "port": 0,
+    "entry_vram": "0xF000",
+    "start": [
+     160,
+     100
+    ],
+    "step_per_pressed_run": 2,
+    "palette_line": 0,
+    "colour": 15,
+    "size_pixels": [
+     8,
+     8
+    ]
+   },
+   {
+    "sprite": 1,
+    "port": 1,
+    "entry_vram": "0xF008",
+    "start": [
+     60,
+     150
+    ],
+    "step_per_pressed_run": 3,
+    "palette_line": 2,
+    "colour": 15,
+    "size_pixels": [
+     8,
+     8
+    ]
+   }
+  ]
+ },
+ "inputs": {
+  "note": "Entries of the genewhip-input-log 1 format written by the test: tick = field * 896040 (the start of that field), kind pad, port 0 (controller port 1, moves sprite 0) or 1 (controller port 2, moves sprite 1), logical mask (Up 1, Down 2, Left 4, Right 8; A 64, B 16, C 32; set bit = pressed). The handler of run c (VINT at the end of field c-1) reads each port's last entry with field <= c-1; a sprite entry written there is first drawn in field c. Sound presses are A at field 3, B at field 30, C at field 60, each released the next field. Port-1-only movement intervals: fields 5-7 and 31-32; port-2-only: 26-29.",
+  "ticks_per_field": 896040,
+  "entries": [
+   {
+    "field": 3,
+    "port": 0,
+    "mask": "0x40"
+   },
+   {
+    "field": 4,
+    "port": 0,
+    "mask": "0x00"
+   },
+   {
+    "field": 5,
+    "port": 0,
+    "mask": "0x08"
+   },
+   {
+    "field": 8,
+    "port": 1,
+    "mask": "0x04"
+   },
+   {
+    "field": 12,
+    "port": 0,
+    "mask": "0x0a"
+   },
+   {
+    "field": 15,
+    "port": 1,
+    "mask": "0x02"
+   },
+   {
+    "field": 17,
+    "port": 0,
+    "mask": "0x02"
+   },
+   {
+    "field": 20,
+    "port": 0,
+    "mask": "0x05"
+   },
+   {
+    "field": 22,
+    "port": 1,
+    "mask": "0x0a"
+   },
+   {
+    "field": 26,
+    "port": 0,
+    "mask": "0x00"
+   },
+   {
+    "field": 28,
+    "port": 1,
+    "mask": "0x08"
+   },
+   {
+    "field": 30,
+    "port": 0,
+    "mask": "0x11"
+   },
+   {
+    "field": 31,
+    "port": 1,
+    "mask": "0x00"
+   },
+   {
+    "field": 33,
+    "port": 0,
+    "mask": "0x00"
+   },
+   {
+    "field": 36,
+    "port": 1,
+    "mask": "0x01"
+   },
+   {
+    "field": 60,
+    "port": 0,
+    "mask": "0x20"
+   },
+   {
+    "field": 61,
+    "port": 0,
+    "mask": "0x00"
+   }
+  ]
+ },
+ "shadow_band": {
+  "note": "Shadow/highlight (Genewhip convention, assumption A5): from handler run 80 the toy sets register 12 to 0x89 (H40 plus S/TE). Every field c >= 80 shows low-priority plane pixels and the backdrop at the shadow level, and high-priority plane pixels at the normal level. Levels: normal L[2v], shadow L[v], highlight L[v+7] with L the 15-entry table.",
+  "from_count": 80,
+  "register_12": "0x89",
+  "levels": [
+   0,
+   27,
+   49,
+   71,
+   87,
+   103,
+   119,
+   130,
+   146,
+   157,
+   174,
+   190,
+   206,
+   228,
+   255
+  ]
+ },
+ "sound_oracle": "guest-source-derived-Z80-register-trace-and-PCM-temporal-activity"
+}

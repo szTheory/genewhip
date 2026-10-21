@@ -1,0 +1,113 @@
+{
+  "seam": "vdp-ports",
+  "rom": "tests/devices/roms/ports.bin",
+  "run_ticks": 50000,
+  "ram_offset": 0,
+  "ram_length": 256,
+  "cases": [
+    {
+      "id": "vram-write-readback",
+      "oracle_class": "documented",
+      "citation": "plutiedev vdp-commands (VRAM write 0x40000000 and read 0x00000000 command words); Sega Genesis Software Manual, VDP data-port read",
+      "offset": 0,
+      "length": 4,
+      "expected": "1234abcd"
+    },
+    {
+      "id": "cram-write-readback",
+      "oracle_class": "documented",
+      "citation": "plutiedev vdp-commands (CRAM write 0xC0000000, read 0x00000020); Sega Genesis Software Manual, CRAM word format 0000 BBB0 GGG0 RRR0 (values use only defined bits)",
+      "offset": 4,
+      "length": 4,
+      "expected": "0e4a0a28"
+    },
+    {
+      "id": "vsram-write-readback",
+      "oracle_class": "documented",
+      "citation": "plutiedev vdp-commands (VSRAM write 0x40000010, read 0x00000010); Sega Genesis Software Manual, 11-bit vertical scroll entries",
+      "offset": 8,
+      "length": 4,
+      "expected": "01230456"
+    },
+    {
+      "id": "autoincrement-4",
+      "oracle_class": "documented",
+      "citation": "plutiedev vdp-registers, register 15 auto-increment: word writes at 0x2000 and 0x2004 read back in order with increment 4",
+      "offset": 12,
+      "length": 4,
+      "expected": "11112222"
+    },
+    {
+      "id": "port-mirrors-c00002-c00006",
+      "oracle_class": "documented",
+      "citation": "plutiedev vdp-setup and vdp-commands: data port 0xC00000/0xC00002 and control port 0xC00004/0xC00006 behave identically",
+      "offset": 16,
+      "length": 2,
+      "expected": "5a5a"
+    },
+    {
+      "id": "status-fifo-empty-dma-pal",
+      "oracle_class": "documented",
+      "citation": "Sega Genesis Software Manual, VDP status register: FIFO empty 0x200, DMA busy 0x02, PAL 0x01 (NTSC reads 0); preceding data read has drained the FIFO",
+      "offset": 18,
+      "length": 2,
+      "expected": "0200",
+      "mask": "0203"
+    },
+    {
+      "id": "status-vblank-display-disabled",
+      "oracle_class": "REF-derived",
+      "citation": "Genesis Plus GX vdp_ctrl.c status composition (VBLANK also reads set while the display is disabled); the Sega manual defines the bit only for vertical blanking, so this is reference-derived, not documented evidence",
+      "offset": 18,
+      "length": 2,
+      "expected": "0008",
+      "mask": "0008"
+    },
+    {
+      "id": "status-via-c00006",
+      "oracle_class": "documented",
+      "citation": "plutiedev vdp-commands: control port 0xC00006 mirrors 0xC00004; read returns the status register (same bit sources as status-fifo-empty-dma-pal)",
+      "offset": 20,
+      "length": 2,
+      "expected": "0200",
+      "mask": "0203"
+    },
+    {
+      "id": "status-upper-bits-and-hblank",
+      "oracle_class": "unknown",
+      "citation": "Status bits 15-10, VINT, SOVR, SCOL and HBLANK depend on undocumented bus residue or Genewhip's own instruction timing; no independent expected value exists",
+      "offset": 18,
+      "length": 2
+    },
+    {
+      "id": "latch-cleared-by-status-read",
+      "oracle_class": "REF-derived",
+      "citation": "Genesis Plus GX vdp_ctrl.c clears the pending command flag on a status read; plutiedev vdp-commands is silent on this, so the case is reference-derived, not documented evidence",
+      "offset": 24,
+      "length": 2,
+      "expected": "7e7e"
+    },
+    {
+      "id": "hv-counter-word",
+      "oracle_class": "unknown",
+      "citation": "HV counter V and H bytes at the read tick depend on Genewhip's instruction timing; no independent expected value exists",
+      "offset": 26,
+      "length": 2
+    },
+    {
+      "id": "vsram-entry-40-read",
+      "oracle_class": "unknown",
+      "citation": "Sega documentation lists 40 VSRAM entries; the value read past them is undocumented in the cited pages",
+      "offset": 28,
+      "length": 2
+    },
+    {
+      "id": "completion-marker",
+      "oracle_class": "documented",
+      "citation": "ports.s control flow: the marker store is the last instruction before the idle loop, so it is reached only if every earlier port access completed without an unsupported stop",
+      "offset": 254,
+      "length": 2,
+      "expected": "600d"
+    }
+  ]
+}

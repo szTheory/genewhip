@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Genewhip diagnostic evidence v1",
+  "description": "Canonical ordered JSON subset; tools/evidence/validate.c additionally enforces field order, unescaped ASCII tokens, fixed expected case IDs, byte bound, trusted build identities and qualification policy.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_revision",
+    "source_state",
+    "configuration",
+    "fixture",
+    "input",
+    "profile",
+    "oracle",
+    "expected",
+    "results"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "source_revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "source_state": {
+      "enum": [
+        "clean",
+        "dirty"
+      ]
+    },
+    "configuration": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "fixture": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "input": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "profile": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+    },
+    "oracle": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+    },
+    "expected": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64
+    },
+    "results": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "outcome",
+          "observed"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+          },
+          "outcome": {
+            "enum": [
+              "pass",
+              "fail",
+              "unknown",
+              "unsupported",
+              "skipped",
+              "infrastructure-error"
+            ]
+          },
+          "observed": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,59 @@
+# Generated private build script. Public outputs contain identities, not paths.
+cmake_minimum_required(VERSION 3.27)
+set(root "@CMAKE_CURRENT_SOURCE_DIR@")
+set(build "@CMAKE_CURRENT_BINARY_DIR@")
+set(configuration "@GW_CONFIGURATION_SEED@|${GW_ACTIVE_CONFIG}")
+include("${root}/cmake/EffectiveConfiguration.cmake")
+set(identity_files
+  CMakeLists.txt cmake/EvidenceIdentity.cmake.in cmake/EvidenceDriver.cmake.in
+  cmake/EffectiveConfiguration.cmake
+  include/genewhip/genewhip.h src/core.c src/cpu68000.c src/bus.c
+  src/diagnostic.c src/diagnostics.c src/internal.h
+  tools/diagnostic/main.c tools/evidence/evidence.h tools/evidence/validate.c
+  tools/evidence/main.c tools/evidence/diagnostic_identity.h
+  tests/diagnostic/diagnostic.S tests/diagnostic/build_rom.c
+  evidence/schema.json evidence/input.json fixtures/manifest.json)
+foreach(path IN LISTS identity_files)
+  file(SHA256 "${root}/${path}" hash)
+  string(APPEND configuration "\n${path}:${hash}")
+endforeach()
+string(SHA256 configuration "${configuration}")
+execute_process(COMMAND git rev-parse HEAD WORKING_DIRECTORY "${root}"
+  RESULT_VARIABLE git_result OUTPUT_VARIABLE revision OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+execute_process(COMMAND git rev-parse --show-toplevel WORKING_DIRECTORY "${root}"
+  RESULT_VARIABLE root_result OUTPUT_VARIABLE git_root OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+file(REAL_PATH "${root}" real_root)
+file(REAL_PATH "${git_root}" real_git_root)
+# A source archive nested beneath another checkout must not inherit its identity.
+if(NOT root_result EQUAL 0 OR NOT real_root STREQUAL real_git_root)
+  set(git_result 1)
+endif()
+execute_process(COMMAND git status --porcelain --untracked-files=normal --
+  CMakeLists.txt cmake src include tools evidence fixtures tests/diagnostic
+  WORKING_DIRECTORY "${root}" RESULT_VARIABLE status_result OUTPUT_VARIABLE changes ERROR_QUIET)
+set(state clean)
+if(NOT git_result EQUAL 0 OR NOT status_result EQUAL 0 OR NOT changes STREQUAL "")
+  set(state dirty)
+endif()
+if(NOT git_result EQUAL 0)
+  set(revision "0000000000000000000000000000000000000000")
+endif()
+string(LENGTH "${revision}" revision_length)
+if(NOT revision MATCHES "^[0-9a-f]+$" OR NOT revision_length EQUAL 40)
+  message(FATAL_ERROR "Invalid source revision")
+endif()
+file(SHA256 "${build}/diagnostic.bin" fixture)
+if(NOT fixture STREQUAL "411191ba90be4a31898f90401c159022df724419129ab10da3c8c6478e045e9a")
+  message(FATAL_ERROR "Unadmitted diagnostic fixture bytes")
+endif()
+file(SHA256 "${root}/evidence/input.json" input)
+if(NOT input STREQUAL "91c4db8bac340b74dd939c4456145d6f6867b1c58a0996ebdec70db081ac062b")
+  message(FATAL_ERROR "Unsupported diagnostic input scenario; update runner and independent oracle before admitting a new input identity")
+endif()
+file(READ "${build}/diagnostic.bin" rom HEX)
+string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," rom "${rom}")
+set(header "/* Generated from current build inputs; do not edit. */\n#define GW_SOURCE_REVISION \"${revision}\"\n#define GW_SOURCE_STATE \"${state}\"\n#define GW_CONFIGURATION \"${configuration}\"\n#define GW_FIXTURE \"${fixture}\"\n#define GW_INPUT \"${input}\"\nstatic const unsigned char gw_admitted_rom[1024] = {${rom}};\n")
+file(MAKE_DIRECTORY "${build}/evidence-${GW_ACTIVE_CONFIG}")
+file(WRITE "${build}/evidence-${GW_ACTIVE_CONFIG}/identity.tmp" "${header}")
+execute_process(COMMAND "@CMAKE_COMMAND@" -E copy_if_different "${build}/evidence-${GW_ACTIVE_CONFIG}/identity.tmp" "${build}/evidence-${GW_ACTIVE_CONFIG}/identity.h"
+  COMMAND_ERROR_IS_FATAL ANY)

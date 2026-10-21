@@ -1,0 +1,35 @@
+{
+  "schema": "genewhip-fm-reference-lock",
+  "version": 1,
+  "nuked": {
+    "repository": "https://github.com/nukeykt/Nuked-OPN2",
+    "commit": "335747d78cb0abbc3b55b004e62dad9763140115",
+    "head_checked": "2026-10-20",
+    "head_commit": "335747d78cb0abbc3b55b004e62dad9763140115",
+    "files": {
+      "ym3438.c": "8fa385546f0f2d1c975d097002af00cd729ae2ae097c068e9c883ce08ddf3a76",
+      "ym3438.h": "8e60e35f77049d0e600ad1a47bfc3dfc8b832483e614104473a83c1f33cd7189"
+    },
+    "license": "LGPL-2.1-or-later",
+    "license_header": "GNU LESSER GENERAL PUBLIC LICENSE Version 2.1",
+    "disposition": "evidence tool only; never vendored, installed or packaged"
+  },
+  "ymfm": {
+    "repository": "https://github.com/aaronsgiles/ymfm",
+    "commit": "81aec25ccbb98f4873a255f7551ac4dadac59b4a",
+    "license": "BSD-3-Clause",
+    "files": {
+      "LICENSE": "2d2e9213c170a9866c616fa85b6da993a6724e10befc61f468ed9bfb84c4691c",
+      "ymfm.h": "f5ab6fed63c8669abab8403e0e93132e1dad0ae4d8e4954e7836ab9e5b228405",
+      "ymfm_fm.h": "1b27bfb7fa4963d7c54cb06fd9bf659450362d8ed496c6af7d487b068cac45c9",
+      "ymfm_fm.ipp": "4fb7fe59d4494a19e9f9c7888eb644a63d86e109fdefb27a8117bf6a5f6ab4b9",
+      "ymfm_opn.h": "1950990c3ea0c6d492a20f66a683a372a7367ef39f7830aa65b20a20d1bcbef5",
+      "ymfm_opn.cpp": "8734c6d5a6e1bf49a08eeb33d260d39c17cd1d26f5db506e5d0d3e416913b489",
+      "ymfm_adpcm.h": "5933691971493b853a9be443f6e6fd74f63869aa21225f66dd89fc20de20914d",
+      "ymfm_ssg.h": "27966b0887fe98f2d06a96be2776c911107e2f2a13a64f9a349e1ffc19cf7584",
+      "ymfm_adpcm.cpp": "74e5ded129ea7e532112e5b637d0a7bd4e127fd83331f1fac32011723051d4e0",
+      "ymfm_ssg.cpp": "73a3028a77f13f3769b7705079659eb8325431a67b8164ded25e12f324f42bfd"
+    },
+    "notice": "packaging/notices/THIRD-PARTY-ymfm.txt"
+  }
+}

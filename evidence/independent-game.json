@@ -1,0 +1,679 @@
+{
+  "calibration_trace": {
+    "address_max": 10563824,
+    "address_min": 0,
+    "bytes": 4445000,
+    "counts": {
+      "AS_PROGRAM:R": 76805,
+      "AS_PROGRAM:W": 2
+    },
+    "first_sequence": 1,
+    "last_sequence": 76807,
+    "rows": 76807,
+    "sha256": "4dded58d0a367ae9a7fdacbc565a5c87d346e52a6996dd037f236166d229e3cd"
+  },
+  "candidate_disposition": {
+    "scope": "runtime_evidence_capture",
+    "status": "candidate"
+  },
+  "coverage": {
+    "forbidden_candidate_accesses": {
+      "enable_control": 0,
+      "storage": 0
+    },
+    "m68000_address_mask": "0xFFFFFF",
+    "route_audit_status": "pass",
+    "runtime_progression": "pass",
+    "source_route_to_hook": "pass",
+    "trace_complete_and_ordered": true
+  },
+  "device_map": [
+    {
+      "access": [
+        "read",
+        "write"
+      ],
+      "end": "0xA01FFF",
+      "function": "megadriv_68k_base_map",
+      "line": 309,
+      "mapping": ".before_delay(NAME([](offs_t) { return 1; })).rw(FUNC(md_base_state::megadriv_68k_read_z80_ram), FUNC(md_base_state::megadriv_68k_write_z80_ram));",
+      "start": "0xA00000"
+    },
+    {
+      "access": [
+        "write"
+      ],
+      "end": "0xA03FFF",
+      "function": "megadriv_68k_base_map",
+      "line": 310,
+      "mapping": ".before_delay(NAME([](offs_t) { return 1; })).w(FUNC(md_base_state::megadriv_68k_write_z80_ram));",
+      "start": "0xA02000"
+    },
+    {
+      "access": [
+        "read",
+        "write"
+      ],
+      "end": "0xA04003",
+      "function": "megadriv_68k_base_map",
+      "line": 311,
+      "mapping": ".before_delay(NAME([](offs_t) { return 1; })).rw(FUNC(md_base_state::megadriv_68k_YM2612_read), FUNC(md_base_state::megadriv_68k_YM2612_write));",
+      "start": "0xA04000"
+    },
+    {
+      "access": [
+        "write"
+      ],
+      "end": "0xA06001",
+      "function": "megadriv_68k_base_map",
+      "line": 313,
+      "mapping": ".before_delay(NAME([](offs_t) { return 1; })).w(FUNC(md_base_state::megadriv_68k_z80_bank_write));",
+      "start": "0xA06000"
+    },
+    {
+      "access": [
+        "read"
+      ],
+      "end": "0xA10001",
+      "function": "megadriv_68k_base_map",
+      "line": 315,
+      "mapping": ".r(FUNC(md_base_state::m68k_version_read));",
+      "start": "0xA10000"
+    },
+    {
+      "access": [
+        "read",
+        "write"
+      ],
+      "end": "0xA10007",
+      "function": "megadriv_68k_base_map",
+      "line": 316,
+      "mapping": ".rw(FUNC(md_base_state::m68k_ioport_data_read), FUNC(md_base_state::m68k_ioport_data_write));",
+      "start": "0xA10002"
+    },
+    {
+      "access": [
+        "read",
+        "write"
+      ],
+      "end": "0xA1000D",
+      "function": "megadriv_68k_base_map",
+      "line": 317,
+      "mapping": ".rw(FUNC(md_base_state::m68k_ioport_ctrl_read), FUNC(md_base_state::m68k_ioport_ctrl_write));",
+      "start": "0xA10008"
+    },
+    {
+      "access": [
+        "read",
+        "write"
+      ],
+      "end": "0xA1000F",
+      "function": "megadriv_68k_base_map",
+      "line": 318,
+      "mapping": ".rw(FUNC(md_base_state::m68k_ioport_txdata_read<0>), FUNC(md_base_state::m68k_ioport_txdata_write<0>));",
+      "start": "0xA1000E"
+    },
+    {
+      "access": [
+        "read"
+      ],
+      "end": "0xA10011",
+      "function": "megadriv_68k_base_map",
+      "line": 319,
+      "mapping": ".r(FUNC(md_base_state::m68k_ioport_rxdata_read<0>));",
+      "start": "0xA10010"
+    },
+    {
+      "access": [
+        "read",
+        "write"
+      ],
+      "end": "0xA10013",
+      "function": "megadriv_68k_base_map",
+      "line": 320,
+      "mapping": ".rw(FUNC(md_base_state::m68k_ioport_s_ctrl_read<0>), FUNC(md_base_state::m68k_ioport_s_ctrl_write<0>));",
+      "start": "0xA10012"
+    },
+    {
+      "access": [
+        "read",
+        "write"
+      ],
+      "end": "0xA10015",
+      "function": "megadriv_68k_base_map",
+      "line": 321,
+      "mapping": ".rw(FUNC(md_base_state::m68k_ioport_txdata_read<1>), FUNC(md_base_state::m68k_ioport_txdata_write<1>));",
+      "start": "0xA10014"
+    },
+    {
+      "access": [
+        "read"
+      ],
+      "end": "0xA10017",
+      "function": "megadriv_68k_base_map",
+      "line": 322,
+      "mapping": ".r(FUNC(md_base_state::m68k_ioport_rxdata_read<1>));",
+      "start": "0xA10016"
+    },
+    {
+      "access": [
+        "read",
+        "write"
+      ],
+      "end": "0xA10019",
+      "function": "megadriv_68k_base_map",
+      "line": 323,
+      "mapping": ".rw(FUNC(md_base_state::m68k_ioport_s_ctrl_read<1>), FUNC(md_base_state::m68k_ioport_s_ctrl_write<1>));",
+      "start": "0xA10018"
+    },
+    {
+      "access": [
+        "read",
+        "write"
+      ],
+      "end": "0xA1001B",
+      "function": "megadriv_68k_base_map",
+      "line": 324,
+      "mapping": ".rw(FUNC(md_base_state::m68k_ioport_txdata_read<2>), FUNC(md_base_state::m68k_ioport_txdata_write<2>));",
+      "start": "0xA1001A"
+    },
+    {
+      "access": [
+        "read"
+      ],
+      "end": "0xA1001D",
+      "function": "megadriv_68k_base_map",
+      "line": 325,
+      "mapping": ".r(FUNC(md_base_state::m68k_ioport_rxdata_read<2>));",
+      "start": "0xA1001C"
+    },
+    {
+      "access": [
+        "read",
+        "write"
+      ],
+      "end": "0xA1001F",
+      "function": "megadriv_68k_base_map",
+      "line": 326,
+      "mapping": ".rw(FUNC(md_base_state::m68k_ioport_s_ctrl_read<2>), FUNC(md_base_state::m68k_ioport_s_ctrl_write<2>));",
+      "start": "0xA1001E"
+    },
+    {
+      "access": [
+        "read",
+        "write"
+      ],
+      "end": "0xA11101",
+      "function": "megadriv_68k_base_map",
+      "line": 328,
+      "mapping": ".rw(FUNC(md_base_state::megadriv_68k_check_z80_bus), FUNC(md_base_state::megadriv_68k_req_z80_bus));",
+      "start": "0xA11100"
+    },
+    {
+      "access": [
+        "write"
+      ],
+      "end": "0xA11201",
+      "function": "megadriv_68k_base_map",
+      "line": 329,
+      "mapping": ".w(FUNC(md_base_state::megadriv_68k_req_z80_reset));",
+      "start": "0xA11200"
+    },
+    {
+      "access": [
+        "read",
+        "write"
+      ],
+      "end": "0xC0001F",
+      "function": "megadriv_68k_base_map",
+      "line": 331,
+      "mapping": ".rw(m_vdp, FUNC(sega315_5313_device::vdp_r), FUNC(sega315_5313_device::vdp_w));",
+      "start": "0xC00000"
+    },
+    {
+      "access": [
+        "read",
+        "write"
+      ],
+      "end": "0xD0001F",
+      "function": "megadriv_68k_base_map",
+      "line": 332,
+      "mapping": ".rw(m_vdp, FUNC(sega315_5313_device::vdp_r), FUNC(sega315_5313_device::vdp_w)); // the earth defend",
+      "start": "0xD00000"
+    },
+    {
+      "access": [
+        "read",
+        "write"
+      ],
+      "end": "0xE0FFFF",
+      "function": "megadriv_68k_base_map",
+      "line": 333,
+      "mapping": ".ram().mirror(0x1f0000).share(\"megadrive_ram\");",
+      "start": "0xE00000"
+    },
+    {
+      "access": [
+        "read",
+        "write"
+      ],
+      "end": "0x3FFFFF",
+      "function": "megadriv_68k_map",
+      "line": 342,
+      "mapping": ".rom();",
+      "start": "0x000000"
+    },
+    {
+      "access": [
+        "read"
+      ],
+      "end": "0xFFFFF3",
+      "function": "cpu_space_map",
+      "line": 734,
+      "mapping": ".before_time(m_maincpu, FUNC(m68000_device::vpa_sync)).after_delay(m_maincpu, FUNC(m68000_device::vpa_after)).lr8(NAME([] () -> u8 { return 25; }));",
+      "start": "0xFFFFF3"
+    },
+    {
+      "access": [
+        "read"
+      ],
+      "end": "0xFFFFF5",
+      "function": "cpu_space_map",
+      "line": 736,
+      "mapping": ".before_time(m_maincpu, FUNC(m68000_device::vpa_sync)).after_delay(m_maincpu, FUNC(m68000_device::vpa_after)).lr8(NAME([] () -> u8 { return 26; }));",
+      "start": "0xFFFFF5"
+    },
+    {
+      "access": [
+        "read"
+      ],
+      "end": "0xFFFFF7",
+      "function": "cpu_space_map",
+      "line": 737,
+      "mapping": ".before_time(m_maincpu, FUNC(m68000_device::vpa_sync)).after_delay(m_maincpu, FUNC(m68000_device::vpa_after)).lr8(NAME([] () -> u8 { return 27; }));",
+      "start": "0xFFFFF7"
+    },
+    {
+      "access": [
+        "read"
+      ],
+      "end": "0xFFFFF9",
+      "function": "cpu_space_map",
+      "line": 741,
+      "mapping": ".before_time(m_maincpu, FUNC(m68000_device::vpa_sync)).after_delay(m_maincpu, FUNC(m68000_device::vpa_after)).lr8(NAME([this] () -> u8 { m_vdp->irq_ack(); return 28; }));",
+      "start": "0xFFFFF9"
+    },
+    {
+      "access": [
+        "read"
+      ],
+      "end": "0xFFFFFB",
+      "function": "cpu_space_map",
+      "line": 742,
+      "mapping": ".before_time(m_maincpu, FUNC(m68000_device::vpa_sync)).after_delay(m_maincpu, FUNC(m68000_device::vpa_after)).lr8(NAME([] () -> u8 { return 29; }));",
+      "start": "0xFFFFFB"
+    },
+    {
+      "access": [
+        "read"
+      ],
+      "end": "0xFFFFFD",
+      "function": "cpu_space_map",
+      "line": 746,
+      "mapping": ".before_time(m_maincpu, FUNC(m68000_device::vpa_sync)).after_delay(m_maincpu, FUNC(m68000_device::vpa_after)).lr8(NAME([this] () -> u8 { m_vdp->irq_ack(); return 30; }));",
+      "start": "0xFFFFFD"
+    },
+    {
+      "access": [
+        "read"
+      ],
+      "end": "0xFFFFFF",
+      "function": "cpu_space_map",
+      "line": 747,
+      "mapping": ".before_time(m_maincpu, FUNC(m68000_device::vpa_sync)).after_delay(m_maincpu, FUNC(m68000_device::vpa_after)).lr8(NAME([] () -> u8 { return 31; }));",
+      "start": "0xFFFFFF"
+    },
+    {
+      "access": [
+        "read"
+      ],
+      "end": "0x7FFFFF",
+      "function": "install_cartslot",
+      "line": 92,
+      "mapping": "cartridge read delegate",
+      "start": "0x000000"
+    },
+    {
+      "access": [
+        "write"
+      ],
+      "end": "0x7FFFFF",
+      "function": "install_cartslot",
+      "line": 93,
+      "mapping": "cartridge write delegate",
+      "start": "0x000000"
+    },
+    {
+      "access": [
+        "read",
+        "write"
+      ],
+      "end": "0xA130FF",
+      "function": "install_cartslot",
+      "line": 94,
+      "mapping": "cartridge A13 read/write registers",
+      "start": "0xA13000"
+    },
+    {
+      "access": [
+        "read",
+        "write"
+      ],
+      "end": "0xA150FF",
+      "function": "install_cartslot",
+      "line": 95,
+      "mapping": "cartridge A15 read/write registers",
+      "start": "0xA15000"
+    }
+  ],
+  "errors": [],
+  "gameplay_trace": {
+    "address_max": 16777204,
+    "address_min": 0,
+    "bytes": 101382173,
+    "counts": {
+      "AS_CPU_SPACE:R": 2,
+      "AS_PROGRAM:R": 1611307,
+      "AS_PROGRAM:W": 53419
+    },
+    "first_sequence": 1,
+    "last_sequence": 1664728,
+    "rows": 1664728,
+    "sha256": "ca590fce97065071e10de71aa40bc21b027b3790658b8f42621d306852ba7fb5"
+  },
+  "identities": {
+    "candidate_notice_sha256": "151370e78b28fccbbcf533b41c47a16b3d1b627a247bd849301eb450aa70dfb5",
+    "candidate_source_relative_path": "fixtures/independent-game/src/game.s",
+    "candidate_source_sha256": "624e2d788104530a380a7ad6ac1ef8e140decc765e3a83f7d2c7d8fb3569e75d",
+    "candidate_toolchain_lock_sha256": "8c45e06f44653aa854322e2fa62d9e73b7fffe1e690bb93a63bb21bd6d9686c6",
+    "input_schedule_sha256": "4da9665e64f8bdfa39cc8467886a5f453e69446768fef3e36107776cf59b0598",
+    "input_script_sha256": "f31c5736e9fa4a369e9af9ed19f9117ad3cb104d57ef7699ed93c2535b61ff78",
+    "mame_build_script_sha256": "b8001305ebed413aafd015efb59643498719ba723ab7f01315b3afa2e637eff4",
+    "mame_configuration_sha256": "794aaeb429a59e8f146e6f0711e46925e2c104e979cda58234bfc72ba3857194",
+    "mame_executable_sha256": "6c056b1dfd38a409e531f37f2650d4b4c37ef63241f0991c3888cdc50681cb03",
+    "mame_patch_sha256": "323f00f433f730ea682a26aaf4c142430538072d7389dd6fe8292477d0b6ac73",
+    "mame_source_archive_sha256": "0929cc749afabcef892900e10dd90bd8b05f94a7dde8f367ac6a5d2082589f84",
+    "mame_source_revision": "tag mame0289; commit f34f02505e32c1993c6a782b6814232cbfc74e36; signed tag object d0b7160e54874fa58f553614db373d73100d5ecb",
+    "mame_source_signature": {
+      "signer_fingerprint": "D0362DB01844E0433ADBBFBAC174B1018C40710E",
+      "signer_key_sha256": "dada893db9dc7c1fdf7b138059d54451274cf882891b38243c24d7987d92aea4",
+      "signer_key_source": "https://api.github.com/users/cuavas/gpg_keys (key ID C174B1018C40710E)",
+      "status": "pass",
+      "tag": "mame0289",
+      "tag_object": "d0b7160e54874fa58f553614db373d73100d5ecb",
+      "tag_signature_sha256": "4e6943da913b68f395c3785e5e94e82803668fb37938e3369dc8819502a945c2",
+      "verification": "isolated GNUPGHOME import; full fingerprint independently matched; git verify-tag passed"
+    },
+    "mame_version": "0.289",
+    "profile": "VA3-NTSC-U",
+    "rom_relative_path": "fixtures/independent-game/game.bin",
+    "rom_sha256": "c17ad98e22d3237feac4f2dfe9d96295f32398a9ce8e4cf0b0542b1035bb0fc1",
+    "route_audit_sha256": "367e01615ad6dcb59816d8f1af2cd4423dddad47355f3e44ac1ebde280be2301",
+    "route_audit_status": "pass",
+    "runtime_harness_sha256": "f1468810c42889e75794c8f403bb99883f4af040328d0bea844904b475495ca7",
+    "scenario_sha256": "8949a289075920ebe61aea40f98a9189190c7c1e57303f7a3c4ca5cd2bd38d71",
+    "sram_sentinel_build_log_sha256": "4eab4aef41761faba65d412e86fd57af464c4881bccb7f4205c5a467461c727b",
+    "sram_sentinel_builder_sha256": "ab73b66e2988a2b28405c59f4ed56252cf83f405617a7bf857f483bda0d942d3",
+    "sram_sentinel_rom_sha256": "3763e7b5813da793a346d4ce4120fe7b8cc130926621c3a97445915974204786",
+    "sram_sentinel_source_relative_path": "fixtures/independent-game/src/sram_sentinel.s",
+    "sram_sentinel_source_sha256": "9118b6b61ba4e64014368789bf0cea6a28e74ec117e8d1961be503f99646ccd2",
+    "trace_parser_sha256": "25cff8d4ee6368b4f2e7db82b2875b7bc3bb3ba04b8ad16cd162ec2183a559dc"
+  },
+  "instrumented_address_ranges": {
+    "AS_CPU_SPACE": {
+      "bits": 24,
+      "end": "0xFFFFFF",
+      "hook": "genewhip_trace",
+      "start": "0x000000",
+      "transactions": [
+        "interrupt_acknowledge_read"
+      ]
+    },
+    "AS_PROGRAM": {
+      "bits": 24,
+      "end": "0xFFFFFF",
+      "hook": "genewhip_trace",
+      "start": "0x000000",
+      "transactions": [
+        "opcode_fetch",
+        "data_read",
+        "data_write",
+        "memory_mapped_io_read",
+        "memory_mapped_io_write"
+      ]
+    }
+  },
+  "outcome_counts": {
+    "fail": 0,
+    "infrastructure_error": 0,
+    "pass": 2,
+    "skipped": 0,
+    "unknown": 0,
+    "unsupported": 0
+  },
+  "outcome_denominator": 2,
+  "pong_disposition": "rejected",
+  "purpose": "bounded runtime qualification evidence; historical pre-admission snapshot",
+  "routes": [
+    {
+      "helper": "m68000-sdp.cpp: m_opcodes.read_interruptible",
+      "hook": "AS_PROGRAM read tap",
+      "proof": "m68000_device::device_start binds m_r_opcodes from the configured or aliased opcode space; root tap prevents direct handler bypass",
+      "route": "opcode fetch",
+      "space": "AS_OPCODES alias AS_PROGRAM"
+    },
+    {
+      "helper": "m68000-sdp.cpp: m_program.read_interruptible",
+      "hook": "AS_PROGRAM read tap",
+      "proof": "standard non-MMU handler selected by m68000_device::device_start; specific accessor is bound to AS_PROGRAM",
+      "route": "normal data read",
+      "space": "AS_PROGRAM"
+    },
+    {
+      "helper": "m68000-sdp.cpp: m_program.write_interruptible",
+      "hook": "AS_PROGRAM write tap",
+      "proof": "standard non-MMU handler selected by m68000_device::device_start; specific accessor is bound to AS_PROGRAM",
+      "route": "normal data write",
+      "space": "AS_PROGRAM"
+    },
+    {
+      "helper": "same m_program32 specific read/write methods against Genesis device map callbacks",
+      "hook": "AS_PROGRAM read/write tap",
+      "proof": "Genesis controllers, YM, VDP, Z80 control and cartridge registers are mapped in AS_PROGRAM; there is no separate M68000 AS_IO",
+      "route": "memory-mapped I/O read/write",
+      "space": "AS_PROGRAM"
+    },
+    {
+      "helper": "m_s_uprogram aliases m_s_program absent map",
+      "hook": "AS_PROGRAM read/write tap",
+      "proof": "space fallback uses same hooked program space",
+      "route": "user data read/write",
+      "space": "AS_USER_PROGRAM alias AS_PROGRAM"
+    },
+    {
+      "helper": "m_s_uopcodes aliases opcode/program absent maps",
+      "hook": "AS_PROGRAM read tap",
+      "proof": "space fallback uses same hooked program space",
+      "route": "user opcode fetch",
+      "space": "AS_USER_OPCODES alias AS_PROGRAM"
+    },
+    {
+      "helper": "m68000-sdp.cpp: m_cpu_space.read_interruptible; base implementation: m_cpu_space->read_word(0xfffffff0 | (int_level << 1))",
+      "hook": "AS_CPU_SPACE read tap",
+      "proof": "CPU-space specific accessor is bound to configured CPU-space; 24-bit mask is 0xfffff0-0xfffffe",
+      "route": "interrupt acknowledge",
+      "space": "AS_CPU_SPACE"
+    }
+  ],
+  "runs": [
+    {
+      "name": "sram-route-sentinel",
+      "sentinel_observations": {
+        "sram_enable_control_reads": 1,
+        "sram_enable_control_writes": 1,
+        "sram_storage_reads": 1,
+        "sram_storage_writes": 1
+      },
+      "status": "pass",
+      "trace": {
+        "address_max": 10563824,
+        "address_min": 0,
+        "bytes": 4445000,
+        "counts": {
+          "AS_PROGRAM:R": 76805,
+          "AS_PROGRAM:W": 2
+        },
+        "first_sequence": 1,
+        "last_sequence": 76807,
+        "rows": 76807,
+        "sha256": "4dded58d0a367ae9a7fdacbc565a5c87d346e52a6996dd037f236166d229e3cd"
+      }
+    },
+    {
+      "expected_hardware_io": {
+        "AS_PROGRAM:W": 53419
+      },
+      "name": "bounded-gameplay-scenario",
+      "oracle": {
+        "address": "0xFF0002",
+        "expected_maximum": 39,
+        "expected_minimum": 3,
+        "observed_position": 39,
+        "passed": true
+      },
+      "sram_accesses": {
+        "enable_control": 0,
+        "storage": 0
+      },
+      "status": "pass",
+      "trace": {
+        "address_max": 16777204,
+        "address_min": 0,
+        "bytes": 101382173,
+        "counts": {
+          "AS_CPU_SPACE:R": 2,
+          "AS_PROGRAM:R": 1611307,
+          "AS_PROGRAM:W": 53419
+        },
+        "first_sequence": 1,
+        "last_sequence": 1664728,
+        "rows": 1664728,
+        "sha256": "ca590fce97065071e10de71aa40bc21b027b3790658b8f42621d306852ba7fb5"
+      }
+    }
+  ],
+  "scenario": {
+    "budget": {
+      "frames": 60,
+      "hard_timeout_seconds": 30,
+      "max_trace_bytes": 134217728,
+      "max_trace_rows": 3000000
+    },
+    "forbidden_cartridge_sram": {
+      "basis": "standard Genesis cartridge SRAM aperture and enable register, including both 16-bit bus lanes; candidate advertises no SRAM",
+      "enable_control_end": "0xA130F1",
+      "enable_control_start": "0xA130F0",
+      "storage_end": "0x20FFFF",
+      "storage_start": "0x200000"
+    },
+    "input_schedule": [
+      {
+        "asserted": true,
+        "control": "P1 Start",
+        "frame": 1
+      },
+      {
+        "asserted": false,
+        "control": "P1 Start",
+        "frame": 20
+      },
+      {
+        "asserted": true,
+        "control": "P1 Right",
+        "frame": 25
+      },
+      {
+        "asserted": false,
+        "control": "P1 Right",
+        "frame": 50
+      }
+    ],
+    "machine": {
+      "driver": "genesis",
+      "profile": "VA3-NTSC-U",
+      "software_region": "NTSC-U"
+    },
+    "oracle": {
+      "address": "0xFF0002",
+      "ancestry": "candidate source logic and input schedule; not derived from the MAME trace",
+      "expected_maximum": 39,
+      "expected_minimum": 3,
+      "kind": "independent-work-ram-progression"
+    },
+    "rom": {
+      "relative_path": "fixtures/independent-game/game.bin",
+      "sha256": "c17ad98e22d3237feac4f2dfe9d96295f32398a9ce8e4cf0b0542b1035bb0fc1"
+    },
+    "scenario_id": "genewhip-independent-game-start-right-ntscu-v1",
+    "schema_version": 1
+  },
+  "schema_version": 1,
+  "temporal_scope": {
+    "kind": "historical_pre_admission_snapshot"
+  },
+  "spaces": [
+    {
+      "hooked_alias": null,
+      "source_disposition": "Genesis map + cartridge overlays; handles 68000 supervisor/program data and instruction fetches across the full 24-bit mask",
+      "space": "AS_PROGRAM",
+      "status": "configured"
+    },
+    {
+      "hooked_alias": "AS_PROGRAM",
+      "source_disposition": "no opcode map configured; m68000 device aliases opcode accesses to AS_PROGRAM",
+      "space": "AS_OPCODES",
+      "status": "alias"
+    },
+    {
+      "hooked_alias": "AS_PROGRAM",
+      "source_disposition": "generic MAME enum exists but M68000 logical-space configuration does not enumerate AS_DATA; CPU data helpers use program space",
+      "space": "AS_DATA",
+      "status": "inapplicable"
+    },
+    {
+      "hooked_alias": "AS_PROGRAM",
+      "source_disposition": "generic MAME enum exists but M68000 logical-space configuration does not enumerate AS_IO; Genesis 68000 I/O devices are mapped on AS_PROGRAM",
+      "space": "AS_IO",
+      "status": "inapplicable"
+    },
+    {
+      "hooked_alias": "AS_PROGRAM",
+      "source_disposition": "no user-program map configured; m68000 device aliases it to AS_PROGRAM",
+      "space": "AS_USER_PROGRAM",
+      "status": "alias"
+    },
+    {
+      "hooked_alias": "AS_PROGRAM",
+      "source_disposition": "no user-opcode map configured; m68000 device aliases it to AS_PROGRAM through user-program fallback",
+      "space": "AS_USER_OPCODES",
+      "status": "alias"
+    },
+    {
+      "hooked_alias": null,
+      "source_disposition": "Genesis config sets explicit CPU-space map; M68000 16-bit, 24-bit mask",
+      "space": "AS_CPU_SPACE",
+      "status": "configured"
+    }
+  ],
+  "status": "pass"
+}

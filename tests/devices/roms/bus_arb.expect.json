@@ -1,0 +1,75 @@
+{
+  "seam": "bus-arbitration",
+  "rom": "tests/devices/roms/bus_arb.bin",
+  "run_ticks": 1000000,
+  "ram_offset": 0,
+  "ram_length": 1024,
+  "cases": [
+    {
+      "id": "d44_2_poll_sequence",
+      "oracle_class": "documented-conflicted",
+      "citation": "Sega Technical Overview 1.00 §4 p.76: word D8 (mask 0x0100), equivalently bit 0 of the even-address byte (mask 0x01), is set while BUSREQ is pending and clear when access is granted; the 1992 Sega Sound Software Manual p.2 states the opposite polarity. The source conflict remains unresolved. The guest records every poll and this case tests conformance to the selected Technical Overview model only, not hardware truth",
+      "kind": "ram_bit_sequence",
+      "offset": 256,
+      "length": 64,
+      "count_offset": 128,
+      "bit": 0,
+      "min_reads": 2,
+      "pattern": "ones_then_zeroes"
+    },
+    {
+      "id": "d44_4_ungranted_write_ignored",
+      "oracle_class": "documented",
+      "citation": "Sega Technical Overview 1.00 §4 p.76: the 68000 accesses Z80 RAM after the BUSREQ handshake reports access granted. The 68000 seeds sentinel 0xA5 while granted, writes 0x5A without grant, then reads after the subsequent grant. The Z80 never writes this byte, so it cannot mask an incorrectly accepted write",
+      "offset": 147,
+      "length": 1,
+      "expected": "a5"
+    },
+    {
+      "id": "d44_5_reset_pc0_i_iff2",
+      "oracle_class": "documented",
+      "citation": "Zilog Z80 CPU User Manual UM0080 reset-state description (PC and I reset to zero; IFF1/IFF2 clear) and LD A,I definition (P/V reflects IFF2). After asserting and releasing RESET with BUSREQ held, the guest restarts at PC 0, increments its startup marker, and stores the values observed by its own LD A,I",
+      "offset": 148,
+      "length": 3,
+      "expected": "020000",
+      "mask": "ffffff"
+    },
+    {
+      "id": "z80_ran_marker",
+      "oracle_class": "documented",
+      "citation": "The original guest increments its first instruction's persistent RAM marker once at PC 0 and then loops; this case checks that the Z80 program executed after reset release",
+      "offset": 144,
+      "length": 1,
+      "expected": "01"
+    },
+    {
+      "id": "z80_ld_a_i_i_register",
+      "oracle_class": "documented",
+      "citation": "Zilog Z80 CPU User Manual UM0080: I resets to 0 and LD A,I copies I into A; the guest stores A directly after that instruction",
+      "offset": 145,
+      "length": 1,
+      "expected": "00"
+    },
+    {
+      "id": "ungranted_read_value",
+      "oracle_class": "unknown",
+      "citation": "The cited primary sources do not specify the value returned by a 68000 Z80-RAM-window read without BUSREQ grant; observed bytes are reported without an expectation",
+      "offset": 165,
+      "length": 1
+    },
+    {
+      "id": "busreq_read_unrequested",
+      "oracle_class": "unknown",
+      "citation": "The Technical Overview's request/poll procedure documents status during arbitration but does not establish the value before any BUSREQ request; observed word is reported without an expectation",
+      "offset": 160,
+      "length": 2
+    },
+    {
+      "id": "busreq_read_in_reset",
+      "oracle_class": "unknown",
+      "citation": "The cited primary sources do not establish the 0xA11100 read value while Z80 reset is asserted; observed word is reported without an expectation",
+      "offset": 162,
+      "length": 2
+    }
+  ]
+}

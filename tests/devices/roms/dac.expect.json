@@ -1,0 +1,28 @@
+{
+  "seam": "genewhip-seam-dac-v1",
+  "ram_offset": 0,
+  "ram_length": 1,
+  "run_ticks": 2000000,
+  "audio_rate": 48000,
+  "cases": [
+    {
+      "id": "dac-register-stream",
+      "kind": "trace",
+      "oracle_class": "guest-source-derived-arithmetic",
+      "citation": "256-byte triangle table in z80/dac.s; Zilog UM0080 T-state schedule",
+      "records": [
+        {"chip": "ym_port0", "reg": 43, "value": 128, "source": "z80"},
+        {"chip": "ym_port0", "reg": 42, "source": "z80", "values": {"pattern": "triangle8", "count": 256}}
+      ],
+      "spacing_ticks": {"from_index": 1, "to_index": 256, "ticks": 585}
+    },
+    {
+      "id": "dac-pcm-is-nonsilent",
+      "kind": "pcm_nonsilent",
+      "oracle_class": "unknown",
+      "citation": "Non-silence is a seam smoke observation; DAC sample quality is judged by Plan 03-20",
+      "start_write": 1,
+      "end_write": 256
+    }
+  ]
+}

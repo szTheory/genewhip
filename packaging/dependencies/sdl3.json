@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "name": "SDL",
+  "version": "3.4.18",
+  "tag": "release-3.4.18",
+  "url": "https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz",
+  "sha256": "9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3",
+  "bytes": 15651004,
+  "signature_url": "https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz.sig",
+  "signature_sha256": "175a1575ee6d3bf2970a798985b5262479abaa488447f0584e3e36c6957467ab",
+  "signers": [
+    "0900104363B4C9D4223DE149D913FE7D4B61D39B",
+    "1528635D8053A57F77D1E08630A59377A7763BE6"
+  ],
+  "signer_keys_url": "https://www.libsdl.org/signing-keys.php",
+  "signer_keys_sha256": "a93347116e97b14d8d0ad66709b889f21eedede2388f661b1db95274bc2ef52a",
+  "key_authenticity": "cross-checked 2026-10-19: both signer fingerprints (the 1528...3BE6 DSA key and the 0900...D39B RSA key) match the key blocks published on SDL's own signing-keys page, https://www.libsdl.org/signing-keys.php, fetched over HTTPS; signer_keys_sha256 pins the armored key block extracted from that page (CR stripped); the keys are fetched at verification time, not committed. The page and the release assets share one project, so this is not an independent third-party attestation, and no web-of-trust path was checked. The 3.4.18 signature verified against the 1528...3BE6 key; the tarball and signature served from libsdl.org/release/ were byte-identical to the GitHub assets.",
+  "license": "zlib",
+  "license_file_sha256": "1c040b8271b37e5076359f8fd54240e371114112924d2df81ef87c7d6a1dfdfd",
+  "role": "desktop-only static link; fetched only when GENEWHIP_BUILD_DESKTOP=ON",
+  "build_options": {
+    "SDL_SHARED": "OFF",
+    "SDL_STATIC": "ON",
+    "SDL_TEST_LIBRARY": "OFF",
+    "SDL_TESTS": "OFF",
+    "SDL_DISABLE_INSTALL": "ON"
+  },
+  "fetch_evidence": "executed-real-url: cmake -DGENEWHIP_BUILD_DESKTOP=ON with no GENEWHIP_SDL3_ARCHIVE downloaded the GitHub release URL, URL_HASH matched and the static build and runner tests passed on macOS arm64 (CMake 4.4.3, Apple Clang); signature, digest and notice re-verified by scripts/deps/verify-sdl3.sh on 2026-10-19 (PASS); the hosted CI desktop job is written but has not run (no remote)",
+  "notice": "packaging/notices/SDL3-LICENSE.txt"
+}

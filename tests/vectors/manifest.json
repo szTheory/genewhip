@@ -1,0 +1,942 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/SingleStepTests/m68000",
+  "revision": "64b253116a3de04aaac4346c43680960dc9b67e5",
+  "raw_base": "https://raw.githubusercontent.com/SingleStepTests/m68000/64b253116a3de04aaac4346c43680960dc9b67e5/",
+  "license": "MIT",
+  "license_review": "2026-10-03; exact repository LICENSE reviewed; selected data and unmodified decoder retain upstream notice; no third-party CPU implementation admitted",
+  "oracle": "MAME microcoded M68000 core; upstream does not identify an exact MAME generator revision",
+  "sources": [
+    {
+      "path": "v1/NOP.json.bin",
+      "family": "NOP",
+      "sha256": "9cebf91f85b38304e2496c87613621cbb983d0274a083295492ca25e2331c2b2",
+      "bytes": 754008,
+      "tests": 2500,
+      "sub_forms": {
+        "NOP": 2500
+      }
+    },
+    {
+      "path": "v1/MOVE.q.json.bin",
+      "family": "MOVE.q",
+      "sha256": "bfbe824891e79b72b7163cf40f2c338a40ce50510926cee2981ecc55fb687c13",
+      "bytes": 780582,
+      "tests": 2500,
+      "sub_forms": {
+        "MOVEQ": 2500
+      }
+    },
+    {
+      "path": "v1/MOVE.w.json.bin",
+      "family": "MOVE.w",
+      "sha256": "11c25e839789cb3902d12c0901b707fc5d039008424013375a03d6216efdf653",
+      "bytes": 1464661,
+      "tests": 2500,
+      "sub_forms": {
+        "MOVE": 2500
+      }
+    },
+    {
+      "path": "v1/MOVE.b.json.bin",
+      "family": "MOVE.b",
+      "sha256": "b4400d361e6ef1f6dada70c613e95039161ad8142dfcb64b5cfa27bd5ee24959",
+      "bytes": 1025934,
+      "tests": 2500,
+      "sub_forms": {
+        "MOVE": 2500
+      }
+    },
+    {
+      "path": "v1/MOVE.l.json.bin",
+      "family": "MOVE.l",
+      "sha256": "5b3c5b8de96ca76bfc2b12033541f31048d12a17172f6f286f59314450e8cc15",
+      "bytes": 1516956,
+      "tests": 2500,
+      "sub_forms": {
+        "MOVE": 2500
+      }
+    },
+    {
+      "path": "v1/MOVEA.w.json.bin",
+      "family": "MOVEA.w",
+      "sha256": "2de2210c3d129584c292faf6d2124af1d59c2ab715ff9025f642bdf5e230c23e",
+      "bytes": 1171036,
+      "tests": 2500,
+      "sub_forms": {
+        "MOVEA": 2500
+      }
+    },
+    {
+      "path": "v1/MOVEA.l.json.bin",
+      "family": "MOVEA.l",
+      "sha256": "3329a76915e9b78dbf8ef0db4260339ab0458c9b4bfb22aabddfcf0f534c344c",
+      "bytes": 1206952,
+      "tests": 2500,
+      "sub_forms": {
+        "MOVEA": 2500
+      }
+    },
+    {
+      "path": "v1/LEA.json.bin",
+      "family": "LEA",
+      "sha256": "4f30ade96e6cf65c0628b940858899f1e0db2b40b014207509c9881c4b72be29",
+      "bytes": 864058,
+      "tests": 2500,
+      "sub_forms": {
+        "LEA": 2500
+      }
+    },
+    {
+      "path": "v1/CLR.b.json.bin",
+      "family": "CLR.b",
+      "sha256": "7f6d569ed57b5bf3e57e422802bb256884f2290e641ca5e6279376e5ee23170c",
+      "bytes": 944546,
+      "tests": 2500,
+      "sub_forms": {
+        "CLR": 2500
+      }
+    },
+    {
+      "path": "v1/CLR.w.json.bin",
+      "family": "CLR.w",
+      "sha256": "e7ac8f9efb9c71f88bc3930844e5b2f27eb61635761ab9a36ada767185acdd7a",
+      "bytes": 1254165,
+      "tests": 2500,
+      "sub_forms": {
+        "CLR": 2500
+      }
+    },
+    {
+      "path": "v1/CLR.l.json.bin",
+      "family": "CLR.l",
+      "sha256": "f41e6a53171fb720d14ca8897e4ccc5c70aff6f78c6f241da9d4ddcba6058d0f",
+      "bytes": 1310945,
+      "tests": 2500,
+      "sub_forms": {
+        "CLR": 2500
+      }
+    },
+    {
+      "path": "v1/TST.b.json.bin",
+      "family": "TST.b",
+      "sha256": "289681ae49b0a58b412663488c288bade03748638399aeeb4ed8fdd64d17dc2d",
+      "bytes": 893652,
+      "tests": 2500,
+      "sub_forms": {
+        "TST": 2500
+      }
+    },
+    {
+      "path": "v1/TST.w.json.bin",
+      "family": "TST.w",
+      "sha256": "0d16c2cfd8112aa82fbdda4883635ba31dba5810e14288762e0744429c2c7a78",
+      "bytes": 1216789,
+      "tests": 2500,
+      "sub_forms": {
+        "TST": 2500
+      }
+    },
+    {
+      "path": "v1/TST.l.json.bin",
+      "family": "TST.l",
+      "sha256": "a37cfd0f43451d39491bb8425c2fe46270e5d43cf46e5029a1fd4cd66df65541",
+      "bytes": 1251886,
+      "tests": 2500,
+      "sub_forms": {
+        "TST": 2500
+      }
+    },
+    {
+      "path": "v1/ADD.b.json.bin",
+      "family": "ADD.b",
+      "sha256": "3d76bf7b85fc237be7ef2015445e91490677443d2bd4d6e6d84886989322cae5",
+      "bytes": 951767,
+      "tests": 2500,
+      "sub_forms": {
+        "ADD": 1561,
+        "ADDI": 116,
+        "ADDQ": 823
+      }
+    },
+    {
+      "path": "v1/ADD.w.json.bin",
+      "family": "ADD.w",
+      "sha256": "bd596a3d2ed49b0e9619643dd1d85b07b05993465fde440ab011221561e629a2",
+      "bytes": 1228104,
+      "tests": 2500,
+      "sub_forms": {
+        "ADD": 1538,
+        "ADDI": 91,
+        "ADDQ": 871
+      }
+    },
+    {
+      "path": "v1/ADD.l.json.bin",
+      "family": "ADD.l",
+      "sha256": "cc19a1d614a9ce4a68e3e85a108a3d88811348a748b38950372c09bd947e711e",
+      "bytes": 1287586,
+      "tests": 2500,
+      "sub_forms": {
+        "ADD": 1538,
+        "ADDI": 90,
+        "ADDQ": 872
+      }
+    },
+    {
+      "path": "v1/ADDA.w.json.bin",
+      "family": "ADDA.w",
+      "sha256": "057ddac58789c8da190494a472cb6b591411d307b4d2363b31bb6ec195ee98e7",
+      "bytes": 1165580,
+      "tests": 2500,
+      "sub_forms": {
+        "ADDA": 2500
+      }
+    },
+    {
+      "path": "v1/ADDA.l.json.bin",
+      "family": "ADDA.l",
+      "sha256": "a68dc7807e3705d56c9fd0615316c9fd17aed120fce74ef26fe4b796dfd0b3b2",
+      "bytes": 1206528,
+      "tests": 2500,
+      "sub_forms": {
+        "ADDA": 2500
+      }
+    },
+    {
+      "path": "v1/SUB.b.json.bin",
+      "family": "SUB.b",
+      "sha256": "3201511e0398f360a6b27fc8ef3b04e747d5298aacdfdced8d6aba6dc39782f9",
+      "bytes": 953801,
+      "tests": 2500,
+      "sub_forms": {
+        "SUB": 1567,
+        "SUBI": 122,
+        "SUBQ": 811
+      }
+    },
+    {
+      "path": "v1/SUB.w.json.bin",
+      "family": "SUB.w",
+      "sha256": "544902833ff09af419295b4a2bba70b5e55c2380b5444fe0107b89aa03fcb181",
+      "bytes": 1218196,
+      "tests": 2500,
+      "sub_forms": {
+        "SUB": 1514,
+        "SUBI": 100,
+        "SUBQ": 886
+      }
+    },
+    {
+      "path": "v1/SUB.l.json.bin",
+      "family": "SUB.l",
+      "sha256": "564976803df46dca0db22fcbdcc8ddfbd87d10ad6dcf62ed63f7c963b13da0e8",
+      "bytes": 1279583,
+      "tests": 2500,
+      "sub_forms": {
+        "SUB": 1527,
+        "SUBI": 115,
+        "SUBQ": 858
+      }
+    },
+    {
+      "path": "v1/SUBA.w.json.bin",
+      "family": "SUBA.w",
+      "sha256": "cbc43f9db2e44dd8d869345047b444773f73ed0af376723987b7faabca30d0cb",
+      "bytes": 1185071,
+      "tests": 2500,
+      "sub_forms": {
+        "SUBA": 2500
+      }
+    },
+    {
+      "path": "v1/SUBA.l.json.bin",
+      "family": "SUBA.l",
+      "sha256": "788a2d5fac9563260f7771456425f484e812887a45a77b82d33cea1e70df4022",
+      "bytes": 1207523,
+      "tests": 2500,
+      "sub_forms": {
+        "SUBA": 2500
+      }
+    },
+    {
+      "path": "v1/CMP.b.json.bin",
+      "family": "CMP.b",
+      "sha256": "577ea026c89e6f8c722d343cc42eb524c43d6861d205ce45abe65d9bfbb86ce5",
+      "bytes": 921603,
+      "tests": 2500,
+      "sub_forms": {
+        "CMP": 1991,
+        "CMPI": 233,
+        "CMPM": 276
+      }
+    },
+    {
+      "path": "v1/CMP.w.json.bin",
+      "family": "CMP.w",
+      "sha256": "628adb87b4aa54c8f050ceb5be543139204461eb56502c15abaaa68560785d38",
+      "bytes": 1211777,
+      "tests": 2500,
+      "sub_forms": {
+        "CMP": 2032,
+        "CMPI": 207,
+        "CMPM": 261
+      }
+    },
+    {
+      "path": "v1/CMP.l.json.bin",
+      "family": "CMP.l",
+      "sha256": "fa6c930fc6ac273308a29d1a3e535dc3be4632071299a572b7da934e5cb743d8",
+      "bytes": 1268317,
+      "tests": 2500,
+      "sub_forms": {
+        "CMP": 2063,
+        "CMPI": 190,
+        "CMPM": 247
+      }
+    },
+    {
+      "path": "v1/CMPA.w.json.bin",
+      "family": "CMPA.w",
+      "sha256": "f49365f9816aa621f2a00b3e1b9eb96038221b1504a4c20bf5b5a4ec61cdee2f",
+      "bytes": 1172095,
+      "tests": 2500,
+      "sub_forms": {
+        "CMPA": 2500
+      }
+    },
+    {
+      "path": "v1/CMPA.l.json.bin",
+      "family": "CMPA.l",
+      "sha256": "efd3c67626c60e4ec07e6174b8f98a8b302ba712310a041e3a516154524a40b2",
+      "bytes": 1209504,
+      "tests": 2500,
+      "sub_forms": {
+        "CMPA": 2500
+      }
+    },
+    {
+      "path": "v1/Bcc.json.bin",
+      "family": "Bcc",
+      "sha256": "1f3df93507e9be800d8cced3d7f9f59d2b562e3f23b46badc23b5bb459383ed9",
+      "bytes": 1043904,
+      "tests": 2500,
+      "sub_forms": {
+        "Bcc": 2334,
+        "BRA": 166
+      }
+    },
+    {
+      "path": "v1/DBcc.json.bin",
+      "family": "DBcc",
+      "sha256": "69464a7cfc6bfdff0edb7ef4a0c8e49baa15d9809913c3261de29e76c263ca0a",
+      "bytes": 1082540,
+      "tests": 2500,
+      "sub_forms": {
+        "DBcc": 2500
+      }
+    },
+    {
+      "path": "v1/BSR.json.bin",
+      "family": "BSR",
+      "sha256": "5e071f3914e0495a22e7e7d61848c3193e9c3b8f27a70bfa35d083f1e66b458f",
+      "bytes": 1437124,
+      "tests": 2500,
+      "sub_forms": {
+        "BSR": 2500
+      }
+    },
+    {
+      "path": "v1/JSR.json.bin",
+      "family": "JSR",
+      "sha256": "41943a8c373c29736aa70986553f31bb03d6be5f4a70aed1ce383ec05bdd0f67",
+      "bytes": 1342818,
+      "tests": 2500,
+      "sub_forms": {
+        "JSR": 2500
+      }
+    },
+    {
+      "path": "v1/JMP.json.bin",
+      "family": "JMP",
+      "sha256": "2d64918cd078fcb174a5bdb60a24141cecc982b89304dc8b3af68b4055feb5b4",
+      "bytes": 1282329,
+      "tests": 2500,
+      "sub_forms": {
+        "JMP": 2500
+      }
+    },
+    {
+      "path": "v1/RTS.json.bin",
+      "family": "RTS",
+      "sha256": "772f0bde0b6c82227edbcd374364f6ae07da6c5fa01ca469a368a053d57c5b63",
+      "bytes": 1427102,
+      "tests": 2500,
+      "sub_forms": {
+        "RTS": 2500
+      }
+    },
+    {
+      "path": "v1/BTST.json.bin",
+      "family": "BTST",
+      "sha256": "085509a4341a447a3b9c83ffd73bda15402ddb409e30e875e507a290ac32b074",
+      "bytes": 917582,
+      "tests": 2500,
+      "sub_forms": {
+        "BTST.reg": 2240,
+        "BTST.imm": 260
+      }
+    },
+    {
+      "path": "v1/BSET.json.bin",
+      "family": "BSET",
+      "sha256": "90249455984d1b9fe03f85f4739a7535142653084b472fa8c17246aebdf57bab",
+      "bytes": 967851,
+      "tests": 2500,
+      "sub_forms": {
+        "BSET.reg": 2219,
+        "BSET.imm": 281
+      }
+    },
+    {
+      "path": "v1/BCLR.json.bin",
+      "family": "BCLR",
+      "sha256": "2a5ce0b7e656a74c4bf4eb6cf0bf52cf00a3717b34d853cd563545047853902f",
+      "bytes": 963490,
+      "tests": 2500,
+      "sub_forms": {
+        "BCLR.reg": 2204,
+        "BCLR.imm": 296
+      }
+    },
+    {
+      "path": "v1/BCHG.json.bin",
+      "family": "BCHG",
+      "sha256": "a5508b0dda62f57553e7d4d7a4cb6fd2cf1f16c27d8beb883a6978853ed3a285",
+      "bytes": 964311,
+      "tests": 2500,
+      "sub_forms": {
+        "BCHG.reg": 2225,
+        "BCHG.imm": 275
+      }
+    },
+    {
+      "path": "v1/AND.b.json.bin",
+      "family": "AND.b",
+      "sha256": "dcc72a8ecf74ca6efc61a743ffdc475c448d8c0b517ae44b72044f6fc62246e4",
+      "bytes": 953689,
+      "tests": 2500,
+      "sub_forms": {
+        "AND": 2324,
+        "ANDI": 176
+      }
+    },
+    {
+      "path": "v1/AND.w.json.bin",
+      "family": "AND.w",
+      "sha256": "72f0e3ff75f1fff5f2ad221d5dcae703d7aff3256e77338a1a1594174a415e43",
+      "bytes": 1281872,
+      "tests": 2500,
+      "sub_forms": {
+        "AND": 2342,
+        "ANDI": 158
+      }
+    },
+    {
+      "path": "v1/AND.l.json.bin",
+      "family": "AND.l",
+      "sha256": "bde6f203725d64dcd0e09244f5c127a0323ab16037626075cc965a3782fbcb38",
+      "bytes": 1334577,
+      "tests": 2500,
+      "sub_forms": {
+        "AND": 2371,
+        "ANDI": 129
+      }
+    },
+    {
+      "path": "v1/OR.b.json.bin",
+      "family": "OR.b",
+      "sha256": "62add1222e705a287e23b4385ea45cc4ea9bd26f9b7c845d0cab06effaa9a1e3",
+      "bytes": 948329,
+      "tests": 2500,
+      "sub_forms": {
+        "OR": 2339,
+        "ORI": 161
+      }
+    },
+    {
+      "path": "v1/OR.w.json.bin",
+      "family": "OR.w",
+      "sha256": "4d741c955f7edae2a2f5f12129f05fc28342a0ad5798552b2f177affa2cfd0d8",
+      "bytes": 1278631,
+      "tests": 2500,
+      "sub_forms": {
+        "OR": 2351,
+        "ORI": 149
+      }
+    },
+    {
+      "path": "v1/OR.l.json.bin",
+      "family": "OR.l",
+      "sha256": "649a3e0bc99758e01b237d28b7452f002fde28d770200034382f9d944a8182f4",
+      "bytes": 1357415,
+      "tests": 2500,
+      "sub_forms": {
+        "OR": 2340,
+        "ORI": 160
+      }
+    },
+    {
+      "path": "v1/EOR.b.json.bin",
+      "family": "EOR.b",
+      "sha256": "87bef8de9bb884665e411dd59a501aa2c10348cbe71127c332a139228df20250",
+      "bytes": 966655,
+      "tests": 2500,
+      "sub_forms": {
+        "EOR": 2233,
+        "EORI": 267
+      }
+    },
+    {
+      "path": "v1/EOR.w.json.bin",
+      "family": "EOR.w",
+      "sha256": "065fdad8329184f0154e04a1b678df32eb62a260f46ae487c2f854dcd28cce9f",
+      "bytes": 1264853,
+      "tests": 2500,
+      "sub_forms": {
+        "EOR": 2237,
+        "EORI": 263
+      }
+    },
+    {
+      "path": "v1/EOR.l.json.bin",
+      "family": "EOR.l",
+      "sha256": "5de170b5c84f7a85f05936651fdb7b8653b5aa5b26360aaad525f94aed9a0373",
+      "bytes": 1336358,
+      "tests": 2500,
+      "sub_forms": {
+        "EOR": 2238,
+        "EORI": 262
+      }
+    },
+    {
+      "path": "v1/NOT.b.json.bin",
+      "family": "NOT.b",
+      "sha256": "973f147aa25b58c3fc708edb240b884836ffdc472d5bc923f14b38d56d8680b9",
+      "bytes": 948124,
+      "tests": 2500,
+      "sub_forms": {
+        "NOT": 2500
+      }
+    },
+    {
+      "path": "v1/NOT.w.json.bin",
+      "family": "NOT.w",
+      "sha256": "5ff8f1b45297c0aef0078075976ff1751c18557b1049f1c1f4d6eef2bf66445b",
+      "bytes": 1245475,
+      "tests": 2500,
+      "sub_forms": {
+        "NOT": 2500
+      }
+    },
+    {
+      "path": "v1/NOT.l.json.bin",
+      "family": "NOT.l",
+      "sha256": "1809fb0b9dc2f657c453b5881da11bb5d813dcd2d909159bc4a8d3320591c3fc",
+      "bytes": 1323637,
+      "tests": 2500,
+      "sub_forms": {
+        "NOT": 2500
+      }
+    },
+    {
+      "path": "v1/NEG.b.json.bin",
+      "family": "NEG.b",
+      "sha256": "8f4e24d794d6f6d3c824398848b95e6fdfab0af7d2bcf1399d1c68a58b9bf683",
+      "bytes": 949716,
+      "tests": 2500,
+      "sub_forms": {
+        "NEG": 2500
+      }
+    },
+    {
+      "path": "v1/NEG.w.json.bin",
+      "family": "NEG.w",
+      "sha256": "43f173304b82e4931cabc5b37744f12b617dee9d8bced8c071876a2c4e4c413e",
+      "bytes": 1232931,
+      "tests": 2500,
+      "sub_forms": {
+        "NEG": 2500
+      }
+    },
+    {
+      "path": "v1/NEG.l.json.bin",
+      "family": "NEG.l",
+      "sha256": "52bbcf950c31a102340283135284798680f936789955e7918c0b55e69898e215",
+      "bytes": 1303763,
+      "tests": 2500,
+      "sub_forms": {
+        "NEG": 2500
+      }
+    },
+    {
+      "path": "v1/EXT.w.json.bin",
+      "family": "EXT.w",
+      "sha256": "d7210993a82ca83ba10d34171558f6f3fa2539f02b7a6a3886b1f61d716c35e9",
+      "bytes": 766508,
+      "tests": 2500,
+      "sub_forms": {
+        "EXT": 2500
+      }
+    },
+    {
+      "path": "v1/EXT.l.json.bin",
+      "family": "EXT.l",
+      "sha256": "8aa149103720d7cdfd17ce1646ab381e0bf0baa41039c20e153851ff8d46b4af",
+      "bytes": 766508,
+      "tests": 2500,
+      "sub_forms": {
+        "EXT": 2500
+      }
+    },
+    {
+      "path": "v1/SWAP.json.bin",
+      "family": "SWAP",
+      "sha256": "c68b48eca1bbfc9c43d9fd671a5b4bff2ca85b6c4a30415271da54317608205e",
+      "bytes": 764008,
+      "tests": 2500,
+      "sub_forms": {
+        "SWAP": 2500
+      }
+    },
+    {
+      "path": "v1/ASL.b.json.bin",
+      "family": "ASL.b",
+      "sha256": "5bfda5992400671a0e54be142b625b2c26a225d11c35cc559e9eaa5c66203554",
+      "bytes": 787782,
+      "tests": 2500,
+      "sub_forms": {
+        "ASL": 2500
+      }
+    },
+    {
+      "path": "v1/ASL.w.json.bin",
+      "family": "ASL.w",
+      "sha256": "1f1c952d50a3419932e22633a9247b08212787be31517f6aaa294db42432b809",
+      "bytes": 919300,
+      "tests": 2500,
+      "sub_forms": {
+        "ASL": 1890,
+        "ASL.mem": 610
+      }
+    },
+    {
+      "path": "v1/ASL.l.json.bin",
+      "family": "ASL.l",
+      "sha256": "e44efd7fd77315877bebab514f5ede5941966a37eb1ccb0e8816a6f00d113815",
+      "bytes": 787756,
+      "tests": 2500,
+      "sub_forms": {
+        "ASL": 2500
+      }
+    },
+    {
+      "path": "v1/ASR.b.json.bin",
+      "family": "ASR.b",
+      "sha256": "bea8aa1c533071582d1adece5733457371883898ce0bff7045e224bf5320979d",
+      "bytes": 787757,
+      "tests": 2500,
+      "sub_forms": {
+        "ASR": 2500
+      }
+    },
+    {
+      "path": "v1/ASR.w.json.bin",
+      "family": "ASR.w",
+      "sha256": "3ad48e929e93d104c7df84d67e601d7f246826cc2466d2dadfdaecddcb072bc0",
+      "bytes": 920059,
+      "tests": 2500,
+      "sub_forms": {
+        "ASR": 1903,
+        "ASR.mem": 597
+      }
+    },
+    {
+      "path": "v1/ASR.l.json.bin",
+      "family": "ASR.l",
+      "sha256": "81c9ae3dd7be601e2d6b4ddd58b97ab42bd06cc4cdc0cadef35e7fe46fe0ac01",
+      "bytes": 787826,
+      "tests": 2500,
+      "sub_forms": {
+        "ASR": 2500
+      }
+    },
+    {
+      "path": "v1/LSL.b.json.bin",
+      "family": "LSL.b",
+      "sha256": "f294bf09b3b08149b7a53f8e7209eef979a035c14341ffbd84d885894cce0e17",
+      "bytes": 787771,
+      "tests": 2500,
+      "sub_forms": {
+        "LSL": 2500
+      }
+    },
+    {
+      "path": "v1/LSL.w.json.bin",
+      "family": "LSL.w",
+      "sha256": "c54f1c9edf495f4c47484c69562f68823cec8ce6903d9c408ecd79663e34e5ec",
+      "bytes": 913919,
+      "tests": 2500,
+      "sub_forms": {
+        "LSL": 1888,
+        "LSL.mem": 612
+      }
+    },
+    {
+      "path": "v1/LSL.l.json.bin",
+      "family": "LSL.l",
+      "sha256": "559f2d0bc1d729d2342a5a8ce3e8fe9a58eb47e29a8c4305ed861b7e5e7f6abb",
+      "bytes": 787740,
+      "tests": 2500,
+      "sub_forms": {
+        "LSL": 2500
+      }
+    },
+    {
+      "path": "v1/LSR.b.json.bin",
+      "family": "LSR.b",
+      "sha256": "3c66880461f46bcbc3edd02e89fdfe883ac324f3e9e3d872b4a5b3420ca3c241",
+      "bytes": 787759,
+      "tests": 2500,
+      "sub_forms": {
+        "LSR": 2500
+      }
+    },
+    {
+      "path": "v1/LSR.w.json.bin",
+      "family": "LSR.w",
+      "sha256": "9dd60d26081d4c8fc0b066f8a6a89b129aec0da4436ba2a514e3f98d79389b1c",
+      "bytes": 923031,
+      "tests": 2500,
+      "sub_forms": {
+        "LSR": 1875,
+        "LSR.mem": 625
+      }
+    },
+    {
+      "path": "v1/LSR.l.json.bin",
+      "family": "LSR.l",
+      "sha256": "2b8f9bbed2b781fa7282bb93cb834ad4f9ee737dd24bbdea9265f5460142a1a9",
+      "bytes": 787724,
+      "tests": 2500,
+      "sub_forms": {
+        "LSR": 2500
+      }
+    },
+    {
+      "path": "v1/ROL.b.json.bin",
+      "family": "ROL.b",
+      "sha256": "58b6b13f627a6a23d6a19188bc8cb00934fb97bab5d00cee499d2d159984ea7b",
+      "bytes": 787768,
+      "tests": 2500,
+      "sub_forms": {
+        "ROL": 2500
+      }
+    },
+    {
+      "path": "v1/ROL.w.json.bin",
+      "family": "ROL.w",
+      "sha256": "faa8775164afa38f336a8c73aaa651b4d00074bb5dd3b7f23b8c1cefaca9e01c",
+      "bytes": 921180,
+      "tests": 2500,
+      "sub_forms": {
+        "ROL": 1902,
+        "ROL.mem": 598
+      }
+    },
+    {
+      "path": "v1/ROL.l.json.bin",
+      "family": "ROL.l",
+      "sha256": "fe5f2199fc91ec4883bdb8de7c75dc9414a5f231d079aabe17d85ab81e74e99d",
+      "bytes": 787788,
+      "tests": 2500,
+      "sub_forms": {
+        "ROL": 2500
+      }
+    },
+    {
+      "path": "v1/ROR.b.json.bin",
+      "family": "ROR.b",
+      "sha256": "aabe4dfd9ff678450b75687cfb158396e4ea400eedeec527ce5af154c2e46bee",
+      "bytes": 787771,
+      "tests": 2500,
+      "sub_forms": {
+        "ROR": 2500
+      }
+    },
+    {
+      "path": "v1/ROR.w.json.bin",
+      "family": "ROR.w",
+      "sha256": "0e21a5bd6710b7292344fc8a628461f47909117e2d02d9143868ec5b27cb96ad",
+      "bytes": 926323,
+      "tests": 2500,
+      "sub_forms": {
+        "ROR": 1866,
+        "ROR.mem": 634
+      }
+    },
+    {
+      "path": "v1/ROR.l.json.bin",
+      "family": "ROR.l",
+      "sha256": "425585edcbbd9ff8af771f2cb64e4fa88da6f2060284c30e0a7b8062efd4b2ed",
+      "bytes": 787738,
+      "tests": 2500,
+      "sub_forms": {
+        "ROR": 2500
+      }
+    },
+    {
+      "path": "v1/MOVEtoSR.json.bin",
+      "family": "MOVEtoSR",
+      "sha256": "cf7ce17aacfc6be5a9db9456bd7d7d70206c13e456691245011064e6c0a43d75",
+      "bytes": 1286399,
+      "tests": 2500,
+      "sub_forms": {
+        "MOVEtoSR": 2500
+      }
+    },
+    {
+      "path": "v1/MOVEfromSR.json.bin",
+      "family": "MOVEfromSR",
+      "sha256": "c6a416d1e93c31d1901a1296f08e7cb14e99cf8dbe5c6541878b1956751fb725",
+      "bytes": 1254203,
+      "tests": 2500,
+      "sub_forms": {
+        "MOVEfromSR": 2500
+      }
+    },
+    {
+      "path": "v1/MOVEtoCCR.json.bin",
+      "family": "MOVEtoCCR",
+      "sha256": "603ffea2c9109daa2358288934337a52976636c59d008a75a5ba71d70b304729",
+      "bytes": 1277540,
+      "tests": 2500,
+      "sub_forms": {
+        "MOVEtoCCR": 2500
+      }
+    },
+    {
+      "path": "v1/ANDItoSR.json.bin",
+      "family": "ANDItoSR",
+      "sha256": "6636de1c0521d818ab34683b5278e60f6b89607557da631e887960ad8b3cc487",
+      "bytes": 1116437,
+      "tests": 2500,
+      "sub_forms": {
+        "ANDItoSR": 2500
+      }
+    },
+    {
+      "path": "v1/ORItoSR.json.bin",
+      "family": "ORItoSR",
+      "sha256": "783008bbc9e27ac0be3e5928ce7353dce4eb2a44e52a2d7eed660921f44796a6",
+      "bytes": 1127755,
+      "tests": 2500,
+      "sub_forms": {
+        "ORItoSR": 2500
+      }
+    },
+    {
+      "path": "v1/EORItoSR.json.bin",
+      "family": "EORItoSR",
+      "sha256": "e0eb3039e3d117e5c52e94133cb0a7594a3a7251e378db5e5a8385822afa7117",
+      "bytes": 1118642,
+      "tests": 2500,
+      "sub_forms": {
+        "EORItoSR": 2500
+      }
+    },
+    {
+      "path": "v1/ANDItoCCR.json.bin",
+      "family": "ANDItoCCR",
+      "sha256": "22e73b8f5c22b375d23f901856f13a9fbe463e4ae1f8a88a12dc640bc8bd878d",
+      "bytes": 941508,
+      "tests": 2500,
+      "sub_forms": {
+        "ANDItoCCR": 2500
+      }
+    },
+    {
+      "path": "v1/ORItoCCR.json.bin",
+      "family": "ORItoCCR",
+      "sha256": "34a23aee7ddcfdf113e988ab71d8f093512193d421b17f3abfdf356ff3663c92",
+      "bytes": 939008,
+      "tests": 2500,
+      "sub_forms": {
+        "ORItoCCR": 2500
+      }
+    },
+    {
+      "path": "v1/EORItoCCR.json.bin",
+      "family": "EORItoCCR",
+      "sha256": "9874e4db5b0dc5b6f68b8d8de947a1a80b50ca5d9fe0fd1faf5946112d2ca91f",
+      "bytes": 941508,
+      "tests": 2500,
+      "sub_forms": {
+        "EORItoCCR": 2500
+      }
+    }
+  ],
+  "retained_files": [
+    {
+      "path": "upstream/LICENSE",
+      "sha256": "9b9e332ee11019f131e945d40e20ab0c48b52921754dc03fe62cc85b579e6c61"
+    },
+    {
+      "path": "upstream/README.md",
+      "sha256": "7f36eed9cb93f061d13bfd18dc310c9bda7b5f3ac96b6d0dfe292e00612c46b6"
+    },
+    {
+      "path": "upstream/decode.py",
+      "sha256": "ff1302cd475840765c5afa86563c90c42bce47a6684c208b7f2df1efed1e827b"
+    }
+  ],
+  "selected": {
+    "path": "selected.json",
+    "selection": "first 32 records in source order from each named source, including unsupported states",
+    "sha256": "e6aa85bca81f3eb962d528eaf30bcd482e38e36bc4547836718602e3bb649f20",
+    "denominator": 2688,
+    "applicable": 700,
+    "unsupported": 1988
+  },
+  "scheduled": {
+    "denominator": 210000,
+    "applicable": 52623,
+    "unsupported": 157377,
+    "command": "python3 tests/vectors/run_vectors.py --runner build/phase2/tests/vectors/cpu_vector_runner --full --corpus-dir build/vector-corpus --fetch --report build/phase2/vector-full.json"
+  },
+  "out_of_scope_source_files": {
+    "total_upstream": 127,
+    "selected_families": 29,
+    "other_files": 98,
+    "other_record_count": "unknown; not downloaded or silently included as passing",
+    "status": "not_run",
+    "known_unresolved": [
+      {
+        "path": "v1/TAS.json.bin",
+        "reason": "upstream special five-cycle read-modify-write timing caveat"
+      },
+      {
+        "path": "v1/TRAPV.json.bin",
+        "reason": "upstream unresolved S-bit triggering caveat"
+      }
+    ]
+  },
+  "unchecked": [
+    "prefetch queue and bus transactions beyond which addresses are read and written",
+    "hardware cycle timing",
+    "address-error exception frames: odd word/long accesses stop as unsupported addresses",
+    "CLR read-before-write bus cycle and -(An) long-write word order",
+    "USP storage: unchanged oracle value checked by adapter but core has no user stack model",
+    "Genesis system behavior or independent hardware truth"
+  ]
+}

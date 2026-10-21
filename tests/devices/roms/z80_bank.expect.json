@@ -1,0 +1,41 @@
+{
+  "seam": "z80-bank-psg",
+  "rom": "tests/devices/roms/z80_bank.bin",
+  "run_ticks": 300000000,
+  "audio_rate": 48000,
+  "ram_offset": 0,
+  "ram_length": 16,
+  "cases": [
+    {
+      "id": "bank-one-marker-bytes",
+      "oracle_class": "guest-source-derived-arithmetic",
+      "citation": "The original Z80 source sends the nine bits of bank value one least-significant-bit first to 0x6000, reads 16 bytes from 0x8000, and copies each byte with LDIR to 0x1000; the original enclosing ROM places this marker at 68000 offset 0x8000.",
+      "offset": 0,
+      "length": 16,
+      "expected": "47656e65776869702062616e6b203031"
+    },
+    {
+      "id": "z80-tone-zero-period-128",
+      "kind": "pcm_frequency",
+      "oracle_class": "documented",
+      "citation": "SN76489 tone formula f = Z80 clock / (32*N); VA3 NTSC-U Z80 clock is 3579545 Hz and original guest writes N=128.",
+      "start_write": 0,
+      "end_write": 3,
+      "channel": 0,
+      "expected_hz": 873.912353515625,
+      "tolerance_pct": 1.0
+    },
+    {
+      "id": "z80-sourced-psg-trace",
+      "kind": "trace",
+      "oracle_class": "guest-source-derived-arithmetic",
+      "citation": "The original Z80 guest writes tone latch 0x80, period high bits 0x08, then attenuation 0x90 to memory port 0x7F11 in this order.",
+      "records": [
+        {"chip":"psg","reg":0,"value":128,"source":"z80"},
+        {"chip":"psg","reg":0,"value":8,"source":"z80"},
+        {"chip":"psg","reg":1,"value":144,"source":"z80"},
+        {"chip":"psg","reg":1,"value":159,"source":"z80"}
+      ]
+    }
+  ]
+}

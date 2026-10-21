@@ -1,0 +1,461 @@
+{
+  "seam": "vdp-sprites",
+  "rom": "tests/devices/roms/sprites.bin",
+  "run_ticks": 11648520,
+  "ram_offset": 0,
+  "ram_length": 256,
+  "runs": [
+    {
+      "id": "final",
+      "run_ticks": 11648520
+    },
+    {
+      "id": "phase-1",
+      "run_ticks": 1672380
+    },
+    {
+      "id": "phase-2",
+      "run_ticks": 2568420
+    },
+    {
+      "id": "phase-3",
+      "run_ticks": 3464460
+    },
+    {
+      "id": "phase-4",
+      "run_ticks": 4360500
+    },
+    {
+      "id": "phase-5",
+      "run_ticks": 5256540
+    },
+    {
+      "id": "phase-6",
+      "run_ticks": 6152580
+    },
+    {
+      "id": "phase-7",
+      "run_ticks": 7048620
+    },
+    {
+      "id": "phase-8",
+      "run_ticks": 7944660
+    },
+    {
+      "id": "phase-9",
+      "run_ticks": 8840700
+    },
+    {
+      "id": "phase-10",
+      "run_ticks": 9736740
+    },
+    {
+      "id": "phase-11",
+      "run_ticks": 10632780
+    },
+    {
+      "id": "phase-12",
+      "run_ticks": 11528820
+    }
+  ],
+  "cases": [
+    {
+      "id": "completion-marker",
+      "oracle_class": "documented",
+      "citation": "ROM control flow reached the final store after twelve phases (every field published, cyclic list included)",
+      "offset": 254,
+      "length": 2,
+      "expected": "600d"
+    },
+    {
+      "id": "status-phase1-read1-collision-link-order",
+      "oracle_class": "REF-derived",
+      "offset": 16,
+      "length": 2,
+      "citation": "reference-emulator behaviour (Genesis Plus GX, behavioural reference only) as recorded in 02-RESEARCH.md; plutiedev sprites is silent on the status bits and no reference trace was captured in plan GW-02-12; status bits SOVR 0x40 and SCOL 0x20, other bits masked",
+      "expected": "0020",
+      "mask": "0060"
+    },
+    {
+      "id": "status-phase1-read2-flags-cleared-by-read",
+      "oracle_class": "REF-derived",
+      "offset": 18,
+      "length": 2,
+      "citation": "reference-emulator behaviour (Genesis Plus GX, behavioural reference only) as recorded in 02-RESEARCH.md; plutiedev sprites is silent on the status bits and no reference trace was captured in plan GW-02-12; status bits SOVR 0x40 and SCOL 0x20, other bits masked",
+      "expected": "0000",
+      "mask": "0060"
+    },
+    {
+      "id": "status-phase2-read1-h40-20-sprites-no-overflow",
+      "oracle_class": "REF-derived",
+      "offset": 20,
+      "length": 2,
+      "citation": "reference-emulator behaviour (Genesis Plus GX, behavioural reference only) as recorded in 02-RESEARCH.md; plutiedev sprites is silent on the status bits and no reference trace was captured in plan GW-02-12; status bits SOVR 0x40 and SCOL 0x20, other bits masked",
+      "expected": "0000",
+      "mask": "0060"
+    },
+    {
+      "id": "status-phase3-read1-h40-21-sprites-overflow",
+      "oracle_class": "REF-derived",
+      "offset": 24,
+      "length": 2,
+      "citation": "reference-emulator behaviour (Genesis Plus GX, behavioural reference only) as recorded in 02-RESEARCH.md; plutiedev sprites is silent on the status bits and no reference trace was captured in plan GW-02-12; status bits SOVR 0x40 and SCOL 0x20, other bits masked",
+      "expected": "0040",
+      "mask": "0060"
+    },
+    {
+      "id": "status-phase3-read2-flags-cleared-by-read",
+      "oracle_class": "REF-derived",
+      "offset": 26,
+      "length": 2,
+      "citation": "reference-emulator behaviour (Genesis Plus GX, behavioural reference only) as recorded in 02-RESEARCH.md; plutiedev sprites is silent on the status bits and no reference trace was captured in plan GW-02-12; status bits SOVR 0x40 and SCOL 0x20, other bits masked",
+      "expected": "0000",
+      "mask": "0060"
+    },
+    {
+      "id": "status-phase4-read1-h32-16-sprites-no-overflow",
+      "oracle_class": "REF-derived",
+      "offset": 28,
+      "length": 2,
+      "citation": "reference-emulator behaviour (Genesis Plus GX, behavioural reference only) as recorded in 02-RESEARCH.md; plutiedev sprites is silent on the status bits and no reference trace was captured in plan GW-02-12; status bits SOVR 0x40 and SCOL 0x20, other bits masked",
+      "expected": "0000",
+      "mask": "0060"
+    },
+    {
+      "id": "status-phase5-read1-h32-17-sprites-overflow",
+      "oracle_class": "REF-derived",
+      "offset": 32,
+      "length": 2,
+      "citation": "reference-emulator behaviour (Genesis Plus GX, behavioural reference only) as recorded in 02-RESEARCH.md; plutiedev sprites is silent on the status bits and no reference trace was captured in plan GW-02-12; status bits SOVR 0x40 and SCOL 0x20, other bits masked",
+      "expected": "0040",
+      "mask": "0060"
+    },
+    {
+      "id": "status-phase6-read1-h40-frame-bound-status",
+      "oracle_class": "unknown",
+      "offset": 36,
+      "length": 2,
+      "citation": "undocumented: h40-frame-bound-status; observed value reported, not judged"
+    },
+    {
+      "id": "status-phase7-read1-h32-frame-bound-status",
+      "oracle_class": "unknown",
+      "offset": 40,
+      "length": 2,
+      "citation": "undocumented: h32-frame-bound-status; observed value reported, not judged"
+    },
+    {
+      "id": "status-phase8-read1-h40-pixel-limit-status",
+      "oracle_class": "unknown",
+      "offset": 44,
+      "length": 2,
+      "citation": "undocumented: h40-pixel-limit-status; observed value reported, not judged"
+    },
+    {
+      "id": "status-phase9-read1-h32-pixel-limit-status",
+      "oracle_class": "unknown",
+      "offset": 48,
+      "length": 2,
+      "citation": "undocumented: h32-pixel-limit-status; observed value reported, not judged"
+    },
+    {
+      "id": "status-phase10-read1-partial-sprite-status",
+      "oracle_class": "unknown",
+      "offset": 52,
+      "length": 2,
+      "citation": "undocumented: partial-sprite-status; observed value reported, not judged"
+    },
+    {
+      "id": "status-phase11-read1-x0-masking-status",
+      "oracle_class": "unknown",
+      "offset": 56,
+      "length": 2,
+      "citation": "undocumented: x0-masking-status; observed value reported, not judged"
+    },
+    {
+      "id": "status-phase12-read1-cyclic-list-status",
+      "oracle_class": "unknown",
+      "offset": 60,
+      "length": 2,
+      "citation": "undocumented: cyclic-list-status; observed value reported, not judged"
+    }
+  ],
+  "field_samples": [
+    {
+      "id": "p1-entry0-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line); link byte gives the next entry, 0 ends the list, sprites are drawn in traversal order with the first drawn in front",
+      "run": "phase-1",
+      "x": 40,
+      "y": 53,
+      "expected_cram": "00e0"
+    },
+    {
+      "id": "p1-entry1-only-region",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line); link byte gives the next entry, 0 ends the list, sprites are drawn in traversal order with the first drawn in front",
+      "run": "phase-1",
+      "x": 101,
+      "y": 53,
+      "expected_cram": "000e"
+    },
+    {
+      "id": "p1-traversal-order-overlap-first-drawn-wins",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line); link byte gives the next entry, 0 ends the list, sprites are drawn in traversal order with the first drawn in front",
+      "run": "phase-1",
+      "x": 106,
+      "y": 53,
+      "expected_cram": "0e00"
+    },
+    {
+      "id": "p1-entry2-right-edge",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line); link byte gives the next entry, 0 ends the list, sprites are drawn in traversal order with the first drawn in front",
+      "run": "phase-1",
+      "x": 110,
+      "y": 53,
+      "expected_cram": "0e00"
+    },
+    {
+      "id": "p1-unlinked-entry3-not-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line); link byte gives the next entry, 0 ends the list, sprites are drawn in traversal order with the first drawn in front",
+      "run": "phase-1",
+      "x": 200,
+      "y": 53,
+      "expected_cram": "0000"
+    },
+    {
+      "id": "p2-first-of-20",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line)",
+      "run": "phase-2",
+      "x": 8,
+      "y": 63,
+      "expected_cram": "00e0"
+    },
+    {
+      "id": "p2-twentieth-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line)",
+      "run": "phase-2",
+      "x": 236,
+      "y": 63,
+      "expected_cram": "00e0"
+    },
+    {
+      "id": "p3-twentieth-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line)",
+      "run": "phase-3",
+      "x": 236,
+      "y": 63,
+      "expected_cram": "00e0"
+    },
+    {
+      "id": "p3-twenty-first-not-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line)",
+      "run": "phase-3",
+      "x": 248,
+      "y": 63,
+      "expected_cram": "0000"
+    },
+    {
+      "id": "p4-sixteenth-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line)",
+      "run": "phase-4",
+      "x": 184,
+      "y": 63,
+      "expected_cram": "00e0"
+    },
+    {
+      "id": "p5-sixteenth-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line)",
+      "run": "phase-5",
+      "x": 184,
+      "y": 63,
+      "expected_cram": "00e0"
+    },
+    {
+      "id": "p5-seventeenth-not-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line)",
+      "run": "phase-5",
+      "x": 196,
+      "y": 63,
+      "expected_cram": "0000"
+    },
+    {
+      "id": "p6-entry0-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line)",
+      "run": "phase-6",
+      "x": 0,
+      "y": 11,
+      "expected_cram": "00e0"
+    },
+    {
+      "id": "p6-entry79-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line)",
+      "run": "phase-6",
+      "x": 304,
+      "y": 59,
+      "expected_cram": "00e0"
+    },
+    {
+      "id": "p6-entry80-not-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line)",
+      "run": "phase-6",
+      "x": 0,
+      "y": 75,
+      "expected_cram": "0000"
+    },
+    {
+      "id": "p6-entry99-not-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line)",
+      "run": "phase-6",
+      "x": 304,
+      "y": 75,
+      "expected_cram": "0000"
+    },
+    {
+      "id": "p7-entry63-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line)",
+      "run": "phase-7",
+      "x": 240,
+      "y": 59,
+      "expected_cram": "00e0"
+    },
+    {
+      "id": "p7-entry64-not-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line)",
+      "run": "phase-7",
+      "x": 0,
+      "y": 75,
+      "expected_cram": "0000"
+    },
+    {
+      "id": "p7-entry69-not-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line)",
+      "run": "phase-7",
+      "x": 80,
+      "y": 75,
+      "expected_cram": "0000"
+    },
+    {
+      "id": "p8-first-ten-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line)",
+      "run": "phase-8",
+      "x": 100,
+      "y": 63,
+      "expected_cram": "00e0"
+    },
+    {
+      "id": "p8-eleventh-over-320-pixels-not-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line)",
+      "run": "phase-8",
+      "x": 140,
+      "y": 63,
+      "expected_cram": "0000"
+    },
+    {
+      "id": "p9-first-eight-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line)",
+      "run": "phase-9",
+      "x": 40,
+      "y": 63,
+      "expected_cram": "00e0"
+    },
+    {
+      "id": "p9-ninth-over-256-pixels-not-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line)",
+      "run": "phase-9",
+      "x": 80,
+      "y": 63,
+      "expected_cram": "0000"
+    },
+    {
+      "id": "p10-within-budget-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line)",
+      "run": "phase-10",
+      "x": 100,
+      "y": 63,
+      "expected_cram": "00e0"
+    },
+    {
+      "id": "p10-crossing-sprite-column-147",
+      "oracle_class": "unknown",
+      "citation": "undocumented: how a sprite that crosses the pixel limit is cut (Genewhip draws its leftmost columns); observed value reported",
+      "run": "phase-10",
+      "x": 147,
+      "y": 63
+    },
+    {
+      "id": "p10-crossing-sprite-column-148",
+      "oracle_class": "unknown",
+      "citation": "undocumented: how a sprite that crosses the pixel limit is cut (Genewhip draws its leftmost columns); observed value reported",
+      "run": "phase-10",
+      "x": 148,
+      "y": 63
+    },
+    {
+      "id": "p11-before-x0-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line)",
+      "run": "phase-11",
+      "x": 50,
+      "y": 63,
+      "expected_cram": "00e0"
+    },
+    {
+      "id": "p11-after-x0-sprite",
+      "oracle_class": "unknown",
+      "citation": "undocumented: sprites after an X = 0 entry are masked on reference hardware behaviour; Genewhip does not model masking, observed value reported",
+      "run": "phase-11",
+      "x": 70,
+      "y": 63
+    },
+    {
+      "id": "p12-entry0-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line); at most 80 (H40) sprites are processed per frame, so a cyclic list ends at the bound and the field publishes",
+      "run": "phase-12",
+      "x": 20,
+      "y": 103,
+      "expected_cram": "00e0"
+    },
+    {
+      "id": "p12-entry1-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line); at most 80 (H40) sprites are processed per frame, so a cyclic list ends at the bound and the field publishes",
+      "run": "phase-12",
+      "x": 60,
+      "y": 103,
+      "expected_cram": "000e"
+    },
+    {
+      "id": "p12-entry2-drawn",
+      "oracle_class": "documented",
+      "citation": "plutiedev sprites (sprite table format, link order, 80/64 sprites per frame, 20/16 per line, 320/256 sprite pixels per line); at most 80 (H40) sprites are processed per frame, so a cyclic list ends at the bound and the field publishes",
+      "run": "phase-12",
+      "x": 100,
+      "y": 103,
+      "expected_cram": "0e00"
+    }
+  ]
+}

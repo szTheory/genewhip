@@ -1,0 +1,64 @@
+diff --git a/src/mame/sega/mdconsole.cpp b/src/mame/sega/mdconsole.cpp
+index b558e1fd..073ea431 100644
+--- a/src/mame/sega/mdconsole.cpp
++++ b/src/mame/sega/mdconsole.cpp
+@@ -81,6 +81,7 @@ void md_cons_state::machine_start()
+ 		m_cart->save_nvram();
+ 
+ 	m_genz80.z80_run_timer = timer_alloc(FUNC(md_cons_state::megadriv_z80_run_state), this);
++
+ }
+ 
+ void md_cons_state::install_cartslot()
+@@ -92,8 +93,38 @@ void md_cons_state::install_cartslot()
+ 		m_maincpu->space(AS_PROGRAM).install_write_handler(0x000000, 0x7fffff, write16s_delegate(*m_cart, FUNC(base_md_cart_slot_device::write)));
+ 		m_maincpu->space(AS_PROGRAM).install_readwrite_handler(0xa13000, 0xa130ff, read16sm_delegate(*m_cart, FUNC(base_md_cart_slot_device::read_a13)), write16sm_delegate(*m_cart, FUNC(base_md_cart_slot_device::write_a13)));
+ 		m_maincpu->space(AS_PROGRAM).install_readwrite_handler(0xa15000, 0xa150ff, read16sm_delegate(*m_cart, FUNC(base_md_cart_slot_device::read_a15)), write16sm_delegate(*m_cart, FUNC(base_md_cart_slot_device::write_a15)));
+-//      m_maincpu->space(AS_PROGRAM).install_write_handler(0xa14000, 0xa14003, write16sm_delegate(*m_cart, FUNC(base_md_cart_slot_device::write_tmss_bank)));
++		//      m_maincpu->space(AS_PROGRAM).install_write_handler(0xa14000, 0xa14003, write16sm_delegate(*m_cart, FUNC(base_md_cart_slot_device::write_tmss_bank)));
+ 	}
++
++	// Install after Genesis cartridge overlays so taps remain above the ROM,
++	// SRAM-enable, and mapper handlers in the active root dispatch.
++	auto install_trace = [this](int space_id, char const *name)
++	{
++		if (!m_maincpu->has_space(space_id))
++			return;
++
++		address_space &space = m_maincpu->space(space_id);
++		offs_t const last = space.addrmask();
++		space.install_read_tap(0, last, "genewhip_trace",
++			[this, name](offs_t address, u16 &data, u16 mem_mask)
++			{
++				logerror("GWTRACE,%llu,%s,R,%06X,16,%04X,%04X,%06X\n",
++					static_cast<unsigned long long>(++m_genewhip_trace_sequence), name,
++					unsigned(address), unsigned(data), unsigned(mem_mask), unsigned(m_maincpu->pc() & 0x00ffffff));
++			});
++		space.install_write_tap(0, last, "genewhip_trace",
++			[this, name](offs_t address, u16 &data, u16 mem_mask)
++			{
++				logerror("GWTRACE,%llu,%s,W,%06X,16,%04X,%04X,%06X\n",
++					static_cast<unsigned long long>(++m_genewhip_trace_sequence), name,
++					unsigned(address), unsigned(data), unsigned(mem_mask), unsigned(m_maincpu->pc() & 0x00ffffff));
++			});
++	};
++	install_trace(AS_PROGRAM, "AS_PROGRAM");
++	install_trace(AS_OPCODES, "AS_OPCODES");
++	install_trace(m68000_base_device::AS_USER_PROGRAM, "AS_USER_PROGRAM");
++	install_trace(m68000_base_device::AS_USER_OPCODES, "AS_USER_OPCODES");
++	install_trace(m68000_base_device::AS_CPU_SPACE, "AS_CPU_SPACE");
+ }
+ 
+ uint16_t md_cons_state::tmss_r(offs_t offset)
+diff --git a/src/mame/sega/megadriv.h b/src/mame/sega/megadriv.h
+index ac670e5c..9fe3265e 100644
+--- a/src/mame/sega/megadriv.h
++++ b/src/mame/sega/megadriv.h
+@@ -129,6 +129,7 @@ protected:
+ 	optional_shared_ptr<uint16_t> m_megadrive_ram;
+ 
+ 	genesis_z80_vars m_genz80;
++	u64 m_genewhip_trace_sequence = 0;
+ 	uint8_t m_version_hi_nibble;
+ 	uint8_t m_version_lo_nibble; // 0 = non-TMSS, 1 = TMSS
+ 

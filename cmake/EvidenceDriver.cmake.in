@@ -1,0 +1,2 @@
+# Private, configured command-template inputs omitted from CMake's codemodel.
+set(driver_configuration [==[@GW_DRIVER_CONFIGURATION@]==])

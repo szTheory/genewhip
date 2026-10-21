@@ -1,0 +1,25 @@
+{
+  "seam": "bus-arbitration-mid-instruction",
+  "rom": "tests/devices/roms/bus_arb_midinstr.bin",
+  "run_ticks": 2000000,
+  "ram_offset": 0,
+  "ram_length": 4,
+  "cases": [
+    {
+      "id": "d44_3_push-paused-after-high-byte",
+      "oracle_class": "documented",
+      "citation": "Zilog UM0080 PUSH writes the high byte first and the low byte second. The guest seeds 0x17FE/0x17FD to AA/BB, observes the pair during a BUSREQ grant, then observes it after release.",
+      "offset": 0,
+      "length": 2,
+      "expected": "12bb"
+    },
+    {
+      "id": "d44_3_push-completes-once",
+      "oracle_class": "documented",
+      "citation": "The guest's PUSH BC uses BC=0x1234 and stack pointer 0x17FF; after the mid-instruction grant releases, the same stack pair must contain 0x1234 exactly once.",
+      "offset": 2,
+      "length": 2,
+      "expected": "1234"
+    }
+  ]
+}

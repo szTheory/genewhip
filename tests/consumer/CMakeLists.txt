@@ -1,0 +1,18 @@
+cmake_minimum_required(VERSION 3.24)
+project(GenewhipConsumer LANGUAGES C CXX)
+find_package(Genewhip 0.1.0 EXACT CONFIG REQUIRED)
+include(CTest)
+add_executable(consumer main.c)
+target_link_libraries(consumer PRIVATE Genewhip::core)
+set_target_properties(consumer PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
+if(GW_HOOKS)
+  target_compile_definitions(consumer PRIVATE GW_TEST_HOOKS)
+endif()
+add_executable(header_cpp header.cpp)
+target_link_libraries(header_cpp PRIVATE Genewhip::core)
+set_target_properties(header_cpp PROPERTIES CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO)
+add_test(NAME diagnostic_consumer COMMAND consumer ${GW_ROM})
+add_test(NAME cpp_header_link COMMAND header_cpp)
+add_test(NAME independent_oracle_negative COMMAND ${CMAKE_COMMAND}
+  -DCONSUMER=$<TARGET_FILE:consumer> -DROM=${GW_ROM}
+  -P ${CMAKE_CURRENT_SOURCE_DIR}/negative_oracle.cmake)

@@ -1,0 +1,97 @@
+{
+  "seam": "psg-tone-noise",
+  "rom": "tests/devices/roms/psg.bin",
+  "run_ticks": 300000000,
+  "audio_rate": 48000,
+  "ram_offset": 256,
+  "ram_length": 256,
+  "cases": [
+    {
+      "id": "tone-0-period-128",
+      "kind": "pcm_frequency",
+      "oracle_class": "documented",
+      "citation": "SMS Power SN76489 tone period formula; Z80 clock is master/15 per the named VA3 NTSC-U model. N=128 is written by tests/devices/roms/psg.s.",
+      "start_write": 4,
+      "end_write": 7,
+      "channel": 0,
+      "expected_hz": 873.912353515625,
+      "tolerance_pct": 1.0
+    },
+    {
+      "id": "tone-1-period-192",
+      "kind": "pcm_frequency",
+      "oracle_class": "documented",
+      "citation": "SMS Power SN76489 tone period formula; Z80 clock is master/15 per the named VA3 NTSC-U model. N=192 is written by tests/devices/roms/psg.s.",
+      "start_write": 8,
+      "end_write": 11,
+      "channel": 0,
+      "expected_hz": 582.6082356770834,
+      "tolerance_pct": 1.0
+    },
+    {
+      "id": "tone-2-period-256",
+      "kind": "pcm_frequency",
+      "oracle_class": "documented",
+      "citation": "SMS Power SN76489 tone period formula; Z80 clock is master/15 per the named VA3 NTSC-U model. N=256 is written by tests/devices/roms/psg.s.",
+      "start_write": 12,
+      "end_write": 15,
+      "channel": 0,
+      "expected_hz": 436.9561767578125,
+      "tolerance_pct": 1.0
+    },
+    {
+      "id": "all-voices-silent",
+      "kind": "pcm_silence",
+      "oracle_class": "documented",
+      "citation": "SMS Power SN76489 attenuation register value 15 disables channel output; all four voices are muted in the guest source.",
+      "start_write": 16,
+      "end_write": 20,
+      "channel": 0,
+      "settle_frames": 16
+    },
+    {
+      "id": "white-noise-audible",
+      "kind": "pcm_nonsilent",
+      "oracle_class": "documented",
+      "citation": "SMS Power SN76489 describes white noise with Genesis taps at bits 0 and 3; guest writes white-noise mode and attenuation 0.",
+      "start_write": 20,
+      "end_write": 22,
+      "channel": 0
+    },
+    {
+      "id": "tone-2-clocked-periodic-noise-audible",
+      "kind": "pcm_nonsilent",
+      "oracle_class": "documented",
+      "citation": "SMS Power SN76489 and plutiedev PSG describe noise rate 3 as tone-channel-2 driven; guest selects periodic mode and attenuation 0.",
+      "start_write": 23,
+      "end_write": 25,
+      "channel": 0
+    },
+    {
+      "id": "guest-reached-completion",
+      "oracle_class": "documented",
+      "citation": "The guest source stores 0x600d after all six tone/noise windows complete.",
+      "offset": 510,
+      "length": 2,
+      "expected": "600d"
+    },
+    {
+      "id": "ordered-initial-guest-writes",
+      "kind": "trace",
+      "oracle_class": "documented",
+      "citation": "The first eight PSG writes are explicitly ordered in the original guest source.",
+      "start_index": 0,
+      "end_index": 8,
+      "records": [
+        {"chip": "psg", "reg": 1, "value": 159, "source": "68000"},
+        {"chip": "psg", "reg": 3, "value": 191, "source": "68000"},
+        {"chip": "psg", "reg": 5, "value": 223, "source": "68000"},
+        {"chip": "psg", "reg": 7, "value": 255, "source": "68000"},
+        {"chip": "psg", "reg": 0, "value": 128, "source": "68000"},
+        {"chip": "psg", "reg": 0, "value": 8, "source": "68000"},
+        {"chip": "psg", "reg": 1, "value": 144, "source": "68000"},
+        {"chip": "psg", "reg": 1, "value": 159, "source": "68000"}
+      ]
+    }
+  ]
+}

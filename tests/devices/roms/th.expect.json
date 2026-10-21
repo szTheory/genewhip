@@ -1,0 +1,145 @@
+{
+  "seam": "th-protocol",
+  "rom": "tests/devices/roms/th.bin",
+  "run_ticks": 50000,
+  "ram_offset": 0,
+  "ram_length": 256,
+  "runs": [
+    {
+      "id": "both-pad3",
+      "events": [
+        [112, 0, "c1"],
+        [112, 1, "38"]
+      ],
+      "port_device": ["pad3", "pad3"],
+      "note": "Events are scheduled at tick 112, the first tick after the 112-tick reset vector fetch (docs/core.md); an earlier tick is rejected as late."
+    },
+    {
+      "id": "port2-none",
+      "events": [
+        [112, 0, "c1"]
+      ],
+      "port_device": ["pad3", "none"],
+      "note": "Port 2 is GW_DEVICE_NONE, so no event can target it (the API returns UNSUPPORTED); port 1 keeps mask c1."
+    }
+  ],
+  "cases": [
+    {
+      "id": "port1-th-high",
+      "oracle_class": "documented",
+      "citation": "plutiedev controllers (three-button pad: with TH high the pins read 1,C,B,Right,Left,Down,Up, active low) and io-ports (data/control registers 0xA10003/0xA10005 and 0xA10009/0xA1000B); port 1 holds A|Start|Up (mask c1): only Up pulls a TH-high pin low",
+      "offset": 0,
+      "length": 1,
+      "expected": "7e",
+      "mask": "7f"
+    },
+    {
+      "id": "port1-th-low",
+      "oracle_class": "documented",
+      "citation": "plutiedev controllers (three-button pad: with TH low the pins read 0,Start,A,0,0,Down,Up, active low; bits 3-2 read zero) and io-ports; port 1 holds A|Start|Up (mask c1): Start, A and Up read low, Down reads high",
+      "offset": 1,
+      "length": 1,
+      "expected": "02",
+      "mask": "7f"
+    },
+    {
+      "id": "port2-th-low",
+      "oracle_class": "documented",
+      "citation": "plutiedev controllers (three-button pad: with TH low the pins read 0,Start,A,0,0,Down,Up, active low; bits 3-2 read zero) and io-ports; port 2 holds B|C|Right (mask 38), independent of port 1: none of those buttons appears with TH low",
+      "offset": 2,
+      "length": 1,
+      "expected": "33",
+      "mask": "7f"
+    },
+    {
+      "id": "port2-th-high",
+      "oracle_class": "documented",
+      "citation": "plutiedev controllers (three-button pad: with TH high the pins read 1,C,B,Right,Left,Down,Up, active low) and io-ports (data/control registers 0xA10003/0xA10005 and 0xA10009/0xA1000B); port 2 holds B|C|Right (mask 38), independent of port 1: C, B and Right read low",
+      "offset": 3,
+      "length": 1,
+      "expected": "47",
+      "mask": "7f"
+    },
+    {
+      "id": "th-low-bits-3-2-zero",
+      "oracle_class": "documented",
+      "citation": "plutiedev controllers: with TH low the Left/Right pins read zero on a connected three-button pad (ports 1 and 2)",
+      "offset": 1,
+      "length": 2,
+      "expected": "0000",
+      "mask": "0c0c"
+    },
+    {
+      "id": "th-follows-data-write",
+      "oracle_class": "documented",
+      "citation": "plutiedev io-ports: with control bit 6 set, TH is an output driven from data bit 6; the ROM writes control 0x40 first, then data 0x40 (high) and 0x00 (low)",
+      "offset": 0,
+      "length": 2,
+      "expected": "4000",
+      "mask": "4040"
+    },
+    {
+      "id": "port1-th-input-reads-th-high-layout",
+      "oracle_class": "REF-derived",
+      "citation": "TH configured as an input (control 0x00) floats high through the pad pull-up, so the TH-high layout is read; Genesis Plus GX io controller handling consulted as a behavioural reference only; the plutiedev pages do not state this, so the case is REF-derived and not documented hardware evidence; port 1 holds A|Start|Up (mask c1)",
+      "offset": 4,
+      "length": 1,
+      "expected": "7e",
+      "mask": "7f"
+    },
+    {
+      "id": "port2-th-input-reads-th-high-layout",
+      "oracle_class": "REF-derived",
+      "citation": "TH configured as an input (control 0x00) reads the TH-high layout; Genesis Plus GX io controller handling consulted as a behavioural reference only; the plutiedev pages do not state this, so the case is REF-derived and not documented hardware evidence; port 2 holds B|C|Right (mask 38)",
+      "offset": 5,
+      "length": 1,
+      "expected": "47",
+      "mask": "7f"
+    },
+    {
+      "id": "version-register-a10001",
+      "oracle_class": "unknown",
+      "citation": "Assumption A6: plutiedev io-ports describes the 0xA10001 bit layout, but the value for the profile's console region and model has no independent fixture in this repository, so it is reported and not judged",
+      "offset": 6,
+      "length": 1
+    },
+    {
+      "id": "port1-unaffected-by-port2-none",
+      "run": "port2-none",
+      "oracle_class": "documented",
+      "citation": "plutiedev controllers and io-ports: port 1 TH protocol is independent of port 2; same expectations as port1-th-high and port1-th-low with port 2 unconnected (mask c1)",
+      "offset": 0,
+      "length": 2,
+      "expected": "7e02",
+      "mask": "7f7f"
+    },
+    {
+      "id": "port2-none-reads-pull-ups",
+      "run": "port2-none",
+      "oracle_class": "REF-derived",
+      "citation": "Assumption A7: an unconnected port reads all pins high (bits 5-0 = 1) in both TH phases; Genesis Plus GX io controller handling consulted as a behavioural reference only; the plutiedev pages do not state this, so the case is REF-derived and not documented hardware evidence",
+      "offset": 2,
+      "length": 2,
+      "expected": "3f3f",
+      "mask": "3f3f"
+    },
+    {
+      "id": "port2-none-th-input-reads-pull-ups",
+      "run": "port2-none",
+      "oracle_class": "REF-derived",
+      "citation": "Assumption A7: an unconnected port with TH configured as input reads 0x7F; Genesis Plus GX io controller handling consulted as a behavioural reference only; the plutiedev pages do not state this, so the case is REF-derived and not documented hardware evidence",
+      "offset": 5,
+      "length": 1,
+      "expected": "7f",
+      "mask": "7f"
+    },
+    {
+      "id": "completion-marker",
+      "oracle_class": "documented",
+      "citation": "th.s control flow: the marker store is the last instruction before the idle loop, so it is reached only if every earlier port access completed without an unsupported stop",
+      "offset": 254,
+      "length": 2,
+      "expected": "600d"
+    }
+  ]
+}

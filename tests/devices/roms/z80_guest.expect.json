@@ -1,0 +1,66 @@
+{
+  "seam": "z80-guest-interrupt",
+  "rom": "tests/devices/roms/z80_guest.bin",
+  "run_ticks": 8960400,
+  "audio_rate": 8000,
+  "ram_offset": 0,
+  "ram_length": 263,
+  "cases": [
+    {
+      "id": "ten-vblank-68000-fields",
+      "oracle_class": "documented",
+      "citation": "The original 68000 installs the level-6 vector, enables VINT in VDP register 1 and lets the MC68000 VINT handler count ten entries before reading Z80 RAM.",
+      "offset": 0,
+      "length": 2,
+      "expected": "000a"
+    },
+    {
+      "id": "ten-vblank-im1-entries",
+      "oracle_class": "guest-source-derived-arithmetic",
+      "citation": "The original Z80 guest installs IM 1 at 0x0038; its handler increments RAM 0x1002. The original 68000 guest counts ten VBlank transitions and copies the counter to work RAM. The expected ten entries depend on the explicitly assumed A7 pulse width.",
+      "offset": 258,
+      "length": 1,
+      "expected": "0a"
+    },
+    {
+      "id": "guest-startup-marker",
+      "oracle_class": "guest-source-derived-arithmetic",
+      "citation": "The Z80 guest writes 0x5a to RAM 0x1000 during second-boot setup before its source-counted EI delay; the 68000 copies this source-authored byte after ten VBlank observations.",
+      "offset": 256,
+      "length": 1,
+      "expected": "5a"
+    },
+    {
+      "id": "halt-resume-count",
+      "oracle_class": "guest-source-derived-arithmetic",
+      "citation": "Each interrupt releases the source HALT, the instruction after HALT increments RAM 0x1001 once, then the guest loops back to HALT. Ten field interrupts therefore produce ten post-HALT increments.",
+      "offset": 257,
+      "length": 1,
+      "expected": "0a"
+    },
+    {
+      "id": "im1-entry-executes-handler-at-0038",
+      "oracle_class": "documented",
+      "citation": "Zilog UM0080 (2016), CPU Response, p.19: IM 1 executes a restart at address 0038h. The original guest places the counter handler at that address; a nonzero counter proves execution reached the source-coded handler.",
+      "offset": 258,
+      "length": 1,
+      "expected": "0a"
+    },
+    {
+      "id": "reset-cleared-iff2",
+      "oracle_class": "documented",
+      "citation": "Zilog UM0080 (2016), p.18: reset forces IFF1 and IFF2 to zero; LD A,I copies IFF2 into P/V. The source branches on PO before EI and stores one only for IFF2 clear.",
+      "offset": 259,
+      "length": 1,
+      "expected": "01"
+    },
+    {
+      "id": "pending-int-ei-defers-through-halt",
+      "oracle_class": "guest-source-derived-arithmetic",
+      "citation": "UM0080 EI defers INT until after the following instruction. Source arithmetic aligns EI retirement at 766215 inside the A7 pulse [766080,766560); the following HALT retires at 766275. First handler reads the stacked return PC: after_halt = 0x00b1, little endian b100; premature acceptance pushes 0x00b0. Values are source-derived, not captured output.",
+      "offset": 261,
+      "length": 2,
+      "expected": "b100"
+    }
+  ]
+}
