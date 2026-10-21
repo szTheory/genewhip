@@ -14,6 +14,12 @@ class CIDependencyContract(unittest.TestCase):
         self.assertIn("bash scripts/fixtures/m68k-as.sh", script)
         self.assertIn("python3 tools/evidence/fm_compare/compare.py --fetch --build", script)
 
+    def test_locked_assembler_recipe_uses_macos_base_tools_for_signature_checks(self):
+        recipe = (ROOT / "fixtures/independent-game/toolchain/build-binutils.sh").read_text()
+        self.assertNotRegex(recipe, r"\brg\b", "macos-runner-missing-ripgrep-dependency")
+        self.assertIn("grep -E -q", recipe, "portable-signature-status-check-missing")
+        self.assertIn("grep -E -v", recipe, "portable-linked-image-check-missing")
+
     def test_safety_and_desktop_provision_dependencies_before_ctest(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         safety = workflow.split("  safety:\n", 1)[1].split("  gameplay:\n", 1)[0]

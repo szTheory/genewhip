@@ -35,7 +35,7 @@ if [ -n "$OUTPUT" ]; then
   mkdir -p "$OUTPUT"
   OUTPUT=$(cd "$OUTPUT" && pwd -P)
 fi
-for tool in curl /usr/bin/tar /usr/bin/shasum /usr/bin/file /usr/bin/otool python3 xcodebuild xcrun clang make rg; do
+for tool in curl /usr/bin/tar /usr/bin/shasum /usr/bin/file /usr/bin/otool python3 xcodebuild xcrun clang make grep; do
   command -v "$tool" >/dev/null 2>&1 || fail "required host tool unavailable: $tool"
 done
 GPGV=$(command -v gpgv || true)
@@ -55,11 +55,11 @@ ACTUAL_KEYRING=$(shasum -a 256 "$TMP/gnu-keyring.gpg" | awk '{print $1}')
 [ "$ACTUAL_SIGNATURE" = "$SIGNATURE_SHA" ] || fail "signature SHA-256 mismatch: $ACTUAL_SIGNATURE"
 [ "$ACTUAL_KEYRING" = "$KEYRING_SHA" ] || fail "keyring SHA-256 mismatch: $ACTUAL_KEYRING"
 SIGNATURE_OUTPUT=$("$GPGV" --status-fd 1 --keyring "$TMP/gnu-keyring.gpg" "$TMP/$ARCHIVE.sig" "$TMP/$ARCHIVE" 2>&1) || fail "signature verification failed: $SIGNATURE_OUTPUT"
-if printf '%s\n' "$SIGNATURE_OUTPUT" | rg -q '\[GNUPG:\] (EXPKEYSIG|EXPSIG|KEYEXPIRED|KEYREVOKED|REVKEYSIG|BADSIG|ERRSIG|NO_PUBKEY)'; then
+if printf '%s\n' "$SIGNATURE_OUTPUT" | grep -E -q '\[GNUPG:\] (EXPKEYSIG|EXPSIG|KEYEXPIRED|KEYREVOKED|REVKEYSIG|BADSIG|ERRSIG|NO_PUBKEY)'; then
   fail "signature reports expired, revoked, invalid, or missing-key status: $SIGNATURE_OUTPUT"
 fi
-printf '%s\n' "$SIGNATURE_OUTPUT" | rg -q "\[GNUPG:\] GOODSIG [^ ]+" || fail 'signature verifier did not report GOODSIG'
-printf '%s\n' "$SIGNATURE_OUTPUT" | rg -q "\[GNUPG:\] VALIDSIG $SIGNING_FPR $([ "$SIG_TIME" = 1785086752 ] && printf '2026-07-26') $SIG_TIME " || fail 'signature signer or timestamp differs from the pinned identity'
+printf '%s\n' "$SIGNATURE_OUTPUT" | grep -E -q "\[GNUPG:\] GOODSIG [^ ]+" || fail 'signature verifier did not report GOODSIG'
+printf '%s\n' "$SIGNATURE_OUTPUT" | grep -E -q "\[GNUPG:\] VALIDSIG $SIGNING_FPR $([ "$SIG_TIME" = 1785086752 ] && printf '2026-07-26') $SIG_TIME " || fail 'signature signer or timestamp differs from the pinned identity'
 PRIMARY=$(printf '%s\n' "$SIGNATURE_OUTPUT" | awk '/\[GNUPG:\] VALIDSIG / {print $NF; exit}')
 [ "$PRIMARY" = "$PRIMARY_FPR" ] || fail "unexpected primary signer fingerprint: ${PRIMARY:-missing}"
 
@@ -98,13 +98,13 @@ CFLAGS="$COMPILE_FLAGS" SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" make DESTDIR="$TM
 AS="$TMP/stage/usr/local/bin/$TARGET-as"
 [ -x "$AS" ] || fail "source build did not produce executable $TARGET-as"
 VERSION=$("$AS" --version 2>&1)
-printf '%s\n' "$VERSION" | rg -q '^GNU assembler \(GNU Binutils\) 2\.47\.' || fail 'built assembler version mismatch'
-printf '%s\n' "$VERSION" | rg -q "configured for a target of .$TARGET." || fail 'built assembler target mismatch'
+printf '%s\n' "$VERSION" | grep -E -q '^GNU assembler \(GNU Binutils\) 2\.47\.' || fail 'built assembler version mismatch'
+printf '%s\n' "$VERSION" | grep -E -q "configured for a target of .$TARGET." || fail 'built assembler target mismatch'
 AS_SHA=$(shasum -a 256 "$AS" | awk '{print $1}')
 AS_TYPE=$(/usr/bin/file -b "$AS")
 [ "$AS_TYPE" = 'Mach-O 64-bit executable arm64' ] || fail "unexpected assembler executable type: $AS_TYPE"
 AS_LINKS=$(/usr/bin/otool -L "$AS" | tail -n +2 | sed -E 's/^[[:space:]]*([^ ]+).*/\1/')
-printf '%s\n' "$AS_LINKS" | rg -v '^(/usr/lib/|/System/Library/)' && fail 'assembler has an unaccounted non-system linked image'
+printf '%s\n' "$AS_LINKS" | grep -E -v '^(/usr/lib/|/System/Library/)' && fail 'assembler has an unaccounted non-system linked image'
 AS_LINKS_JSON=$(printf '%s\n' "$AS_LINKS" | python3 -c 'import json,sys; print(json.dumps([{"path":x.strip(),"identity":"Apple system image bound to recorded macOS build"} for x in sys.stdin if x.strip()],separators=(",",":")))')
 HOST_OS=$(sw_vers -productVersion); HOST_BUILD=$(sw_vers -buildVersion); HOST_ARCH=$(uname -m)
 XCODE=$(xcodebuild -version | tr '\n' ';'); SDK=$(xcrun --sdk macosx --show-sdk-version); SDK_BUILD=$(xcrun --sdk macosx --show-sdk-build-version)
