@@ -32,9 +32,10 @@ class CIDependencyContract(unittest.TestCase):
         required = (ROOT / "scripts/ci/required-gate.sh").read_text()
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         self.assertEqual(required.count("scripts/ci/check_ctest_skips.py"), 2)
+        self.assertEqual(required.count("--output-junit ctest-junit.xml"), 2)
         desktop = workflow.split("  desktop:\n", 1)[1].split("  package:\n", 1)[0]
         self.assertIn("scripts/ci/check_ctest_skips.py build/desktop/ctest-junit.xml", desktop)
-        self.assertIn("--output-junit build/desktop/ctest-junit.xml", desktop)
+        self.assertIn("--output-junit ctest-junit.xml", desktop)
 
 
 if __name__ == "__main__":

@@ -87,7 +87,7 @@ jobs:
       - name: Exercise software video, input, audio, pacing and presentation contracts
         run: >-
           ctest --test-dir build/desktop --output-on-failure --no-tests=error
-          --output-junit build/desktop/ctest-junit.xml
+          --output-junit ctest-junit.xml
           -E '^(phase4_host_live|runner_live_display|runner_live_audio)$'
       - name: Reject unapproved CTest skips
         run: python3 scripts/ci/check_ctest_skips.py build/desktop/ctest-junit.xml

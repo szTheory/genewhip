@@ -26,14 +26,14 @@ for lane in native sanitizer; do
   cmake --build "build/ci/$lane" --parallel 2
   junit="build/ci/$lane/ctest-junit.xml"
   ASAN_OPTIONS=detect_leaks=$leaks UBSAN_OPTIONS=halt_on_error=1 \
-    ctest --test-dir "build/ci/$lane" --output-on-failure --no-tests=error --output-junit "$junit"
+    ctest --test-dir "build/ci/$lane" --output-on-failure --no-tests=error --output-junit ctest-junit.xml
   python3 scripts/ci/check_ctest_skips.py "$junit"
   python3 tests/api/safety_contract.py --build "build/ci/$lane" --mode pr
 done
 cmake -S . -B build/ci/production -DCMAKE_BUILD_TYPE=Release -DGENEWHIP_TEST_HOOKS=OFF
 cmake --build build/ci/production --parallel 2
 ctest --test-dir build/ci/production --output-on-failure --no-tests=error \
-  --output-junit build/ci/production/ctest-junit.xml
+  --output-junit ctest-junit.xml
 python3 scripts/ci/check_ctest_skips.py build/ci/production/ctest-junit.xml
 python3 tests/api/safety_contract.py --build build/ci/production --mode production
 echo 'required-gate: PASS (native, ASan/UBSan, hooks-off, installed C/C++, hygiene, gameplay/report contracts)'
