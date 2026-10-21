@@ -152,8 +152,13 @@ COREUTILS_LINKS=$(/usr/bin/otool -L "$COREUTILS" | tail -n +2 | sed -E 's/^[[:sp
 GINSTALL_LINKS=$(/usr/bin/otool -L "$GINSTALL" | tail -n +2 | sed -E 's/^[[:space:]]*([^ ]+).*/\1/' | tr '\n' ';')
 PYTHON_BIN=$(realpath "$(command -v python3)" 2>/dev/null || true)
 [ -n "$PYTHON_BIN" ] || fail 'Python candidate builder unavailable'
-PYTHON_ROOT=$(printf '%s' "$PYTHON_BIN" | sed -E 's#/Frameworks/.*$##')
-PYTHON_FORMULA="$PYTHON_ROOT/.brew/python@3.14.rb"
+PYTHON_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+PYTHON_FORMULA_NAME="python@$PYTHON_MINOR"
+PYTHON_PREFIX=$(brew --prefix "$PYTHON_FORMULA_NAME" 2>/dev/null || true)
+[ -n "$PYTHON_PREFIX" ] || fail 'Python Homebrew prefix unavailable'
+PYTHON_ROOT=$(realpath "$PYTHON_PREFIX" 2>/dev/null || true)
+[ -n "$PYTHON_ROOT" ] || fail 'Python Homebrew installation path unavailable'
+PYTHON_FORMULA="$PYTHON_ROOT/.brew/$PYTHON_FORMULA_NAME.rb"
 PYTHON_LICENSE="$PYTHON_ROOT/LICENSE"
 [ -f "$PYTHON_FORMULA" ] && [ -f "$PYTHON_LICENSE" ] || fail 'Python formula/license provenance unavailable'
 PYTHON_VERSION=$(python3 --version)
