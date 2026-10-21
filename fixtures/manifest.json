@@ -30,7 +30,7 @@
       "status": "admitted",
       "outcome": "pass",
       "project": "Genewhip",
-      "revision": "9c27f9ad0369ffa8cb8ca935dab887a3ccccc9e2",
+      "revision": "e561e04afd9e9f600c418b51c58ad15f1644ef10",
       "source": "fixtures/independent-game/src/game.s",
       "source_sha256": "624e2d788104530a380a7ad6ac1ef8e140decc765e3a83f7d2c7d8fb3569e75d",
       "license": "MIT",
