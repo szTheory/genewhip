@@ -14,12 +14,13 @@ uname -sm >> build/ci/toolchain.txt
 leaks=1
 if [[ "$(uname -s)" == Darwin ]]; then leaks=0; fi # Apple ASan has no LeakSanitizer.
 for lane in native sanitizer; do
-  flags=()
   if [[ "$lane" == sanitizer ]]; then
-    flags=(-DCMAKE_C_FLAGS=-fsanitize=address,undefined\ -fno-omit-frame-pointer
-           -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined)
+    cmake -S . -B "build/ci/$lane" -DCMAKE_BUILD_TYPE=Release -DGENEWHIP_TEST_HOOKS=ON \
+      -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+      -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined
+  else
+    cmake -S . -B "build/ci/$lane" -DCMAKE_BUILD_TYPE=Release -DGENEWHIP_TEST_HOOKS=ON
   fi
-  cmake -S . -B "build/ci/$lane" -DCMAKE_BUILD_TYPE=Release -DGENEWHIP_TEST_HOOKS=ON "${flags[@]}"
   cmake --build "build/ci/$lane" --parallel 2
   ASAN_OPTIONS=detect_leaks=$leaks UBSAN_OPTIONS=halt_on_error=1 ctest --test-dir "build/ci/$lane" --output-on-failure --no-tests=error
   python3 tests/api/safety_contract.py --build "build/ci/$lane" --mode pr
