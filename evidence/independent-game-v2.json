@@ -249,7 +249,7 @@
     "profile": "VA3-NTSC-U",
     "rom_sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb",
     "scenario_sha256": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2",
-    "source_revision": "802eebb590cd553e7fb83679a9bf22d985f9f076",
+    "source_revision": "7a2f3df7460a7a4c9ea1f11a52ab11747026bd2d",
     "source_sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe"
   },
   "outcome": "pass",
