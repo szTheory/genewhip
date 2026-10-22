@@ -73,6 +73,14 @@ class ChildEnvironmentTests(unittest.TestCase):
             self.assertEqual(sdkroot, "/synthetic/sdk")
             self.assertEqual(developer_dir, "/synthetic/developer")
 
+    def test_git_head_advertisement_parser_rejects_malformed_or_ambiguous_refs(self):
+        result = subprocess.run(
+            ["bash", str(BUILD_SCRIPT), "--test-head-parser"],
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("head advertisement controls: 4/4 passed", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

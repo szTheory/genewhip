@@ -18,6 +18,21 @@ if [[ "${1:-}" == "--test-compiler-env" ]]; then
   "$CXX" --genewhip-env-probe
   exit 0
 fi
+extract_head_advertisement() {
+  awk '$2 == "HEAD" && $1 !~ /^ref:/ { head=$1; count++ }
+       END { if (count != 1) exit 1; print head }'
+}
+valid_git_sha() { [[ "$1" =~ ^[0-9a-f]{40}$ ]]; }
+if [[ "${1:-}" == "--test-head-parser" ]]; then
+  expected=335747d78cb0abbc3b55b004e62dad9763140115
+  advertised=$(printf 'ref: refs/heads/main\tHEAD\n%s\tHEAD\n' "$expected" | extract_head_advertisement)
+  [[ "$advertised" == "$expected" ]] && valid_git_sha "$advertised" || exit 1
+  if printf 'ref: refs/heads/main\tHEAD\n' | extract_head_advertisement >/dev/null 2>&1; then exit 1; fi
+  if printf '%s\tHEAD\n%s\tHEAD\n' "$expected" "$expected" | extract_head_advertisement >/dev/null 2>&1; then exit 1; fi
+  if valid_git_sha "${expected%?}z"; then exit 1; fi
+  echo "head advertisement controls: 4/4 passed"
+  exit 0
+fi
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 LOCK="$ROOT/tools/evidence/fm_compare/refs.lock.json"
 REFS="$ROOT/build/audio-refs"
@@ -43,13 +58,19 @@ check_file() {
 
 NUKED_SHA=335747d78cb0abbc3b55b004e62dad9763140115
 YMF_SHA=81aec25ccbb98f4873a255f7551ac4dadac59b4a
-if ! API=$(curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
-    --retry-delay 1 --retry-max-time 15 \
-    "https://api.github.com/repos/nukeykt/Nuked-OPN2/commits?per_page=1"); then
-  echo "FAIL: Nuked HEAD API request failed after bounded retries" >&2
+HEAD=""
+for attempt in 1 2 3 4; do
+  if ADVERTISEMENT=$(git -c http.connectTimeout=10 -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=10 \
+      ls-remote --symref --exit-code https://github.com/nukeykt/Nuked-OPN2.git HEAD 2>/dev/null); then
+    CANDIDATE=$(printf '%s\n' "$ADVERTISEMENT" | extract_head_advertisement) || CANDIDATE=""
+    if valid_git_sha "$CANDIDATE"; then HEAD="$CANDIDATE"; break; fi
+  fi
+  sleep "$attempt"
+done
+if [[ -z "$HEAD" ]]; then
+  echo "FAIL: Nuked HEAD advertisement failed after bounded retries" >&2
   exit 1
 fi
-HEAD=$(python3 -I -c 'import json,sys; print(json.load(sys.stdin)[0]["sha"])' <<<"$API")
 LOCKED_HEAD=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["nuked"]["head_commit"])' "$LOCK")
 if [[ "$HEAD" != "$LOCKED_HEAD" ]]; then
   echo "FAIL: Nuked HEAD changed since the locked check: expected $LOCKED_HEAD, got $HEAD" >&2
