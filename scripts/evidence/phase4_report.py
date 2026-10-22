@@ -13,6 +13,7 @@ import secrets
 import shutil
 import subprocess
 import sys
+import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -56,6 +57,9 @@ SAFETY_GENERATORS = {"Unix Makefiles", "Ninja"}
 SAFETY_CONFIG_KEYS = ("CMAKE_BUILD_TYPE", "CMAKE_GENERATOR", "GENEWHIP_TEST_HOOKS",
                       "CMAKE_C_COMPILER_ID", "CMAKE_C_COMPILER_VERSION")
 SAFETY_MIN_CASES = {"native": 131, "sanitizer": 131, "production": 95}
+PERSONAL_HOME_PATH = re.compile(
+    rb"(?i)(?:/(?:Users|home)/[^/\\\s\"']+|[A-Z]:\\Users\\[^\\\s\"']+)"
+)
 SAFETY_COMMON_TESTS = {
     "evidence_contract", "diagnostics_contract", "load_contract", "time_contract",
     "reset_contract", "bus_boundary_contract", "gameplay_bus_contract", "installed_consumer",
@@ -165,11 +169,61 @@ def safety_start(build, root=ROOT):
             path.unlink()
         else:
             path.unlink(missing_ok=True)
+    _remove_safety_export(Path(build) / "safety-export")
     run = {"schema": SAFETY_RUN_SCHEMA, "version": 1,
            "run_id": secrets.token_hex(16), **identity}
     _write_json(ci / "safety-run.json", run)
     (ci / "source-revision.txt").write_text(identity["source_revision"] + "\n")
     return run
+
+
+def _remove_safety_export(path):
+    if path.is_symlink():
+        path.unlink()
+    elif path.is_dir():
+        shutil.rmtree(path)
+    else:
+        path.unlink(missing_ok=True)
+
+
+def sanitize_ctest_junit(source, destination):
+    """Keep only testcase names and outcome markers; discard freeform runner output."""
+    source, destination = Path(source), Path(destination)
+    _remove_safety_export(destination)
+    try:
+        original = ET.parse(source).getroot()
+    except (OSError, ET.ParseError) as exc:
+        raise ValueError("safety-ctest-junit-invalid") from exc
+    original_cases = original.findall(".//testcase")
+    if not original_cases:
+        raise ValueError("safety-ctest-empty")
+    root = ET.Element("testsuites")
+    suite = ET.SubElement(root, "testsuite")
+    for case in original_cases:
+        name = case.get("name", "")
+        if not name or PERSONAL_HOME_PATH.search(name.encode("utf-8")):
+            raise ValueError("safety-ctest-personal-path")
+        safe_case = ET.SubElement(suite, "testcase", {"name": name})
+        for marker in ("skipped", "failure", "error"):
+            if case.find(marker) is not None:
+                ET.SubElement(safe_case, marker)
+    payload = ET.tostring(root, encoding="utf-8", xml_declaration=True) + b"\n"
+    if PERSONAL_HOME_PATH.search(payload):
+        raise ValueError("safety-ctest-personal-path")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temp_name = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=destination.parent, prefix=".ctest-junit-",
+                                         delete=False) as stream:
+            temp_name = stream.name
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temp_name, destination)
+    finally:
+        if temp_name and os.path.exists(temp_name):
+            os.unlink(temp_name)
+    return destination
 
 
 def _safety_lane_files(ci, lane):
@@ -328,6 +382,43 @@ def safety_finish(build, root=ROOT):
                  lane: digest(records[lane]) for lane in SAFETY_LANES}}
     _write_json(ci / "safety-complete.json", final)
     return final
+
+
+def safety_export(build, output, root=ROOT):
+    """Atomically stage only complete, validated, path-free safety evidence."""
+    build, output = Path(build), Path(output)
+    _remove_safety_export(output)
+    ci = _safety_ci_root(build)
+    run = _safety_run(build)
+    safety_finish(build, root)
+    evidence, problems = collect_safety_contracts(build, run.get("source_revision"))
+    if problems or evidence.get("source_revision") != run.get("source_revision"):
+        reasons = sorted({name for name, _ in problems})
+        suffix = ":" + ",".join(reasons) if reasons else ""
+        raise ValueError("safety-export-validation" + suffix)
+    files = [ci / "safety-run.json", ci / "safety-complete.json",
+             ci / "source-revision.txt", ci / "toolchain.txt"]
+    for lane in SAFETY_LANES:
+        files.extend(ci / lane / name for name in
+                     ("safety-config.json", "ctest-junit.xml", "safety-contract.json",
+                      "safety-completion.json"))
+    if any(not path.is_file() or path.is_symlink() for path in files):
+        raise ValueError("safety-export-file-missing")
+    payloads = [(path, path.read_bytes()) for path in files]
+    if any(PERSONAL_HOME_PATH.search(payload) for _, payload in payloads):
+        raise ValueError("safety-export-personal-path")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temp_dir = Path(tempfile.mkdtemp(prefix=".safety-export-", dir=output.parent))
+    try:
+        for source, payload in payloads:
+            target = temp_dir / source.relative_to(ci)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(payload)
+        os.replace(temp_dir, output)
+    finally:
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir)
+    return output
 
 
 def source_state():
@@ -1094,6 +1185,12 @@ def main(argv=None):
     complete_lane.add_argument("--lane", choices=tuple(SAFETY_LANES), required=True)
     finish = sub.add_parser("safety-finish")
     finish.add_argument("--build", type=Path, required=True)
+    sanitize = sub.add_parser("safety-sanitize-junit")
+    sanitize.add_argument("--input", type=Path, required=True)
+    sanitize.add_argument("--output", type=Path, required=True)
+    export = sub.add_parser("safety-export")
+    export.add_argument("--build", type=Path, required=True)
+    export.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
     if args.command == "safety-start":
         safety_start(args.build)
@@ -1103,6 +1200,22 @@ def main(argv=None):
         return 0
     if args.command == "safety-finish":
         safety_finish(args.build)
+        return 0
+    if args.command == "safety-sanitize-junit":
+        try:
+            sanitize_ctest_junit(args.input, args.output)
+        except (OSError, ValueError) as exc:
+            reason = str(exc) if isinstance(exc, ValueError) else "safety-ctest-junit-io"
+            print("REJECT: " + reason, file=sys.stderr)
+            return 1
+        return 0
+    if args.command == "safety-export":
+        try:
+            safety_export(args.build, args.out)
+        except (OSError, ValueError) as exc:
+            reason = str(exc) if isinstance(exc, ValueError) else "safety-export-io"
+            print("REJECT: " + reason, file=sys.stderr)
+            return 1
         return 0
     if args.command == "build":
         report = build_report(args.build)
