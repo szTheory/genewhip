@@ -6,6 +6,7 @@ import importlib.util
 import copy
 import json
 import math
+import re
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -365,10 +366,18 @@ class ReportContract(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         desktop_job = workflow.split("  desktop:\n", 1)[1].split("\n  package:", 1)[0]
         self.assertIn("name: Export exact-source host session evidence", desktop_job)
-        self.assertIn("python3 scripts/evidence/phase4_report.py host-export", desktop_job)
+        export_command = re.search(
+            r"python3 scripts/evidence/phase4_report\.py host-export\s+--build\s+(\S+)\s+--out\s+(\S+)",
+            desktop_job, re.DOTALL)
+        self.assertIsNotNone(export_command)
+        build_path, output_path = map(Path, export_command.groups())
+        self.assertNotEqual(output_path, build_path)
+        self.assertTrue(output_path.is_relative_to(build_path),
+                        "host-export output must stay below the build root")
         self.assertIn("name: phase4-host-evidence-${{ github.run_id }}-${{ github.run_attempt }}", desktop_job)
-        self.assertIn("path: build/host-export/", desktop_job)
-        self.assertNotIn("path: build/desktop/", desktop_job)
+        upload_path = re.search(r"(?m)^\s+path:\s*(\S+)\s*$", desktop_job)
+        self.assertIsNotNone(upload_path)
+        self.assertEqual(upload_path.group(1), output_path.as_posix() + "/")
 
     def test_exported_package_snapshot_without_safety_inputs_builds_unknown_report(self):
         with tempfile.TemporaryDirectory() as temporary:
