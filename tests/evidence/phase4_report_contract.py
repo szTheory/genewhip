@@ -225,6 +225,7 @@ def create_complete_safety_build(build):
                 json.dumps(expected["lanes"][name]["summary"]))
             module.safety_complete_lane(build, name)
         module.safety_finish(build)
+        (Path(build) / "ci/toolchain.txt").write_text("cmake version 4.4.3\nAppleClang 17.0.0\nDarwin arm64\n")
 
 
 def synthetic_report():
@@ -303,24 +304,110 @@ class ReportContract(unittest.TestCase):
             self.assertIn("safety-source-unverifiable", {reason for reason, _ in problems},
                           "partial-snapshot-safety-evidence-bypassed-source-identity")
 
-    def test_ci_safety_job_uploads_sanitized_run_bound_evidence(self):
+    def test_ci_safety_job_uploads_only_curated_sanitized_evidence(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         safety_job = workflow.split("  safety:\n", 1)[1].split("\n  gameplay:", 1)[0]
         self.assertIn("name: Export exact-source safety evidence", safety_job)
         self.assertIn("if: always()", safety_job)
         self.assertIn("name: safety-evidence-${{ github.run_id }}-${{ github.run_attempt }}", safety_job)
-        for path in ("build/ci/safety-run.json", "build/ci/safety-complete.json",
-                     "build/ci/source-revision.txt", "build/ci/native/ctest-junit.xml",
-                     "build/ci/native/safety-contract.json", "build/ci/native/safety-completion.json",
-                     "build/ci/native/safety-config.json", "build/ci/sanitizer/ctest-junit.xml",
-                     "build/ci/sanitizer/safety-contract.json", "build/ci/sanitizer/safety-completion.json",
-                     "build/ci/sanitizer/safety-config.json", "build/ci/production/ctest-junit.xml",
-                     "build/ci/production/safety-contract.json", "build/ci/production/safety-completion.json",
-                     "build/ci/production/safety-config.json"):
-            self.assertIn(path, safety_job)
+        self.assertIn("run: python3 scripts/evidence/phase4_report.py safety-export", safety_job)
+        self.assertIn("path: build/safety-export/", safety_job)
+        self.assertNotIn("build/ci/", safety_job)
+        gate = (ROOT / "scripts/ci/required-gate.sh").read_text()
+        self.assertIn("ctest-junit.raw.xml", gate)
+        self.assertIn("safety-sanitize-junit", gate)
+        self.assertTrue(gate.startswith("#!/usr/bin/env bash\nset -euo pipefail"),
+                        "CTest failure must remain fatal before artifact sanitization")
+        self.assertLess(gate.index("ctest --test-dir \"build/ci/$lane\""),
+                        gate.index("safety-sanitize-junit"))
+        self.assertLess(gate.index("safety-sanitize-junit"), gate.index("check_ctest_skips.py"))
+        self.assertNotIn("--output-on-failure", gate)
+        self.assertNotIn("ctest-junit.raw.xml", safety_job)
         for path in ("build/ci/native/CMakeCache.txt", "build/ci/sanitizer/CMakeCache.txt",
                      "build/ci/production/CMakeCache.txt"):
             self.assertNotIn(path, safety_job)
+
+    def test_safety_junit_sanitizer_removes_freeform_output_but_keeps_outcomes(self):
+        source_xml = ("<testsuites><testsuite><testcase name='test_pass' classname='" +
+                      PRIVATE_TEST_PATH + "/class' file='" + PRIVATE_TEST_PATH +
+                      "/source.c'><system-out>" + PRIVATE_TEST_PATH +
+                      "/stdout</system-out><system-err>" + PRIVATE_TEST_PATH +
+                      "/stderr</system-err></testcase><testcase name='independent_game_consumer'>"
+                      "<skipped message='" + PRIVATE_TEST_PATH +
+                      "/skip'/></testcase><testcase name='test_failure'><failure message='" +
+                      PRIVATE_TEST_PATH + "/failure'/></testcase></testsuite></testsuites>")
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "raw.xml"
+            output = Path(temporary) / "safe.xml"
+            source.write_text(source_xml)
+            module.sanitize_ctest_junit(source, output)
+            payload = output.read_bytes()
+            root = module.ET.fromstring(payload)
+            cases = root.findall(".//testcase")
+            self.assertEqual([case.get("name") for case in cases],
+                             ["test_pass", "independent_game_consumer", "test_failure"])
+            self.assertEqual([child.tag for child in cases[1]], ["skipped"])
+            self.assertEqual([child.tag for child in cases[2]], ["failure"])
+            self.assertEqual(set(cases[0].attrib), {"name"})
+            self.assertNotIn(PRIVATE_TEST_PATH.encode(), payload)
+            self.assertIsNone(module.PERSONAL_HOME_PATH.search(payload))
+
+    def test_safety_junit_residual_private_path_rejects_without_output(self):
+        windows_marker = "C:" + chr(92) + "Users" + chr(92) + "example" + chr(92) + "leak"
+        for marker in (PRIVATE_TEST_PATH + "/leak", windows_marker):
+            with self.subTest(marker=marker), tempfile.TemporaryDirectory() as temporary:
+                source = Path(temporary) / "raw.xml"
+                output = Path(temporary) / "safe.xml"
+                source.write_text("<testsuites><testsuite><testcase name='" +
+                                  marker + "'/></testsuite></testsuites>")
+                with self.assertRaisesRegex(ValueError, "safety-ctest-personal-path"):
+                    module.sanitize_ctest_junit(source, output)
+                self.assertFalse(output.exists(), "unsafe JUnit destination was emitted")
+
+    def test_failed_ctest_cannot_export_safety_artifacts(self):
+        identity = {"source_revision": TEST_REVISION, "source_tree_id": "c" * 40}
+        with tempfile.TemporaryDirectory() as temporary:
+            build = Path(temporary)
+            create_complete_safety_build(build)
+            lane = build / "ci/native"
+            raw = lane / "failed.raw.xml"
+            failed_report = module.ET.parse(lane / "ctest-junit.xml").getroot()
+            failed_case = failed_report.find(".//testcase")
+            module.ET.SubElement(failed_case, "failure").text = "test failed"
+            raw.write_bytes(module.ET.tostring(failed_report, encoding="utf-8"))
+            module.sanitize_ctest_junit(raw, lane / "ctest-junit.xml")
+            output = build / "safety-export"
+            output.mkdir()
+            (output / "stale.txt").write_text("must be invalidated")
+            with patch.object(module, "public_source_identity", return_value=identity):
+                with self.assertRaisesRegex(ValueError, "safety-ctest-outcome"):
+                    module.safety_complete_lane(build, "native")
+                with self.assertRaisesRegex(ValueError, "safety-ctest-outcome|safety-lane-artifact-mismatch"):
+                    module.safety_export(build, output)
+            self.assertFalse(output.exists(), "failed CTest evidence was exported")
+
+    def test_safety_export_is_curated_and_binds_the_sanitized_junit_bytes(self):
+        identity = {"source_revision": TEST_REVISION, "source_tree_id": "c" * 40}
+        with tempfile.TemporaryDirectory() as temporary:
+            build = Path(temporary)
+            create_complete_safety_build(build)
+            for lane in module.SAFETY_LANES:
+                (build / "ci" / lane / "CMakeCache.txt").unlink()
+            output = build / "safety-export"
+            with patch.object(module, "public_source_identity", return_value=identity):
+                module.safety_export(build, output)
+                evidence, problems = module.collect_safety_contracts(
+                    build, expected_revision=TEST_REVISION)
+            self.assertTrue((output / "native/ctest-junit.xml").is_file())
+            self.assertFalse(any(path.name in {"CMakeCache.txt", "ctest-junit.raw.xml"}
+                                 for path in output.rglob("*")))
+            for lane in module.SAFETY_LANES:
+                exported = output / lane / "ctest-junit.xml"
+                live = build / "ci" / lane / "ctest-junit.xml"
+                self.assertEqual(exported.read_bytes(), live.read_bytes())
+            self.assertEqual(problems, [])
+            self.assertEqual(module.sha(output / "native/ctest-junit.xml"),
+                             evidence["lanes"]["native"]["ctest"]["junit_sha256"])
 
     def test_safety_contract_row_requires_three_source_bound_gate_lanes(self):
         evidence = synthetic_safety_contracts()
