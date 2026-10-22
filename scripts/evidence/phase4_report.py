@@ -424,7 +424,14 @@ def safety_export(build, output, root=ROOT):
 def host_export(build, output, run_id, run_attempt, source_sha, root=ROOT):
     """Atomically stage the exact-source host reports without runner paths or binaries."""
     build, output, root = Path(build), Path(output), Path(root)
-    _remove_safety_export(output)
+    build_resolved, output_resolved, root_resolved = (
+        build.resolve(), output.resolve(), root.resolve())
+    try:
+        output_resolved.relative_to(build_resolved)
+    except ValueError as exc:
+        raise ValueError("host-export-output-outside-build") from exc
+    if output_resolved == build_resolved or output_resolved == root_resolved:
+        raise ValueError("host-export-output-overlaps-source")
     if not isinstance(run_id, str) or not run_id.isdecimal():
         raise ValueError("host-export-run-id-invalid")
     if type(run_attempt) is not int or run_attempt < 1:
@@ -439,12 +446,19 @@ def host_export(build, output, run_id, run_attempt, source_sha, root=ROOT):
     cache = build / "CMakeCache.txt"
     paths = {"software": build / "evidence/phase4-host-sessions.json",
              "live": build / "evidence/phase4-host-live.json"}
+    protected = (root_resolved, build_resolved, *(path.resolve() for path in
+                 (desktop, headless, cache, *paths.values())))
+    if any(path == output_resolved or output_resolved in path.parents
+           for path in protected):
+        raise ValueError("host-export-output-overlaps-source")
     if any(not path.is_file() or path.is_symlink() for path in (desktop, headless, cache, *paths.values())):
         raise ValueError("host-export-input-missing")
     try:
         reports = {name: json.loads(path.read_text()) for name, path in paths.items()}
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError("host-export-report-invalid") from exc
+    if any(not isinstance(report, dict) for report in reports.values()):
+        raise ValueError("host-export-report-invalid")
     if any(report.get("outcome") != "pass" for report in reports.values()):
         raise ValueError("host-export-report-not-pass")
     expected_identity = {"build_configuration_sha256": sha(cache),
@@ -477,6 +491,7 @@ def host_export(build, output, run_id, run_attempt, source_sha, root=ROOT):
                             "sha256": hashlib.sha256(payloads["phase4-host-live.json"]).hexdigest()}}}
     payloads["host-evidence.json"] = (json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n").encode()
     output.parent.mkdir(parents=True, exist_ok=True)
+    _remove_safety_export(output)
     temp_dir = Path(tempfile.mkdtemp(prefix=".host-export-", dir=output.parent))
     try:
         for name, payload in payloads.items():

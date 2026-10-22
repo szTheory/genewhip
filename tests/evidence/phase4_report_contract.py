@@ -297,7 +297,7 @@ class ReportContract(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             build, reports = self._host_export_fixture(base)
-            output = base / "host-export"
+            output = build / "host-export"
             identity = {"source_revision": TEST_REVISION, "source_tree_id": "f" * 40}
             with patch.object(module, "public_source_identity", return_value=identity):
                 module.host_export(build, output, "123456", 2, TEST_REVISION)
@@ -331,11 +331,35 @@ class ReportContract(unittest.TestCase):
                         row["outcome"] = "skipped"
                         row["reason"] = "device unavailable"
                 (build / "evidence/phase4-host-live.json").write_text(json.dumps(live, sort_keys=True) + "\n")
-                output = base / "host-export"
+                output = build / "host-export"
                 with patch.object(module, "public_source_identity", return_value=identity):
                     with self.assertRaises(ValueError):
                         module.host_export(build, output, "123456", 2, TEST_REVISION)
                 self.assertFalse(output.exists(), "rejected host reports were staged")
+
+    def test_host_export_rejects_output_overlapping_build_without_deleting_it(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            build, _ = self._host_export_fixture(base)
+            identity = {"source_revision": TEST_REVISION, "source_tree_id": "f" * 40}
+            sentinel = build / "keep-me.txt"
+            sentinel.write_text("preserve source build")
+            with patch.object(module, "public_source_identity", return_value=identity):
+                with self.assertRaisesRegex(ValueError, "host-export-output-overlaps-source"):
+                    module.host_export(build, build, "123456", 2, TEST_REVISION)
+            self.assertEqual(sentinel.read_text(), "preserve source build")
+
+    def test_host_export_rejects_non_object_json_report(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            build, _ = self._host_export_fixture(base)
+            identity = {"source_revision": TEST_REVISION, "source_tree_id": "f" * 40}
+            (build / "evidence/phase4-host-live.json").write_text("[]\n")
+            output = build / "host-export"
+            with patch.object(module, "public_source_identity", return_value=identity):
+                with self.assertRaisesRegex(ValueError, "host-export-report-invalid"):
+                    module.host_export(build, output, "123456", 2, TEST_REVISION)
+            self.assertFalse(output.exists())
 
     def test_ci_desktop_job_uploads_only_attempt_bound_curated_host_reports(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
