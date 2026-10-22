@@ -60,8 +60,15 @@ def _verified_public_candidate(root, name, path):
                 return False
             validator = spec.module_from_spec(module_spec)
             module_spec.loader.exec_module(validator)
-            return validator._validate_successor(row, root) == "ok"
-        except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError,
+            provenance_spec = spec.spec_from_file_location(
+                "fixture_source_provenance", root / "scripts/fixtures/source_provenance.py")
+            if provenance_spec is None or provenance_spec.loader is None:
+                return False
+            provenance = spec.module_from_spec(provenance_spec)
+            provenance_spec.loader.exec_module(provenance)
+            with provenance.source_identity_context(validator, row, root):
+                return validator._validate_successor(row, root) == "ok"
+        except (KeyError, OSError, TypeError, ValueError, subprocess.SubprocessError, json.JSONDecodeError,
                 AttributeError, ImportError):
             return False
     if name != "fixtures/independent-game/game.bin":

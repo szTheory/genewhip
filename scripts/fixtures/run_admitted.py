@@ -23,8 +23,15 @@ def main() -> int:
         return 2
     validator = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(validator)
+    provenance_spec = importlib.util.spec_from_file_location(
+        "fixture_source_provenance", root / "scripts/fixtures/source_provenance.py")
+    if provenance_spec is None or provenance_spec.loader is None:
+        print("BLOCKED: fixture source provenance verifier is unavailable", file=sys.stderr)
+        return 2
+    provenance = importlib.util.module_from_spec(provenance_spec)
+    provenance_spec.loader.exec_module(provenance)
     try:
-        rom = validator.require_admitted(
+        rom = provenance.require_admitted(validator,
             root, args.manifest, args.fixture_id, args.diagnostic_rom)
     except (OSError, ValueError) as exc:
         print(f"BLOCKED: {exc}", file=sys.stderr)
