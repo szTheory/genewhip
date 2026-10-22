@@ -260,6 +260,10 @@ class PromotionContract(unittest.TestCase):
         self.assertEqual(validate_live_repository_policy(
             EXPECTED["repository"], explicit_denial, None, rules,
             publisher_contents_write=True), ["publication-write-permission-unavailable"])
+        malformed = {**repo, "permissions": None}
+        self.assertEqual(validate_live_repository_policy(
+            EXPECTED["repository"], malformed, None, rules,
+            publisher_contents_write=True), ["publication-write-permission-unavailable"])
 
     def test_publish_rechecks_real_service_path_before_visibility_transition(self):
         source_sha = EXPECTED["sha"]
