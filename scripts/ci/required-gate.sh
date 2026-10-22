@@ -12,8 +12,7 @@ python3 tests/evidence/independent_game_toolchain.py --self-test-current-receipt
 python3 tests/evidence/independent_game_toolchain.py
 python3 tests/evidence/independent_game_toolchain.py --validate-current-receipt build/tool-cache/z80-elf-as.receipt.json --target z80-elf --assembler build/tool-cache/z80-elf-as
 python3 tests/evidence/independent_game_toolchain.py --validate-current-receipt build/tool-cache/m68k-elf-as.receipt.json --target m68k-elf --assembler build/tool-cache/m68k-elf-as
-mkdir -p build/ci
-git rev-parse HEAD > build/ci/source-revision.txt
+python3 scripts/evidence/phase4_report.py safety-start --build build
 cmake --version | head -n 1 > build/ci/toolchain.txt
 "${CC:-cc}" --version | head -n 1 >> build/ci/toolchain.txt
 uname -sm >> build/ci/toolchain.txt
@@ -32,12 +31,17 @@ for lane in native sanitizer; do
   ASAN_OPTIONS=detect_leaks=$leaks UBSAN_OPTIONS=halt_on_error=1 \
     ctest --test-dir "build/ci/$lane" --output-on-failure --no-tests=error --output-junit ctest-junit.xml
   python3 scripts/ci/check_ctest_skips.py "$junit"
-  python3 tests/api/safety_contract.py --build "build/ci/$lane" --mode pr
+  python3 tests/api/safety_contract.py --build "build/ci/$lane" --mode pr \
+    --out "build/ci/$lane/safety-contract.json"
+  python3 scripts/evidence/phase4_report.py safety-lane-complete --build build --lane "$lane"
 done
 cmake -S . -B build/ci/production -DCMAKE_BUILD_TYPE=Release -DGENEWHIP_TEST_HOOKS=OFF
 cmake --build build/ci/production --parallel 2
 ctest --test-dir build/ci/production --output-on-failure --no-tests=error \
   --output-junit ctest-junit.xml
 python3 scripts/ci/check_ctest_skips.py build/ci/production/ctest-junit.xml
-python3 tests/api/safety_contract.py --build build/ci/production --mode production
+python3 tests/api/safety_contract.py --build build/ci/production --mode production \
+  --out build/ci/production/safety-contract.json
+python3 scripts/evidence/phase4_report.py safety-lane-complete --build build --lane production
+python3 scripts/evidence/phase4_report.py safety-finish --build build
 echo 'required-gate: PASS (native, ASan/UBSan, hooks-off, installed C/C++, hygiene, gameplay/report contracts)'

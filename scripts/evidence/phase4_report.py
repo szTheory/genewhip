@@ -9,8 +9,11 @@ import math
 import os
 import platform
 import re
+import secrets
+import shutil
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -42,6 +45,29 @@ GAME_IDENTITIES = {"source_sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93
 HOST_SCHEMA = "genewhip-phase4-host-sessions"
 HOST_CONTROLS = ROOT / "fixtures/independent-game-v2/host-controls.json"
 HOST_HEX = re.compile(r"^[0-9a-f]{64}$")
+SAFETY_LANES = {"native": ("pr", True), "sanitizer": ("pr", True),
+                "production": ("production", False)}
+SAFETY_ALLOWED_SKIPS = {"independent_game_admission", "independent_game_consumer"}
+SAFETY_RUN_SCHEMA = "genewhip-phase4-safety-run-v1"
+SAFETY_COMPLETION_SCHEMA = "genewhip-phase4-safety-lane-completion-v1"
+SAFETY_FINAL_SCHEMA = "genewhip-phase4-safety-complete-v1"
+SAFETY_CONFIG_SCHEMA = "genewhip-phase4-safety-config-v1"
+SAFETY_GENERATORS = {"Unix Makefiles", "Ninja"}
+SAFETY_CONFIG_KEYS = ("CMAKE_BUILD_TYPE", "CMAKE_GENERATOR", "GENEWHIP_TEST_HOOKS",
+                      "CMAKE_C_COMPILER_ID", "CMAKE_C_COMPILER_VERSION")
+SAFETY_MIN_CASES = {"native": 131, "sanitizer": 131, "production": 95}
+SAFETY_COMMON_TESTS = {
+    "evidence_contract", "diagnostics_contract", "load_contract", "time_contract",
+    "reset_contract", "bus_boundary_contract", "gameplay_bus_contract", "installed_consumer",
+}
+SAFETY_HOOK_TESTS = {"memory_accounting", "phase4_report_contract"}
+SAFETY_PRODUCTION_TESTS = {"cpu_overlay_absent", "z80_overlay_absent"}
+
+
+def safety_required_tests(lane):
+    required = set(SAFETY_COMMON_TESTS) | SAFETY_ALLOWED_SKIPS
+    required |= SAFETY_HOOK_TESTS if SAFETY_LANES[lane][1] else SAFETY_PRODUCTION_TESTS
+    return required
 
 
 def sha(path):
@@ -66,6 +92,242 @@ def git_head():
         return snapshot_revision
     return subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, check=True,
                           text=True, stdout=subprocess.PIPE).stdout.strip()
+
+
+def public_source_identity(root=ROOT):
+    """Return the committed public-source identity only when its worktree is clean.
+
+    Planning notes are excluded because they are private workflow state and may be
+    locally dirty without changing the public source tree under qualification.
+    """
+    root = Path(root).resolve()
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True,
+                          text=True, stdout=subprocess.PIPE).stdout.strip()
+    tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=root, check=True,
+                          text=True, stdout=subprocess.PIPE).stdout.strip()
+    changed = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all",
+                              "--", ".", ":(exclude).planning/**"], cwd=root, check=True,
+                             text=True, stdout=subprocess.PIPE).stdout
+    if changed:
+        raise ValueError("safety-source-dirty")
+    return {"source_revision": head, "source_tree_id": tree}
+
+
+def _safety_ci_root(build):
+    build = Path(build).resolve()
+    ci = build / "ci"
+    if ci.is_symlink():
+        raise ValueError("safety-ci-directory-symlink")
+    ci.mkdir(parents=True, exist_ok=True)
+    return ci
+
+
+def _write_json(path, value):
+    path = Path(path)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_bytes(_json_bytes(value))
+    os.replace(temporary, path)
+
+
+def _json_bytes(value):
+    return (json.dumps(value, sort_keys=True, indent=2) + "\n").encode()
+
+
+def _read_json(path):
+    return json.loads(Path(path).read_text())
+
+
+def _read_safety_record(path, invalid_reason):
+    record = _read_json(path)
+    if not isinstance(record, dict):
+        raise ValueError(invalid_reason)
+    return record
+
+
+def _safety_run(build):
+    return _read_safety_record(_safety_ci_root(build) / "safety-run.json",
+                               "safety-run-invalid")
+
+
+def safety_start(build, root=ROOT):
+    """Start a fresh safety run, invalidating every prior lane artifact first."""
+    identity = public_source_identity(root)
+    ci = _safety_ci_root(build)
+    for lane in SAFETY_LANES:
+        lane_dir = ci / lane
+        if lane_dir.is_symlink():
+            lane_dir.unlink()
+        elif lane_dir.exists():
+            shutil.rmtree(lane_dir)
+    for name in ("safety-run.json", "safety-complete.json", "source-revision.txt"):
+        path = ci / name
+        if path.is_symlink():
+            path.unlink()
+        else:
+            path.unlink(missing_ok=True)
+    run = {"schema": SAFETY_RUN_SCHEMA, "version": 1,
+           "run_id": secrets.token_hex(16), **identity}
+    _write_json(ci / "safety-run.json", run)
+    (ci / "source-revision.txt").write_text(identity["source_revision"] + "\n")
+    return run
+
+
+def _safety_lane_files(ci, lane):
+    lane_build = ci / lane
+    junit_path = lane_build / "ctest-junit.xml"
+    summary_path = lane_build / "safety-contract.json"
+    cache_path = lane_build / "CMakeCache.txt"
+    config_path = lane_build / "safety-config.json"
+    root = ET.parse(junit_path).getroot()
+    cases = root.findall(".//testcase")
+    if not cases:
+        raise ValueError("safety-ctest-empty")
+    names = [case.get("name", "") for case in cases]
+    skipped = [case.get("name", "") for case in cases if case.find("skipped") is not None]
+    passed = sum(case.find("skipped") is None and case.find("failure") is None and
+                 case.find("error") is None for case in cases)
+    failed = sum(case.find("failure") is not None for case in cases)
+    errors = sum(case.find("error") is not None for case in cases)
+    ctest = {"denominator": len(cases), "pass": passed, "fail": failed,
+             "error": errors, "skipped": skipped, "case_names": names,
+             "test_inventory_sha256": digest(sorted(names)), "junit_sha256": sha(junit_path)}
+    if (len(names) < SAFETY_MIN_CASES[lane] or len(names) != len(set(names)) or
+            not safety_required_tests(lane) <= set(names)):
+        raise ValueError("safety-ctest-roster")
+    if failed or errors or passed + len(skipped) != len(cases):
+        raise ValueError("safety-ctest-outcome")
+    if any(not isinstance(name, str) or not name for name in skipped):
+        raise ValueError("safety-unexpected-skip")
+    if len(skipped) != len(set(skipped)):
+        raise ValueError("safety-duplicate-skip")
+    if not set(skipped) <= SAFETY_ALLOWED_SKIPS:
+        raise ValueError("safety-unexpected-skip")
+    summary_bytes = summary_path.read_bytes()
+    summary = json.loads(summary_bytes)
+    config_bytes = config_path.read_bytes()
+    safety_config = json.loads(config_bytes)
+    _validate_safety_configuration(safety_config, lane)
+    if cache_path.is_file() and safety_config != _safety_configuration_from_cache(cache_path, lane):
+        raise ValueError("safety-config-cache-mismatch")
+    return {"ctest": ctest, "summary": summary,
+            "summary_sha256": digest(summary),
+            "summary_file_sha256": hashlib.sha256(summary_bytes).hexdigest(),
+            "configuration": safety_config,
+            "configuration_sha256": hashlib.sha256(config_bytes).hexdigest()}
+
+
+def _safety_configuration_from_cache(cache_path, lane):
+    """Read only safe lane settings from CMakeCache; never export cache contents."""
+    cache_keys = {"CMAKE_BUILD_TYPE", "CMAKE_GENERATOR", "GENEWHIP_TEST_HOOKS"}
+    values = {}
+    for line in Path(cache_path).read_text(errors="replace").splitlines():
+        match = re.match(r"^([^:]+):[^=]*=(.*)$", line)
+        if match and match.group(1) in cache_keys | {"CMAKE_C_COMPILER_ID", "CMAKE_C_COMPILER_VERSION"}:
+            key, value = match.groups()
+            if key in values:
+                raise ValueError("safety-config-invalid")
+            values[key] = value
+    if not cache_keys <= set(values):
+        raise ValueError("safety-config-invalid")
+    compiler_keys = {"CMAKE_C_COMPILER_ID", "CMAKE_C_COMPILER_VERSION"}
+    present_compiler_keys = compiler_keys & set(values)
+    if present_compiler_keys and present_compiler_keys != compiler_keys:
+        raise ValueError("safety-config-invalid")
+    if not present_compiler_keys:
+        identities = set()
+        for compiler_file in Path(cache_path).parent.glob("CMakeFiles/*/CMakeCCompiler.cmake"):
+            text = compiler_file.read_text(errors="replace")
+            compiler_id = re.search(r'^set\(CMAKE_C_COMPILER_ID "([^"]+)"\)$', text, re.MULTILINE)
+            compiler_version = re.search(r'^set\(CMAKE_C_COMPILER_VERSION "([^"]+)"\)$', text, re.MULTILINE)
+            if compiler_id and compiler_version:
+                identities.add((compiler_id.group(1), compiler_version.group(1)))
+        if len(identities) != 1:
+            raise ValueError("safety-config-invalid")
+        values["CMAKE_C_COMPILER_ID"], values["CMAKE_C_COMPILER_VERSION"] = identities.pop()
+    config = {"schema": SAFETY_CONFIG_SCHEMA, "version": 1,
+              "lane": lane, "values": values}
+    _validate_safety_configuration(config, lane)
+    return config
+
+
+def _validate_safety_configuration(config, lane):
+    if (not isinstance(config, dict) or set(config) != {"schema", "version", "lane", "values"} or
+            config.get("schema") != SAFETY_CONFIG_SCHEMA or config.get("version") != 1 or
+            config.get("lane") != lane or not isinstance(config.get("values"), dict) or
+            set(config["values"]) != set(SAFETY_CONFIG_KEYS)):
+        raise ValueError("safety-config-invalid")
+    values = config["values"]
+    safe_text = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _+.-]{0,63}$")
+    for key in SAFETY_CONFIG_KEYS:
+        value = values.get(key)
+        if not isinstance(value, str) or not safe_text.fullmatch(value):
+            raise ValueError("safety-config-invalid")
+    if values["CMAKE_BUILD_TYPE"] != "Release":
+        raise ValueError("safety-config-invalid")
+    if values["CMAKE_GENERATOR"] not in SAFETY_GENERATORS:
+        raise ValueError("safety-config-invalid")
+    if values["GENEWHIP_TEST_HOOKS"] != ("ON" if SAFETY_LANES[lane][1] else "OFF"):
+        raise ValueError("safety-config-invalid")
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9+_.-]{0,63}", values["CMAKE_C_COMPILER_ID"]):
+        raise ValueError("safety-config-invalid")
+    if not re.fullmatch(r"[0-9][A-Za-z0-9.+_-]{0,63}", values["CMAKE_C_COMPILER_VERSION"]):
+        raise ValueError("safety-config-invalid")
+    return config
+
+
+def _validate_lane_completion(ci, lane, run):
+    path = ci / lane / "safety-completion.json"
+    if not isinstance(run, dict):
+        raise ValueError("safety-run-invalid")
+    record = _read_safety_record(path, "safety-lane-record-invalid")
+    if record.get("schema") != SAFETY_COMPLETION_SCHEMA or record.get("lane") != lane:
+        raise ValueError("safety-lane-record-invalid")
+    if record.get("run_id") != run.get("run_id"):
+        raise ValueError("safety-lane-run-mismatch")
+    for key in ("source_revision", "source_tree_id"):
+        if record.get(key) != run.get(key):
+            raise ValueError("safety-lane-source-mismatch")
+    current = _safety_lane_files(ci, lane)
+    for key in ("ctest", "summary", "summary_sha256", "summary_file_sha256",
+                "configuration", "configuration_sha256"):
+        if record.get(key) != current.get(key):
+            raise ValueError("safety-lane-artifact-mismatch")
+    return record
+
+
+def safety_complete_lane(build, lane, root=ROOT):
+    if lane not in SAFETY_LANES:
+        raise ValueError("safety-lane-invalid")
+    run = _safety_run(build)
+    if public_source_identity(root) != {key: run.get(key) for key in
+                                        ("source_revision", "source_tree_id")}:
+        raise ValueError("safety-source-changed")
+    ci = _safety_ci_root(build)
+    lane_dir = ci / lane
+    safety_config = _safety_configuration_from_cache(lane_dir / "CMakeCache.txt", lane)
+    _write_json(lane_dir / "safety-config.json", safety_config)
+    record = {"schema": SAFETY_COMPLETION_SCHEMA, "version": 1, "run_id": run["run_id"],
+              "lane": lane, "source_revision": run["source_revision"],
+              "source_tree_id": run["source_tree_id"],
+              **_safety_lane_files(ci, lane)}
+    _write_json(ci / lane / "safety-completion.json", record)
+    return record
+
+
+def safety_finish(build, root=ROOT):
+    run = _safety_run(build)
+    if public_source_identity(root) != {key: run.get(key) for key in
+                                        ("source_revision", "source_tree_id")}:
+        raise ValueError("safety-source-changed")
+    ci = _safety_ci_root(build)
+    records = {lane: _validate_lane_completion(ci, lane, run) for lane in SAFETY_LANES}
+    final = {"schema": SAFETY_FINAL_SCHEMA, "version": 1, "run_id": run["run_id"],
+             "source_revision": run["source_revision"],
+             "source_tree_id": run["source_tree_id"],
+             "lane_completion_sha256": {
+                 lane: digest(records[lane]) for lane in SAFETY_LANES}}
+    _write_json(ci / "safety-complete.json", final)
+    return final
 
 
 def source_state():
@@ -455,6 +717,156 @@ def validate_delivery_evidence(evidence):
     return sorted(set(problems))
 
 
+def validate_safety_contracts(evidence, expected_revision=None):
+    """Validate exact-source CTest and API-safety evidence for all required gate lanes."""
+    problems = []
+    if not isinstance(evidence, dict) or evidence.get("schema") != "genewhip-phase4-safety-contracts-v1" or evidence.get("version") != 1:
+        return [("safety-schema", "invalid safety-contract schema/version")]
+    revision = evidence.get("source_revision")
+    if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision):
+        problems.append(("safety-source-identity", "invalid source revision"))
+    if expected_revision and revision != expected_revision:
+        problems.append(("safety-stale-source", "safety lanes do not match report source"))
+    run_id = evidence.get("run_id")
+    tree_id = evidence.get("source_tree_id")
+    final_record = evidence.get("final_record")
+    if not isinstance(run_id, str) or not re.fullmatch(r"[0-9a-f]{32}", run_id):
+        problems.append(("safety-run-identity", "invalid safety run identifier"))
+    if not isinstance(tree_id, str) or not re.fullmatch(r"[0-9a-f]{40}", tree_id):
+        problems.append(("safety-source-tree", "invalid committed source tree identity"))
+    if not isinstance(final_record, dict):
+        problems.append(("safety-final-record-invalid", "final completion record must be an object"))
+    elif (evidence.get("final_record_sha256") != digest(final_record) or
+            final_record.get("schema") != SAFETY_FINAL_SCHEMA or
+            final_record.get("version") != 1 or final_record.get("run_id") != run_id or
+            final_record.get("source_revision") != revision or
+            final_record.get("source_tree_id") != tree_id or
+            not isinstance(final_record.get("lane_completion_sha256"), dict) or
+            set(final_record["lane_completion_sha256"]) != set(SAFETY_LANES)):
+        problems.append(("safety-run-incomplete", "missing or invalid final complete-run record"))
+    lanes = evidence.get("lanes")
+    if not isinstance(lanes, dict) or set(lanes) != set(SAFETY_LANES):
+        return problems + [("safety-lane-roster", "native, sanitizer, and production lanes are required")]
+    for name, (mode, instrumented) in SAFETY_LANES.items():
+        lane = lanes.get(name)
+        if not isinstance(lane, dict):
+            problems.append(("safety-lane-schema", name)); continue
+        if lane.get("source_revision") != revision:
+            problems.append(("safety-stale-source", name))
+        if lane.get("run_id") != run_id or lane.get("source_tree_id") != tree_id:
+            problems.append(("safety-lane-run-mismatch", name))
+        lane_record = {key: value for key, value in lane.items()
+                       if key != "completion_record_sha256"}
+        if (lane.get("completion_record_sha256") != digest(lane_record) or
+                lane_record.get("schema") != SAFETY_COMPLETION_SCHEMA or
+                lane_record.get("version") != 1 or lane_record.get("lane") != name or
+                lane_record.get("run_id") != run_id or
+                lane_record.get("source_revision") != revision or
+                lane_record.get("source_tree_id") != tree_id or
+                not isinstance(lane_record.get("configuration_sha256"), str) or
+                not HOST_HEX.fullmatch(lane_record["configuration_sha256"]) or
+                not isinstance(lane_record.get("summary_file_sha256"), str) or
+                not HOST_HEX.fullmatch(lane_record["summary_file_sha256"])):
+            problems.append(("safety-lane-completion-identity", name))
+        try:
+            safe_config = _validate_safety_configuration(lane_record.get("configuration"), name)
+            if lane_record.get("configuration_sha256") != hashlib.sha256(
+                    _json_bytes(safe_config)).hexdigest():
+                problems.append(("safety-config-identity", name))
+        except ValueError:
+            problems.append(("safety-config-invalid", name))
+        if (not isinstance(final_record, dict) or
+                not isinstance(final_record.get("lane_completion_sha256"), dict) or
+                final_record["lane_completion_sha256"].get(name) != lane.get("completion_record_sha256")):
+            problems.append(("safety-final-lane-identity", name))
+        ctest = lane.get("ctest")
+        if not isinstance(ctest, dict):
+            problems.append(("safety-ctest-schema", name)); continue
+        total, passed = ctest.get("denominator"), ctest.get("pass")
+        case_names = ctest.get("case_names")
+        skipped = ctest.get("skipped")
+        if (not isinstance(total, int) or isinstance(total, bool) or total <= 0 or
+                not isinstance(passed, int) or isinstance(passed, bool) or
+                not isinstance(skipped, list) or ctest.get("fail") != 0 or ctest.get("error") != 0 or
+                passed + len(skipped) != total):
+            problems.append(("safety-ctest-outcome", name))
+        if (not isinstance(case_names, list) or
+                any(not isinstance(item, str) or not item for item in case_names) or
+                len(case_names) != total or len(set(case_names)) != len(case_names) or
+                total < SAFETY_MIN_CASES[name] or
+                not safety_required_tests(name) <= set(case_names)):
+            problems.append(("safety-ctest-roster", name))
+        elif ctest.get("test_inventory_sha256") != digest(sorted(case_names)):
+            problems.append(("safety-ctest-inventory-identity", name))
+        if isinstance(skipped, list):
+            if any(not isinstance(item, str) or not item for item in skipped):
+                problems.append(("safety-unexpected-skip", name))
+            elif len(skipped) != len(set(skipped)):
+                problems.append(("safety-duplicate-skip", name))
+            elif not set(skipped) <= SAFETY_ALLOWED_SKIPS:
+                problems.append(("safety-unexpected-skip", name))
+        if not isinstance(ctest.get("junit_sha256"), str) or not HOST_HEX.fullmatch(ctest["junit_sha256"]):
+            problems.append(("safety-ctest-identity", name))
+        summary = lane.get("summary")
+        if not isinstance(summary, dict):
+            problems.append(("safety-summary-contract", name)); continue
+        expected_summary = {"mode": mode, "seed": "47573105", "cases": 16, "safety_pass": 16,
+                            "audio_pass": 256, "negative_controls": 6,
+                            "steps_per_case": 8, "tick_budget": 180000,
+                            "output_cap_frames": 128,
+                            "allocation_instrumented": instrumented,
+                            "allocation_count_peak": 2 if instrumented else 0,
+                            "steady_allocations": 0}
+        if not isinstance(summary, dict) or any(summary.get(key) != value
+                                                 for key, value in expected_summary.items()):
+            problems.append(("safety-summary-contract", name))
+        if lane.get("summary_sha256") != digest(summary):
+            problems.append(("safety-summary-identity", name))
+    return problems
+
+
+def collect_safety_contracts(build, expected_revision):
+    """Read the three required-gate lanes; absent or malformed evidence stays unknown."""
+    build = Path(build).resolve()
+    evidence = {"schema": "genewhip-phase4-safety-contracts-v1", "version": 1,
+                "source_revision": None, "lanes": {}}
+    ci = build / "ci"
+    safety_inputs = [ci / "safety-run.json", ci / "safety-complete.json"]
+    for name in SAFETY_LANES:
+        lane = ci / name
+        safety_inputs.extend(lane / filename for filename in
+                             ("safety-config.json", "ctest-junit.xml", "safety-contract.json",
+                              "safety-completion.json"))
+    if not any(path.is_file() or path.is_symlink() for path in safety_inputs):
+        return evidence, [("safety-evidence-missing",
+                           "required gate safety artifacts are absent from this build")]
+    try:
+        root = ROOT
+        identity = public_source_identity(root)
+        run = _safety_run(build)
+        final = _read_safety_record(ci / "safety-complete.json",
+                                    "safety-final-record-invalid")
+        evidence.update(identity)
+        evidence["run_id"] = run.get("run_id")
+        evidence["final_record"] = final
+        evidence["final_record_sha256"] = digest(final)
+        if run.get("schema") != SAFETY_RUN_SCHEMA or run.get("version") != 1:
+            raise ValueError("safety-run-invalid")
+        if {key: run.get(key) for key in identity} != identity:
+            raise ValueError("safety-run-source-mismatch")
+        if identity["source_revision"] != expected_revision:
+            raise ValueError("safety-stale-source")
+        for name, (mode, _) in SAFETY_LANES.items():
+            record = _validate_lane_completion(ci, name, run)
+            evidence["lanes"][name] = {**record,
+                "completion_record_sha256": digest(record)}
+    except (OSError, ET.ParseError, ValueError, json.JSONDecodeError, KeyError) as error:
+        reason = str(error) if str(error).startswith("safety-") else "safety-evidence-incomplete"
+        return evidence, [(reason, str(error))]
+    problems = validate_safety_contracts(evidence, expected_revision=expected_revision)
+    return evidence, problems
+
+
 def expected_for(build=None, head=None):
     expected = {"source_revision": head or git_head(),
                 "fixture_manifest_sha256": sha(ROOT / "fixtures/manifest.json")}
@@ -514,6 +926,7 @@ def build_report(build):
     else:
         host_evidence = {"reason": "phase4 host software and live lanes have not both produced evidence"}
     rows = []
+    safety_evidence, safety_problems = collect_safety_contracts(build, expected_revision=git_head())
     for row_id, required in ROSTER:
         if row_id == "diagnostic_public_clients":
             rows.append({"id": row_id, "required": required, "outcome": outcome, "observed": observed})
@@ -521,6 +934,12 @@ def build_report(build):
             rows.append({"id": row_id, "required": required,
                          "outcome": gameplay.get("outcome", "infrastructure-error") if gameplay else "unknown",
                          "observed": gameplay if gameplay else {"reason": "phase4 gameplay clients have not produced evidence in this build"}})
+        elif row_id == "safety_contracts":
+            rows.append({"id": row_id, "required": required,
+                         "outcome": "pass" if not safety_problems else "unknown",
+                         "observed": safety_evidence,
+                         **({"validation_errors": [{"reason": reason, "detail": detail}
+                             for reason, detail in safety_problems]} if safety_problems else {})})
         elif row_id == "core_performance":
             performance_path = build / "phase4-performance.json"
             performance = json.loads(performance_path.read_text()) if performance_path.is_file() else None
@@ -620,6 +1039,9 @@ def validate(report, head=None, qualification=False, expected=None):
         if row_id == "independent_gameplay" and outcome == "pass":
             problems.extend(validate_gameplay(observed, qualification=qualification,
                                                expected_identity=expected.get("gameplay_identity")))
+        if row_id == "safety_contracts" and outcome == "pass":
+            problems.extend(validate_safety_contracts(observed,
+                                                       expected_revision=expected.get("source_revision")))
         if row_id == "core_performance" and outcome == "pass":
             benchmark_path = ROOT / "tools/evidence/core_benchmark.py"
             bench_spec = importlib.util.spec_from_file_location("gw_core_benchmark_validator", benchmark_path)
@@ -665,7 +1087,23 @@ def main(argv=None):
     check.add_argument("--build", type=Path, required=True)
     check.add_argument("--head", default=None)
     check.add_argument("--qualification", action="store_true")
+    start = sub.add_parser("safety-start")
+    start.add_argument("--build", type=Path, required=True)
+    complete_lane = sub.add_parser("safety-lane-complete")
+    complete_lane.add_argument("--build", type=Path, required=True)
+    complete_lane.add_argument("--lane", choices=tuple(SAFETY_LANES), required=True)
+    finish = sub.add_parser("safety-finish")
+    finish.add_argument("--build", type=Path, required=True)
     args = parser.parse_args(argv)
+    if args.command == "safety-start":
+        safety_start(args.build)
+        return 0
+    if args.command == "safety-lane-complete":
+        safety_complete_lane(args.build, args.lane)
+        return 0
+    if args.command == "safety-finish":
+        safety_finish(args.build)
+        return 0
     if args.command == "build":
         report = build_report(args.build)
         problems = validate(report, expected=expected_for(args.build))

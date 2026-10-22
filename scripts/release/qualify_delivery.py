@@ -8,6 +8,7 @@ import hashlib
 import json
 import pathlib
 import re
+import secrets
 import subprocess
 import sys
 import time
@@ -112,11 +113,22 @@ def validate_workflow_identity(run: Any, expected_path: str, expected_sha: str,
     return []
 
 
-def validate_publisher_run(run: Any, expected_sha: str) -> list[str]:
+def publisher_display_title(source_sha: str, qualification_run_id: str,
+                            qualification_attempt: int, correlation_id: str) -> str:
+    return (f"Preview release for {source_sha} (qualification {qualification_run_id} "
+            f"attempt {qualification_attempt}; dispatch {correlation_id})")
+
+
+def validate_publisher_run(run: Any, expected_sha: str, qualification_run_id: str,
+                           qualification_attempt: int, correlation_id: str) -> list[str]:
     if not isinstance(run, dict) or run.get("event") != "workflow_dispatch":
         return ["publisher-run-event-invalid"]
     if run.get("headSha") != expected_sha:
         return ["publisher-run-source-mismatch"]
+    expected_title = publisher_display_title(expected_sha, str(qualification_run_id),
+                                             qualification_attempt, correlation_id)
+    if run.get("displayTitle") != expected_title:
+        return ["publisher-run-dispatch-identity-mismatch"]
     if run.get("status") != "completed" or run.get("conclusion") != "success":
         return ["publisher-run-not-success"]
     if not any(isinstance(job, dict) and job.get("name") == "promote"
@@ -392,16 +404,20 @@ def run_delivery(args: argparse.Namespace) -> dict[str, Any]:
         raise DeliveryError(problems[0])
 
     dispatch_time = dt.datetime.now(dt.timezone.utc)
+    correlation_id = secrets.token_hex(16)
     _gh(["workflow", "run", "release.yml", "--repo", repository, "--ref", "main",
-         "-f", f"source_sha={source_sha}", "-f", f"run_id={run_id}", "-f", f"run_attempt={attempt}"])
+         "-f", f"source_sha={source_sha}", "-f", f"run_id={run_id}",
+         "-f", f"run_attempt={attempt}", "-f", f"correlation_id={correlation_id}"])
 
     def publisher_run():
         rows = _gh_json(["run", "list", "--repo", repository, "--workflow", "release.yml", "--branch",
                          "main", "--event", "workflow_dispatch", "--limit", "10",
-                         "--json", "databaseId,attempt,event,headSha,status,conclusion,workflowName,createdAt"])
+                         "--json", "databaseId,attempt,event,headSha,status,conclusion,workflowName,createdAt,displayTitle"])
+        expected_title = publisher_display_title(source_sha, run_id, attempt, correlation_id)
         for row in rows:
             if not isinstance(row, dict) or row.get("headSha") != source_sha \
-                    or row.get("event") != "workflow_dispatch":
+                    or row.get("event") != "workflow_dispatch" \
+                    or row.get("displayTitle") != expected_title:
                 continue
             created = dt.datetime.fromisoformat(row["createdAt"].replace("Z", "+00:00"))
             if created < dispatch_time:
@@ -409,11 +425,11 @@ def run_delivery(args: argparse.Namespace) -> dict[str, Any]:
             if row.get("status") != "completed":
                 return None
             return _gh_json(["run", "view", str(row["databaseId"]), "--repo", repository,
-                             "--json", "attempt,event,headSha,status,conclusion,jobs,workflowName,databaseId"])
+                             "--json", "attempt,event,headSha,status,conclusion,jobs,workflowName,databaseId,displayTitle"])
         return None
 
     publisher = _wait_for(publisher_run, args.timeout_seconds)
-    problems = validate_publisher_run(publisher, source_sha)
+    problems = validate_publisher_run(publisher, source_sha, run_id, attempt, correlation_id)
     if problems:
         raise DeliveryError(problems[0])
     publisher_identity = _gh_json(["api", f"repos/{repository}/actions/runs/{publisher.get('databaseId')}/attempts/{publisher.get('attempt')}"])
@@ -426,6 +442,7 @@ def run_delivery(args: argparse.Namespace) -> dict[str, Any]:
                 "pull_request_base_sha": args.expected_base, "merged_source_sha": source_sha,
                 "merge_commit_sha": source_sha, "qualification_run_id": run_id,
                 "qualification_run_attempt": attempt, "qualification_workflow": run.get("workflowName"),
+                "publisher_correlation_id": correlation_id,
                 "publisher_run_id": str(publisher.get("databaseId")),
                 "publisher_run_attempt": publisher.get("attempt"),
                 "publisher_workflow": publisher.get("workflowName"),
@@ -447,7 +464,9 @@ def verify_release(args: argparse.Namespace) -> dict[str, Any]:
     qualification_attempt = evidence.get("qualification_run_attempt")
     publisher_id = evidence.get("publisher_run_id")
     publisher_attempt = evidence.get("publisher_run_attempt")
-    if not all((qualification_id, qualification_attempt, publisher_id, publisher_attempt)):
+    correlation_id = evidence.get("publisher_correlation_id")
+    if not all((qualification_id, qualification_attempt, publisher_id, publisher_attempt,
+                correlation_id)):
         raise DeliveryError("hosted-run-identities-missing")
     qualification = _gh_json(["run", "view", str(qualification_id), "--repo", repository,
                               "--attempt", str(qualification_attempt),
@@ -462,8 +481,9 @@ def verify_release(args: argparse.Namespace) -> dict[str, Any]:
         raise DeliveryError(problems[0])
     publisher = _gh_json(["run", "view", str(publisher_id), "--repo", repository,
                           "--attempt", str(publisher_attempt),
-                          "--json", "attempt,event,headSha,status,conclusion,jobs,workflowName,databaseId"])
-    problems = validate_publisher_run(publisher, source_sha)
+                          "--json", "attempt,event,headSha,status,conclusion,jobs,workflowName,databaseId,displayTitle"])
+    problems = validate_publisher_run(publisher, source_sha, qualification_id,
+                                      int(qualification_attempt), correlation_id)
     if problems:
         raise DeliveryError(problems[0])
     problems = validate_workflow_identity(

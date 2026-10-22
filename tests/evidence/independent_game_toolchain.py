@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import pathlib
 import re
 import sys
@@ -164,7 +165,13 @@ def validate_current_receipt(doc: dict, target: str, assembler_path: pathlib.Pat
     reject(not isinstance(version_output, str), "current-host assembler version output must be a string")
     reject("GNU assembler (GNU Binutils) 2.47." not in version_output, "current-host assembler version output mismatch")
     reject("target of `" + target + "'" not in version_output, "current-host assembler target output mismatch")
-    reject(not assembler_path.is_file() or hashlib.sha256(assembler_path.read_bytes()).hexdigest() != exe.get("sha256"), "current-host receipt does not match assembler bytes")
+    executable = (os.access(assembler_path, os.X_OK, effective_ids=True)
+                  if os.access in os.supports_effective_ids else
+                  os.access(assembler_path, os.X_OK))
+    reject(not assembler_path.is_file() or not executable,
+           "current-host assembler is not executable")
+    reject(hashlib.sha256(assembler_path.read_bytes()).hexdigest() != exe.get("sha256"),
+           "current-host receipt does not match assembler bytes")
 
 
 def current_receipt_log_identity(doc: dict, receipt_bytes: bytes) -> dict:
@@ -231,6 +238,7 @@ def self_test_current_receipt(lock: dict) -> int:
     with tempfile.TemporaryDirectory(prefix="genewhip-current-receipt-") as tmp:
         binary = pathlib.Path(tmp) / "m68k-elf-as"
         binary.write_bytes(b"current-host assembler fixture")
+        binary.chmod(0o755)
         payload["record"]["executable"]["sha256"] = hashlib.sha256(binary.read_bytes()).hexdigest()
         validate_current_receipt(payload, target, binary)
         mutations = [
@@ -259,6 +267,16 @@ def self_test_current_receipt(lock: dict) -> int:
             else:
                 print(f"FAIL: current-host receipt mutation passed: {label}", file=sys.stderr)
                 return 1
+        binary.chmod(0o401)
+        try:
+            validate_current_receipt(payload, target, binary)
+        except ValueError:
+            accepted += 1
+            print("PASS: rejected current-host assembler executable permission-class mutation")
+        else:
+            print("FAIL: current-host assembler permission-class mutation passed", file=sys.stderr)
+            return 1
+        binary.chmod(0o755)
         binary.write_bytes(b"mutated assembler bytes")
         try:
             validate_current_receipt(payload, target, binary)
