@@ -150,7 +150,7 @@ def validate_current_receipt(doc: dict, target: str, assembler_path: pathlib.Pat
         for key in ("source_archive_sha256", "formula_sha256", "license_notice_sha256"):
             reject(not SHA.fullmatch(host_tools[0].get(key, "")), f"current-host Coreutils digest missing: {key}")
     else:
-        reject(not host_tools[0].get("identity", "").startswith("/usr/bin/mkdir and /usr/bin/install on macOS "), "current-host Apple install utility identity missing")
+        reject(not host_tools[0].get("identity", "").startswith("/bin/mkdir and /usr/bin/install on macOS "), "current-host Apple install utility identity missing")
     flags = record.get("flags", [])
     configure = "configure=--prefix=/usr/local --target=" + target + " --disable-nls --disable-werror --disable-gdb --disable-gdbserver --disable-gprofng --disable-gold --disable-ld --disable-sim --disable-shared --disable-plugins --disable-libctf --disable-readline --disable-tui --disable-gdbtk --disable-compressed-debug-sections --without-system-zlib --without-zstd; CFLAGS=-O2 -g0 -ffile-prefix-map=<BUILD_ROOT>=.; SOURCE_DATE_EPOCH=1785086752"
     expected_flags = ["target=" + target, configure, "build=make -j4 all-gas && make DESTDIR=<BUILD_ROOT>/stage install-gas"]

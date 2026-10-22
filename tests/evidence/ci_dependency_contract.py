@@ -58,6 +58,18 @@ class CIDependencyContract(unittest.TestCase):
         self.assertIn("grep -E -q", recipe, "portable-signature-status-check-missing")
         self.assertIn("grep -E -v", recipe, "portable-linked-image-check-missing")
 
+    def test_apple_utility_fallback_binds_real_system_executable_bytes(self):
+        recipe_path = ROOT / "fixtures/independent-game/toolchain/build-binutils.sh"
+        recipe = recipe_path.read_text()
+        self.assertIn("record_apple_tools", recipe)
+        self.assertIn("else\n  [ \"$MODE\" = --record-current ] || fail 'GNU Coreutils gmkdir/ginstall build inputs unavailable'\n  record_apple_tools", recipe)
+        fallback = subprocess.run(["bash", str(recipe_path), "--self-test-apple-tools"],
+                                  text=True, capture_output=True)
+        self.assertEqual(fallback.returncode, 0,
+                         "apple-utility-fallback-missing-or-identity-mismatch")
+        self.assertIn("PASS: Apple utility fallback binds /bin/mkdir and /usr/bin/install bytes",
+                      fallback.stdout)
+
     def test_safety_and_desktop_provision_dependencies_before_ctest(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         safety = workflow.split("  safety:\n", 1)[1].split("  gameplay:\n", 1)[0]

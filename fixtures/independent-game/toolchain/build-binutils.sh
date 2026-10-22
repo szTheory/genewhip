@@ -13,20 +13,42 @@ SIGNING_FPR=3A24BC1E8FB409FA9F14371813FCEF89DD9E3C4F
 SIG_TIME=1785086752
 ANNOUNCEMENT=https://sourceware.org/pipermail/binutils/2026-July/150520.html
 fail() { printf 'BLOCKED: %s\n' "$*" >&2; exit 1; }
+record_apple_tools() {
+  [ -x /bin/mkdir ] || fail 'Apple system mkdir unavailable at /bin/mkdir'
+  [ -x /usr/bin/install ] || fail 'Apple system install unavailable at /usr/bin/install'
+  COREUTILS_VERSION='not-installed; Apple system mkdir/install used'
+  COREUTILS_SOURCE_SHA=not-applicable COREUTILS_FORMULA_SHA=not-applicable COREUTILS_LICENSE_SHA=not-applicable
+  GMK_SHA=$(shasum -a 256 /bin/mkdir | awk '{print $1}')
+  GINSTALL_SHA=$(shasum -a 256 /usr/bin/install | awk '{print $1}')
+  COREUTILS_LINKS="/bin/mkdir on macOS $HOST_BUILD"
+  GINSTALL_LINKS="/usr/bin/install on macOS $HOST_BUILD"
+}
 MODE=--record
 TARGET=m68k-elf
 OUTPUT=''
 RECEIPT=''
 CURRENT_RECEIPT=''
+SELF_TEST_APPLE_TOOLS=false
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --record|--verify-lock|--record-current) MODE=$1; shift ;;
+    --self-test-apple-tools) SELF_TEST_APPLE_TOOLS=true; shift ;;
     --target) [ -n "${2:-}" ] || fail 'missing --target'; TARGET=$2; shift 2 ;;
     --output) [ -n "${2:-}" ] || fail 'missing --output directory'; OUTPUT=$2; shift 2 ;;
     --receipt) [ -n "${2:-}" ] || fail 'missing --receipt path'; RECEIPT=$2; shift 2 ;;
     *) fail "usage: $0 [--record|--verify-lock|--record-current] [--target m68k-elf|z80-elf] [--output DIR] [--receipt FILE]" ;;
   esac
 done
+if [ "$SELF_TEST_APPLE_TOOLS" = true ]; then
+  [ "$#" -eq 0 ] || fail '--self-test-apple-tools accepts no other arguments'
+  HOST_BUILD=$(sw_vers -buildVersion)
+  record_apple_tools
+  [[ "$COREUTILS_LINKS" == /bin/mkdir\ on\ macOS\ * ]] || fail 'Apple mkdir receipt path mismatch'
+  [[ "$GINSTALL_LINKS" == /usr/bin/install\ on\ macOS\ * ]] || fail 'Apple install receipt path mismatch'
+  [[ "$GMK_SHA" =~ ^[0-9a-f]{64}$ && "$GINSTALL_SHA" =~ ^[0-9a-f]{64}$ ]] || fail 'Apple utility receipt digest malformed'
+  printf 'PASS: Apple utility fallback binds /bin/mkdir and /usr/bin/install bytes\n'
+  exit 0
+fi
 if [ "$MODE" = --record-current ]; then
   [ -n "$RECEIPT" ] || fail '--record-current requires --receipt'
   mkdir -p "$(dirname "$RECEIPT")"
@@ -166,12 +188,7 @@ if [ -n "$COREUTILS" ] && [ -n "$GINSTALL" ]; then
   GINSTALL_LINKS=$(/usr/bin/otool -L "$GINSTALL" | tail -n +2 | sed -E 's/^[[:space:]]*([^ ]+).*/\1/' | tr '\n' ';')
 else
   [ "$MODE" = --record-current ] || fail 'GNU Coreutils gmkdir/ginstall build inputs unavailable'
-  COREUTILS_VERSION='not-installed; Apple system mkdir/install used'
-  COREUTILS_SOURCE_SHA=not-applicable COREUTILS_FORMULA_SHA=not-applicable COREUTILS_LICENSE_SHA=not-applicable
-  GMK_SHA=$(shasum -a 256 /usr/bin/mkdir | awk '{print $1}')
-  GINSTALL_SHA=$(shasum -a 256 /usr/bin/install | awk '{print $1}')
-  COREUTILS_LINKS="/usr/bin/mkdir on macOS $HOST_BUILD"
-  GINSTALL_LINKS="/usr/bin/install on macOS $HOST_BUILD"
+  record_apple_tools
 fi
 PYTHON_BIN=$(realpath "$(command -v python3)" 2>/dev/null || true)
 [ -n "$PYTHON_BIN" ] || fail 'Python candidate builder unavailable'
@@ -244,7 +261,7 @@ import json, pathlib, sys
  assha, astype, version, aslinks,
  flags, build, target, lock_key, receipt, current_receipt_path) = sys.argv[1:]
 p=pathlib.Path(path); doc=json.loads(p.read_text()); before_mame=doc.get('mame')
-host_dependency = ({'name':'Apple system directory/install utilities','identity':'/usr/bin/mkdir and /usr/bin/install on macOS '+osbuild,'license':'Apple macOS system tools; host build only','executables':[{'name':'mkdir','sha256':gmkdir_sha,'linked_images':[gmkdir_links]},{'name':'install','sha256':ginstall_sha,'linked_images':[ginstall_links]}]} if coreutils_version.startswith('not-installed') else {'name':'GNU Coreutils install tools','version':coreutils_version,'source_archive_sha256':coreutils_source,'formula_sha256':coreutils_formula,'license':'GPL-3.0-or-later','license_notice_sha256':coreutils_license,'executables':[{'name':'gmkdir','sha256':gmkdir_sha,'linked_images':[x for x in gmkdir_links.split(';') if x]},{'name':'ginstall','sha256':ginstall_sha,'linked_images':[x for x in ginstall_links.split(';') if x]}]})
+host_dependency = ({'name':'Apple system directory/install utilities','identity':'/bin/mkdir and /usr/bin/install on macOS '+osbuild,'license':'Apple macOS system tools; host build only','executables':[{'name':'mkdir','sha256':gmkdir_sha,'linked_images':[gmkdir_links]},{'name':'install','sha256':ginstall_sha,'linked_images':[ginstall_links]}]} if coreutils_version.startswith('not-installed') else {'name':'GNU Coreutils install tools','version':coreutils_version,'source_archive_sha256':coreutils_source,'formula_sha256':coreutils_formula,'license':'GPL-3.0-or-later','license_notice_sha256':coreutils_license,'executables':[{'name':'gmkdir','sha256':gmkdir_sha,'linked_images':[x for x in gmkdir_links.split(';') if x]},{'name':'ginstall','sha256':ginstall_sha,'linked_images':[x for x in ginstall_links.split(';') if x]}]})
 new={
  'name':'GNU Binutils assembler','version':'2.47','source_url':'https://ftp.gnu.org/gnu/binutils/binutils-2.47.tar.bz2',
  'source_revision':'binutils-2.47 official release archive; extracted source tree SHA-256 '+tree,
