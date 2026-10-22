@@ -4,6 +4,7 @@ import importlib.util
 import hashlib
 import json
 import shutil
+import subprocess
 import sys
 import tempfile
 from unittest.mock import patch
@@ -30,6 +31,7 @@ with tempfile.TemporaryDirectory(prefix="gw-public-hygiene-") as temporary:
         "tests/fixtures/game_successor_reference.py",
         "tests/evidence/game_successor_admission.py",
         "evidence/independent-game-v2.json",
+        "scripts/fixtures/source_provenance.py",
     ):
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -50,16 +52,59 @@ with tempfile.TemporaryDirectory(prefix="gw-public-hygiene-") as temporary:
     successor_row = next(row for row in manifest["fixtures"]
                          if row.get("id") == "genewhip-independent-game-v2")
 
-    def fake_git_revision(command, **_kwargs):
-        if len(command) > 3 and command[0] == "git" and command[1] == "-C" and Path(command[2]).resolve() == root.resolve() and "log" in command:
-            return SimpleNamespace(stdout=successor_row["revision"] + "\n")
-        raise AssertionError(f"unexpected process in offline public-fixture validation: {command!r}")
+    def fake_git_revision(*, tag_target=None, source_bytes=None):
+        log_calls = 0
+        def run(command, **_kwargs):
+            nonlocal log_calls
+            if (len(command) >= 5 and command[:2] == ["git", "-C"]
+                    and Path(command[2]).resolve() == root.resolve()
+                    and command[3:5] == ["log", "--follow"]):
+                log_calls += 1
+                # Model a squash-imported source: HEAD differs, but the evidence's
+                # own historical source join still observes the admitted SHA.
+                revision = "f" * 40 if log_calls == 1 else successor_row["revision"]
+                return SimpleNamespace(stdout=revision + "\n")
+            if (len(command) >= 5 and command[:2] == ["git", "-C"]
+                    and Path(command[2]).resolve() == root.resolve()
+                    and command[3] == "rev-parse"):
+                return SimpleNamespace(stdout=(tag_target or successor_row["revision"]) + "\n")
+            if (len(command) >= 5 and command[:2] == ["git", "-C"]
+                    and Path(command[2]).resolve() == root.resolve()
+                    and command[3] == "show"):
+                return SimpleNamespace(stdout=(source_bytes if source_bytes is not None
+                                               else (root / successor_row["source"]).read_bytes()))
+            raise AssertionError(f"unexpected process in offline public-fixture validation: {command!r}")
+        return run
 
-    with patch("subprocess.run", side_effect=fake_git_revision):
-        assert hygiene.inspect(root, [successor]) == [], (
-            "the exact admitted v2 successor with its complete production evidence must be public"
+    with patch("subprocess.run", side_effect=fake_git_revision()):
+        observed = hygiene.inspect(root, [successor])
+        assert observed == [], (
+            f"the exact admitted v2 successor with its pinned source tag and complete production evidence must be public: {observed}"
         )
-        print("PASS: admitted v2 ROM with current rights/build/reference identities is public")
+        print("PASS: admitted v2 ROM validates via its immutable source tag and current rights/build/reference identities")
+
+        with patch("subprocess.run", side_effect=fake_git_revision(tag_target="e" * 40)):
+            assert hygiene.inspect(root, [successor]) == [(successor, "unverified-public-binary")], (
+                "a source tag that resolves to a different commit must not qualify the binary"
+            )
+        print("PASS: mismatched immutable source tag is rejected")
+
+        def fake_missing_tag(command, **kwargs):
+            if len(command) >= 5 and command[3] == "rev-parse":
+                raise subprocess.CalledProcessError(1, command)
+            return fake_git_revision()(command, **kwargs)
+        with patch("subprocess.run", side_effect=fake_missing_tag):
+            assert hygiene.inspect(root, [successor]) == [(successor, "unverified-public-binary")], (
+                "a missing source tag must reject the binary without crashing the hygiene scan"
+            )
+        print("PASS: missing immutable source tag is rejected")
+
+        with patch("subprocess.run", side_effect=fake_git_revision(
+                source_bytes=b"different source revision")):
+            assert hygiene.inspect(root, [successor]) == [(successor, "unverified-public-binary")], (
+                "a tagged revision whose source bytes differ from the admitted source digest must be rejected"
+            )
+        print("PASS: mismatched tagged source bytes are rejected")
 
         # Each control passes through inspect(), which is also used by the actual
         # public-hygiene command. No path-prefix exception or fixture allowlist is used.

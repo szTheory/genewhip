@@ -305,7 +305,13 @@ _original_rom_cases()
 
 if len(sys.argv) == 4:
     real = json.loads((root / "fixtures/manifest.json").read_text())
-    check(real, "ok", "repository fixture manifest")
+    provenance_spec = importlib.util.spec_from_file_location(
+        "fixture_source_provenance", root / "scripts/fixtures/source_provenance.py")
+    provenance = importlib.util.module_from_spec(provenance_spec)
+    provenance_spec.loader.exec_module(provenance)
+    actual = provenance.validate(admission, real, root, rom)
+    if actual != "ok":
+        raise AssertionError(f"repository fixture manifest: expected 'ok', got {actual!r}")
     pong_index = next(index for index, row in enumerate(real["fixtures"])
                       if row.get("id") == "free-retro-games-pong")
     for gate in ("rights", "reproducible_build", "runtime_sram"):
