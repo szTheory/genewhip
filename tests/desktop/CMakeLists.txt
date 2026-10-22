@@ -72,9 +72,15 @@ if(GENEWHIP_BUILD_DESKTOP)
     ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_AUDIODRIVER=dummy")
   add_test(NAME runner_audio_capture COMMAND ${Python3_EXECUTABLE} -I
     ${CMAKE_CURRENT_SOURCE_DIR}/runner_smoke.py runner_audio_capture
-    $<TARGET_FILE:genewhip_desktop> ${PROJECT_BINARY_DIR}/tests/audio/psg_tone.bin)
+    $<TARGET_FILE:genewhip_desktop> ${PROJECT_BINARY_DIR}/tests/audio/psg_tone.bin
+    $<TARGET_FILE:gw_headless>)
   set_tests_properties(runner_audio_capture PROPERTIES TIMEOUT 60
     ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_AUDIODRIVER=disk;SDL_AUDIO_DISK_OUTPUT_FILE=unused")
+  add_test(NAME runner_audio_capture_contract COMMAND ${Python3_EXECUTABLE} -I
+    ${CMAKE_CURRENT_SOURCE_DIR}/runner_smoke.py runner_audio_capture_contract
+    $<TARGET_FILE:genewhip_desktop> ${PROJECT_BINARY_DIR}/tests/audio/psg_tone.bin)
+  set_tests_properties(runner_audio_capture_contract PROPERTIES TIMEOUT 60
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_AUDIODRIVER=dummy")
   add_test(NAME runner_toy_sound COMMAND ${Python3_EXECUTABLE} -I
     ${CMAKE_CURRENT_SOURCE_DIR}/runner_smoke.py runner_toy_sound
     $<TARGET_FILE:genewhip_desktop> ${PROJECT_SOURCE_DIR}/fixtures/raster-toy/toy.bin)

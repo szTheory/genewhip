@@ -129,17 +129,50 @@ def stat_lines(result):
     return [dict(re.findall(r"([a-z][a-z0-9_]*)=([a-z]+|[0-9]+(?:\.[0-9]+)?)", line)) for line in lines]
 
 
+def has_two_sustained_silence_runs(runs, minimum_frames):
+    return sum(length >= minimum_frames for length in runs) >= 2
+
+
+def deterministic_pcm_matches(captured, expected, core_frames):
+    return len(expected) == core_frames * 4 and captured == expected
+
+
 def runner_audio_capture():
+    headless_runner = Path(sys.argv[4]) if len(sys.argv) > 4 else headless
+    assert headless_runner is not None, "headless executable is required for PCM comparison"
     with tempfile.TemporaryDirectory() as directory:
         base = Path(directory)
         script = base / "capture.script"
         capture = base / "capture.raw"
+        desktop_pcm = base / "desktop.pcm"
+        headless_pcm = base / "headless.pcm"
         script.write_text("40 mute\n80 unmute\n120 pause\n160 resume\n")
         env = dict(ENV, SDL_AUDIODRIVER="disk", SDL_AUDIO_DISK_OUTPUT_FILE=str(capture))
-        result = run("--fields", 240, "--host-script", script, rom, env=env)
+        result = run("--fields", 240, "--host-script", script,
+                     "--print-field-hashes", "--dump-audio", desktop_pcm, rom, env=env)
         assert result.returncode == 0, (result.stdout, result.stderr)
         raw = capture.read_bytes()
-        assert len(raw) >= 240 * 800 * 4 and len(raw) % 4 == 0, len(raw)
+        values = counters(result)
+        frame_counters = ("produced_frames", "consumed_frames", "queued_frames",
+                          "dropped_frames", "host_cap_dropped_frames",
+                          "intentional_clear_frames", "stream_failure_dropped_frames",
+                          "core_frames")
+        numbers = {key: int(values[key]) for key in frame_counters}
+        assert values.get("audio") == "on", result.stdout
+        assert numbers["produced_frames"] == numbers["consumed_frames"] + numbers["queued_frames"] + numbers["dropped_frames"], values
+        assert numbers["dropped_frames"] == (numbers["host_cap_dropped_frames"] +
+                                               numbers["intentional_clear_frames"] +
+                                               numbers["stream_failure_dropped_frames"]), values
+        assert len(raw) % 4 == 0, len(raw)
+        headless_result = subprocess.run(
+            [str(headless_runner), str(rom), "--fields", "240", "--audio-rate", "48000",
+             "--dump-audio", str(headless_pcm)],
+            capture_output=True, timeout=60)
+        assert headless_result.returncode == 0, headless_result.stderr
+        assert deterministic_pcm_matches(desktop_pcm.read_bytes(), headless_pcm.read_bytes(),
+                                         numbers["core_frames"]), (
+            "captured session PCM differs from deterministic core PCM", desktop_pcm.stat().st_size,
+            headless_pcm.stat().st_size, numbers)
         samples = struct.unpack("<" + "h" * (len(raw) // 2), raw)
         frames = list(zip(samples[0::2], samples[1::2]))
         silent_runs = []
@@ -150,8 +183,13 @@ def runner_audio_capture():
             elif pair != (0, 0) and run_start is not None:
                 silent_runs.append(index - run_start)
                 run_start = None
-        required = int(40 * 800 * 0.75)
-        assert sum(length >= required for length in silent_runs) >= 2, (silent_runs, required, len(frames))
+        # Keep a substantial observed-silence floor while allowing two extra
+        # 800-frame callbacks versus the former 75% cutoff. This device-file
+        # duration is scheduler-sensitive; functional correctness comes from
+        # conserved production accounting, the audio control seams, and the
+        # byte-for-byte deterministic core PCM comparison above.
+        required = int(40 * 800 * 0.70)
+        assert has_two_sustained_silence_runs(silent_runs, required), (silent_runs, required, len(frames))
         assert any(left or right for left, right in frames), "capture is entirely silent"
 
 
@@ -297,6 +335,21 @@ class RunnerAudioStatisticsContract(unittest.TestCase):
             self.assertGreater(report["reprime_silence_frames"], 0)
             self.assertFalse(report["audio_muted"])
             self.assertFalse(report["audio_paused"])
+
+
+class RunnerAudioCaptureContract(unittest.TestCase):
+    def test_silence_cutoff_rejects_subthreshold_or_single_spans(self):
+        minimum = int(40 * 800 * 0.70)
+        self.assertTrue(has_two_sustained_silence_runs([minimum, minimum], minimum))
+        self.assertFalse(has_two_sustained_silence_runs([minimum - 1, minimum + 1], minimum))
+        self.assertFalse(has_two_sustained_silence_runs([minimum * 2], minimum))
+
+    def test_core_pcm_rejects_wrong_and_truncated_bytes(self):
+        expected = b"\x01\x02\x03\x04\x05\x06\x07\x08"
+        self.assertTrue(deterministic_pcm_matches(expected, expected, 2))
+        self.assertFalse(deterministic_pcm_matches(expected[:-4], expected, 2))
+        self.assertFalse(deterministic_pcm_matches(expected, expected[:-4], 2))
+        self.assertFalse(deterministic_pcm_matches(expected[:-1] + b"\x00", expected, 2))
 
 
 def runner_live_audio():
@@ -503,6 +556,10 @@ if case == "runner_presentation_contract":
 elif case == "runner_audio_stats_contract":
     result = unittest.TextTestRunner().run(
         unittest.defaultTestLoader.loadTestsFromTestCase(RunnerAudioStatisticsContract))
+    raise SystemExit(not result.wasSuccessful())
+elif case == "runner_audio_capture_contract":
+    result = unittest.TextTestRunner().run(
+        unittest.defaultTestLoader.loadTestsFromTestCase(RunnerAudioCaptureContract))
     raise SystemExit(not result.wasSuccessful())
 else:
     CASES[case]()
