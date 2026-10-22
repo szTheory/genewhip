@@ -111,6 +111,32 @@ class DeliveryContract(unittest.TestCase):
             wrong_correlation, "e" * 40, "1234", 2, "a" * 32),
             ["publisher-run-dispatch-identity-mismatch"])
 
+    def test_publisher_code_sha_is_separate_from_qualified_artifact_source(self):
+        qualified_source = "e" * 40
+        publisher_sha = "f" * 40
+        run = {"event": "workflow_dispatch", "status": "completed", "conclusion": "success",
+               "headSha": publisher_sha, "jobs": [{"name": "promote", "conclusion": "success"}]}
+        run["displayTitle"] = delivery.publisher_display_title(qualified_source, "1234", 2, "a" * 32)
+        self.assertEqual(delivery.validate_publisher_run(
+            run, publisher_sha, "1234", 2, "a" * 32,
+            qualified_source_sha=qualified_source), [])
+        self.assertEqual(delivery.validate_publisher_run(
+            dict(run, headSha="d" * 40), publisher_sha, "1234", 2, "a" * 32,
+            qualified_source_sha=qualified_source), ["publisher-run-source-mismatch"])
+        self.assertEqual(delivery.validate_publisher_run(
+            run, publisher_sha, "1234", 2, "a" * 32,
+            qualified_source_sha="c" * 40), ["publisher-run-dispatch-identity-mismatch"])
+
+    def test_publisher_workflow_identity_requires_protected_main_branch(self):
+        run = {"head_sha": "f" * 40, "head_branch": "main"}
+        self.assertEqual(delivery.validate_publisher_branch_identity(run, "f" * 40), [])
+        self.assertEqual(delivery.validate_publisher_branch_identity(
+            dict(run, head_branch="feature/untrusted"), "f" * 40),
+            ["publisher-workflow-not-main-branch"])
+        self.assertEqual(delivery.validate_publisher_branch_identity(
+            dict(run, head_sha="e" * 40), "f" * 40),
+            ["publisher-workflow-source-mismatch"])
+
     def test_release_workflow_publishes_dispatch_inputs_in_run_identity(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text()
         self.assertIn("run-name:", workflow)

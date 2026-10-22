@@ -529,7 +529,22 @@ class GitHub:
             value = self.get(path)
         except PromotionError as error:
             if str(error) == "not-found":
-                return None
+                # GitHub's by-tag endpoint may omit drafts even when they are
+                # visible in the releases collection. Fall back to that collection
+                # so interrupted, unpublished drafts can be resumed safely.
+                matches: list[dict[str, Any]] = []
+                for page in range(1, 101):
+                    releases = self.get(f"/repos/{self.repository}/releases?per_page=100&page={page}")
+                    if not isinstance(releases, list) or any(not isinstance(row, dict) for row in releases):
+                        raise PromotionError("release-list-malformed") from None
+                    matches.extend(row for row in releases if row.get("tag_name") == tag)
+                    if len(releases) < 100:
+                        break
+                else:
+                    raise PromotionError("release-list-pagination-limit") from None
+                if len(matches) > 1:
+                    raise PromotionError("release-tag-lookup-ambiguous")
+                return matches[0] if matches else None
             raise
         return value if isinstance(value, dict) else None
 
