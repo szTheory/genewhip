@@ -319,10 +319,11 @@ class PromotionContract(unittest.TestCase):
                     super().__init__(token, selected_repository)
                     self.patches = []
                     self.release = {"id": 9, "tag_name": "v0.1.0", "draft": True,
-                        "assets": [{"name": name, "state": "uploaded",
+                        "name": "0.1.0", "body": "Qualified preview draft", "prerelease": True,
+                        "assets": [{"name": name, "size": len(name), "state": "uploaded",
                                     "digest": "sha256:" + row["sha256"]}
                                    for name, row in rows.items()] + [{
-                        "name": "inventory.json", "state": "uploaded",
+                        "name": "inventory.json", "size": len(inventory_data), "state": "uploaded",
                             "digest": "sha256:" + checksums["inventory.json"]}],
                         "upload_url": "https://uploads.github.com/example"}
 
@@ -340,7 +341,7 @@ class PromotionContract(unittest.TestCase):
                         return {"path": promote.WORKFLOW_PATH}
                     if path == "/repos/example/genewhip":
                         return {"full_name": repository, "default_branch": "main",
-                                "permissions": {"push": True, "admin": False},
+                                "permissions": copy.deepcopy(self.repo_permissions),
                                 "current_tip_for_test": "b" * 40}
                     if path == "/repos/example/genewhip/branches/main/protection":
                         if self.protection_access_denied:
@@ -359,9 +360,15 @@ class PromotionContract(unittest.TestCase):
                 protection_access_denied = False
                 rules_access_denied = False
                 effective_rules = []
+                repo_permissions = {"push": True, "admin": False}
+                write_probe_denied = False
+                probe_response_override = None
+                probe_readback_mutation = None
+                move_tag_after_probe = False
+                tag_moved = False
 
                 def tag_commit(self, tag):
-                    return source_sha
+                    return "c" * 40 if self.tag_moved else source_sha
 
                 def release_by_tag(self, tag):
                     return self.release
@@ -372,7 +379,19 @@ class PromotionContract(unittest.TestCase):
 
                 def patch(self, path, value):
                     self.patches.append((path, value))
-                    self.release["draft"] = False
+                    if "draft" not in value and self.write_probe_denied:
+                        raise promote.PromotionError("permission-denied")
+                    is_probe = "draft" not in value
+                    if is_probe and self.move_tag_after_probe:
+                        self.tag_moved = True
+                    if "draft" in value:
+                        self.release["draft"] = value["draft"]
+                    self.release.update({key: value[key] for key in ("name", "body") if key in value})
+                    if is_probe and self.probe_readback_mutation:
+                        self.probe_readback_mutation(self.release)
+                    if is_probe and self.probe_response_override is not None:
+                        return self.probe_response_override(copy.deepcopy(self.release))
+                    return copy.deepcopy(self.release)
 
             statement = {"predicate": {"runDetails": {"metadata": {
                 "invocationId": f"https://github.com/{repository}/actions/runs/12345/attempts/2"}}}}
@@ -394,6 +413,73 @@ class PromotionContract(unittest.TestCase):
                 result = promote.publish(repository, source_sha, "12345", 2, event_path, assets, "token")
             self.assertEqual(result, "published-complete-inventory")
             self.assertEqual(len(instance.patches), 1)
+
+            # When metadata denies push, verify actual GITHUB_TOKEN write access by
+            # updating only the existing private draft's unchanged name and body.
+            instance.release["draft"] = True
+            instance.patches.clear()
+            instance.repo_permissions = {"push": False, "admin": False}
+            result = publish_with_mock_attestation()
+            self.assertEqual(result, "published-complete-inventory")
+            self.assertEqual(len(instance.patches), 2)
+            self.assertEqual(instance.patches[0][1], {
+                "name": "0.1.0", "body": "Qualified preview draft"})
+            self.assertNotIn("draft", instance.patches[0][1])
+            self.assertEqual(instance.patches[1][1], {"draft": False})
+
+            # Malformed asset identity, changed API response, and changed readback
+            # state must all fail before a public visibility transition.
+            instance.release["draft"] = True
+            instance.patches.clear()
+            instance.release["assets"][0]["name"] = None
+            with self.assertRaisesRegex(promote.PromotionError, "release-assets-malformed"):
+                instance.verify_draft_write_access(instance.release, "v0.1.0")
+            instance.release["assets"][0]["name"] = next(iter(rows))
+
+            instance.probe_response_override = lambda response: {**response, "name": "changed"}
+            with self.assertRaisesRegex(promote.PromotionError,
+                                        "publication-write-probe-result-invalid"):
+                instance.verify_draft_write_access(instance.release, "v0.1.0")
+            instance.probe_response_override = None
+
+            def change_readback_asset(release):
+                release["assets"][0]["digest"] = "sha256:" + ("0" * 64)
+            instance.probe_readback_mutation = change_readback_asset
+            with self.assertRaisesRegex(promote.PromotionError,
+                                        "publication-write-probe-state-changed"):
+                instance.verify_draft_write_access(instance.release, "v0.1.0")
+            instance.probe_readback_mutation = None
+            self.assertTrue(instance.release["draft"])
+            self.assertTrue(all("draft" not in patch for _, patch in instance.patches))
+            instance = MockGitHub("token", repository)
+            instance.repo_permissions = {"push": False, "admin": False}
+
+            # A denied metadata write must leave the draft private and stop before
+            # the separate visibility transition.
+            instance.release["draft"] = True
+            instance.patches.clear()
+            instance.write_probe_denied = True
+            with self.assertRaisesRegex(promote.PromotionError,
+                                        "publication-write-permission-unavailable"):
+                publish_with_mock_attestation()
+            self.assertTrue(instance.release["draft"])
+            self.assertEqual(len(instance.patches), 1)
+            self.assertNotIn("draft", instance.patches[0][1])
+            instance.write_probe_denied = False
+            instance.repo_permissions = {"push": True, "admin": False}
+
+            # The immutable qualified source tag is rechecked after the network
+            # probe, immediately before the public visibility transition.
+            instance = MockGitHub("token", repository)
+            instance.repo_permissions = {"push": False, "admin": False}
+            instance.move_tag_after_probe = True
+            with self.assertRaisesRegex(promote.PromotionError,
+                                        "tag-source-conflict-before-publish"):
+                publish_with_mock_attestation()
+            self.assertTrue(instance.release["draft"])
+            self.assertEqual(len(instance.patches), 1)
+            self.assertNotIn("draft", instance.patches[0][1])
+            instance = MockGitHub("token", repository)
 
             # The release workflow's standard token cannot read classic protection. An
             # effective ruleset read is sufficient only when it confirms both required
