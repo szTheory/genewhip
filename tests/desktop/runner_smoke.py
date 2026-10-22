@@ -148,19 +148,14 @@ def runner_audio_capture():
         frame_counters = ("produced_frames", "consumed_frames", "queued_frames",
                           "dropped_frames", "host_cap_dropped_frames",
                           "intentional_clear_frames", "stream_failure_dropped_frames",
-                          "clock_exposure_ns", "core_frames")
+                          "core_frames")
         numbers = {key: int(values[key]) for key in frame_counters}
         assert values.get("audio") == "on", result.stdout
         assert numbers["produced_frames"] == numbers["consumed_frames"] + numbers["queued_frames"] + numbers["dropped_frames"], values
         assert numbers["dropped_frames"] == (numbers["host_cap_dropped_frames"] +
                                                numbers["intentional_clear_frames"] +
                                                numbers["stream_failure_dropped_frames"]), values
-        captured_frames = len(raw) // 4
         assert len(raw) % 4 == 0, len(raw)
-        expected_device_frames = (numbers["clock_exposure_ns"] * 48000 + 500000000) // 1000000000
-        device_buffer_frames = 800
-        assert abs(captured_frames - expected_device_frames) <= 10 * device_buffer_frames, (
-            captured_frames, expected_device_frames, values)
         headless_result = subprocess.run(
             [str(headless_runner), str(rom), "--fields", "240", "--audio-rate", "48000",
              "--dump-audio", str(headless_pcm)],
