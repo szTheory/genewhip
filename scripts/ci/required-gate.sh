@@ -8,6 +8,10 @@ python3 tests/evidence/promotion_contract.py
 python3 tests/evidence/phase4_report_contract.py
 python3 tests/evidence/ctest_skip_contract.py
 python3 tests/evidence/ci_dependency_contract.py
+python3 tests/evidence/independent_game_toolchain.py --self-test-current-receipt
+python3 tests/evidence/independent_game_toolchain.py
+python3 tests/evidence/independent_game_toolchain.py --validate-current-receipt build/tool-cache/z80-elf-as.receipt.json --target z80-elf --assembler build/tool-cache/z80-elf-as
+python3 tests/evidence/independent_game_toolchain.py --validate-current-receipt build/tool-cache/m68k-elf-as.receipt.json --target m68k-elf --assembler build/tool-cache/m68k-elf-as
 mkdir -p build/ci
 git rev-parse HEAD > build/ci/source-revision.txt
 cmake --version | head -n 1 > build/ci/toolchain.txt

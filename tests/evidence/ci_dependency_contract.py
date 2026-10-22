@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: MIT
 """Keep required hosted lanes bound to the pinned macOS/tool evidence inputs."""
 import pathlib
+import shutil
+import subprocess
+import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -10,11 +13,44 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 class CIDependencyContract(unittest.TestCase):
     def test_prepare_script_builds_each_locked_evidence_dependency(self):
         script = (ROOT / "scripts/ci/prepare_evidence_dependencies.sh").read_text()
-        self.assertIn("brew install coreutils", script, "missing-macos-coreutils-bootstrap")
-        self.assertIn("bash scripts/fixtures/z80-as.sh", script)
+        self.assertIn("--current-host", script, "missing-current-host-toolchain-receipt")
+        self.assertNotIn("brew install coreutils", script, "unreviewed-latest-coreutils-bootstrap")
         self.assertIn("bash scripts/fixtures/z80-as.sh", script)
         self.assertIn("bash scripts/fixtures/m68k-as.sh", script)
         self.assertIn("python3 tools/evidence/fm_compare/compare.py --fetch --build", script)
+        self.assertIn("build-original-roms.sh --verify-reproducible", script)
+        self.assertIn("--validate-current-receipt", script)
+
+    def test_current_receipt_is_a_separate_validated_host_record(self):
+        recipe = (ROOT / "fixtures/independent-game/toolchain/build-binutils.sh").read_text()
+        validator = (ROOT / "tests/evidence/independent_game_toolchain.py").read_text()
+        self.assertIn("--record-current", recipe)
+        self.assertIn("--receipt", recipe)
+        self.assertIn("--validate-current-receipt", validator)
+        self.assertIn("validate_current_receipt", validator)
+        self.assertIn("genewhip-current-host-toolchain-v1", recipe)
+        self.assertIn("--self-test-current-receipt", (ROOT / "scripts/ci/required-gate.sh").read_text())
+        self.assertIn("tests/evidence/independent_game_toolchain.py", (ROOT / "scripts/ci/required-gate.sh").read_text())
+        self.assertIn("toolchain.lock", recipe)
+
+    def test_current_receipt_cache_reuse_and_executable_tamper_rejection(self):
+        for target, script in (("z80-elf", "z80-as.sh"), ("m68k-elf", "m68k-as.sh")):
+            binary = ROOT / "build/tool-cache" / f"{target}-as"
+            receipt = ROOT / "build/tool-cache" / f"{target}-as.receipt.json"
+            self.assertTrue(binary.is_file(), f"current-{target}-assembler-not-built")
+            self.assertTrue(receipt.is_file(), f"current-{target}-receipt-not-built")
+            with tempfile.TemporaryDirectory(prefix="genewhip-receipt-cache-") as temporary:
+                cache = pathlib.Path(temporary)
+                shutil.copyfile(binary, cache / binary.name)
+                shutil.copyfile(receipt, cache / receipt.name)
+                args = ["bash", str(ROOT / "scripts/fixtures" / script), "--cache", str(cache)]
+                accepted = subprocess.run(args, text=True, capture_output=True)
+                self.assertEqual(accepted.returncode, 0, f"current-{target}-receipt-cache-rejected")
+                tampered = cache / binary.name
+                tampered.write_bytes(tampered.read_bytes() + b"tamper")
+                rejected = subprocess.run(args, text=True, capture_output=True)
+                self.assertNotEqual(rejected.returncode, 0, f"tampered-{target}-receipt-cache-accepted")
+                self.assertIn("receipt", rejected.stderr.lower(), f"tampered-{target}-rejection-not-named")
 
     def test_locked_assembler_recipe_uses_macos_base_tools_for_signature_checks(self):
         recipe = (ROOT / "fixtures/independent-game/toolchain/build-binutils.sh").read_text()

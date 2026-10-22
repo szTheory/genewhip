@@ -7,9 +7,11 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd -P)
 LOCK="$ROOT/fixtures/independent-game/toolchain.lock"
 CACHE="$ROOT/build/tool-cache"
 blocked() { printf 'BLOCKED: %s\n' "$*" >&2; exit 1; }
+CURRENT_HOST=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --cache) [ -n "${2:-}" ] || blocked 'missing --cache directory'; CACHE=$2; shift 2 ;;
+    --current-host) CURRENT_HOST=1; shift ;;
     *) blocked "usage: $0 [--cache DIR]" ;;
   esac
 done
@@ -23,8 +25,20 @@ esac
 mkdir -p "$CACHE"
 CACHE=$(cd "$CACHE" && pwd -P)
 AS="$CACHE/m68k-elf-as"
+RECEIPT="$CACHE/m68k-elf-as.receipt.json"
 actual() { shasum -a 256 "$AS" 2>/dev/null | awk '{print $1}'; }
+if [ "$CURRENT_HOST" -eq 1 ]; then
+  bash "$ROOT/fixtures/independent-game/toolchain/build-binutils.sh" --record-current --output "$CACHE" --receipt "$RECEIPT" >&2 || blocked 'current-host signed source build failed'
+  python3 "$ROOT/tests/evidence/independent_game_toolchain.py" --validate-current-receipt "$RECEIPT" --target m68k-elf --assembler "$AS" >&2 || blocked 'current-host receipt validation failed'
+  printf '%s\n' "$AS"
+  exit 0
+fi
 if [ -x "$AS" ] && [ "$(actual)" = "$EXPECTED" ]; then
+  printf '%s\n' "$AS"
+  exit 0
+fi
+if [ -f "$RECEIPT" ]; then
+  python3 "$ROOT/tests/evidence/independent_game_toolchain.py" --validate-current-receipt "$RECEIPT" --target m68k-elf --assembler "$AS" >&2 || blocked 'cached current-host receipt does not bind assembler bytes'
   printf '%s\n' "$AS"
   exit 0
 fi
