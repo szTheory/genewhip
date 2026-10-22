@@ -136,7 +136,13 @@ class CIDependencyContract(unittest.TestCase):
         required = (ROOT / "scripts/ci/required-gate.sh").read_text()
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         self.assertEqual(required.count("scripts/ci/check_ctest_skips.py"), 2)
-        self.assertEqual(required.count("--output-junit ctest-junit.xml"), 2)
+        self.assertEqual(required.count("--output-junit ctest-junit.raw.xml"), 2)
+        self.assertEqual(required.count("safety-sanitize-junit"), 2)
+        normalized = " ".join(required.replace("\\", " ").split())
+        self.assertIn('--input "build/ci/$lane/ctest-junit.raw.xml" --output "$junit"', normalized)
+        self.assertIn("--input build/ci/production/ctest-junit.raw.xml "
+                      "--output build/ci/production/ctest-junit.xml", normalized)
+        self.assertNotIn("--output-junit ctest-junit.xml", required)
         desktop = workflow.split("  desktop:\n", 1)[1].split("  package:\n", 1)[0]
         self.assertIn("scripts/ci/check_ctest_skips.py build/desktop/ctest-junit.xml", desktop)
         self.assertIn("--output-junit ctest-junit.xml", desktop)
