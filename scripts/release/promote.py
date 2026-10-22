@@ -250,7 +250,8 @@ def verify_dispatch_event(event: dict[str, Any], expected_repo: str, source_sha:
 
 def validate_live_repository_policy(repository: str, repo: Any, protection: Any,
                                     active_rules: Any,
-                                    publisher_contents_write: bool = False) -> list[str]:
+                                    publisher_contents_write: bool = False,
+                                    publisher_write_probe_passed: bool = False) -> list[str]:
     """Require current destination protections and publisher write access."""
     if not isinstance(repo, dict) or repo.get("full_name") != repository:
         return ["publication-destination-mismatch"]
@@ -259,10 +260,15 @@ def validate_live_repository_policy(repository: str, repo: Any, protection: Any,
     if "permissions" in repo:
         permissions = repo.get("permissions")
         if not isinstance(permissions, dict):
+            if publisher_write_probe_passed:
+                permissions = None
+            else:
+                return ["publication-write-permission-unavailable"]
+        if isinstance(permissions, dict) and not (
+                permissions.get("push") is True or permissions.get("admin") is True
+        ) and not publisher_write_probe_passed:
             return ["publication-write-permission-unavailable"]
-        if not (permissions.get("push") is True or permissions.get("admin") is True):
-            return ["publication-write-permission-unavailable"]
-    elif not publisher_contents_write:
+    elif not publisher_contents_write and not publisher_write_probe_passed:
         return ["publication-write-permission-unavailable"]
     if not isinstance(active_rules, list):
         return ["publication-active-rules-unavailable"]
@@ -614,7 +620,48 @@ class GitHub:
                 or attestation[0].get("conclusion") != "success"):
             raise PromotionError("trusted-attestation-job-not-success")
 
-    def verify_live_publication_policy(self) -> None:
+    def verify_draft_write_access(self, release: dict[str, Any], tag: str) -> None:
+        """Prove effective write access with a same-value update to the private draft."""
+        release_id = release.get("id")
+        name, body = release.get("name"), release.get("body")
+        if (not isinstance(release_id, int) or isinstance(release_id, bool)
+                or release.get("tag_name") != tag or release.get("draft") is not True
+                or not isinstance(name, str) or not isinstance(body, str)):
+            raise PromotionError("publication-write-probe-input-invalid")
+        def snapshot_assets(value: dict[str, Any]) -> tuple[tuple[str, int, str], ...]:
+            self.release_assets(value)  # retain existing upload-state and digest validation
+            rows = value.get("assets")
+            snapshot = []
+            for row in rows:
+                asset_name, size = row.get("name"), row.get("size")
+                digest = row.get("digest")
+                if (not isinstance(asset_name, str) or not asset_name
+                        or not isinstance(size, int) or isinstance(size, bool) or size < 0
+                        or not isinstance(digest, str) or not digest.startswith("sha256:")):
+                    raise PromotionError("release-assets-malformed")
+                snapshot.append((asset_name, size, digest))
+            return tuple(sorted(snapshot))
+
+        before_assets = snapshot_assets(release)
+        try:
+            updated = self.patch(f"/repos/{self.repository}/releases/{release_id}",
+                                 {"name": name, "body": body})
+        except PromotionError as error:
+            if str(error) in ("permission-denied", "not-found"):
+                raise PromotionError("publication-write-permission-unavailable") from None
+            raise
+        if (not isinstance(updated, dict) or updated.get("id") != release_id
+                or updated.get("tag_name") != tag or updated.get("draft") is not True
+                or updated.get("name") != name or updated.get("body") != body):
+            raise PromotionError("publication-write-probe-result-invalid")
+        observed = self.release_by_tag(tag)
+        if (not isinstance(observed, dict) or observed.get("id") != release_id
+                or observed.get("tag_name") != tag or observed.get("draft") is not True
+                or observed.get("name") != name or observed.get("body") != body
+                or snapshot_assets(observed) != before_assets):
+            raise PromotionError("publication-write-probe-state-changed")
+
+    def verify_live_publication_policy(self, release: dict[str, Any], tag: str) -> None:
         """Re-read destination policy immediately before making the release public."""
         root = f"/repos/{self.repository}"
         repo = self.get(root)
@@ -654,6 +701,15 @@ class GitHub:
         blockers = validate_live_repository_policy(
             self.repository, repo, protection, rules,
             publisher_contents_write=declares_contents_write)
+        if "publication-write-permission-unavailable" in blockers:
+            probe_blockers = validate_live_repository_policy(
+                self.repository, repo, protection, rules,
+                publisher_contents_write=declares_contents_write,
+                publisher_write_probe_passed=True)
+            if probe_blockers:
+                raise PromotionError(probe_blockers[0])
+            self.verify_draft_write_access(release, tag)
+            blockers = []
         if blockers:
             raise PromotionError(blockers[0])
 
@@ -822,7 +878,9 @@ def publish(repository: str, source_sha: str, run_id: str, attempt: int,
         raise PromotionError("tag-source-conflict-before-publish")
     if release.get("draft") is not True:
         raise PromotionError("release-public-state-unexpected")
-    api.verify_live_publication_policy()
+    api.verify_live_publication_policy(release, tag)
+    if api.tag_commit(tag) != source_sha:
+        raise PromotionError("tag-source-conflict-before-publish")
     try:
         api.patch(f"/repos/{repository}/releases/{release['id']}", {"draft": False})
     except PromotionError:
