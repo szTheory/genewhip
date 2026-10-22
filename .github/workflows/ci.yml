@@ -32,6 +32,30 @@ jobs:
         run: bash scripts/ci/prepare_evidence_dependencies.sh
       - run: bash scripts/ci/required-gate.sh
       - run: cmake -DPROJECT_SOURCE_DIR="$PWD" -P tests/package/package_smoke.cmake
+      - name: Export exact-source safety evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: safety-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/ci/safety-run.json
+            build/ci/safety-complete.json
+            build/ci/source-revision.txt
+            build/ci/toolchain.txt
+            build/ci/native/safety-config.json
+            build/ci/native/ctest-junit.xml
+            build/ci/native/safety-contract.json
+            build/ci/native/safety-completion.json
+            build/ci/sanitizer/safety-config.json
+            build/ci/sanitizer/ctest-junit.xml
+            build/ci/sanitizer/safety-contract.json
+            build/ci/sanitizer/safety-completion.json
+            build/ci/production/safety-config.json
+            build/ci/production/ctest-junit.xml
+            build/ci/production/safety-contract.json
+            build/ci/production/safety-completion.json
+          if-no-files-found: warn
+          retention-days: 30
   gameplay:
     if: github.event_name != 'schedule'
     runs-on: macos-26

@@ -89,9 +89,35 @@ class DeliveryContract(unittest.TestCase):
     def test_publisher_run_is_bound_to_dispatch_source_and_promotion_job(self):
         run = {"event": "workflow_dispatch", "status": "completed", "conclusion": "success",
                "headSha": "e" * 40, "jobs": [{"name": "promote", "conclusion": "success"}]}
-        self.assertEqual(delivery.validate_publisher_run(run, "e" * 40), [])
-        self.assertEqual(delivery.validate_publisher_run(run, "f" * 40),
+        run["displayTitle"] = delivery.publisher_display_title("e" * 40, "1234", 2, "a" * 32)
+        self.assertEqual(delivery.validate_publisher_run(run, "e" * 40, "1234", 2, "a" * 32), [])
+        self.assertEqual(delivery.validate_publisher_run(run, "f" * 40, "1234", 2, "a" * 32),
                          ["publisher-run-source-mismatch"])
+        # Same source and successful promotion, but an overlapping dispatch selected a
+        # different qualification attempt. The source-only check used to accept this.
+        wrong_qualification = dict(run, displayTitle=delivery.publisher_display_title(
+            "e" * 40, "9999", 3, "b" * 32))
+        self.assertEqual(delivery.validate_publisher_run(
+            wrong_qualification, "e" * 40, "1234", 2, "a" * 32),
+            ["publisher-run-dispatch-identity-mismatch"])
+        wrong_attempt = dict(run, displayTitle=delivery.publisher_display_title(
+            "e" * 40, "1234", 3, "a" * 32))
+        self.assertEqual(delivery.validate_publisher_run(
+            wrong_attempt, "e" * 40, "1234", 2, "a" * 32),
+            ["publisher-run-dispatch-identity-mismatch"])
+        wrong_correlation = dict(run, displayTitle=delivery.publisher_display_title(
+            "e" * 40, "1234", 2, "c" * 32))
+        self.assertEqual(delivery.validate_publisher_run(
+            wrong_correlation, "e" * 40, "1234", 2, "a" * 32),
+            ["publisher-run-dispatch-identity-mismatch"])
+
+    def test_release_workflow_publishes_dispatch_inputs_in_run_identity(self):
+        workflow = (ROOT / ".github/workflows/release.yml").read_text()
+        self.assertIn("run-name:", workflow)
+        for field in ("inputs.source_sha", "inputs.run_id", "inputs.run_attempt",
+                      "inputs.correlation_id"):
+            self.assertIn("${{ " + field + " }}", workflow)
+        self.assertIn("correlation_id:\n", workflow)
 
     def test_self_test_is_never_hosted_evidence(self):
         result = delivery.self_test()

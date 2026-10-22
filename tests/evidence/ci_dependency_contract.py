@@ -45,9 +45,30 @@ class CIDependencyContract(unittest.TestCase):
                 cache = pathlib.Path(temporary)
                 shutil.copyfile(binary, cache / binary.name)
                 shutil.copyfile(receipt, cache / receipt.name)
+                cached_assembler = cache / binary.name
+                cached_assembler.chmod(0o755)
                 args = ["bash", str(ROOT / "scripts/fixtures" / script), "--cache", str(cache)]
                 accepted = subprocess.run(args, text=True, capture_output=True)
                 self.assertEqual(accepted.returncode, 0, f"current-{target}-receipt-cache-rejected")
+                returned_path = accepted.stdout.strip()
+                self.assertEqual(pathlib.Path(returned_path), cached_assembler.resolve(),
+                                 f"current-{target}-wrapper-returned-unexpected-path")
+                invoked = subprocess.run([returned_path, "--version"], text=True,
+                                         capture_output=True)
+                self.assertEqual(invoked.returncode, 0,
+                                 f"current-{target}-returned-assembler-not-executable")
+                self.assertIn("GNU assembler (GNU Binutils) 2.47.", invoked.stdout,
+                              f"current-{target}-returned-assembler-wrong-tool")
+                for mode, label in ((0o644, "no-execute-bits"),
+                                    (0o401, "execute-bit-on-other-class")):
+                    cached_assembler.chmod(mode)
+                    rejected_mode = subprocess.run(args, text=True, capture_output=True)
+                    self.assertNotEqual(rejected_mode.returncode, 0,
+                                        f"{label}-{target}-receipt-cache-accepted")
+                    self.assertIn("current-host assembler is not executable",
+                                  rejected_mode.stderr,
+                                  f"{label}-{target}-rejection-not-named")
+                cached_assembler.chmod(0o755)
                 tampered = cache / binary.name
                 tampered.write_bytes(tampered.read_bytes() + b"tamper")
                 rejected = subprocess.run(args, text=True, capture_output=True)

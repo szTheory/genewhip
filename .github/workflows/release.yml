@@ -1,4 +1,6 @@
 name: Promote qualified preview release
+run-name: >-
+  Preview release for ${{ inputs.source_sha }} (qualification ${{ inputs.run_id }} attempt ${{ inputs.run_attempt }}; dispatch ${{ inputs.correlation_id }})
 on:
   workflow_dispatch:
     inputs:
@@ -12,6 +14,10 @@ on:
         type: number
       source_sha:
         description: Full source commit SHA reported by that run
+        required: true
+        type: string
+      correlation_id:
+        description: Unique identifier for this exact promotion dispatch
         required: true
         type: string
 permissions: {}

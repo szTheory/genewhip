@@ -109,6 +109,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--build", type=Path, required=True)
     parser.add_argument("--mode", choices=("pr", "scheduled", "production", "negative-controls"), required=True)
+    parser.add_argument("--out", type=Path, help="write the exact validated JSON summary to this path")
     args = parser.parse_args()
     mutants = run_negative_controls()
     if args.mode == "negative-controls":
@@ -157,7 +158,11 @@ def main():
         "negative_controls": mutants, "allocation_instrumented": report["allocation_instrumented"],
         "allocation_count_peak": report["allocation_count_peak"],
         "steady_allocations": report["steady_allocations"]}
-    print(json.dumps(result, sort_keys=True))
+    encoded = json.dumps(result, sort_keys=True)
+    if args.out:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(encoded + "\n")
+    print(encoded)
     return 0
 
 
