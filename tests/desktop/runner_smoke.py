@@ -129,6 +129,12 @@ def stat_lines(result):
     return [dict(re.findall(r"([a-z][a-z0-9_]*)=([a-z]+|[0-9]+(?:\.[0-9]+)?)", line)) for line in lines]
 
 
+def paused_starvation_is_stable(lines):
+    paused = [int(line["producer_starvation_observations"])
+              for line in lines if line.get("audio_paused") == "1"]
+    return len(paused) >= 3 and len(set(paused)) == 1
+
+
 def has_two_sustained_silence_runs(runs, minimum_frames):
     return sum(length >= minimum_frames for length in runs) >= 2
 
@@ -244,6 +250,20 @@ def runner_toy_sound():
 
 
 def runner_audio_pause():
+    # Paused samples are selected by the published audio state, not by an
+    # output-line range that can include resumed host callbacks.
+    assert paused_starvation_is_stable([
+        {"audio_paused": "1", "producer_starvation_observations": "4"},
+        {"audio_paused": "0", "producer_starvation_observations": "9"},
+        {"audio_paused": "1", "producer_starvation_observations": "4"},
+        {"audio_paused": "1", "producer_starvation_observations": "4"},
+    ])
+    assert not paused_starvation_is_stable([
+        {"audio_paused": "1", "producer_starvation_observations": "4"},
+        {"audio_paused": "0", "producer_starvation_observations": "9"},
+        {"audio_paused": "1", "producer_starvation_observations": "5"},
+        {"audio_paused": "1", "producer_starvation_observations": "5"},
+    ])
     with tempfile.TemporaryDirectory() as directory:
         script = Path(directory) / "pause.script"
         script.write_text("30 pause\n70 resume\n")
@@ -251,8 +271,9 @@ def runner_audio_pause():
         assert result.returncode == 0, (result.stdout, result.stderr)
         lines = stat_lines(result)
         assert len(lines) == 11, (len(lines), result.stderr)
-        observed = [int(line["producer_starvation_observations"]) for line in lines[2:9]]
-        assert len(set(observed)) == 1, (observed, lines)
+        observed = [int(line["producer_starvation_observations"])
+                    for line in lines if line.get("audio_paused") == "1"]
+        assert paused_starvation_is_stable(lines), (observed, lines)
         assert status(result)[1] == 40, result.stdout
 
 
