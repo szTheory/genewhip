@@ -29,6 +29,7 @@ EXPECTED = {
     "assets": {"sdk.tar.gz": "1" * 64, "desktop.tar.gz": "2" * 64,
                "inventory.json": "3" * 64},
 }
+AUTHORIZED_RECOVERY_RELEASE_ID = 420400458
 
 
 def statement():
@@ -154,6 +155,74 @@ class PromotionContract(unittest.TestCase):
         with self.assertRaisesRegex(promote.PromotionError, "release-tag-lookup-ambiguous"):
             client.release_by_tag("v0.1.0")
 
+    def test_recovers_only_one_exact_source_bound_untagged_draft(self):
+        client = promote.GitHub.__new__(promote.GitHub)
+        source = "a" * 40
+        client.tag_commit = lambda tag: source
+        desired = {"package-a.tar.gz": "1" * 64, "package-b.tar.gz": "2" * 64,
+                   "inventory.json": "3" * 64, "SHA256SUMS": "4" * 64}
+        draft = {"id": 42, "tag_name": "untagged-abc123", "target_commitish": source,
+                 "draft": True, "prerelease": True, "name": "0.1.0",
+                 "body": "Qualified Genewhip preview artifacts; see the attached package inventory and checksums.",
+                 "assets": [{"name": name, "state": "uploaded", "digest": "sha256:" + digest}
+                            for name, digest in desired.items()]}
+        client.repository = "example/genewhip"
+        client.get = lambda path: [copy.deepcopy(draft)] if path.endswith("page=1") else []
+        recovered = client.recover_untagged_draft("v0.1.0", source, "0.1.0", desired, 42)
+        self.assertEqual(recovered, draft)
+        with self.assertRaisesRegex(promote.PromotionError,
+                                    "release-draft-recovery-id-mismatch"):
+            client.recover_untagged_draft("v0.1.0", source, "0.1.0", desired, 99)
+
+        for mutation, reason in (
+            (lambda row: row.update(target_commitish="b" * 40), None),
+            (lambda row: row["assets"].pop(), "release-draft-recovery-assets-mismatch"),
+            (lambda row: row["assets"][0].update(digest="sha256:" + "0" * 64),
+             "release-draft-recovery-assets-mismatch"),
+            (lambda row: row.update(body="changed"), "release-draft-recovery-metadata-mismatch"),
+            (lambda row: row.update(draft=False), None),
+        ):
+            changed = copy.deepcopy(draft); mutation(changed)
+            client.get = lambda path, selected=changed: [selected] if path.endswith("page=1") else []
+            if reason is None:
+                self.assertIsNone(client.recover_untagged_draft("v0.1.0", source, "0.1.0", desired, 42))
+            else:
+                with self.assertRaisesRegex(promote.PromotionError, reason):
+                    client.recover_untagged_draft("v0.1.0", source, "0.1.0", desired, 42)
+
+        duplicate = copy.deepcopy(draft); duplicate["id"] = 43
+        client.get = lambda path: [copy.deepcopy(draft), duplicate] if path.endswith("page=1") else []
+        with self.assertRaisesRegex(promote.PromotionError, "release-draft-recovery-ambiguous"):
+            client.recover_untagged_draft("v0.1.0", source, "0.1.0", desired, 42)
+
+    def test_draft_write_probe_explicitly_binds_tag_and_target_without_visibility_change(self):
+        client = promote.GitHub.__new__(promote.GitHub)
+        source = "a" * 40
+        desired = {"asset.bin": "1" * 64}
+        release = {"id": 42, "tag_name": "untagged-abc123", "target_commitish": source,
+                   "draft": True, "prerelease": True, "name": "0.1.0",
+                   "body": promote.RELEASE_BODY,
+                   "assets": [{"name": "asset.bin", "size": 1, "state": "uploaded",
+                               "digest": "sha256:" + desired["asset.bin"]}]}
+        client.repository = "example/genewhip"
+        client.release_assets = lambda row: [{"name": item["name"], "sha256": item["digest"][7:]}
+                                             for item in row["assets"]]
+        client.tag_commit = lambda tag: source
+        patches = []
+
+        def patch(path, payload):
+            patches.append(payload)
+            release.update(payload)
+            return copy.deepcopy(release)
+
+        client.patch = patch
+        client.release_by_id = lambda release_id: copy.deepcopy(release)
+        client.release_by_tag = lambda tag: copy.deepcopy(release)
+        client.verify_draft_write_access(release, "v0.1.0", source, desired)
+        self.assertEqual(patches, [{"tag_name": "v0.1.0", "target_commitish": source,
+                                    "name": "0.1.0", "body": promote.RELEASE_BODY}])
+        self.assertTrue(release["draft"])
+
     def test_release_job_does_not_request_administration_or_an_extra_credential(self):
         workflow = (pathlib.Path(__file__).resolve().parents[2] /
                     ".github/workflows/release.yml").read_text()
@@ -161,6 +230,8 @@ class PromotionContract(unittest.TestCase):
                          r"      attestations: read\n      contents: write\n")
         self.assertNotRegex(workflow, r"(?im)^\s+administration:\s*(?:read|write)\b")
         self.assertIn("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}", workflow)
+        self.assertIn('AUTHORIZED_RECOVERY_RELEASE_ID: "420400458"', workflow)
+        self.assertIn('--authorized-recovery-release-id "$AUTHORIZED_RECOVERY_RELEASE_ID"', workflow)
         self.assertNotRegex(workflow, r"(?i)(PERSONAL_ACCESS_TOKEN|APP_PRIVATE_KEY|APP_ID)")
 
     def test_workflow_permission_parser_is_scoped_to_promote_job(self):
@@ -373,7 +444,8 @@ class PromotionContract(unittest.TestCase):
                     self.uploads = []
                     self.asset_count_at_visibility = None
                     self.release = {"id": 9, "tag_name": "v0.1.0", "draft": True,
-                        "name": "0.1.0", "body": "Qualified preview draft", "prerelease": True,
+                        "name": "0.1.0", "body": promote.RELEASE_BODY, "prerelease": True,
+                        "target_commitish": source_sha,
                         "assets": [{"name": name, "size": len(name), "state": "uploaded",
                                     "digest": "sha256:" + row["sha256"]}
                                    for name, row in rows.items()] + [{
@@ -425,7 +497,23 @@ class PromotionContract(unittest.TestCase):
                     return "c" * 40 if self.tag_moved else source_sha
 
                 def release_by_tag(self, tag):
-                    return self.release
+                    return self.release if self.release.get("tag_name") == tag else None
+
+                def release_by_id(self, release_id):
+                    return self.release if release_id == self.release["id"] else None
+
+                def recover_untagged_draft(self, tag, candidate_source, version, desired,
+                                           authorized_release_id):
+                    self.recovery_calls = getattr(self, "recovery_calls", 0) + 1
+                    actual = {row["name"]: row["sha256"] for row in self.release_assets(self.release)}
+                    if (tag == "v0.1.0" and candidate_source == source_sha and version == "0.1.0"
+                            and authorized_release_id == AUTHORIZED_RECOVERY_RELEASE_ID
+                            and self.release.get("id") == authorized_release_id
+                            and self.release.get("tag_name", "").startswith("untagged-")
+                            and self.release.get("target_commitish") == candidate_source
+                            and actual == desired):
+                        return self.release
+                    return None
 
                 def release_assets(self, release):
                     return [{"name": row["name"], "sha256": row["digest"][7:]}
@@ -446,7 +534,8 @@ class PromotionContract(unittest.TestCase):
                     if "draft" in value:
                         self.release["draft"] = value["draft"]
                         self.asset_count_at_visibility = len(self.release["assets"])
-                    self.release.update({key: value[key] for key in ("name", "body") if key in value})
+                    self.release.update({key: value[key] for key in
+                                         ("tag_name", "target_commitish", "name", "body") if key in value})
                     if is_probe and self.probe_readback_mutation:
                         self.probe_readback_mutation(self.release)
                     if is_probe and self.probe_response_override is not None:
@@ -461,24 +550,26 @@ class PromotionContract(unittest.TestCase):
                 with mock.patch.object(promote, "GitHub", return_value=instance), \
                         mock.patch.object(promote.subprocess, "run", return_value=promote.subprocess.CompletedProcess(
                             args=["gh"], returncode=0, stdout=gh_output, stderr="")):
-                    return promote.publish(repository, source_sha, "12345", 2, event_path, assets, "token")
+                    return promote.publish(repository, source_sha, "12345", 2, event_path, assets,
+                                           "token", AUTHORIZED_RECOVERY_RELEASE_ID)
             with mock.patch.object(promote, "GitHub", return_value=instance), \
                     mock.patch.object(promote.subprocess, "run", return_value=promote.subprocess.CompletedProcess(
                         args=["gh"], returncode=0, stdout=gh_output, stderr="")):
                 with self.assertRaisesRegex(promote.PromotionError, "publication-protection-missing"):
                     instance.policy_ok = False
-                    promote.publish(repository, source_sha, "12345", 2, event_path, assets, "token")
+                    promote.publish(repository, source_sha, "12345", 2, event_path, assets,
+                                    "token", AUTHORIZED_RECOVERY_RELEASE_ID)
                 self.assertEqual(instance.patches, [], "policy rejection must happen before public PATCH")
                 self.assertEqual(instance.uploads, ["SHA256SUMS"])
                 self.assertEqual(len(instance.release["assets"]), 8)
                 instance.policy_ok = True
-                result = promote.publish(repository, source_sha, "12345", 2, event_path, assets, "token")
+                result = promote.publish(repository, source_sha, "12345", 2, event_path, assets,
+                                         "token", AUTHORIZED_RECOVERY_RELEASE_ID)
             self.assertEqual(result, "published-complete-inventory")
             self.assertEqual(instance.asset_count_at_visibility, 8)
             self.assertEqual(len(instance.patches), 1)
 
-            # When metadata denies push, verify actual GITHUB_TOKEN write access by
-            # updating only the existing private draft's unchanged name and body.
+            # When metadata denies push, bind the exact source tag on the private draft.
             instance.release["draft"] = True
             instance.patches.clear()
             instance.repo_permissions = {"push": False, "admin": False}
@@ -486,9 +577,11 @@ class PromotionContract(unittest.TestCase):
             self.assertEqual(result, "published-complete-inventory")
             self.assertEqual(len(instance.patches), 2)
             self.assertEqual(instance.patches[0][1], {
-                "name": "0.1.0", "body": "Qualified preview draft"})
+                "tag_name": "v0.1.0", "target_commitish": source_sha,
+                "name": "0.1.0", "body": promote.RELEASE_BODY})
             self.assertNotIn("draft", instance.patches[0][1])
-            self.assertEqual(instance.patches[1][1], {"draft": False})
+            self.assertEqual(instance.patches[1][1], {
+                "tag_name": "v0.1.0", "target_commitish": source_sha, "draft": False})
 
             # Malformed asset identity, changed API response, and changed readback
             # state must all fail before a public visibility transition.
@@ -496,13 +589,13 @@ class PromotionContract(unittest.TestCase):
             instance.patches.clear()
             instance.release["assets"][0]["name"] = None
             with self.assertRaisesRegex(promote.PromotionError, "release-assets-malformed"):
-                instance.verify_draft_write_access(instance.release, "v0.1.0")
+                instance.verify_draft_write_access(instance.release, "v0.1.0", source_sha, desired)
             instance.release["assets"][0]["name"] = next(iter(rows))
 
             instance.probe_response_override = lambda response: {**response, "name": "changed"}
             with self.assertRaisesRegex(promote.PromotionError,
                                         "publication-write-probe-result-invalid"):
-                instance.verify_draft_write_access(instance.release, "v0.1.0")
+                instance.verify_draft_write_access(instance.release, "v0.1.0", source_sha, desired)
             instance.probe_response_override = None
 
             def change_readback_asset(release):
@@ -510,7 +603,7 @@ class PromotionContract(unittest.TestCase):
             instance.probe_readback_mutation = change_readback_asset
             with self.assertRaisesRegex(promote.PromotionError,
                                         "publication-write-probe-state-changed"):
-                instance.verify_draft_write_access(instance.release, "v0.1.0")
+                instance.verify_draft_write_access(instance.release, "v0.1.0", source_sha, desired)
             instance.probe_readback_mutation = None
             self.assertTrue(instance.release["draft"])
             self.assertTrue(all("draft" not in patch for _, patch in instance.patches))
@@ -537,11 +630,30 @@ class PromotionContract(unittest.TestCase):
             instance.repo_permissions = {"push": False, "admin": False}
             instance.move_tag_after_probe = True
             with self.assertRaisesRegex(promote.PromotionError,
-                                        "tag-source-conflict-before-publish"):
+                                        "publication-write-probe-state-changed"):
                 publish_with_mock_attestation()
             self.assertTrue(instance.release["draft"])
             self.assertEqual(len(instance.patches), 1)
             self.assertNotIn("draft", instance.patches[0][1])
+            instance = MockGitHub("token", repository)
+
+            # Resume only the identified untagged private draft after its complete
+            # eight-asset inventory matches the qualified source byte-for-byte.
+            instance.release["tag_name"] = "untagged-465cafee"
+            instance.release["id"] = AUTHORIZED_RECOVERY_RELEASE_ID
+            instance.release["assets"].append({"name": "SHA256SUMS", "size": 1,
+                "state": "uploaded", "digest": "sha256:" +
+                hashlib.sha256((assets / "SHA256SUMS").read_bytes()).hexdigest()})
+            result = publish_with_mock_attestation()
+            self.assertEqual(result, "published-complete-inventory")
+            self.assertEqual(instance.recovery_calls, 1)
+            self.assertEqual(instance.patches[0][1], {
+                "tag_name": "v0.1.0", "target_commitish": source_sha,
+                "name": "0.1.0", "body": promote.RELEASE_BODY})
+            self.assertTrue(instance.patches[0][1].get("draft") is None)
+            self.assertEqual(instance.patches[1][1], {
+                "tag_name": "v0.1.0", "target_commitish": source_sha, "draft": False})
+
             instance = MockGitHub("token", repository)
 
             # The release workflow's standard token cannot read classic protection. An

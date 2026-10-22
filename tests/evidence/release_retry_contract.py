@@ -142,7 +142,7 @@ class ReleaseRetryContract(unittest.TestCase):
                 (directory / name).write_bytes(data)
             digests, blockers = validate_release_inventory(directory, inventory)
             self.assertEqual(blockers, [])
-            self.assertEqual(set(digests), set(values) - {"SHA256SUMS"})
+            self.assertEqual(set(digests), set(values))
 
     def test_modified_local_asset_is_rejected_by_digest(self):
         with tempfile.TemporaryDirectory() as temporary:
