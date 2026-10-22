@@ -167,6 +167,59 @@ def validate_current_receipt(doc: dict, target: str, assembler_path: pathlib.Pat
     reject(not assembler_path.is_file() or hashlib.sha256(assembler_path.read_bytes()).hexdigest() != exe.get("sha256"), "current-host receipt does not match assembler bytes")
 
 
+def current_receipt_log_identity(doc: dict, receipt_bytes: bytes) -> dict:
+    """Return verifiable current-host provenance without machine-local paths."""
+    record = doc["record"]
+    signature = record["signature"]
+    host = record["host"]
+    builder = record["candidate_builder"]
+    verifier = next(item for item in record["build_dependencies"]
+                    if item["name"] == "GNU Binutils release verifier gpgv")
+    install_tools = next(item for item in record["build_dependencies"]
+                         if item["name"] in ("GNU Coreutils install tools",
+                                              "Apple system directory/install utilities"))
+    tree = re.search(r"extracted source tree SHA-256 ([0-9a-f]{64})$",
+                     record["source_revision"])
+    if tree is None:
+        raise ValueError("current-host source tree identity unavailable")
+    return {
+        "schema": doc["schema"],
+        "target": doc["target"],
+        "receipt_sha256": hashlib.sha256(receipt_bytes).hexdigest(),
+        "historical_lock_sha256": doc["historical_lock_sha256"],
+        "binutils": {
+            "version": record["version"],
+            "source_archive_sha256": record["source_archive_sha256"],
+            "source_tree_sha256": tree.group(1),
+            "signature_sha256": signature["sha256"],
+            "keyring_sha256": signature["keyring_sha256"],
+            "signing_fingerprint": signature["signing_fingerprint"],
+        },
+        "host": {
+            key: host[key] for key in
+            ("os", "os_build", "architecture", "xcode", "sdk_version", "sdk_build",
+             "compiler", "make")
+        },
+        "python": {
+            "version": builder["version"],
+            "sha256": builder["sha256"],
+            "framework_sha256": builder["framework_sha256"],
+        },
+        "gpgv": {"version": verifier["identity"], "sha256": verifier["sha256"]},
+        "install_tools": {
+            "name": install_tools["name"],
+            "executables": [
+                {"name": item["name"], "sha256": item["sha256"]}
+                for item in install_tools["executables"]
+            ],
+        },
+        "assembler": {
+            "sha256": record["executable"]["sha256"],
+            "file_type": record["executable"]["file_type"],
+        },
+    }
+
+
 def self_test_current_receipt(lock: dict) -> int:
     record = copy.deepcopy(lock["assembler"])
     target = "m68k-elf"
@@ -347,12 +400,16 @@ def main() -> int:
             print("BLOCKED: usage: --validate-current-receipt FILE --target m68k-elf|z80-elf --assembler FILE", file=sys.stderr)
             return 2
         try:
-            receipt = json.loads(pathlib.Path(sys.argv[2]).read_text())
+            receipt_path = pathlib.Path(sys.argv[2])
+            receipt_bytes = receipt_path.read_bytes()
+            receipt = json.loads(receipt_bytes)
             validate_current_receipt(receipt, sys.argv[4], pathlib.Path(sys.argv[6]))
         except (OSError, ValueError, KeyError, TypeError) as exc:
             print(f"BLOCKED: {exc}", file=sys.stderr)
             return 1
         print(f"PASS: current-host {sys.argv[4]} receipt binds the signed Binutils source and exact assembler bytes")
+        print("CURRENT_HOST_RECEIPT: " + json.dumps(current_receipt_log_identity(receipt, receipt_bytes),
+                                                     sort_keys=True, separators=(",", ":")))
         return 0
     if len(sys.argv) > 1 and sys.argv[1] == "--self-test-lock":
         try:

@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: MIT
 """Keep required hosted lanes bound to the pinned macOS/tool evidence inputs."""
 import pathlib
+import json
+import hashlib
 import shutil
 import subprocess
 import tempfile
@@ -51,6 +53,31 @@ class CIDependencyContract(unittest.TestCase):
                 rejected = subprocess.run(args, text=True, capture_output=True)
                 self.assertNotEqual(rejected.returncode, 0, f"tampered-{target}-receipt-cache-accepted")
                 self.assertIn("receipt", rejected.stderr.lower(), f"tampered-{target}-rejection-not-named")
+
+    def test_validated_receipt_logs_redacted_reproducible_identity(self):
+        for target in ("z80-elf", "m68k-elf"):
+            receipt_path = ROOT / "build/tool-cache" / f"{target}-as.receipt.json"
+            binary_path = ROOT / "build/tool-cache" / f"{target}-as"
+            result = subprocess.run([
+                "python3", str(ROOT / "tests/evidence/independent_game_toolchain.py"),
+                "--validate-current-receipt", str(receipt_path), "--target", target,
+                "--assembler", str(binary_path),
+            ], text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, f"{target}-receipt-identity-validation-failed")
+            identity_lines = [line for line in result.stdout.splitlines()
+                              if line.startswith("CURRENT_HOST_RECEIPT: ")]
+            self.assertEqual(len(identity_lines), 1, f"{target}-receipt-identity-log-missing")
+            identity = json.loads(identity_lines[0].split(": ", 1)[1])
+            self.assertEqual(identity["schema"], "genewhip-current-host-toolchain-v1")
+            self.assertEqual(identity["target"], target)
+            self.assertEqual(identity["receipt_sha256"],
+                             hashlib.sha256(receipt_path.read_bytes()).hexdigest())
+            self.assertEqual(identity["binutils"]["source_archive_sha256"],
+                             "3068128c75cda9f898ccb4211d360246e8e195ffcc9dfb655b23ae23a54800e8")
+            self.assertEqual(identity["assembler"]["sha256"],
+                             hashlib.sha256(binary_path.read_bytes()).hexdigest())
+            self.assertNotIn("/Users/", identity_lines[0])
+            self.assertNotIn("/home/", identity_lines[0])
 
     def test_locked_assembler_recipe_uses_macos_base_tools_for_signature_checks(self):
         recipe = (ROOT / "fixtures/independent-game/toolchain/build-binutils.sh").read_text()
