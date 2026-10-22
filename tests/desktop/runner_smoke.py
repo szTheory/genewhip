@@ -173,7 +173,11 @@ def runner_audio_capture():
             elif pair != (0, 0) and run_start is not None:
                 silent_runs.append(index - run_start)
                 run_start = None
-        required = int(40 * 800 * 0.75)
+        # The disk driver records complete 800-frame device callbacks. Host
+        # catchup can clip a mute interval at either callback boundary, so
+        # require 70% of its nominal duration while still requiring two
+        # separate, substantial silent spans.
+        required = int(40 * 800 * 0.70)
         assert sum(length >= required for length in silent_runs) >= 2, (silent_runs, required, len(frames))
         assert any(left or right for left, right in frames), "capture is entirely silent"
 
