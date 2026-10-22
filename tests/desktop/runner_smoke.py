@@ -130,16 +130,44 @@ def stat_lines(result):
 
 
 def runner_audio_capture():
+    headless_runner = Path(sys.argv[4]) if len(sys.argv) > 4 else headless
+    assert headless_runner is not None, "headless executable is required for PCM comparison"
     with tempfile.TemporaryDirectory() as directory:
         base = Path(directory)
         script = base / "capture.script"
         capture = base / "capture.raw"
+        desktop_pcm = base / "desktop.pcm"
+        headless_pcm = base / "headless.pcm"
         script.write_text("40 mute\n80 unmute\n120 pause\n160 resume\n")
         env = dict(ENV, SDL_AUDIODRIVER="disk", SDL_AUDIO_DISK_OUTPUT_FILE=str(capture))
-        result = run("--fields", 240, "--host-script", script, rom, env=env)
+        result = run("--fields", 240, "--host-script", script,
+                     "--print-field-hashes", "--dump-audio", desktop_pcm, rom, env=env)
         assert result.returncode == 0, (result.stdout, result.stderr)
         raw = capture.read_bytes()
-        assert len(raw) >= 240 * 800 * 4 and len(raw) % 4 == 0, len(raw)
+        values = counters(result)
+        frame_counters = ("produced_frames", "consumed_frames", "queued_frames",
+                          "dropped_frames", "host_cap_dropped_frames",
+                          "intentional_clear_frames", "stream_failure_dropped_frames",
+                          "clock_exposure_ns", "core_frames")
+        numbers = {key: int(values[key]) for key in frame_counters}
+        assert values.get("audio") == "on", result.stdout
+        assert numbers["produced_frames"] == numbers["consumed_frames"] + numbers["queued_frames"] + numbers["dropped_frames"], values
+        assert numbers["dropped_frames"] == (numbers["host_cap_dropped_frames"] +
+                                               numbers["intentional_clear_frames"] +
+                                               numbers["stream_failure_dropped_frames"]), values
+        captured_frames = len(raw) // 4
+        assert len(raw) % 4 == 0, len(raw)
+        expected_device_frames = (numbers["clock_exposure_ns"] * 48000 + 500000000) // 1000000000
+        device_buffer_frames = 800
+        assert abs(captured_frames - expected_device_frames) <= 10 * device_buffer_frames, (
+            captured_frames, expected_device_frames, values)
+        headless_result = subprocess.run(
+            [str(headless_runner), str(rom), "--fields", "240", "--audio-rate", "48000",
+             "--dump-audio", str(headless_pcm)],
+            capture_output=True, timeout=60)
+        assert headless_result.returncode == 0, headless_result.stderr
+        assert desktop_pcm.read_bytes() == headless_pcm.read_bytes(), "captured session PCM differs from deterministic core PCM"
+        assert desktop_pcm.stat().st_size == numbers["core_frames"] * 4, (desktop_pcm.stat().st_size, values)
         samples = struct.unpack("<" + "h" * (len(raw) // 2), raw)
         frames = list(zip(samples[0::2], samples[1::2]))
         silent_runs = []
