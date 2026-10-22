@@ -24,3 +24,7 @@ foreach(test_name ym_port_fidelity ym_nuked_compare ym_nuked_negative_control ym
     --port-runner $<TARGET_FILE:gw_fm_port_replay>)
   set_tests_properties(${test_name} PROPERTIES TIMEOUT 600 SKIP_RETURN_CODE 77 LABELS fm-compare)
 endforeach()
+
+add_test(NAME fm_compare_environment COMMAND ${Python3_EXECUTABLE} -I
+  ${PROJECT_SOURCE_DIR}/tests/audio/fm_compare_environment.py)
+set_tests_properties(fm_compare_environment PROPERTIES TIMEOUT 15 LABELS fm-compare)

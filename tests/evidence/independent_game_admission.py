@@ -106,6 +106,30 @@ route_spec = importlib.util.spec_from_file_location(
     "route_audit", root / "fixtures/independent-game/route_audit.py")
 route_audit = importlib.util.module_from_spec(route_spec)
 route_spec.loader.exec_module(route_audit)
+
+def classify_legacy_capability(expected_identity, observed_identity, route_status=None):
+    """Keep missing historical binaries separate from route-audit failures."""
+    if not expected_identity or not observed_identity:
+        return "identity-unavailable"
+    if observed_identity != expected_identity:
+        return "identity-unavailable"
+    if route_status is None:
+        return "needs-route-audit"
+    return "available" if route_status == "pass" else "route-audit-failed"
+
+legacy_gate_cases = [
+    ("absent expected identity", None, "a" * 64, None, "identity-unavailable"),
+    ("absent observed identity", "a" * 64, None, None, "identity-unavailable"),
+    ("mismatched identity", "a" * 64, "b" * 64, None, "identity-unavailable"),
+    ("matching identity", "a" * 64, "a" * 64, None, "needs-route-audit"),
+    ("genuine route failure", "a" * 64, "a" * 64, "failed", "route-audit-failed"),
+    ("verified route", "a" * 64, "a" * 64, "pass", "available"),
+]
+for case_name, expected, observed, route_status, wanted in legacy_gate_cases:
+    actual = classify_legacy_capability(expected, observed, route_status)
+    if actual != wanted:
+        raise AssertionError(f"legacy capability {case_name}: expected {wanted}, got {actual}")
+
 mame_source = Path(route_audit.DEFAULT_SOURCE)
 if not (mame_source / ".git").is_dir() or not (mame_source / "genewhip").is_file():
     # The recorded-evidence checks above ran; the fresh MAME route checks need a local build.
@@ -114,6 +138,34 @@ if not (mame_source / ".git").is_dir() or not (mame_source / "genewhip").is_file
     print(f"SKIP: MAME 0.289 checkout absent at {shown}; recorded-evidence rejection checks passed. "
           "Build it with GENEWHIP_MAME_WORK_ROOT=build/tool-cache/mame0289 "
           "fixtures/independent-game/mame_build.sh --build")
+    sys.exit(77)
+
+# The fixture's admitted v1 evidence binds a specific reference executable. A
+# separately restored v2 reference may use the same signed source and route
+# instrumentation while producing a different executable identity. Keep the
+# v1 admission/consumer test visible as unavailable rather than reporting a
+# route failure or silently refreshing its historical lock/evidence.
+expected_executable = lock["mame"]["executable_build_sha256"]
+actual_executable = hashlib.sha256((mame_source / "genewhip").read_bytes()).hexdigest()
+legacy_status = classify_legacy_capability(expected_executable, actual_executable)
+if legacy_status == "identity-unavailable":
+    local_evidence = root / "build/tool-cache/mame0289/v1-capability.json"
+    local_evidence.parent.mkdir(parents=True, exist_ok=True)
+    local_evidence.write_text(json.dumps({
+        "schema_version": 1,
+        "fixture_id": "genewhip-independent-game",
+        "capability": "historical-v1-mame-executable",
+        "status": "identity-unavailable",
+        "outcome": "unknown",
+        "expected_executable_sha256": expected_executable,
+        "observed_executable_sha256": actual_executable,
+        "reason": "The restored executable does not match the historical v1 lock; no v1 route or admission result is inferred.",
+    }, indent=2) + "\n")
+    print("SKIP: historical v1 MAME executable identity unavailable; "
+          f"expected {expected_executable}, found {actual_executable}. "
+          "Local identity evidence: build/tool-cache/mame0289/v1-capability.json. "
+          "The separate v2 reference capability is verified independently; "
+          "v1 admission/consumer outcome remains unknown.")
     sys.exit(77)
 
 with tempfile.TemporaryDirectory(prefix=".gw-admission-", dir=root) as temp:

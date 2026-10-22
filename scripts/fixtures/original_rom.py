@@ -11,20 +11,21 @@ import argparse
 import pathlib
 import struct
 import sys
+from typing import Optional
 
 
 SHF_ALLOC = 0x2
 SHT_PROGBITS, SHT_NOBITS = 1, 8
 
 
-def extract(obj: pathlib.Path, size: int | None, machine: str = "m68k") -> bytes:
+def extract(obj: pathlib.Path, size: Optional[int], machine: str = "m68k") -> bytes:
     try:
         return _extract(obj, size, machine)
     except (struct.error, IndexError, UnicodeDecodeError, OSError) as error:
         raise SystemExit(f"BLOCKED: malformed object ({type(error).__name__})")
 
 
-def _extract(obj: pathlib.Path, size: int | None, machine: str) -> bytes:
+def _extract(obj: pathlib.Path, size: Optional[int], machine: str) -> bytes:
     b = obj.read_bytes()
     # GNU Binutils 2.47 include/elf/common.h: EM_Z80 = 220 (0xDC);
     # the planned 0x69 is EM_MSP430 and must not be accepted as Z80.

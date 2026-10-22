@@ -31,6 +31,11 @@ cat build/extended/reports/z80-fuzz.json
 # Random audio creation rates, read capacities and trace capacities exercise failure bounds.
 build/extended/gw_bounded_fuzz audio-calls > build/extended/reports/audio-fuzz.json
 cat build/extended/reports/audio-fuzz.json
+# Larger but still finite safety exposure. The Python checker gives every child a
+# hard timeout and rejects incomplete, unknown, skipped or mismatched summaries.
+python3 tests/api/safety_contract.py --build build/extended --mode scheduled \
+  > build/extended/reports/api-safety.json
+cat build/extended/reports/api-safety.json
 # Versioned Phase 2 evidence report (plan GW-02-13): aggregates every seam, the raster toy, vector
 # counts, session cadence/split-run and the non-gating independent-game smoke, then validates it.
 python3 -I scripts/evidence/phase2_report.py --build build/extended --out build/extended/reports/phase2-evidence.json

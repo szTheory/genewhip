@@ -51,6 +51,8 @@ struct gw_machine {
     gw_audio audio;
 #ifdef GW_TEST_HOOKS
     uint64_t allocations;
+    size_t owned_bytes_current;
+    size_t owned_bytes_peak;
     gw_test_z80_arb_event z80_arb_events[256];
     size_t z80_arb_event_count;
     /* Bounded private test observations; never installed or used by the core. */
@@ -104,6 +106,9 @@ int gw_bus_span(const gw_machine *m, uint32_t address, size_t size, int write);
 uint8_t gw_bus_peek(const gw_machine *m, uint32_t address);
 #ifdef GW_TEST_HOOKS
 /* Private vector-adapter seam; absent from hooks-off builds. */
+size_t gw_test_owned_bytes_current(const gw_machine *m);
+size_t gw_test_owned_bytes_peak(const gw_machine *m);
+uint64_t gw_test_allocation_count(const gw_machine *m);
 void gw_test_memory_reset(gw_machine *m);
 int gw_test_memory_set(gw_machine *m, uint32_t address, uint8_t value);
 int gw_test_memory_get(const gw_machine *m, uint32_t address, uint8_t *value);

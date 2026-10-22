@@ -135,7 +135,39 @@ def classify(op, source=None):
     return "gated:unimplemented-family"
 
 
+STATE_WIDTHS = {
+    "a": 8, "b": 8, "c": 8, "d": 8, "e": 8, "f": 8, "h": 8, "l": 8,
+    "i": 8, "r": 8, "q": 8, "af_": 16, "bc_": 16, "de_": 16, "hl_": 16,
+    "ix": 16, "iy": 16, "pc": 16, "sp": 16, "wz": 16,
+}
+STATE_DOMAINS = {"ei": range(2), "iff1": range(2), "iff2": range(2),
+                 "im": range(3), "p": range(2)}
+STATE_FIELDS = frozenset((*STATE_WIDTHS, *STATE_DOMAINS, "ram"))
+
+
+def validate_state(state, label="state"):
+    if not isinstance(state, dict):
+        raise ValueError(f"{label} must be an object")
+    missing, extra = STATE_FIELDS - state.keys(), state.keys() - STATE_FIELDS
+    if missing or extra:
+        details = []
+        if missing: details.append("missing " + ", ".join(sorted(missing)))
+        if extra: details.append("unexpected " + ", ".join(sorted(extra)))
+        raise ValueError(f"{label} schema: {'; '.join(details)}")
+    for name, width in STATE_WIDTHS.items():
+        value = state[name]
+        if type(value) is not int or not 0 <= value < (1 << width):
+            raise ValueError(f"{label}.{name} must be an integer in [0, {(1 << width) - 1}]")
+    for name, allowed in STATE_DOMAINS.items():
+        value = state[name]
+        if type(value) is not int or value not in allowed:
+            raise ValueError(f"{label}.{name} must be an integer in {list(allowed)}")
+    if not isinstance(state["ram"], list):
+        raise ValueError(f"{label}.ram must be a list")
+
+
 def pack_state(state):
+    validate_state(state)
     return [((state["a"] << 8) | state["f"]), ((state["b"] << 8) | state["c"]),
             ((state["d"] << 8) | state["e"]), ((state["h"] << 8) | state["l"]),
             state["af_"], state["bc_"], state["de_"], state["hl_"], state["ix"], state["iy"],

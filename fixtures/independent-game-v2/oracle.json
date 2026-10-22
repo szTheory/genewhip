@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "oracle_id": "genewhip-independent-game-v2-source-oracle-v1",
+  "ancestry": "derived from fixtures/independent-game-v2/src/game.s and the declared input schedules; frozen before Genewhip capture; no emulator output or trace recording used",
+  "source_sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe",
+  "observations": {
+    "video_mode": {
+      "register": 1,
+      "mode5_bit": 2,
+      "display_enable_bit": 6,
+      "display_enabled": true,
+      "mode5_enabled": true,
+      "value": 68,
+      "basis": "Initial VDP register 1 write selects Genesis Mode 5 before display enable.",
+      "primary_source": "SEGA Genesis Software Manual, Addendum 4, section 2, compiled PDF page 18",
+      "primary_claim": "The Genesis mode is active when Register #1's bit 2=1.",
+      "primary_source_url": "https://device.report/m/55cc8ed622c4bb453d08032a76b03b32ee4e41a5f3c09382b5fecdd0afe6268d.pdf#page=18"
+    },
+    "play_state": {
+      "address": "0xFF0000",
+      "width_bits": 16,
+      "title_value": 0,
+      "playing_value": 1,
+      "basis": "clear at reset; set after active-low Start"
+    },
+    "position": {
+      "address": "0xFF0002",
+      "width_bits": 16,
+      "minimum": 0,
+      "maximum": 39,
+      "basis": "active-low left/right updates one cell per guest play loop and clamps at both ends"
+    },
+    "marker": {
+      "plane": "A",
+      "vram_base": "0xC280",
+      "column": "position at 0xFF0002",
+      "tile": 2,
+      "basis": "source writes tile 2 at the byte-addressed VRAM command address 0xC280 + position * 2 bytes"
+    },
+    "title": {
+      "plane": "A",
+      "vram_base": "0xC000",
+      "cells": 10,
+      "tile": 1,
+      "basis": "source writes ten tile-1 cells before waiting for Start; clears them after Start"
+    },
+    "sound": {
+      "port": "0xC00011",
+      "width_bits": 8,
+      "trigger": "active-low P1 B press edge",
+      "register": "SN76489 tone channel 0",
+      "ordered_data": [
+        132,
+        2,
+        144
+      ],
+      "basis": "source emits low-period, high-period, then audible-volume writes once while the action latch is clear"
+    },
+    "no_trigger": {
+      "expected_sound_writes": [],
+      "controls": [
+        "title-no-start",
+        "start-idle",
+        "start-move",
+        "action-no-trigger"
+      ],
+      "basis": "all PSG writes are inside the B-press edge branch"
+    },
+    "forbidden_cartridge_storage": {
+      "ranges": [
+        [
+          2097152,
+          2162687
+        ],
+        [
+          1053424,
+          1053425
+        ]
+      ],
+      "basis": "selected ordinary linear cartridge advertises no cartridge SRAM; source references neither range"
+    }
+  },
+  "case_ids": [
+    "title-no-start",
+    "start-idle",
+    "start-move",
+    "action-sound",
+    "action-no-trigger",
+    "sustained-play"
+  ],
+  "sustained_protocol": {
+    "warmup_fields": 120,
+    "measured_fields": 600,
+    "minimum_total_fields": 720,
+    "reset_policy": "fresh MAME process and machine for each run"
+  }
+}

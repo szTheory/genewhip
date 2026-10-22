@@ -14,7 +14,11 @@ if(GENEWHIP_TEST_HOOKS)
     ${CMAKE_CURRENT_SOURCE_DIR}/run_vectors.py --runner $<TARGET_FILE:cpu_vector_runner> --negative-control)
   add_test(NAME cpu_vectors_integrity COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/integrity_contract.py $<TARGET_FILE:cpu_vector_runner>)
+  add_test(NAME gameplay_family_contract COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/gameplay_family_contract.py
+    $<TARGET_FILE:gw_headless>)
   set_tests_properties(cpu_vectors cpu_vectors_negative_control cpu_vectors_integrity PROPERTIES TIMEOUT 30)
+  set_tests_properties(gameplay_family_contract PROPERTIES TIMEOUT 180)
   # Authored MC68000UM-derived interrupt-entry tests (plan GW-02-10); hooks only.
   add_executable(cpu_interrupt cpu_interrupt.c)
   target_link_libraries(cpu_interrupt PRIVATE Genewhip::core)

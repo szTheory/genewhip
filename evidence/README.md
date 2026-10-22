@@ -128,8 +128,10 @@ Validator reasons: `missing-row`, `duplicate-row`, `unexpected-row`, `stale-revi
 `denominator`, `counts`, `relabelled-outcome` (a class-`unknown` row, a vector source with
 non-pass counts, or a smoke without an in-range value reported `pass`) and `relabelled-class`.
 
-The independent-game core smoke (`independent_game_core_smoke`, label `non-gating`) replays the
-admitted scenario's input schedule through `gw_headless`; its outcome is recorded, never gated,
-and carries no compatibility claim. At this revision the Genewhip core stops it with an
-`unsupported-address` stop (fault address `0xc00006`) on the first field, so its row is
-`unsupported`, not `pass`. Compatibility claims are reserved for Phase 4.
+The Phase 3 independent-game core smoke (`independent_game_core_smoke`, label `non-gating`)
+replayed the historical v1 scenario through `gw_headless` and stopped with an
+`unsupported-address` at `0xc00006`; that result remains historical and unsupported. Phase 4
+separately admits corrected v2 for its exact MAME reference scenario and records a six-case,
+840-field Genewhip public-client gameplay result plus a distinct 720-field scenario. These
+identity-bound outcomes do not imply broad game compatibility. See `phase4-gameplay.json` and
+the Phase 4 summary for the exact source, ROM, scenario, input and client identities.

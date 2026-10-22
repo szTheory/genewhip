@@ -1,8 +1,8 @@
 # Audio contract (API 4)
 
 This page describes the deterministic core PCM interface and the audio behavior
-implemented in the current Phase 3 slice. The core owns no host audio device and
-uses no host clock.
+implemented across the Phase 3 sound slice and the bounded Phase 4 game/desktop
+qualification. The core owns no host audio device and uses no host clock.
 
 ## Phase 3 evidence and limits
 
@@ -24,14 +24,18 @@ guest reset replay remain unknown. The variant identity is YM2612 discrete, VA3 
 exact VA3 reset wiring remains under the approved bounded exception in the Phase 3 record.
 
 The original raster toy has measured temporal AC ranges of PSG 5,301, FM 13,430 and DAC
-7,703. Idle YM DC alone is not activity. The independent-game audio smoke is non-gating and
-rights-aware; its current stop at VDP mirror address `0xC00006` remains unsupported and does
-not establish game audio compatibility. Pong remains skipped because it is not admitted.
+7,703. Idle YM DC alone is not activity. The Phase 3 independent-game smoke stopped at
+VDP mirror address `0xC00006`; that historical result remains unsupported. The corrected
+Phase 4 v2 guest separately passes six bounded Genewhip cases/840 requested fields,
+including action-triggered sound and matched no-trigger silence, through the headless
+and desktop clients. This is not general game-audio compatibility. Pong remains rejected
+because rights/build/runtime gates are unresolved.
 No analog output filter, YM3438 variant, Model 2 or PAL profile is claimed. Source/model
 assumptions A1–A12 remain open for hardware confirmation; their source-derived relationships
-do not establish hardware truth and remain visible in the Phase 3 evidence report. The human-only
-items are subjective listening quality and physical-output artifacts, because capture cannot
-establish listener preference or noise from a physical transducer and room.
+do not establish hardware truth and remain visible in the Phase 3 evidence report. The user
+explicitly made subjective listening optional; those observations remain unknown in the Phase 3
+UAT and are not a current release gate. Automated PCM and host-session evidence does not establish
+listener preference or physical output quality.
 
 ## PCM output and rate
 
@@ -168,8 +172,8 @@ split; this API slice does not expose a digest function.
 
 The 68000-visible PSG data port is byte-write-only at `0xC00011`. Reads,
 word accesses, and writes to `0xC00013`, `0xC00015`, or `0xC00017` stop with
-`GW_STOP_UNSUPPORTED_ADDRESS`. The Z80-side port at `0x7F11` is not implemented
-yet.
+`GW_STOP_UNSUPPORTED_ADDRESS`. Z80 writes to `0x7F11` reach the same PSG
+model at the Z80 cycle timestamp and record Z80 source attribution in the trace.
 
 A latch byte (bit 7 set) selects one of three tone channels or the noise
 channel, then selects period/noise control or attenuation. A tone latch writes

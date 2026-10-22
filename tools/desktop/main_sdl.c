@@ -16,6 +16,7 @@
 
 #define SCRIPT_LINE_MAX 320
 #define SCRIPT_PATH_MAX 256
+#define AUDIO_DUMP_BUFFER_BYTES 4096u
 
 typedef enum { ACTION_PAUSE, ACTION_RESUME, ACTION_RESET, ACTION_QUIT, ACTION_PRESS, ACTION_DROP,
     ACTION_MUTE, ACTION_UNMUTE } host_action;
@@ -45,10 +46,31 @@ static const struct { SDL_GamepadButton button; uint32_t mask; } PAD_MAP[] = {
 
 static uint8_t rom_buffer[GW_MAX_ROM_SIZE];
 
+static int dump_audio_frames(FILE *out, const int16_t *frames, uint32_t count)
+{
+    uint8_t bytes[AUDIO_DUMP_BUFFER_BYTES];
+    uint32_t offset = 0;
+    while (offset < count) {
+        uint32_t batch = count - offset;
+        if (batch > sizeof(bytes) / 4u) batch = (uint32_t)(sizeof(bytes) / 4u);
+        for (uint32_t i = 0; i < batch; ++i) {
+            uint16_t left = (uint16_t)frames[2u * (offset + i)];
+            uint16_t right = (uint16_t)frames[2u * (offset + i) + 1u];
+            bytes[4u * i] = (uint8_t)left;
+            bytes[4u * i + 1u] = (uint8_t)(left >> 8);
+            bytes[4u * i + 2u] = (uint8_t)right;
+            bytes[4u * i + 3u] = (uint8_t)(right >> 8);
+        }
+        if (fwrite(bytes, 4u, batch, out) != batch) return 1;
+        offset += batch;
+    }
+    return 0;
+}
+
 static int usage(void)
 {
     fputs("usage: genewhip-desktop [--fields N] [--host-script FILE] [--scale N]\n"
-          "       [--record LOG | --replay LOG] [--print-field-hashes] [--stats FILE]\n"
+          "       [--record LOG | --replay LOG] [--dump-audio FILE] [--print-field-hashes] [--stats FILE]\n"
           "       [--stats-interval N]\n"
           "       [--port1 keyboard|gamepad|none] [--port2 keyboard|gamepad|none] ROM\n", stderr);
     return 2;
@@ -130,6 +152,7 @@ static void fatal_box(const char *message)
 typedef struct runner {
     gw_session session;
     runner_audio *audio;
+    runner_stats stats;
     SDL_Window *window;
     SDL_Renderer *renderer;
     SDL_Texture *texture;
@@ -279,22 +302,44 @@ static int present_field(runner *r)
     const uint32_t *pixels = NULL;
     int status = gw_session_field(&r->session, &field, &pixels);
     if (status == (int)GW_ERROR_EMPTY) return 1;
-    if (status != 0 || field.pixel_format != GW_PIXEL_XRGB8888) return 0;
+    if (status != 0) {
+        (void)snprintf(r->stats.present_error, sizeof(r->stats.present_error),
+            "gw_session_field failed (status %d)", status);
+        runner_stats_present(&r->stats, r->session.fields, 0, r->stats.present_error);
+        return 0;
+    }
+    if (field.pixel_format != GW_PIXEL_XRGB8888) {
+        runner_stats_present(&r->stats, field.sequence, 0, "unsupported field pixel format");
+        return 0;
+    }
+#define PRESENT_FAILURE(context) do { \
+        char detail[GW_RUNNER_PRESENT_ERROR_SIZE]; \
+        char message[GW_RUNNER_PRESENT_ERROR_SIZE]; \
+        gw_sanitize_display(SDL_GetError(), detail, sizeof(detail)); \
+        (void)snprintf(message, sizeof(message), "%s: %s", (context), \
+            detail[0] ? detail : "SDL reported no error detail"); \
+        runner_stats_present(&r->stats, field.sequence, 0, message); \
+        return 0; \
+    } while (0)
     if (!r->texture || r->tex_w != (int)field.width || r->tex_h != (int)field.height) {
         if (r->texture) SDL_DestroyTexture(r->texture);
         r->texture = SDL_CreateTexture(r->renderer, SDL_PIXELFORMAT_XRGB8888,
             SDL_TEXTUREACCESS_STREAMING, (int)field.width, (int)field.height);
-        if (!r->texture) return 0;
+        if (!r->texture) PRESENT_FAILURE("SDL_CreateTexture");
         r->tex_w = (int)field.width;
         r->tex_h = (int)field.height;
-        (void)SDL_SetTextureScaleMode(r->texture, SDL_SCALEMODE_NEAREST);
-        (void)SDL_SetRenderLogicalPresentation(r->renderer, r->tex_w, r->tex_h,
-            SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
+        if (!SDL_SetTextureScaleMode(r->texture, SDL_SCALEMODE_NEAREST))
+            PRESENT_FAILURE("SDL_SetTextureScaleMode");
+        if (!SDL_SetRenderLogicalPresentation(r->renderer, r->tex_w, r->tex_h,
+            SDL_LOGICAL_PRESENTATION_INTEGER_SCALE)) PRESENT_FAILURE("SDL_SetRenderLogicalPresentation");
     }
-    if (!SDL_UpdateTexture(r->texture, NULL, pixels, (int)field.pitch_bytes)) return 0;
-    (void)SDL_RenderClear(r->renderer);
-    (void)SDL_RenderTexture(r->renderer, r->texture, NULL, NULL);
-    (void)SDL_RenderPresent(r->renderer);
+    if (!SDL_UpdateTexture(r->texture, NULL, pixels, (int)field.pitch_bytes))
+        PRESENT_FAILURE("SDL_UpdateTexture");
+    if (!SDL_RenderClear(r->renderer)) PRESENT_FAILURE("SDL_RenderClear");
+    if (!SDL_RenderTexture(r->renderer, r->texture, NULL, NULL)) PRESENT_FAILURE("SDL_RenderTexture");
+    if (!SDL_RenderPresent(r->renderer)) PRESENT_FAILURE("SDL_RenderPresent");
+    runner_stats_present(&r->stats, field.sequence, 1, NULL);
+#undef PRESENT_FAILURE
     return 1;
 }
 
@@ -309,8 +354,10 @@ int main(int argc, char **argv)
     script_entry script[HOST_SCRIPT_MAX];
     size_t script_count = 0, script_next = 0, rom_size = 0;
     uint64_t max_fields = 0, scale = 3, frame = 0, stats_interval = 0, next_ns, period_ns;
+    uint64_t stats_start_ns = 0;
     const char *rom_path = NULL, *script_path = NULL, *reason = NULL, *record_path = NULL, *replay_path = NULL;
-    const char *stats_path = NULL;
+    const char *stats_path = NULL, *dump_audio_path = NULL;
+    FILE *audio_dump = NULL;
     int status, exit_code = 0;
 
     memset(&r, 0, sizeof(r));
@@ -331,6 +378,8 @@ int main(int argc, char **argv)
             record_path = argv[++i];
         } else if (!strcmp(argv[i], "--replay") && i + 1 < argc) {
             replay_path = argv[++i];
+        } else if (!strcmp(argv[i], "--dump-audio") && i + 1 < argc) {
+            dump_audio_path = argv[++i];
         } else if (!strcmp(argv[i], "--print-field-hashes")) {
             print_hashes = 1;
         } else if ((!strcmp(argv[i], "--port1") || !strcmp(argv[i], "--port2")) && i + 1 < argc) {
@@ -401,17 +450,32 @@ int main(int argc, char **argv)
     }
     (void)runner_audio_open(&audio);
     r.audio = &audio;
+    if (dump_audio_path) {
+        audio_dump = fopen(dump_audio_path, "wb");
+        if (!audio_dump) {
+            fputs("ERROR: could not write audio dump\n", stderr);
+            runner_audio_close(&audio);
+            SDL_DestroyRenderer(r.renderer);
+            SDL_DestroyWindow(r.window);
+            SDL_Quit();
+            gw_session_close(&r.session);
+            if (have_log) gw_input_log_free(&log);
+            return 1;
+        }
+    }
     (void)SDL_SetRenderVSync(r.renderer, 1);
     set_title(&r, NULL);
 
     period_ns = ((uint64_t)GW_FIELD_TICKS * UINT64_C(1000000000)) / GW_MASTER_HZ;
     next_ns = SDL_GetTicksNS();
+    stats_start_ns = next_ns;
     while (!r.quit) {
         uint64_t now;
         int due = 0, stepped = 0;
         handle_events(&r);
         now = SDL_GetTicksNS();
         while (!r.quit && now >= next_ns && due < GW_SESSION_CATCHUP_FIELDS) {
+            runner_stats_deadline(&r.stats, next_ns, now);
             while (script_next < script_count && script[script_next].frame <= frame)
                 apply_action(&r, &script[script_next++]);
             if (r.quit || (max_fields && r.session.fields >= max_fields)) { r.quit = 1; break; }
@@ -429,12 +493,30 @@ int main(int argc, char **argv)
                 }
                 stepped = 1;
                 {
+                    gw_video_field field;
+                    const uint32_t *pixels = NULL;
+                    status = gw_session_field(&r.session, &field, &pixels);
+                    if (status != 0) {
+                        fprintf(stderr, "ERROR: could not observe emulated field (status %d)\n", status);
+                        exit_code = 1;
+                        r.quit = 1;
+                        break;
+                    }
+                    runner_stats_field(&r.stats, field.sequence, due != 0);
+                }
+                {
                     const int16_t *audio_frames = NULL;
                     uint32_t audio_count = 0;
                     gw_audio_read_result audio_result;
-                    if (gw_session_audio(&r.session, &audio_frames, &audio_count, &audio_result) == 0)
+                    if (gw_session_audio(&r.session, &audio_frames, &audio_count, &audio_result) == 0) {
+                        if (audio_dump && dump_audio_frames(audio_dump, audio_frames, audio_count) != 0) {
+                            fputs("ERROR: could not write audio dump\n", stderr);
+                            exit_code = 1;
+                            r.quit = 1;
+                        }
                         runner_audio_put_field(&audio, audio_frames, audio_count,
                             r.session.audio_total_frames, audio_result.lost, audio_result.clipped);
+                    }
                 }
                 if (print_hashes && gw_session_print_field(&r.session, stdout) != 0) {
                     fprintf(stderr, "ERROR: could not print the field hash\n");
@@ -445,13 +527,17 @@ int main(int argc, char **argv)
             }
             frame++;
             if (stats_interval && frame % stats_interval == 0) {
-                runner_audio_print_stats(&audio, stderr);
+                runner_stats_exposure(&r.stats, SDL_GetTicksNS() - stats_start_ns);
+                runner_audio_print_stats(&audio, &r.stats, stderr);
                 fputc('\n', stderr);
             }
             next_ns += period_ns;
             due++;
         }
-        if (now >= next_ns) next_ns = now; /* Discard debt beyond the catch-up cap. */
+        if (now >= next_ns) {
+            runner_stats_discard_wall(&r.stats, now - next_ns);
+            next_ns = now; /* Discard debt beyond the catch-up cap. */
+        }
         if (stepped) {
             if (!present_field(&r)) {
                 fprintf(stderr, "ERROR: could not present the field\n");
@@ -478,7 +564,8 @@ int main(int argc, char **argv)
 
     printf("fields=%" PRIu64 " paused_fields=%" PRIu64 " resets=%" PRIu64 " ",
         r.session.fields, r.paused_fields, r.reset_count_before_loads + r.session.resets);
-    runner_audio_print_counters(&audio);
+    runner_stats_exposure(&r.stats, SDL_GetTicksNS() - stats_start_ns);
+    runner_audio_print_stats(&audio, &r.stats, stdout);
     putchar('\n');
     if (print_hashes && gw_session_print_final(&r.session, stdout) != 0) exit_code = 1;
     if (stats_path) {
@@ -487,13 +574,17 @@ int main(int argc, char **argv)
             fputs("ERROR: could not write stats file\n", stderr);
             exit_code = 1;
         } else {
-            runner_audio_write_stats_json(&audio, stats_file);
+            runner_audio_write_stats_json(&audio, &r.stats, stats_file);
             if (fclose(stats_file) != 0) { fputs("ERROR: could not finish stats file\n", stderr); exit_code = 1; }
         }
     }
     if (record_path) {
         if (r.session.log_overflow) fputs("WARN: input log full, later input not recorded\n", stderr);
         if (gw_input_log_write(record_path, &log) != 0) { fputs("ERROR: could not write the log\n", stderr); exit_code = 1; }
+    }
+    if (audio_dump && fclose(audio_dump) != 0) {
+        fputs("ERROR: could not finish audio dump\n", stderr);
+        exit_code = 1;
     }
     if (fflush(stdout) != 0) exit_code = 1;
     for (int i = 0; i < MAX_GAMEPADS; ++i) if (r.gamepads[i]) SDL_CloseGamepad(r.gamepads[i]);

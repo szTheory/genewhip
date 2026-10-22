@@ -11,6 +11,7 @@ import struct
 import sys
 import tempfile
 import time
+import unittest
 from pathlib import Path
 
 case, runner, rom = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
@@ -76,7 +77,7 @@ def runner_host_controls():
 
 def counters(result):
     line = next((line for line in result.stdout.decode().splitlines() if line.startswith("fields=")), "")
-    values = dict(re.findall(r"([a-z_]+)=([0-9]+(?:\.[0-9]+)?)", line))
+    values = dict(re.findall(r"([a-z][a-z0-9_]*)=([0-9]+(?:\.[0-9]+)?)", line))
     match = re.search(r"\baudio=(on|off)\b", line)
     if match:
         values["audio"] = match.group(1)
@@ -90,6 +91,10 @@ def runner_audio_counters():
     assert values.get("audio") == "on", result.stdout
     numbers = {key: float(value) for key, value in values.items() if key != "audio"}
     assert numbers["produced_frames"] == numbers["consumed_frames"] + numbers["queued_frames"] + numbers["dropped_frames"], values
+    assert numbers["dropped_frames"] == (numbers["host_cap_dropped_frames"] +
+                                           numbers["intentional_clear_frames"] +
+                                           numbers["stream_failure_dropped_frames"]), values
+    assert numbers["queue_source_bytes"] == numbers["queue_source_frames"] * 4, values
     assert 0.995 <= numbers["ratio_min"] <= numbers["ratio_max"] <= 1.005, values
     assert numbers["core_lost"] == 0, values
     # N(t) = floor(t * 48000 / master_clock); final tick is 180 field ends.
@@ -121,7 +126,7 @@ def runner_audio_mute_hashes():
 
 def stat_lines(result):
     lines = [line for line in result.stderr.decode().splitlines() if line.startswith("audio=")]
-    return [dict(re.findall(r"([a-z_]+)=([a-z]+|[0-9]+(?:\.[0-9]+)?)", line)) for line in lines]
+    return [dict(re.findall(r"([a-z][a-z0-9_]*)=([a-z]+|[0-9]+(?:\.[0-9]+)?)", line)) for line in lines]
 
 
 def runner_audio_capture():
@@ -208,7 +213,7 @@ def runner_audio_pause():
         assert result.returncode == 0, (result.stdout, result.stderr)
         lines = stat_lines(result)
         assert len(lines) == 11, (len(lines), result.stderr)
-        observed = [int(line["underruns"]) for line in lines[2:9]]
+        observed = [int(line["producer_starvation_observations"]) for line in lines[2:9]]
         assert len(set(observed)) == 1, (observed, lines)
         assert status(result)[1] == 40, result.stdout
 
@@ -242,16 +247,56 @@ def runner_stats():
         report = json.loads(stats.read_text())
         exit_values = counters(result)
         exit_audio_keys = set(stat_lines(result)[-1])
-        assert set(report) == exit_audio_keys, (set(report), exit_audio_keys)
+        assert set(report) - {"last_present_error", "queue_source_unit"} == exit_audio_keys, (set(report), exit_audio_keys)
         assert str(report["produced_frames"]) == exit_values["produced_frames"], (report, exit_values)
         stdout_lines = result.stdout.decode().splitlines()
         assert stdout_lines and all(line.startswith("{") or line.startswith("fields=") for line in stdout_lines), result.stdout
         interval_lines = result.stderr.decode().splitlines()
         assert len(interval_lines) == 3 and all(line.startswith("audio=") for line in interval_lines), result.stderr
-        assert all(set(values) == set(report) for values in stat_lines(result)), stat_lines(result)
+        assert all(set(values) == exit_audio_keys for values in stat_lines(result)), stat_lines(result)
         home = str(Path.home()).encode()
         for payload in (result.stdout, result.stderr, stats.read_bytes()):
             assert home not in payload and b"/Users/" not in payload, payload
+
+
+class RunnerPresentationContract(unittest.TestCase):
+    def test_versioned_scheduler_and_identity_observations(self):
+        with tempfile.TemporaryDirectory() as directory:
+            stats = Path(directory) / "stats.json"
+            result = run("--fields", 30, "--stats", stats, rom)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = json.loads(stats.read_text())
+            self.assertEqual(report.get("stats_version"), 2,
+                             f"runner stats must expose schema version 2: {report}")
+            for key in ("scheduled_deadlines", "late_deadlines", "emulated_fields",
+                        "catchup_fields", "discarded_wall_ns", "present_calls",
+                        "present_successes", "present_errors", "last_presented_field_id",
+                        "superseded_fields", "repeated_field_ids"):
+                self.assertIn(key, report, f"missing scheduler observation {key}: {report}")
+
+
+class RunnerAudioStatisticsContract(unittest.TestCase):
+    def test_queue_and_loss_categories_use_source_frame_units(self):
+        with tempfile.TemporaryDirectory() as directory:
+            stats = Path(directory) / "stats.json"
+            script = Path(directory) / "controls.script"
+            script.write_text("3 mute\n6 pause\n8 resume\n10 reset\n12 unmute\n")
+            result = run("--fields", 20, "--host-script", script, "--stats", stats, rom)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = json.loads(stats.read_text())
+            self.assertIn("queue_source_bytes", report,
+                          f"runner must expose SDL source-byte depth: {report}")
+            for key in ("queue_source_frames", "queue_samples", "queue_exposure_ns",
+                        "producer_starvation_observations", "core_lost_frames",
+                        "host_cap_dropped_frames", "intentional_clear_frames",
+                        "pause_ramp_frames", "reprime_silence_frames", "audio_muted", "audio_paused"):
+                self.assertIn(key, report, f"missing audio observation {key}: {report}")
+            self.assertEqual(report["queue_source_bytes"], 4 * report["queue_source_frames"])
+            self.assertGreater(report["queue_samples"], 0)
+            self.assertGreater(report["intentional_clear_frames"], 0)
+            self.assertGreater(report["reprime_silence_frames"], 0)
+            self.assertFalse(report["audio_muted"])
+            self.assertFalse(report["audio_paused"])
 
 
 def runner_live_audio():
@@ -282,11 +327,15 @@ def runner_live_audio():
 
 def runner_audio_fallback():
     env = dict(ENV, SDL_AUDIODRIVER="genewhip-no-such-driver")
-    result = run("--fields", 180, "--print-field-hashes", rom, env=env)
+    with tempfile.TemporaryDirectory() as directory:
+        stats = Path(directory) / "fallback.json"
+        result = run("--fields", 180, "--stats", stats, "--print-field-hashes", rom, env=env)
+        report = json.loads(stats.read_text())
     assert result.returncode == 0, result.stderr
     lines = result.stderr.decode().splitlines()
     assert len(lines) == 1 and lines[0].startswith("audio: disabled ("), result.stderr
     assert counters(result).get("audio") == "off", result.stdout
+    assert report["audio_available"] == 0 and report["queue_samples"] == 0, report
     values = counters(result)
     numbers = {key: float(value) for key, value in values.items() if key != "audio"}
     assert numbers["produced_frames"] == numbers["consumed_frames"] + numbers["queued_frames"] + numbers["dropped_frames"]
@@ -303,7 +352,8 @@ def runner_audio_replay():
         assert a[key] == b[key], (key, a, b)
     for values in (a, b):
         numbers = {key: float(value) for key, value in values.items() if key != "audio"}
-        assert numbers["produced_frames"] == numbers["consumed_frames"] + numbers["queued_frames"] + numbers["dropped_frames"]
+        accounted = numbers["consumed_frames"] + numbers["queued_frames"] + numbers["dropped_frames"]
+        assert numbers["produced_frames"] == accounted, ("source-frame conservation", values, accounted)
         assert 0.995 <= numbers["ratio_min"] <= numbers["ratio_max"] <= 1.005
     expected = (180 * 896040 * 48000) // 53693175
     assert float(a["core_frames"]) == expected, (a, expected)
@@ -314,6 +364,24 @@ def runner_audio_replay():
         assert result.returncode == 0, result.stderr
         assert dump.stat().st_size % 4 == 0
         assert dump.stat().st_size // 4 == expected == int(float(a["core_frames"]))
+
+
+def runner_audio_dump():
+    with tempfile.TemporaryDirectory() as directory:
+        desktop_dump = Path(directory) / "desktop.pcm"
+        headless_dump = Path(directory) / "headless.pcm"
+        fields = 4
+        desktop_result = run("--fields", fields, "--dump-audio", desktop_dump, rom)
+        assert desktop_result.returncode == 0, desktop_result.stderr
+        assert counters(desktop_result).get("audio") == "on", desktop_result.stdout
+        headless_result = subprocess.run([str(headless), str(rom), "--fields", str(fields),
+                                          "--audio-rate", "48000", "--dump-audio", str(headless_dump)],
+                                         capture_output=True, timeout=40)
+        assert headless_result.returncode == 0, headless_result.stderr
+        assert desktop_dump.read_bytes() == headless_dump.read_bytes(), "dump differs from core PCM"
+        assert desktop_dump.stat().st_size % 4 == 0
+        failed = run("--fields", fields, "--dump-audio", Path(directory) / "missing" / "out.pcm", rom)
+        assert failed.returncode != 0 and b"ERROR: could not write audio dump" in failed.stderr, failed.stderr
 
 
 def hash_lines(result):
@@ -418,6 +486,7 @@ CASES = {"runner_fields": runner_fields, "runner_errors": runner_errors,
          "runner_audio_counters": runner_audio_counters,
          "runner_audio_fallback": runner_audio_fallback,
          "runner_audio_replay": runner_audio_replay,
+         "runner_audio_dump": runner_audio_dump,
          "runner_audio_mute_hashes": runner_audio_mute_hashes,
          "runner_audio_capture": runner_audio_capture,
          "runner_toy_sound": runner_toy_sound,
@@ -427,5 +496,14 @@ CASES = {"runner_fields": runner_fields, "runner_errors": runner_errors,
          "runner_input_replay": runner_input_replay, "runner_drop": runner_drop,
          "runner_live_display": runner_live_display,
          "runner_live_audio": runner_live_audio}
-CASES[case]()
-print(f"PASS: {case}")
+if case == "runner_presentation_contract":
+    result = unittest.TextTestRunner().run(
+        unittest.defaultTestLoader.loadTestsFromTestCase(RunnerPresentationContract))
+    raise SystemExit(not result.wasSuccessful())
+elif case == "runner_audio_stats_contract":
+    result = unittest.TextTestRunner().run(
+        unittest.defaultTestLoader.loadTestsFromTestCase(RunnerAudioStatisticsContract))
+    raise SystemExit(not result.wasSuccessful())
+else:
+    CASES[case]()
+    print(f"PASS: {case}")

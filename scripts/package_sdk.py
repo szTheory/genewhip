@@ -20,9 +20,10 @@ def run(*args, **kwargs):
 def identity(ignore_planning_for_list=False):
     status = subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"],
                                      cwd=ROOT, text=True)
+    # Planning notes do not enter the SDK payload; all public source and fixture
+    # inputs still have to be committed before package identity is assigned.
     changes = [line for line in status.splitlines()
-               if line[3:] != ".planning/milestone.lock"
-               and not (ignore_planning_for_list and line[3:].startswith(".planning/"))]
+               if not line[3:].startswith(".planning/")]
     if changes:
         raise ValueError("source-dirty: commit public inputs before packaging")
     return run("git", "rev-parse", "HEAD")
@@ -103,12 +104,33 @@ def main():
                     tar.addfile(info, io.BytesIO(data))
         digest = hashlib.sha256(pending.read_bytes()).hexdigest()
         # No successful-looking final artifact until exact-byte smoke succeeds.
-        subprocess.run([sys.executable, str(ROOT / "tests/package/smoke.py"), str(pending), digest, revision], check=True)
+        smoke = subprocess.run([sys.executable, str(ROOT / "tests/package/smoke.py"), str(pending), digest, revision],
+                               check=False, capture_output=True, text=True)
+        if smoke.returncode:
+            sys.stderr.write(smoke.stdout)
+            sys.stderr.write(smoke.stderr)
+            raise ValueError("sdk-package-smoke-failed")
+        smoke_result = json.loads(smoke.stdout.strip().splitlines()[-1])
         if identity() != revision:
             raise ValueError("source-changed-during-smoke")
         shutil.copyfile(pending, archive)
         archive.with_suffix(archive.suffix + ".sha256").write_text(digest + "  " + archive.name + "\n")
-        print(json.dumps({"archive": str(archive.relative_to(ROOT)), "sha256": digest, "source_revision": revision}))
+        with tarfile.open(pending, "r:*") as tar:
+            root_name = next(pathlib.PurePosixPath(row.name).parts[0] for row in tar.getmembers() if row.isfile())
+            inventory_sha256 = hashlib.sha256(tar.extractfile(root_name + "/checksums.json").read()).hexdigest()
+            metadata = json.loads(tar.extractfile(root_name + "/metadata.json").read())
+        receipt = {"schema": "genewhip-local-package-qualification", "version": 1,
+                   "kind": "SDL-free API 4 SDK archive", "outcome": "pass",
+                   "source_revision": revision, "archive": archive.name, "archive_sha256": digest,
+                   "inventory_sha256": inventory_sha256, "api_version": metadata["api_version"],
+                   "host_system": metadata["system"], "host_architecture": metadata["architecture"],
+                   "smoke": smoke_result,
+                   "publication": "not published; this is a local exact-byte qualification receipt"}
+        receipt_path = output / (archive.name + ".qualification.json")
+        receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
+        print(json.dumps({"archive": str(archive.relative_to(ROOT)), "sha256": digest,
+                          "inventory_sha256": inventory_sha256, "receipt": str(receipt_path.relative_to(ROOT)),
+                          "source_revision": revision}))
 
 if __name__ == "__main__":
     try:

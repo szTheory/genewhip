@@ -7,17 +7,33 @@ static void *core_allocate(gw_machine *owner, size_t size)
 {
     void *p = malloc(size);
 #ifdef GW_TEST_HOOKS
-    if (p && owner) ++owner->allocations;
+    if (p && owner) {
+        ++owner->allocations;
+        owner->owned_bytes_current += size;
+        if (owner->owned_bytes_current > owner->owned_bytes_peak)
+            owner->owned_bytes_peak = owner->owned_bytes_current;
+    }
 #else
     (void)owner;
 #endif
     return p;
 }
-static void core_free(void *p) { free(p); }
+static void core_free(gw_machine *owner, void *p, size_t size)
+{
+#ifdef GW_TEST_HOOKS
+    if (p && owner) owner->owned_bytes_current -= size;
+#else
+    (void)owner;
+    (void)size;
+#endif
+    free(p);
+}
 
 #ifdef GW_TEST_HOOKS
 /* Private test link seam: not declared or installed as public API. */
 uint64_t gw_test_allocation_count(const gw_machine *m) { return m->allocations; }
+size_t gw_test_owned_bytes_current(const gw_machine *m) { return m ? m->owned_bytes_current : 0; }
+size_t gw_test_owned_bytes_peak(const gw_machine *m) { return m ? m->owned_bytes_peak : 0; }
 #endif
 
 uint32_t gw_api_version(void) { return GW_API_VERSION; }
@@ -47,6 +63,8 @@ gw_status gw_create(const gw_config *config, gw_machine **out)
     gw_z80_cold_init(&m->z80);
 #ifdef GW_TEST_HOOKS
     m->allocations = 1;
+    m->owned_bytes_current = sizeof(*m);
+    m->owned_bytes_peak = sizeof(*m);
 #endif
     *out = m;
     return GW_OK;
@@ -55,8 +73,8 @@ gw_status gw_create(const gw_config *config, gw_machine **out)
 void gw_destroy(gw_machine *m)
 {
     if (!m) return;
-    core_free(m->rom);
-    core_free(m);
+    core_free(m, m->rom, m->rom_size);
+    core_free(m, m, sizeof(*m));
 }
 
 gw_status gw_load_rom(gw_machine *m, const void *bytes, size_t size)
@@ -73,7 +91,7 @@ gw_status gw_load_rom(gw_machine *m, const void *bytes, size_t size)
     copy = core_allocate(m, size);
     if (!copy) return GW_ERROR_MEMORY;
     memcpy(copy, input, size);
-    core_free(m->rom);
+    core_free(m, m->rom, m->rom_size);
     m->rom = copy;
     m->rom_size = size;
     return gw_cold_init(m);

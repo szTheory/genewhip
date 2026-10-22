@@ -1,4 +1,4 @@
-"""Build the audio-capable diagnostic macOS desktop preview from a clean revision.
+"""Build and qualify the exact native arm64 playable-preview archive.
 
 Usage: package_desktop.py [--repeatability]
 
@@ -21,7 +21,7 @@ import tarfile
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-LABEL = "audio-capable diagnostic desktop preview"
+LABEL = "narrow playable preview"
 PERSONAL_PATH = re.compile(rb"/(?:Users|home)/[A-Za-z0-9_.-]+/|[A-Za-z]:\\Users\\")
 
 
@@ -30,8 +30,11 @@ def run(*args, **kwargs):
 
 
 def identity():
-    changes = run("git", "status", "--porcelain", "--untracked-files=all")
-    changes = [p for p in changes.splitlines() if p[3:] != ".planning/milestone.lock"]
+    status = subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"],
+                                     cwd=ROOT, text=True)
+    # Planning artifacts do not enter the archive. Public source, build, fixture,
+    # tests and packaging edits still have to be committed before packaging.
+    changes = [p for p in status.splitlines() if not p[3:].startswith(".planning/")]
     if changes:
         raise ValueError("source-dirty: commit public inputs before packaging")
     return run("git", "rev-parse", "HEAD")
@@ -43,6 +46,21 @@ def toy_log(scenario):
     lines = ["genewhip-input-log 1"] + ["%d pad %d %x" % (e["field"] * ticks, e["port"], int(e["mask"], 0))
                                        for e in scenario["inputs"]["entries"]]
     return "\n".join(lines) + "\n"
+
+
+def game_input_log(case):
+    buttons = {"Start": 128, "Right": 8, "Left": 4, "Up": 1, "Down": 2,
+               "A": 64, "B": 16, "C": 32}
+    held = [0, 0]
+    lines = ["genewhip-input-log 1"]
+    for event in sorted(case["input_schedule"], key=lambda row: row["frame"]):
+        port_name, _, button = event["control"].partition(" ")
+        if port_name not in ("P1", "P2") or button not in buttons:
+            raise ValueError("game-input-log: unknown controller event")
+        port = int(port_name[1]) - 1
+        held[port] = held[port] | buttons[button] if event["asserted"] else held[port] & ~buttons[button]
+        lines.append("%d pad %d %x" % (event["frame"] * 896040, port, held[port]))
+    return ("\n".join(lines) + "\n").encode()
 
 
 def sdl_route():
@@ -61,16 +79,39 @@ def configure_build(src, build, extra, env):
 
 def build_archive(revision, scratch, name):
     """Return (pending archive path, sha256) for the revision, built inside scratch."""
-    build, stage = scratch / "build", scratch / name
+    source, build, stage = scratch / "source", scratch / "source/.package-build", scratch / name
+    source.mkdir()
+    source_archive = subprocess.check_output(["git", "archive", revision], cwd=ROOT)
+    with tarfile.open(fileobj=io.BytesIO(source_archive), mode="r:") as source_tar:
+        source_tar.extractall(source)
     # Apple libtool/ld otherwise embed wall-clock or build-directory identity.
     env = dict(os.environ, ZERO_AR_DATE="1")
     sdl_args, route = sdl_route()
-    maps = " ".join("-ffile-prefix-map=%s=." % p for p in (build, ROOT))
-    configure_build(ROOT, build, ["-DBUILD_TESTING=OFF", "-DGENEWHIP_TEST_HOOKS=OFF", "-DGENEWHIP_BUILD_DESKTOP=ON",
-                                  "-DCMAKE_C_FLAGS=" + maps, *sdl_args], env)
-    # The evidence report needs the hooks-on test build of the same revision.
-    evidence_build = scratch / "evidence-build"
-    configure_build(ROOT, evidence_build, ["-DBUILD_TESTING=ON", "-DGENEWHIP_TEST_HOOKS=ON"], env)
+    maps = " ".join("-ffile-prefix-map=%s=." % p for p in (build, source))
+    configure_build(source, build, ["-DBUILD_TESTING=OFF", "-DGENEWHIP_TEST_HOOKS=OFF", "-DGENEWHIP_BUILD_DESKTOP=ON",
+                                    "-DCMAKE_C_FLAGS=" + maps, *sdl_args], env)
+    if platform.system() != "Darwin" or platform.machine() != "arm64":
+        raise ValueError("unsupported-build-host: native macOS arm64 required")
+    phase4_game = source / "tests/fixtures/phase4_game.py"
+    game_evidence = build / "evidence/phase4-gameplay.json"
+    game_evidence.parent.mkdir(parents=True, exist_ok=True)
+    game_run = subprocess.run([sys.executable, str(phase4_game), str(build / "tools/session/gw_headless"),
+                               str(build / "tools/desktop/genewhip-desktop"), "--report", str(game_evidence)],
+                              cwd=source, env=dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy"),
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=900)
+    if game_run.returncode:
+        raise ValueError("gameplay-qualification: " + game_run.stderr.strip())
+    tracer = source / "tests/fixtures/phase4_tracer.py"
+    tracer_out = build / "evidence/phase4-tracer.json"
+    subprocess.run([sys.executable, str(tracer), "--headless", str(build / "tools/session/gw_headless"),
+                    "--desktop", str(build / "tools/desktop/genewhip-desktop"), "--out", str(tracer_out)],
+                   cwd=source, env=dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy"),
+                   check=True, timeout=600)
+    phase4_report = source / "scripts/evidence/phase4_report.py"
+    report_path = build / "evidence/phase4-evidence.json"
+    report_env = dict(os.environ, GENEWHIP_SOURCE_SNAPSHOT="1", GENEWHIP_SOURCE_REVISION=revision)
+    subprocess.run([sys.executable, str(phase4_report), "build", "--build", str(build), "--out", str(report_path)],
+                   cwd=source, env=report_env, check=True, timeout=120)
     share = stage / "share/genewhip"
     (stage / "bin").mkdir(parents=True)
     share.mkdir(parents=True)
@@ -81,34 +122,74 @@ def build_archive(revision, scratch, name):
                         ("THIRD-PARTY-ymfm.txt", "packaging/notices/THIRD-PARTY-ymfm.txt"),
                         ("sdl3.json", "packaging/dependencies/sdl3.json"),
                         ("manifest.json", "fixtures/manifest.json"),
+                        ("independent-game-v2.bin", "fixtures/independent-game-v2/game.bin"),
+                        ("independent-game-v2.s", "fixtures/independent-game-v2/src/game.s"),
+                        ("independent-game-v2-NOTICES.md", "fixtures/independent-game-v2/NOTICES.md"),
+                        ("independent-game-v2-scenario.json", "fixtures/independent-game-v2/scenario.json"),
+                        ("independent-game-v2-oracle.json", "fixtures/independent-game-v2/oracle.json"),
+                        ("independent-game-v2-host-controls.json", "fixtures/independent-game-v2/host-controls.json"),
                         ("raster-toy.bin", "fixtures/raster-toy/toy.bin"),
+                        ("raster-toy.s", "fixtures/raster-toy/src/toy.s"),
+                        ("raster-toy-z80-driver.s", "fixtures/raster-toy/z80/driver.s"),
+                        ("raster-toy-z80-driver.inc", "fixtures/raster-toy/z80/driver.inc"),
                         ("raster-toy-NOTICES.md", "fixtures/raster-toy/NOTICES.md"),
-                        ("raster-toy-demo.log", ""),
+                        ("raster-toy-scenario.json", "fixtures/raster-toy/scenario.json"),
                         ("video.md", "docs/video.md"), ("input.md", "docs/input.md"),
                         ("desktop.md", "docs/desktop.md")]:
         if src:
-            shutil.copy(ROOT / src, share / target)
-    scenario = json.loads((ROOT / "fixtures/raster-toy/scenario.json").read_text())
+            shutil.copy(source / src, share / target)
+    scenario = json.loads((source / "fixtures/raster-toy/scenario.json").read_text())
     (share / "raster-toy-demo.log").write_text(toy_log(scenario))
-    report_path = share / "phase3-evidence.json"
-    subprocess.run([sys.executable, str(ROOT / "scripts/evidence/phase3_report.py"), "--build", str(evidence_build),
-                    "--out", str(report_path)], cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
+    game_scenario = json.loads((source / "fixtures/independent-game-v2/scenario.json").read_text())
+    game_case = next(row for row in game_scenario["cases"] if row["id"] == "sustained-play")
+    (share / "independent-game-v2-demo.log").write_bytes(game_input_log(game_case))
+    shutil.copy(game_evidence, share / "phase4-gameplay.json")
+    shutil.copy(tracer_out, share / "phase4-diagnostic.json")
+    shutil.copy(report_path, share / "phase4-evidence.json")
     report = json.loads(report_path.read_text())
     if report["source_revision"] != revision or report["source_state"] != "clean":
         raise ValueError("evidence-source-identity")
-    subprocess.run([sys.executable, str(ROOT / "scripts/evidence/phase3_report.py"),
-                    "--validate", str(report_path), "--expected-revision", revision], check=True)
+    subprocess.run([sys.executable, str(phase4_report), "validate", "--report", str(report_path),
+                    "--build", str(build), "--head", revision], cwd=source, env=report_env, check=True)
+    manifest = json.loads((source / "fixtures/manifest.json").read_text())
+    game = next((row for row in manifest["fixtures"] if row.get("id") == "genewhip-independent-game-v2"), None)
+    if not game or game.get("status") != "admitted" or game.get("outcome") != "pass":
+        raise ValueError("fixture-admission: independent-game-v2")
+    dependency = json.loads((source / "packaging/dependencies/sdl3.json").read_text())
+    if dependency.get("version") != "3.4.18" or dependency.get("sha256") != "9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3":
+        raise ValueError("dependency-identity: SDL3")
+    signing_output = subprocess.run(["security", "find-identity", "-v", "-p", "codesigning"],
+                                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True).stdout
+    signing_capability = "Developer ID identity detected; signing not used" if "Developer ID Application" in signing_output else "no Developer ID identity detected"
+    macos_target = os.environ.get("MACOSX_DEPLOYMENT_TARGET", "toolchain default (not explicitly set)")
     metadata = {"schema_version": 1, "version": "0.1.0", "api_version": 4, "label": LABEL,
                 "source_revision": revision, "source_state": "clean",
-                "signing": "unsigned, unnotarized", "architectures": ["arm64"],
-                "system": platform.system(), "architecture": platform.machine(),
-                "os_version": platform.mac_ver()[0] or platform.release(),
+                "signing": "unsigned, unnotarized", "signing_capability": signing_capability,
+                "architectures": ["arm64"], "system": "Darwin", "architecture": "arm64",
+                "tested_os": platform.mac_ver()[0] or platform.release(), "deployment_target": macos_target,
                 "compiler": run(os.environ.get("CC", "cc"), "--version").splitlines()[0],
                 "cmake": run("cmake", "--version").splitlines()[0],
                 "build": "Release; C17; test hooks off; SDL3 3.4.18 static",
-                "sdl3_route": route,
-                "limitations": "Original fixture PSG/FM/DAC only; no game audio compatibility or performance claim; "
-                               "native macOS arm64 as executed; unsigned/unnotarized; no publication"}
+                "sdl3_route": route, "sdl3_version": dependency["version"],
+                "sdl3_sha256": dependency["sha256"], "fixture_manifest_sha256": hashlib.sha256(
+                    (share / "manifest.json").read_bytes()).hexdigest(),
+                "fixtures": {"independent_game_v2": {"id": game["id"], "source_sha256": game["source_sha256"],
+                              "rom_sha256": game["sha256"], "scenario_sha256": hashlib.sha256(
+                                  (share / "independent-game-v2-scenario.json").read_bytes()).hexdigest(),
+                              "oracle_sha256": hashlib.sha256((share / "independent-game-v2-oracle.json").read_bytes()).hexdigest()},
+                             "raster_toy": {"id": "genewhip-raster-toy-v1", "source_sha256": hashlib.sha256(
+                                  (share / "raster-toy.s").read_bytes()).hexdigest(), "rom_sha256": hashlib.sha256(
+                                  (share / "raster-toy.bin").read_bytes()).hexdigest(),
+                                  "scenario_sha256": hashlib.sha256((share / "raster-toy-scenario.json").read_bytes()).hexdigest()}},
+                "input_sha256": {"independent_game_v2": hashlib.sha256((share / "independent-game-v2-demo.log").read_bytes()).hexdigest(),
+                                 "raster_toy": hashlib.sha256((share / "raster-toy-demo.log").read_bytes()).hexdigest()},
+                "configuration_sha256": report["configuration_sha256"],
+                "binary_sha256": {name: hashlib.sha256((stage / "bin" / name).read_bytes()).hexdigest()
+                                  for name in ("genewhip-desktop", "gw_headless")},
+                "evidence_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+                                    for p in (share / "phase4-gameplay.json", share / "phase4-diagnostic.json", share / "phase4-evidence.json")},
+                "limitations": "One admitted Genewhip-authored playable scenario and one sounded diagnostic; native macOS arm64 only; "
+                               "unsigned/unnotarized; no hosted release or broader compatibility claim"}
     (stage / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
     files = sorted(p for p in stage.rglob("*") if p.is_file())
     for path in files:
@@ -117,6 +198,7 @@ def build_archive(revision, scratch, name):
             raise ValueError("private-build-path-in-artifact: " + str(path.relative_to(stage)))
     checksums = {str(p.relative_to(stage)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
     (stage / "checksums.json").write_text(json.dumps(checksums, indent=2) + "\n")
+    check_staged_inventory(stage)
     if identity() != revision:
         raise ValueError("source-changed-during-build")
     epoch = int(run("git", "show", "-s", "--format=%ct", revision))
@@ -135,7 +217,34 @@ def build_archive(revision, scratch, name):
 
 def members(path):
     with tarfile.open(path) as tar:
-        return {m.name: hashlib.sha256(tar.extractfile(m).read()).hexdigest() for m in tar.getmembers() if m.isfile()}
+        result = {}
+        for member in tar.getmembers():
+            if member.name in result:
+                raise ValueError("archive-duplicate-member")
+            if member.name.startswith("/") or ".." in pathlib.PurePosixPath(member.name).parts:
+                raise ValueError("archive-path")
+            if not member.isfile():
+                raise ValueError("archive-member-type")
+            stream = tar.extractfile(member)
+            if stream is None:
+                raise ValueError("archive-member-unreadable")
+            result[member.name] = hashlib.sha256(stream.read()).hexdigest()
+        if not result:
+            raise ValueError("archive-empty")
+        return result
+
+
+def check_staged_inventory(root):
+    root = pathlib.Path(root)
+    inventory_path = root / "checksums.json"
+    if not inventory_path.is_file():
+        raise ValueError("package-content-checksum")
+    expected = json.loads(inventory_path.read_text())
+    actual_paths = sorted(p for p in root.rglob("*") if p.is_file() and p != inventory_path)
+    actual = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in actual_paths}
+    if not isinstance(expected, dict) or expected != actual:
+        raise ValueError("package-content-checksum")
+    return actual
 
 
 def repeatability(revision, name):
@@ -155,8 +264,10 @@ def repeatability(revision, name):
 
 def main():
     revision = identity()
+    if platform.system() != "Darwin" or platform.machine() != "arm64":
+        raise ValueError("unsupported-build-host: native macOS arm64 required")
     subprocess.run(["bash", "scripts/ci/public-hygiene.sh"], cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
-    name = ("genewhip-0.1.0-desktop-audio-preview-" + platform.system().lower() + "-" + platform.machine() + "-"
+    name = ("genewhip-0.1.0-playable-preview-macos-arm64-"
             + revision[:12])
     if "--repeatability" in sys.argv[1:]:
         repeatability(revision, name)
@@ -167,14 +278,35 @@ def main():
         scratch = pathlib.Path(tmp)
         pending, digest = build_archive(revision, scratch, name)
         # No successful-looking final artifact until exact-byte smoke succeeds.
-        subprocess.run([sys.executable, str(ROOT / "tests/package/desktop_smoke.py"), str(pending), digest, revision],
-                       check=True)
+        smoke = subprocess.run([sys.executable, str(ROOT / "tests/package/desktop_smoke.py"), str(pending), digest, revision],
+                               check=False, capture_output=True, text=True)
+        if smoke.returncode:
+            sys.stderr.write(smoke.stdout)
+            sys.stderr.write(smoke.stderr)
+            raise ValueError("desktop-package-smoke-failed")
+        smoke_result = json.loads(smoke.stdout.strip().splitlines()[-1])
         if identity() != revision:
             raise ValueError("source-changed-during-smoke")
         archive = output / (name + ".tar.gz")
         shutil.copyfile(pending, archive)
         archive.with_suffix(archive.suffix + ".sha256").write_text(digest + "  " + archive.name + "\n")
-        print(json.dumps({"archive": str(archive.relative_to(ROOT)), "sha256": digest, "source_revision": revision}))
+        with tarfile.open(pending, "r:*") as tar:
+            root_name = next(pathlib.PurePosixPath(row.name).parts[0] for row in tar.getmembers() if row.isfile())
+            inventory_sha256 = hashlib.sha256(tar.extractfile(root_name + "/checksums.json").read()).hexdigest()
+            metadata = json.loads(tar.extractfile(root_name + "/metadata.json").read())
+        receipt = {"schema": "genewhip-local-package-qualification", "version": 1,
+                   "kind": "native macOS arm64 desktop archive", "outcome": "pass",
+                   "source_revision": revision, "archive": archive.name, "archive_sha256": digest,
+                   "inventory_sha256": inventory_sha256, "api_version": metadata["api_version"],
+                   "tested_os": metadata["tested_os"], "deployment_target": metadata["deployment_target"],
+                   "signing": metadata["signing"], "smoke": smoke_result,
+                   "publication": "not published; this is a local exact-byte qualification receipt"}
+        receipt_path = output / (archive.name + ".qualification.json")
+        receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
+        sys.stdout.write(smoke.stdout)
+        print(json.dumps({"archive": str(archive.relative_to(ROOT)), "sha256": digest,
+                          "inventory_sha256": inventory_sha256, "receipt": str(receipt_path.relative_to(ROOT)),
+                          "source_revision": revision}))
 
 
 if __name__ == "__main__":

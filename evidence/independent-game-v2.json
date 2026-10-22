@@ -1,0 +1,312 @@
+{
+  "candidate_disposition": "admitted",
+  "cases": [
+    {
+      "frames": 12,
+      "id": "title-no-start",
+      "observed": {
+        "controller_reads": 20197,
+        "geometry": {
+          "marker_position": null,
+          "marker_tile": null,
+          "title_row": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "play_state": 0,
+        "position": 0,
+        "psg_writes": [],
+        "vdp_control_writes": 12
+      },
+      "outcome": "pass",
+      "status": "pass",
+      "trace": {
+        "bytes": 21353449,
+        "first_sequence": 1,
+        "last_sequence": 363806,
+        "rows": 363806,
+        "sha256": "1fb63f05c98bda5a01cad66bd834c84ab7606115199a1e788f85d3d8a59c7ac0"
+      }
+    },
+    {
+      "frames": 20,
+      "id": "start-idle",
+      "observed": {
+        "controller_reads": 3661,
+        "geometry": {
+          "marker_position": 0,
+          "marker_tile": 2,
+          "title_row": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "play_state": 1,
+        "position": 0,
+        "psg_writes": [],
+        "vdp_control_writes": 624
+      },
+      "outcome": "pass",
+      "status": "pass",
+      "trace": {
+        "bytes": 32834082,
+        "first_sequence": 1,
+        "last_sequence": 558393,
+        "rows": 558393,
+        "sha256": "e49e3e762b64bf84d25190f89911ff48d53ace891a6a19d70137e56edd254221"
+      }
+    },
+    {
+      "frames": 40,
+      "id": "start-move",
+      "observed": {
+        "controller_reads": 3991,
+        "geometry": {
+          "marker_position": 39,
+          "marker_tile": 2,
+          "title_row": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "play_state": 1,
+        "position": 39,
+        "psg_writes": [],
+        "vdp_control_writes": 1284
+      },
+      "outcome": "pass",
+      "status": "pass",
+      "trace": {
+        "bytes": 65576316,
+        "first_sequence": 1,
+        "last_sequence": 1111457,
+        "rows": 1111457,
+        "sha256": "9a623a6829dbfa6aa0cd0fea962c66f0320bf695018c59a8afabe6850682f185"
+      }
+    },
+    {
+      "frames": 24,
+      "id": "action-sound",
+      "observed": {
+        "controller_reads": 3729,
+        "geometry": {
+          "marker_position": 0,
+          "marker_tile": 2,
+          "title_row": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "play_state": 1,
+        "position": 0,
+        "psg_writes": [
+          132,
+          2,
+          144
+        ],
+        "vdp_control_writes": 760
+      },
+      "outcome": "pass",
+      "status": "pass",
+      "trace": {
+        "bytes": 39356886,
+        "first_sequence": 1,
+        "last_sequence": 668949,
+        "rows": 668949,
+        "sha256": "6bdbcddbca9897ab7c3e74a760d67063e234258cdb0113adef6bfb26c013102b"
+      }
+    },
+    {
+      "frames": 24,
+      "id": "action-no-trigger",
+      "observed": {
+        "controller_reads": 3725,
+        "geometry": {
+          "marker_position": 39,
+          "marker_tile": 2,
+          "title_row": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "play_state": 1,
+        "position": 39,
+        "psg_writes": [],
+        "vdp_control_writes": 752
+      },
+      "outcome": "pass",
+      "status": "pass",
+      "trace": {
+        "bytes": 39360013,
+        "first_sequence": 1,
+        "last_sequence": 669002,
+        "rows": 669002,
+        "sha256": "31df9f60232855d2c1e9b694165428c51d924e1d0d36c4156d8d28393997544e"
+      }
+    },
+    {
+      "frames": 720,
+      "id": "sustained-play",
+      "observed": {
+        "controller_reads": 15481,
+        "geometry": {
+          "marker_position": 39,
+          "marker_tile": 2,
+          "title_row": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "play_state": 1,
+        "position": 39,
+        "psg_writes": [
+          132,
+          2,
+          144
+        ],
+        "vdp_control_writes": 24264
+      },
+      "outcome": "pass",
+      "status": "pass",
+      "trace": {
+        "bytes": 1203745133,
+        "first_sequence": 1,
+        "last_sequence": 19915676,
+        "rows": 19915676,
+        "sha256": "73e941c1655fa7dbc1540b0e31b325f4ebf6ebc4c047be03727694b75e4a4031"
+      }
+    }
+  ],
+  "consumer": {
+    "contract": "production fixture manifest and run_admitted consumer",
+    "passed": 6,
+    "required": 6,
+    "status": "pass"
+  },
+  "fixture_id": "genewhip-independent-game-v2",
+  "identities": {
+    "admission_script_sha256": "7f524840f541f11a5b3ddc494e3b54b2b15204d778ed84e88ab75e881f624364",
+    "build_sha256": "15f321b986db3c2f7df6a6d55ff5b49d9415399bccd0a241f518351ead7356f4",
+    "capture_script_sha256": "1ddc13c4bdb92a399580f895002b8963521607e38947660d2779c34918b94f51",
+    "mame_configuration_sha256": "d456d7fb268d9ea19091f18ba522b42a59fc749dc30c4916822cfe55bca35baf",
+    "mame_executable_sha256": "07e811e49b38a5e2378ccf070fad5b6b48008dcfe5bcc746c6941dd8fe06b5bb",
+    "mame_lock_sha256": "5592a0ea4761fb1a7b2efde52e6473ee42f2169bfb33e7c80f8ae2a8f14da7d9",
+    "mame_patch_sha256": "323f00f433f730ea682a26aaf4c142430538072d7389dd6fe8292477d0b6ac73",
+    "mame_script_sha256": "b9cc8fcf261c25262833b35812b8c84ca38d27ce3a42e76b4255c9f3083437d6",
+    "mame_source_archive_sha256": "0929cc749afabcef892900e10dd90bd8b05f94a7dde8f367ac6a5d2082589f84",
+    "manifest_validator_sha256": "1effa88749894c0bd9d6d8dd2613d2ffb59399cb372c7d613f8936001cc89865",
+    "notices_sha256": "ab969e7a01aa9f3f6c1beb6856eb6540e3f6a18fab3ac82e65be14cbd385bf97",
+    "oracle_sha256": "1a9d99cb01496f26fe3dc33d0c1bcb0cf22bd9178088fa183e5bba37a8600f42",
+    "profile": "VA3-NTSC-U",
+    "rom_sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb",
+    "scenario_sha256": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2",
+    "source_revision": "7a2f3df7460a7a4c9ea1f11a52ab11747026bd2d",
+    "source_sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe"
+  },
+  "outcome": "pass",
+  "outcome_counts": {
+    "fail": 0,
+    "infrastructure_error": 0,
+    "pass": 6,
+    "skipped": 0,
+    "unknown": 0,
+    "unsupported": 0
+  },
+  "purpose": "fresh bounded source-derived MAME reference evidence",
+  "reference_capability": {
+    "route_status": "pass",
+    "runtime_sentinels": {
+      "controller_read": {
+        "count": 4374,
+        "status": "pass"
+      },
+      "cpu_space_ack": {
+        "count": 2,
+        "status": "pass"
+      },
+      "program_fetch": {
+        "count": 1611302,
+        "status": "pass"
+      },
+      "sram_enable_read": {
+        "count": 1,
+        "status": "pass"
+      },
+      "sram_enable_write": {
+        "count": 1,
+        "status": "pass"
+      },
+      "sram_storage_read": {
+        "count": 1,
+        "status": "pass"
+      },
+      "sram_storage_write": {
+        "count": 1,
+        "status": "pass"
+      },
+      "vdp_write": {
+        "count": 2050,
+        "status": "pass"
+      }
+    },
+    "status": "pass"
+  },
+  "schema_version": 1,
+  "status": "pass",
+  "sustained_policy": {
+    "measured_fields": 600,
+    "minimum_total_fields_per_fresh_run": 720,
+    "reset_policy": "fresh MAME process and machine for each run; guest reset vector executed before input schedule",
+    "scenario_id": "sustained-play",
+    "warmup_fields": 120
+  }
+}

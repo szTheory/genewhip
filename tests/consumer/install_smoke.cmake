@@ -12,8 +12,8 @@ endif()
 
 # Use a moved temporary prefix and copied consumer sources, with no source-tree
 # include path. All generated files stay inside this test's build directory.
-set(scratch "${GW_BUILD}/consumer-smoke")
-file(REMOVE_RECURSE "${scratch}")
+string(RANDOM LENGTH 16 ALPHABET 0123456789abcdef invocation_id)
+set(scratch "${GW_BUILD}/consumer-smoke-${invocation_id}")
 file(MAKE_DIRECTORY "${scratch}/project")
 checked("${CMAKE_COMMAND}" --install "${GW_BUILD}" --prefix "${scratch}/original" ${config_args})
 file(RENAME "${scratch}/original" "${scratch}/relocated")
@@ -28,3 +28,4 @@ checked("${CMAKE_COMMAND}" -S "${scratch}/project" -B "${scratch}/build"
   "-DCMAKE_BUILD_TYPE=${GW_CONFIG}")
 checked("${CMAKE_COMMAND}" --build "${scratch}/build" ${config_args})
 checked("${CMAKE_CTEST_COMMAND}" --test-dir "${scratch}/build" ${ctest_config_args} --output-on-failure)
+file(REMOVE_RECURSE "${scratch}")

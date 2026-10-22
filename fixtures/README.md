@@ -1,8 +1,12 @@
 # Fixture admission
 
-The manifest admits two distinct system fixtures: the original 1,024-byte Genewhip
-diagnostic and the independently authored progression game described below. Their
-source, oracles, scenarios and evidence are separate.
+The manifest keeps the original Genewhip diagnostic and two versioned independent
+game records. `genewhip-independent-game-v1` is retained as historical bounded MAME
+admission evidence; its exact old MAME executable is unavailable for a fresh probe,
+so the current probe has 2 explicit skips and 77 unknown cases. Do not use that
+historical admission as current Genewhip gameplay evidence. Corrected v2 is the
+current admitted reference fixture, with a separate bounded Genewhip gameplay
+qualification. Source, ROM, scenario, oracle and report identities remain distinct.
 `manifest.json` identifies its authored source, MIT notice, deterministic emitter,
 SHA256, input schedule and independent expected observations. Build it with
 `cmake --build build/phase1`; the emitter has no SDK, assets or runtime linked into
@@ -14,7 +18,7 @@ the original diagnostic source/emitter/ROM bytes and provenance. The independent
 game has its own strict source/build/route/runtime validator and controlled
 admission/consumer tests; changing a manifest status alone cannot admit its bytes.
 
-## Admitted independent game
+## Historical independent game v1
 
 `genewhip-independent-game-v1` is admitted under the MIT license. Its original
 assembly source is `fixtures/independent-game/src/game.s` (revision
@@ -25,7 +29,7 @@ toolchain, host build inputs and notices are identified in `toolchain.lock`. The
 reproducible build command is
 `fixtures/independent-game/build.sh --verify-reproducible`.
 
-The admitted ROM SHA-256 is
+The historical v1 ROM SHA-256 is
 `c17ad98e22d3237feac4f2dfe9d96295f32398a9ce8e4cf0b0542b1035bb0fc1`. Evidence
 uses the `VA3-NTSC-U` profile and scenario
 `genewhip-independent-game-start-right-ntscu-v1`: Start is asserted at frame 1
@@ -41,8 +45,10 @@ identities and repository-contained ROM bytes before returning a path:
 Evidence preserves all six statuses: pass, fail, unknown, unsupported, skipped,
 and infrastructure_error. The independent-game report denominator is 2
 (candidate route sentinel and bounded gameplay), with 2 pass and 0 in each
-remaining status. This is bounded evidence for this exact game/profile/scenario,
-not broad compatibility or hardware timing proof. Pong remains rejected with
+remaining status in the stored historical report. This is bounded evidence for
+that exact game/profile/scenario, not broad compatibility or hardware timing
+proof. A fresh MAME probe cannot currently reproduce its exact executable and
+reports 2 skipped / 77 unknown; v1 remains immutable. Pong remains rejected with
 unresolved generated-byte rights, reproducible-build provenance and scripted
 runtime/SRAM proof; its outcome remains unknown.
 
@@ -74,11 +80,30 @@ advisory; SRAM is unsupported. Source inspection found no game save calls, but
 that is not a runtime proof. The candidate is rejected by unresolved rights/build/
 runtime gates, not repaired by a header patch.
 
-The separately authored Genewhip independent game now supplies the lawful
-replacement: its source, generated ROM rights, zero-asset inventory, exact
-toolchain/build, byte identity and bounded route/runtime evidence passed the
-independent admission validator. KłełeAtoms MD remains an unadmitted alternative,
-with external-art and SRAM/mouse/controller concerns.
+The corrected v2 successor supplies the current lawful fixture: its source,
+generated ROM rights, zero-asset inventory, exact toolchain/build, byte identity
+and bounded route/runtime evidence passed the independent admission validator.
+KłełeAtoms MD remains an unadmitted alternative, with external-art and
+SRAM/mouse/controller concerns.
+
+## Current successor v2
+
+`genewhip-independent-game-v2` binds source SHA-256
+`b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe`, the MIT
+notice, reproducible GNU Binutils 2.47 build, ROM SHA-256
+`7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb`, scenario,
+oracle, and fresh MAME 0.289 evidence. Its six source-derived reference cases
+pass with zero failure, unknown, skipped, unsupported, or infrastructure-error
+outcomes. Reference admission is MAME-side evidence only.
+
+Genewhip's separate public-client report (`evidence/phase4-gameplay.json`, also
+included in the desktop package) covers six frozen cases and 840 requested fields
+through both headless and desktop clients. Field, RAM and raw PCM results agree;
+action-triggered sound and matched no-trigger silence are checked. A separate
+720-field case passed. This is evidence for the exact guest/profile/scenarios, not
+a hardware oracle or broad game compatibility. The raster toy remains a
+PSG/FM/DAC diagnostic, not game-audio evidence. Native host observations and
+unknown presentation/audio quality outcomes are in the Phase 4 records.
 
 ## Original ROMs
 
@@ -120,8 +145,9 @@ scenario-derived bytes, and compares them with fields written by
 and an oracle naming Genewhip output.
 
 The toy is original diagnostic evidence for the renderer. It is separate from the
-independent game, which remains a non-gating smoke whose compatibility claim belongs to
-Phase 4; nothing here is independent-game compatibility evidence.
+independent game. The corrected v2 game's independent MAME admission and bounded
+Genewhip gameplay evidence are described above; neither widens this toy's oracle or
+establishes general game compatibility.
 
 Verification and rebuilding are separate. The required gate is offline: it
 checks committed bytes, digests and notices only. Rebuilding is
