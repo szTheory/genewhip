@@ -249,15 +249,18 @@ def verify_dispatch_event(event: dict[str, Any], expected_repo: str, source_sha:
 
 
 def validate_live_repository_policy(repository: str, repo: Any, protection: Any,
-                                    active_rules: Any) -> list[str]:
+                                    active_rules: Any,
+                                    publisher_contents_write: bool = False) -> list[str]:
     """Require current destination protections and publisher write access."""
     if not isinstance(repo, dict) or repo.get("full_name") != repository:
         return ["publication-destination-mismatch"]
     if repo.get("default_branch") != "main":
         return ["publication-default-branch-mismatch"]
     permissions = repo.get("permissions")
-    if not isinstance(permissions, dict) or not (
-            permissions.get("push") is True or permissions.get("admin") is True):
+    if isinstance(permissions, dict):
+        if not (permissions.get("push") is True or permissions.get("admin") is True):
+            return ["publication-write-permission-unavailable"]
+    elif not publisher_contents_write:
         return ["publication-write-permission-unavailable"]
     if not isinstance(active_rules, list):
         return ["publication-active-rules-unavailable"]
@@ -291,6 +294,20 @@ def validate_live_repository_policy(repository: str, repo: Any, protection: Any,
     if not pull_request_required:
         problems.append("publication-required-pull-request-policy-missing")
     return problems
+
+
+def workflow_declares_contents_write(workflow_text: str, repository: str,
+                                     workflow_ref: str, git_ref: str,
+                                     event_name: str) -> bool:
+    """Recognize only the protected main workflow's narrow publisher token scope."""
+    trusted_context = (
+        workflow_ref == f"{repository}/.github/workflows/release.yml@refs/heads/main"
+        and git_ref == "refs/heads/main"
+        and event_name == "workflow_dispatch"
+    )
+    return trusted_context and bool(re.search(
+        r"(?ms)^  promote:\n(?:(?!^  [^ ].*:$).)*?^    permissions:\n"
+        r"(?:(?!^    [^ ].*:$).)*?^      contents: write\s*$", workflow_text))
 
 
 def _attestation_statement(result: Any, expected_invocation: str) -> dict[str, Any]:
@@ -624,7 +641,17 @@ class GitHub:
                 protection = None
             else:
                 raise
-        blockers = validate_live_repository_policy(self.repository, repo, protection, rules)
+        workflow_path = pathlib.Path(".github/workflows/release.yml")
+        try:
+            workflow_text = workflow_path.read_text(encoding="utf-8")
+        except OSError:
+            workflow_text = ""
+        declares_contents_write = workflow_declares_contents_write(
+            workflow_text, self.repository, os.environ.get("GITHUB_WORKFLOW_REF", ""),
+            os.environ.get("GITHUB_REF", ""), os.environ.get("GITHUB_EVENT_NAME", ""))
+        blockers = validate_live_repository_policy(
+            self.repository, repo, protection, rules,
+            publisher_contents_write=declares_contents_write)
         if blockers:
             raise PromotionError(blockers[0])
 

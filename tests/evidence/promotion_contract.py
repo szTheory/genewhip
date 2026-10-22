@@ -122,6 +122,24 @@ class PromotionContract(unittest.TestCase):
         self.assertIn("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}", workflow)
         self.assertNotRegex(workflow, r"(?i)(PERSONAL_ACCESS_TOKEN|APP_PRIVATE_KEY|APP_ID)")
 
+    def test_workflow_permission_parser_is_scoped_to_promote_job(self):
+        repository = EXPECTED["repository"]
+        workflow_ref = f"{repository}/.github/workflows/release.yml@refs/heads/main"
+        declares = "jobs:\n  promote:\n    permissions:\n      contents: write\n    steps:\n      - run: true\n"
+        self.assertTrue(promote.workflow_declares_contents_write(
+            declares, repository, workflow_ref, "refs/heads/main", "workflow_dispatch"))
+        for changed_text, changed_ref, changed_git_ref, changed_event in (
+            ("jobs:\n  promote:\n    permissions:\n      contents: read\n", workflow_ref,
+             "refs/heads/main", "workflow_dispatch"),
+            (declares, f"{repository}/.github/workflows/release.yml@refs/heads/feature", "refs/heads/feature",
+             "workflow_dispatch"),
+            (declares, workflow_ref, "refs/heads/main", "push"),
+            ("jobs:\n  other:\n    permissions:\n      contents: write\n  promote:\n    steps:\n      - run: true\n",
+             workflow_ref, "refs/heads/main", "workflow_dispatch"),
+        ):
+            self.assertFalse(promote.workflow_declares_contents_write(
+                changed_text, repository, changed_ref, changed_git_ref, changed_event))
+
     def test_accepts_exact_trusted_run_and_complete_inventory(self):
         self.assertEqual(validate_provenance(statement(), EXPECTED), [])
 
@@ -225,6 +243,23 @@ class PromotionContract(unittest.TestCase):
             {"type": "pull_request", "parameters": {"required_approving_review_count": 0}},
         ]
         self.assertEqual(validate_live_repository_policy(EXPECTED["repository"], repo, None, rules), [])
+
+    def test_live_policy_uses_explicit_workflow_contents_write_when_api_omits_user_permissions(self):
+        repo = {"full_name": EXPECTED["repository"], "default_branch": "main"}
+        rules = [
+            {"type": "required_status_checks", "parameters": {
+                "required_status_checks": [{"context": "required-ci"}]}},
+            {"type": "pull_request", "parameters": {"required_approving_review_count": 0}},
+        ]
+        self.assertEqual(validate_live_repository_policy(
+            EXPECTED["repository"], repo, None, rules),
+            ["publication-write-permission-unavailable"])
+        self.assertEqual(validate_live_repository_policy(
+            EXPECTED["repository"], repo, None, rules, publisher_contents_write=True), [])
+        explicit_denial = {**repo, "permissions": {"push": False, "admin": False}}
+        self.assertEqual(validate_live_repository_policy(
+            EXPECTED["repository"], explicit_denial, None, rules,
+            publisher_contents_write=True), ["publication-write-permission-unavailable"])
 
     def test_publish_rechecks_real_service_path_before_visibility_transition(self):
         source_sha = EXPECTED["sha"]
