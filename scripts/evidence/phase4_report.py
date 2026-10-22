@@ -878,7 +878,8 @@ def validate_delivery_evidence(evidence):
         return ["delivery-schema-invalid"]
     problems = []
     sha_pattern = re.compile(r"^[0-9a-f]{40}$")
-    for key in ("pull_request_head_sha", "pull_request_base_sha", "merged_source_sha"):
+    for key in ("pull_request_head_sha", "pull_request_base_sha", "merged_source_sha",
+                "publisher_source_sha"):
         if not isinstance(evidence.get(key), str) or not sha_pattern.fullmatch(evidence[key]):
             problems.append("delivery-identity-invalid")
     if evidence.get("repository") != "szTheory/genewhip":

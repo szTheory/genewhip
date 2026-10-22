@@ -36,6 +36,83 @@ def statement():
 
 
 class PromotionContract(unittest.TestCase):
+    def test_draft_release_lookup_falls_back_to_unique_tag_in_release_list(self):
+        client = promote.GitHub.__new__(promote.GitHub)
+        expected = {"id": 42, "tag_name": "v0.1.0", "draft": True, "assets": []}
+        calls = []
+
+        def get(path):
+            calls.append(path)
+            if path.endswith("/releases/tags/v0.1.0"):
+                raise promote.PromotionError("not-found")
+            if path.endswith("/releases?per_page=100&page=1"):
+                return [{"id": 41, "tag_name": "v0.0.9", "draft": False}, expected]
+            if path.endswith("/releases?per_page=100&page=2"):
+                return []
+            raise AssertionError("unexpected GitHub API request")
+
+        client.repository = "example/genewhip"
+        client.get = get
+        self.assertEqual(client.release_by_tag("v0.1.0"), expected)
+        self.assertEqual(calls, ["/repos/example/genewhip/releases/tags/v0.1.0",
+                                 "/repos/example/genewhip/releases?per_page=100&page=1"])
+
+    def test_draft_release_lookup_rejects_ambiguous_tag_matches(self):
+        client = promote.GitHub.__new__(promote.GitHub)
+
+        def get(path):
+            if path.endswith("/releases/tags/v0.1.0"):
+                raise promote.PromotionError("not-found")
+            if path.endswith("/releases?per_page=100&page=1"):
+                return [{"id": 42, "tag_name": "v0.1.0"}, {"id": 43, "tag_name": "v0.1.0"}]
+            if path.endswith("/releases?per_page=100&page=2"):
+                return []
+            raise AssertionError("unexpected GitHub API request")
+
+        client.repository = "example/genewhip"
+        client.get = get
+        with self.assertRaisesRegex(promote.PromotionError, "release-tag-lookup-ambiguous"):
+            client.release_by_tag("v0.1.0")
+
+    def test_draft_release_lookup_checks_later_pages_for_match_and_duplicate(self):
+        client = promote.GitHub.__new__(promote.GitHub)
+        expected = {"id": 42, "tag_name": "v0.1.0", "draft": True}
+        client.repository = "example/genewhip"
+        calls = []
+
+        def get(path):
+            calls.append(path)
+            if path.endswith("/releases/tags/v0.1.0"):
+                raise promote.PromotionError("not-found")
+            if path.endswith("page=1"):
+                return [{"id": index, "tag_name": f"v0.0.{index}"} for index in range(100)]
+            if path.endswith("page=2"):
+                return [expected] + [{"id": index + 100, "tag_name": f"v0.0.{index + 100}"}
+                                      for index in range(99)]
+            if path.endswith("page=3"):
+                return []
+            raise AssertionError("unexpected GitHub API request")
+
+        client.get = get
+        self.assertEqual(client.release_by_tag("v0.1.0"), expected)
+        self.assertEqual(len(calls), 4)
+
+        def duplicate_on_later_page(path):
+            if path.endswith("/releases/tags/v0.1.0"):
+                raise promote.PromotionError("not-found")
+            if path.endswith("page=1"):
+                return [{"id": index, "tag_name": f"v0.0.{index}"} for index in range(100)]
+            if path.endswith("page=2"):
+                return [expected] + [{"id": index + 100, "tag_name": f"v0.0.{index + 100}"}
+                                      for index in range(99)]
+            if path.endswith("page=3"):
+                return [{"id": 43, "tag_name": "v0.1.0"}]
+            raise AssertionError("unexpected GitHub API request")
+
+        client.get = duplicate_on_later_page
+        with self.assertRaisesRegex(promote.PromotionError, "release-tag-lookup-ambiguous"):
+            client.release_by_tag("v0.1.0")
+
     def test_release_job_does_not_request_administration_or_an_extra_credential(self):
         workflow = (pathlib.Path(__file__).resolve().parents[2] /
                     ".github/workflows/release.yml").read_text()

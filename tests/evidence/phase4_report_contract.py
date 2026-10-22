@@ -235,6 +235,7 @@ def synthetic_report():
     delivery = {"schema": "genewhip.hosted-delivery.v1", "repository": "szTheory/genewhip",
                 "pull_request": 12, "pull_request_head_sha": "a" * 40,
                 "pull_request_base_sha": "b" * 40, "merged_source_sha": "c" * 40,
+                "publisher_source_sha": "d" * 40,
                 "qualification_run_id": "101", "qualification_run_attempt": 1,
                 "publisher_run_id": "102", "publisher_run_attempt": 1,
                 "hosted_evidence": {"outcome": "success", "qualifies_rel_03": True},
@@ -841,6 +842,7 @@ class ReportContract(unittest.TestCase):
         evidence = {"schema": "genewhip.hosted-delivery.v1", "repository": "szTheory/genewhip",
                     "pull_request": 12, "pull_request_head_sha": "a" * 40,
                     "pull_request_base_sha": "b" * 40, "merged_source_sha": "c" * 40,
+                    "publisher_source_sha": "d" * 40,
                     "qualification_run_id": "101", "qualification_run_attempt": 1,
                     "publisher_run_id": "102", "publisher_run_attempt": 1,
                     "hosted_evidence": {"outcome": "success", "qualifies_rel_03": True},
@@ -856,6 +858,9 @@ class ReportContract(unittest.TestCase):
                     "downloaded_package_adoption": "pass",
                     "requirements": {"REL-03": "pass", "REL-02": "pass", "DOC-01": "pass"}}
         self.assertEqual(module.validate_delivery_evidence(evidence), [])
+        evidence["publisher_source_sha"] = "not-a-commit"
+        self.assertIn("delivery-identity-invalid", module.validate_delivery_evidence(evidence))
+        evidence["publisher_source_sha"] = "d" * 40
         evidence["downloaded_package_adoption"] = "unknown"
         self.assertIn("delivery-adoption-not-passed",
                       module.validate_delivery_evidence(evidence))
