@@ -256,8 +256,10 @@ def validate_live_repository_policy(repository: str, repo: Any, protection: Any,
         return ["publication-destination-mismatch"]
     if repo.get("default_branch") != "main":
         return ["publication-default-branch-mismatch"]
-    permissions = repo.get("permissions")
-    if isinstance(permissions, dict):
+    if "permissions" in repo:
+        permissions = repo.get("permissions")
+        if not isinstance(permissions, dict):
+            return ["publication-write-permission-unavailable"]
         if not (permissions.get("push") is True or permissions.get("admin") is True):
             return ["publication-write-permission-unavailable"]
     elif not publisher_contents_write:
