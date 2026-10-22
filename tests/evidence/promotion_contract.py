@@ -36,6 +36,47 @@ def statement():
 
 
 class PromotionContract(unittest.TestCase):
+    def test_release_inventory_includes_checksum_file_in_desired_assets(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = pathlib.Path(temporary)
+            payload = b"known package bytes"
+            (directory / "package.bin").write_bytes(payload)
+            inventory = {"schema": "genewhip.release-inventory.v1", "version": "0.1.0",
+                         "source_revision": EXPECTED["sha"], "assets": {
+                             "package.bin": {"sha256": hashlib.sha256(payload).hexdigest(),
+                                             "size": len(payload)}}}
+            inventory_bytes = promote._json_bytes(inventory)
+            (directory / "inventory.json").write_bytes(inventory_bytes)
+            checksum_rows = {
+                "package.bin": hashlib.sha256(payload).hexdigest(),
+                "inventory.json": hashlib.sha256(inventory_bytes).hexdigest(),
+            }
+            sums_bytes = "".join(f"{digest}  {name}\n"
+                                 for name, digest in sorted(checksum_rows.items())).encode()
+            sums_path = directory / "SHA256SUMS"
+            sums_path.write_bytes(sums_bytes)
+
+            desired, blockers = promote.validate_release_inventory(directory, inventory)
+            self.assertEqual(blockers, [])
+            self.assertEqual(set(desired), {"package.bin", "inventory.json", "SHA256SUMS"})
+            self.assertEqual(desired["SHA256SUMS"], hashlib.sha256(sums_bytes).hexdigest())
+            resumed = promote.release_plan(
+                release={"tag_sha": EXPECTED["sha"], "published": False, "assets": [
+                    {"name": name, "sha256": digest}
+                    for name, digest in desired.items() if name != "SHA256SUMS"]},
+                tag_sha=EXPECTED["sha"], source_sha=EXPECTED["sha"], desired=desired)
+            self.assertEqual(resumed["upload"], ["SHA256SUMS"])
+
+            tampered_rows = dict(checksum_rows)
+            tampered_rows["package.bin"] = "0" * 64
+            sums_path.write_text("".join(f"{digest}  {name}\n"
+                                         for name, digest in sorted(tampered_rows.items())))
+            _, blockers = promote.validate_release_inventory(directory, inventory)
+            self.assertEqual(blockers, ["checksum-inventory-mismatch"])
+            sums_path.unlink()
+            _, blockers = promote.validate_release_inventory(directory, inventory)
+            self.assertEqual(blockers, ["inventory-incomplete"])
+
     def test_draft_release_lookup_falls_back_to_unique_tag_in_release_list(self):
         client = promote.GitHub.__new__(promote.GitHub)
         expected = {"id": 42, "tag_name": "v0.1.0", "draft": True, "assets": []}
@@ -310,6 +351,17 @@ class PromotionContract(unittest.TestCase):
             checksums["inventory.json"] = hashlib.sha256(inventory_data).hexdigest()
             (assets / "SHA256SUMS").write_text("".join(
                 f"{digest}  {name}\n" for name, digest in sorted(checksums.items())))
+            desired, blockers = promote.validate_release_inventory(assets, inventory)
+            self.assertEqual(blockers, [])
+            self.assertEqual(len(promote.expected_asset_names(inventory)), 8)
+            self.assertEqual(set(desired), set(rows) | {"inventory.json", "SHA256SUMS"})
+            self.assertEqual(set(desired), promote.expected_asset_names(inventory))
+            existing_without_sums = [{"name": name, "sha256": digest}
+                                     for name, digest in desired.items() if name != "SHA256SUMS"]
+            resume = promote.release_plan(
+                release={"tag_sha": source_sha, "assets": existing_without_sums, "published": False},
+                tag_sha=source_sha, source_sha=source_sha, desired=desired)
+            self.assertEqual(resume["upload"], ["SHA256SUMS"])
             event_path = root / "event.json"
             event_path.write_text(json.dumps({"repository": {"full_name": repository}, "inputs": {
                 "source_sha": source_sha, "run_id": "12345", "run_attempt": "2"}}))
@@ -318,6 +370,8 @@ class PromotionContract(unittest.TestCase):
                 def __init__(self, token, selected_repository):
                     super().__init__(token, selected_repository)
                     self.patches = []
+                    self.uploads = []
+                    self.asset_count_at_visibility = None
                     self.release = {"id": 9, "tag_name": "v0.1.0", "draft": True,
                         "name": "0.1.0", "body": "Qualified preview draft", "prerelease": True,
                         "assets": [{"name": name, "size": len(name), "state": "uploaded",
@@ -377,6 +431,11 @@ class PromotionContract(unittest.TestCase):
                     return [{"name": row["name"], "sha256": row["digest"][7:]}
                             for row in release["assets"]]
 
+                def upload_asset(self, release, name, data):
+                    self.uploads.append(name)
+                    self.release["assets"].append({"name": name, "size": len(data),
+                        "state": "uploaded", "digest": "sha256:" + hashlib.sha256(data).hexdigest()})
+
                 def patch(self, path, value):
                     self.patches.append((path, value))
                     if "draft" not in value and self.write_probe_denied:
@@ -386,6 +445,7 @@ class PromotionContract(unittest.TestCase):
                         self.tag_moved = True
                     if "draft" in value:
                         self.release["draft"] = value["draft"]
+                        self.asset_count_at_visibility = len(self.release["assets"])
                     self.release.update({key: value[key] for key in ("name", "body") if key in value})
                     if is_probe and self.probe_readback_mutation:
                         self.probe_readback_mutation(self.release)
@@ -409,9 +469,12 @@ class PromotionContract(unittest.TestCase):
                     instance.policy_ok = False
                     promote.publish(repository, source_sha, "12345", 2, event_path, assets, "token")
                 self.assertEqual(instance.patches, [], "policy rejection must happen before public PATCH")
+                self.assertEqual(instance.uploads, ["SHA256SUMS"])
+                self.assertEqual(len(instance.release["assets"]), 8)
                 instance.policy_ok = True
                 result = promote.publish(repository, source_sha, "12345", 2, event_path, assets, "token")
             self.assertEqual(result, "published-complete-inventory")
+            self.assertEqual(instance.asset_count_at_visibility, 8)
             self.assertEqual(len(instance.patches), 1)
 
             # When metadata denies push, verify actual GITHUB_TOKEN write access by

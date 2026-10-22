@@ -128,7 +128,18 @@ def validate_release_inventory(
     if json.loads(inventory_data) != inventory:
         return {}, ["inventory-digest-mismatch"]
     digests["inventory.json"] = sha256_bytes(inventory_data)
-    sums = (directory / "SHA256SUMS").read_text(encoding="utf-8").splitlines()
+    sums_path = directory / "SHA256SUMS"
+    try:
+        sums_info = sums_path.lstat()
+    except OSError:
+        return {}, ["inventory-incomplete"]
+    if not stat.S_ISREG(sums_info.st_mode) or sums_info.st_size > 1024 * 1024:
+        return {}, ["inventory-file-type-or-size-invalid"]
+    sums_data = sums_path.read_bytes()
+    try:
+        sums = sums_data.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        return {}, ["checksum-inventory-malformed"]
     parsed: dict[str, str] = {}
     for line in sums:
         digest, separator, name = line.partition("  ")
@@ -137,6 +148,9 @@ def validate_release_inventory(
         parsed[name] = digest
     if parsed != digests:
         return {}, ["checksum-inventory-mismatch"]
+    # SHA256SUMS describes the package and inventory files; include its own
+    # digest as a release asset even though the manifest intentionally omits it.
+    digests["SHA256SUMS"] = sha256_bytes(sums_data)
     return digests, []
 
 
