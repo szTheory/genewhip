@@ -467,7 +467,12 @@ def host_export(build, output, run_id, run_attempt, source_sha, root=ROOT):
     problems = validate_host_sessions(reports, expected_revision=source_sha,
                                       expected_identity=expected_identity)
     if problems:
-        raise ValueError("host-export-validation:" + ",".join(sorted({reason for reason, _ in problems})))
+        reasons = sorted({reason for reason, _ in problems})
+        message = "host-export-validation:" + ",".join(reasons)
+        if "desktop-host-capability" in reasons:
+            message += ";live-display-summary=" + json.dumps(
+                _host_display_summary(reports["live"]), sort_keys=True, separators=(",", ":"))
+        raise ValueError(message)
 
     hygiene_spec = importlib.util.spec_from_file_location(
         "gw_host_export_public_hygiene", root / "scripts/ci/public_hygiene.py")
@@ -504,6 +509,58 @@ def host_export(build, output, run_id, run_attempt, source_sha, root=ROOT):
         if temp_dir.exists():
             shutil.rmtree(temp_dir)
     return output
+
+
+def _host_display_summary(report):
+    """Return only bounded, non-identifying display capability facts for failure logs."""
+    summary = []
+    rows = report.get("runs")
+    if not isinstance(rows, list):
+        return summary
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            continue
+        settings = row.get("host_settings")
+        settings = settings if isinstance(settings, dict) else {}
+        display = settings.get("display_identity")
+        display = display if isinstance(display, dict) else {}
+        displays = display.get("displays")
+        displays = displays if isinstance(displays, list) else []
+        refresh_count = sum(
+            isinstance(item, dict)
+            and isinstance(item.get("refresh_hz"), (int, float))
+            and not isinstance(item.get("refresh_hz"), bool)
+            and math.isfinite(item.get("refresh_hz"))
+            and item.get("refresh_hz") > 0
+            for item in displays)
+        summary.append({"case_index": index,
+                        "cocoa_driver": settings.get("video_driver") == "cocoa",
+                        "display_observed": display.get("status") == "observed",
+                        "display_count": len(displays), "refresh_count": refresh_count})
+    return summary
+
+
+def _valid_host_display_identity(display):
+    """Accept an observed display with explicit unknown refresh, or a named absence."""
+    if not isinstance(display, dict):
+        return False
+    status = display.get("status")
+    if status == "unavailable":
+        return isinstance(display.get("reason"), str) and bool(display["reason"].strip()) and \
+            not display.get("displays")
+    if status != "observed":
+        return False
+    displays = display.get("displays")
+    if not isinstance(displays, list) or not displays:
+        return False
+    for item in displays:
+        if not isinstance(item, dict) or "refresh_hz" not in item:
+            return False
+        refresh = item["refresh_hz"]
+        if refresh is not None and (not isinstance(refresh, (int, float)) or isinstance(refresh, bool)
+                                    or not math.isfinite(refresh) or refresh <= 0):
+            return False
+    return True
 
 
 def source_state():
@@ -769,19 +826,8 @@ def validate_host_sessions(evidence, expected_revision=None, expected_identity=N
                 problems.append(("desktop-host-setup", str(row_id)))
             if mode == "live":
                 display = settings.get("display_identity") if isinstance(settings, dict) else None
-                displays = display.get("displays") if isinstance(display, dict) else None
-                has_refresh = isinstance(displays, list) and any(
-                    isinstance(item, dict)
-                    and isinstance(item.get("refresh_hz"), (int, float))
-                    and not isinstance(item.get("refresh_hz"), bool)
-                    and item.get("refresh_hz") > 0
-                    and (not isinstance(item.get("refresh_hz"), float)
-                         or math.isfinite(item.get("refresh_hz")))
-                    for item in displays
-                )
                 if (not isinstance(settings, dict) or settings.get("video_driver") != "cocoa"
-                        or not isinstance(display, dict) or display.get("status") != "observed"
-                        or not has_refresh):
+                        or not _valid_host_display_identity(display)):
                     problems.append(("desktop-host-capability", str(row_id)))
             stats = row.get("stats")
             if not isinstance(stats, dict) or row.get("stats_schema") != 2 or stats.get("stats_version") != 2:

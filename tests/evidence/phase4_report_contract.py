@@ -362,6 +362,28 @@ class ReportContract(unittest.TestCase):
                     module.host_export(build, output, "123456", 2, TEST_REVISION)
             self.assertFalse(output.exists())
 
+    def test_host_export_reports_only_path_free_live_capability_diagnostics(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            build, reports = self._host_export_fixture(base)
+            identity = {"source_revision": TEST_REVISION, "source_tree_id": "f" * 40}
+            live = reports["live"]
+            live["runs"][0]["host_settings"]["display_identity"] = {
+                "status": "unavailable", "reason": PRIVATE_TEST_PATH, "displays": []}
+            live["runs"][0]["host_settings"]["video_driver"] = "dummy"
+            live["runs"][1]["id"] = PRIVATE_TEST_PATH + "/fixture"
+            (build / "evidence/phase4-host-live.json").write_text(json.dumps(live, sort_keys=True) + "\n")
+            output = build / "host-export"
+            with patch.object(module, "public_source_identity", return_value=identity):
+                with self.assertRaisesRegex(ValueError, "host-export-validation:desktop-host-capability") as caught:
+                    module.host_export(build, output, "123456", 2, TEST_REVISION)
+            message = str(caught.exception)
+            self.assertIn('"case_index":0', message)
+            self.assertIn('"display_observed":false', message)
+            self.assertIn('"display_count":0', message)
+            self.assertIn('"refresh_count":0', message)
+            self.assertNotIn(PRIVATE_TEST_PATH, message)
+
     def test_ci_desktop_job_uploads_only_attempt_bound_curated_host_reports(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         desktop_job = workflow.split("  desktop:\n", 1)[1].split("\n  package:", 1)[0]
@@ -871,6 +893,24 @@ class ReportContract(unittest.TestCase):
             lambda row: row["host_settings"]["display_identity"].update(displays=[{"refresh_hz": math.inf}]),
         )
         for mutate in mutations:
+            with self.subTest(mutation=mutate):
+                self.assert_malformed_live_display_rejected(mutate)
+
+    def test_live_display_inventory_unknown_is_retained_without_claiming_refresh(self):
+        evidence = {"software": synthetic_host_report("software"),
+                    "live": synthetic_host_report("live")}
+        evidence["live"]["runs"][0]["host_settings"]["display_identity"] = {
+            "status": "unavailable", "reason": "system_profiler returned no display rows"}
+        evidence["live"]["runs"][1]["host_settings"]["display_identity"] = {
+            "status": "observed", "displays": [{"refresh_hz": None}]}
+        self.assertEqual(module.validate_host_sessions(evidence), [])
+
+    def test_live_display_unavailable_requires_reason_and_cocoa_driver(self):
+        for mutate in (
+            lambda row: row["host_settings"].update(
+                display_identity={"status": "unavailable", "displays": []}),
+            lambda row: row["host_settings"].update(video_driver="dummy"),
+        ):
             with self.subTest(mutation=mutate):
                 self.assert_malformed_live_display_rejected(mutate)
 
