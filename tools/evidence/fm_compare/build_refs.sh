@@ -28,7 +28,11 @@ trap 'rm -rf "$TMP"' EXIT
 
 check_file() {
   local group="$1" name="$2" url="$3" expected="$4" output="$5"
-  curl --fail --silent --show-error --location "$url" -o "$output"
+  if ! curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
+      --retry-delay 1 --retry-max-time 15 "$url" -o "$output"; then
+    echo "FAIL: $group/$name download failed after bounded retries" >&2
+    exit 1
+  fi
   local got
   got=$(shasum -a 256 "$output" | awk '{print $1}')
   if [[ "$got" != "$expected" ]]; then
@@ -39,8 +43,12 @@ check_file() {
 
 NUKED_SHA=335747d78cb0abbc3b55b004e62dad9763140115
 YMF_SHA=81aec25ccbb98f4873a255f7551ac4dadac59b4a
-API=$(curl --fail --silent --show-error --location \
-  "https://api.github.com/repos/nukeykt/Nuked-OPN2/commits?per_page=1")
+if ! API=$(curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
+    --retry-delay 1 --retry-max-time 15 \
+    "https://api.github.com/repos/nukeykt/Nuked-OPN2/commits?per_page=1"); then
+  echo "FAIL: Nuked HEAD API request failed after bounded retries" >&2
+  exit 1
+fi
 HEAD=$(python3 -I -c 'import json,sys; print(json.load(sys.stdin)[0]["sha"])' <<<"$API")
 LOCKED_HEAD=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["nuked"]["head_commit"])' "$LOCK")
 if [[ "$HEAD" != "$LOCKED_HEAD" ]]; then
