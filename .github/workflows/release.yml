@@ -59,6 +59,7 @@ jobs:
           SOURCE_SHA: ${{ inputs.source_sha }}
           RUN_ID: ${{ inputs.run_id }}
           RUN_ATTEMPT: ${{ inputs.run_attempt }}
+          AUTHORIZED_RECOVERY_RELEASE_ID: "420400458"
           EVENT_PATH: ${{ github.event_path }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: >-
@@ -67,5 +68,6 @@ jobs:
           --source-sha "$SOURCE_SHA"
           --run-id "$RUN_ID"
           --run-attempt "$RUN_ATTEMPT"
+          --authorized-recovery-release-id "$AUTHORIZED_RECOVERY_RELEASE_ID"
           --event "$EVENT_PATH"
           --asset-dir release-assets

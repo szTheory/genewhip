@@ -27,6 +27,7 @@ from typing import Any
 
 API = "https://api.github.com"
 API_VERSION = "2026-03-10"
+RELEASE_BODY = "Qualified Genewhip preview artifacts; see the attached package inventory and checksums."
 MAX_RELEASE_ASSET_BYTES = 2 * 1024 * 1024 * 1024
 WORKFLOW_PATH = ".github/workflows/ci.yml"
 RELEASE_TAG_PREFIX = "v"
@@ -587,6 +588,51 @@ class GitHub:
             raise
         return value if isinstance(value, dict) else None
 
+    def release_by_id(self, release_id: int) -> dict[str, Any] | None:
+        if type(release_id) is not int or release_id < 1:
+            raise PromotionError("release-id-invalid")
+        value = self.get(f"/repos/{self.repository}/releases/{release_id}")
+        return value if isinstance(value, dict) else None
+
+    def recover_untagged_draft(self, tag: str, source_sha: str, version: str,
+                               desired: dict[str, str],
+                               authorized_release_id: int) -> dict[str, Any] | None:
+        """Find only a complete draft whose exact package bytes bind it to this source."""
+        if type(authorized_release_id) is not int or authorized_release_id < 1:
+            raise PromotionError("release-draft-recovery-id-invalid")
+        if self.tag_commit(tag) != source_sha:
+            raise PromotionError("tag-source-conflict")
+        candidates: list[dict[str, Any]] = []
+        for page in range(1, 101):
+            releases = self.get(f"/repos/{self.repository}/releases?per_page=100&page={page}")
+            if not isinstance(releases, list) or any(not isinstance(row, dict) for row in releases):
+                raise PromotionError("release-list-malformed")
+            candidates.extend(row for row in releases
+                              if row.get("draft") is True and row.get("prerelease") is True
+                              and isinstance(row.get("tag_name"), str)
+                              and row["tag_name"].startswith("untagged-")
+                              and row.get("target_commitish") == source_sha
+                              and row.get("name") == version)
+            if len(releases) < 100:
+                break
+        else:
+            raise PromotionError("release-list-pagination-limit")
+        if not candidates:
+            return None
+        if len(candidates) != 1:
+            raise PromotionError("release-draft-recovery-ambiguous")
+        release = candidates[0]
+        if release.get("id") != authorized_release_id:
+            raise PromotionError("release-draft-recovery-id-mismatch")
+        if (type(release.get("id")) is not int or not isinstance(release.get("body"), str)
+                or release.get("body") != RELEASE_BODY):
+            raise PromotionError("release-draft-recovery-metadata-mismatch")
+        assets = self.release_assets(release)
+        actual = {row["name"]: row["sha256"] for row in assets}
+        if len(assets) != len(actual) or actual != desired:
+            raise PromotionError("release-draft-recovery-assets-mismatch")
+        return release
+
     def tag_commit(self, tag: str) -> str | None:
         path = f"/repos/{self.repository}/git/ref/tags/{urllib.parse.quote(tag, safe='')}"
         try:
@@ -634,13 +680,20 @@ class GitHub:
                 or attestation[0].get("conclusion") != "success"):
             raise PromotionError("trusted-attestation-job-not-success")
 
-    def verify_draft_write_access(self, release: dict[str, Any], tag: str) -> None:
-        """Prove effective write access with a same-value update to the private draft."""
+    def verify_draft_write_access(self, release: dict[str, Any], tag: str,
+                                  source_sha: str, desired: dict[str, str]) -> None:
+        """Prove write access and bind a recovered draft to its immutable qualified tag."""
         release_id = release.get("id")
         name, body = release.get("name"), release.get("body")
+        release_tag = release.get("tag_name")
         if (not isinstance(release_id, int) or isinstance(release_id, bool)
-                or release.get("tag_name") != tag or release.get("draft") is not True
-                or not isinstance(name, str) or not isinstance(body, str)):
+                or (release_tag != tag and not (isinstance(release_tag, str)
+                                                and release_tag.startswith("untagged-")))
+                or release.get("target_commitish") != source_sha
+                or release.get("draft") is not True or release.get("prerelease") is not True
+                or not isinstance(name, str) or name != "0.1.0"
+                or body != RELEASE_BODY
+                or self.tag_commit(tag) != source_sha):
             raise PromotionError("publication-write-probe-input-invalid")
         def snapshot_assets(value: dict[str, Any]) -> tuple[tuple[str, int, str], ...]:
             self.release_assets(value)  # retain existing upload-state and digest validation
@@ -657,25 +710,35 @@ class GitHub:
             return tuple(sorted(snapshot))
 
         before_assets = snapshot_assets(release)
+        if {name: digest[7:] for name, _, digest in before_assets} != desired:
+            raise PromotionError("publication-write-probe-inventory-incomplete")
         try:
             updated = self.patch(f"/repos/{self.repository}/releases/{release_id}",
-                                 {"name": name, "body": body})
+                                 {"tag_name": tag, "target_commitish": source_sha,
+                                  "name": name, "body": body})
         except PromotionError as error:
             if str(error) in ("permission-denied", "not-found"):
                 raise PromotionError("publication-write-permission-unavailable") from None
             raise
         if (not isinstance(updated, dict) or updated.get("id") != release_id
-                or updated.get("tag_name") != tag or updated.get("draft") is not True
+                or updated.get("tag_name") != tag or updated.get("target_commitish") != source_sha
+                or updated.get("draft") is not True
                 or updated.get("name") != name or updated.get("body") != body):
             raise PromotionError("publication-write-probe-result-invalid")
-        observed = self.release_by_tag(tag)
+        observed = self.release_by_id(release_id)
         if (not isinstance(observed, dict) or observed.get("id") != release_id
-                or observed.get("tag_name") != tag or observed.get("draft") is not True
+                or observed.get("tag_name") != tag or observed.get("target_commitish") != source_sha
+                or observed.get("draft") is not True
                 or observed.get("name") != name or observed.get("body") != body
                 or snapshot_assets(observed) != before_assets):
             raise PromotionError("publication-write-probe-state-changed")
+        tagged = self.release_by_tag(tag)
+        if not isinstance(tagged, dict) or tagged.get("id") != release_id \
+                or self.tag_commit(tag) != source_sha:
+            raise PromotionError("publication-write-probe-state-changed")
 
-    def verify_live_publication_policy(self, release: dict[str, Any], tag: str) -> None:
+    def verify_live_publication_policy(self, release: dict[str, Any], tag: str,
+                                       source_sha: str, desired: dict[str, str]) -> None:
         """Re-read destination policy immediately before making the release public."""
         root = f"/repos/{self.repository}"
         repo = self.get(root)
@@ -715,6 +778,7 @@ class GitHub:
         blockers = validate_live_repository_policy(
             self.repository, repo, protection, rules,
             publisher_contents_write=declares_contents_write)
+        probe_verified = False
         if "publication-write-permission-unavailable" in blockers:
             probe_blockers = validate_live_repository_policy(
                 self.repository, repo, protection, rules,
@@ -722,10 +786,13 @@ class GitHub:
                 publisher_write_probe_passed=True)
             if probe_blockers:
                 raise PromotionError(probe_blockers[0])
-            self.verify_draft_write_access(release, tag)
+            self.verify_draft_write_access(release, tag, source_sha, desired)
+            probe_verified = True
             blockers = []
         if blockers:
             raise PromotionError(blockers[0])
+        if release.get("tag_name") != tag and not probe_verified:
+            self.verify_draft_write_access(release, tag, source_sha, desired)
 
     def ensure_tag(self, tag: str, source_sha: str) -> str:
         current = self.tag_commit(tag)
@@ -754,7 +821,7 @@ class GitHub:
         try:
             value = self.post(f"/repos/{self.repository}/releases", {
                 "tag_name": tag, "target_commitish": source_sha, "name": version,
-                "body": "Qualified Genewhip preview artifacts; see the attached package inventory and checksums.",
+                "body": RELEASE_BODY,
                 "draft": True, "prerelease": True,
             })
         except PromotionError:
@@ -802,10 +869,12 @@ def _asset_digest_map(digests: dict[str, str]) -> dict[str, str]:
 
 
 def publish(repository: str, source_sha: str, run_id: str, attempt: int,
-            event_path: pathlib.Path, asset_dir: pathlib.Path, token: str) -> str:
+            event_path: pathlib.Path, asset_dir: pathlib.Path, token: str,
+            authorized_recovery_release_id: int) -> str:
     if (not REPO_RE.fullmatch(repository) or ".." in repository.split("/")
             or not SHA_RE.fullmatch(source_sha) or not RUN_ID_RE.fullmatch(str(run_id))
-            or attempt < 1):
+            or attempt < 1 or type(authorized_recovery_release_id) is not int
+            or authorized_recovery_release_id < 1):
         raise PromotionError("expected-identity-invalid")
     event = json.loads(event_path.read_text(encoding="utf-8"))
     event_blockers = verify_dispatch_event(event, repository, source_sha, run_id, attempt)
@@ -853,11 +922,18 @@ def publish(repository: str, source_sha: str, run_id: str, attempt: int,
     api.ensure_tag(tag, source_sha)
     release = api.release_by_tag(tag)
     if release is None:
-        release = api.create_draft(tag, version, source_sha)
-        # Re-read after creation so later decisions use server state, not POST response order.
-        release = api.release_by_tag(tag)
+        release = api.recover_untagged_draft(tag, source_sha, version,
+                                             _asset_digest_map(digests),
+                                             authorized_recovery_release_id)
         if release is None:
-            raise PromotionError("draft-state-unavailable")
+            release = api.create_draft(tag, version, source_sha)
+            # Re-read after creation so later decisions use server state, not POST response order.
+            release = api.release_by_tag(tag)
+            if release is None:
+                raise PromotionError("draft-state-unavailable")
+    release_id = release.get("id")
+    if type(release_id) is not int:
+        raise PromotionError("release-id-invalid")
     tag_sha = api.tag_commit(tag)
     assets = api.release_assets(release)
     decision = release_plan(release={"tag_sha": tag_sha, "assets": assets,
@@ -872,8 +948,11 @@ def publish(repository: str, source_sha: str, run_id: str, attempt: int,
         api.upload_asset(release, name, (asset_dir / name).read_bytes())
 
     # Requery the entire set and all mutable qualification inputs immediately before visibility.
-    release = api.release_by_tag(tag)
-    if release is None:
+    refreshed = api.release_by_tag(tag)
+    if refreshed is None and release.get("tag_name", "").startswith("untagged-"):
+        refreshed = api.release_by_id(release_id)
+    release = refreshed
+    if release is None or release.get("id") != release_id:
         raise PromotionError("release-state-unavailable")
     tag_sha = api.tag_commit(tag)
     assets = api.release_assets(release)
@@ -892,11 +971,12 @@ def publish(repository: str, source_sha: str, run_id: str, attempt: int,
         raise PromotionError("tag-source-conflict-before-publish")
     if release.get("draft") is not True:
         raise PromotionError("release-public-state-unexpected")
-    api.verify_live_publication_policy(release, tag)
+    api.verify_live_publication_policy(release, tag, source_sha, _asset_digest_map(digests))
     if api.tag_commit(tag) != source_sha:
         raise PromotionError("tag-source-conflict-before-publish")
     try:
-        api.patch(f"/repos/{repository}/releases/{release['id']}", {"draft": False})
+        updated = api.patch(f"/repos/{repository}/releases/{release['id']}", {
+            "tag_name": tag, "target_commitish": source_sha, "draft": False})
     except PromotionError:
         observed = api.release_by_tag(tag)
         if observed and observed.get("draft") is False:
@@ -907,6 +987,10 @@ def publish(repository: str, source_sha: str, run_id: str, attempt: int,
             if final["state"] == "no-op":
                 return "published-transition-confirmed-after-ambiguous-response"
         raise PromotionError("publish-transition-state-unknown") from None
+    if (not isinstance(updated, dict) or updated.get("id") != release_id
+            or updated.get("tag_name") != tag or updated.get("target_commitish") != source_sha
+            or updated.get("draft") is not False):
+        raise PromotionError("publish-transition-result-invalid")
     observed = api.release_by_tag(tag)
     if not observed or observed.get("draft") is not False:
         raise PromotionError("publish-transition-not-observed")
@@ -933,6 +1017,7 @@ def main(argv: list[str] | None = None) -> int:
     publish_parser.add_argument("--run-attempt", type=int, required=True)
     publish_parser.add_argument("--event", type=pathlib.Path, required=True)
     publish_parser.add_argument("--asset-dir", type=pathlib.Path, required=True)
+    publish_parser.add_argument("--authorized-recovery-release-id", type=int, required=True)
     args = parser.parse_args(argv)
     try:
         if args.mode == "prepare":
@@ -946,7 +1031,8 @@ def main(argv: list[str] | None = None) -> int:
             raise PromotionError("publisher-requires-explicit-workflow-dispatch")
         token = os.environ.get("GH_TOKEN", "")
         result = publish(args.repository, args.source_sha, args.run_id, args.run_attempt,
-                         args.event, args.asset_dir, token)
+                         args.event, args.asset_dir, token,
+                         args.authorized_recovery_release_id)
         print(json.dumps({"outcome": result, "source_revision": args.source_sha,
                           "run_id": args.run_id, "run_attempt": args.run_attempt}, sort_keys=True))
         return 0
