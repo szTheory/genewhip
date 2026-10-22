@@ -111,6 +111,19 @@ jobs:
           --desktop build/desktop/tools/desktop/genewhip-desktop
           --build build/desktop
           --out build/desktop/evidence/phase4-host-live.json
+      - name: Export exact-source host session evidence
+        run: >-
+          python3 scripts/evidence/phase4_report.py host-export
+          --build build/desktop --out build/host-export
+          --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
+          --source-sha "$GITHUB_SHA"
+      - name: Upload exact-source host session evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase4-host-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/host-export/
+          if-no-files-found: error
+          retention-days: 30
   package:
     if: github.event_name != 'schedule'
     runs-on: macos-26

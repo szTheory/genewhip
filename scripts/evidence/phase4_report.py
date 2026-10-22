@@ -421,6 +421,76 @@ def safety_export(build, output, root=ROOT):
     return output
 
 
+def host_export(build, output, run_id, run_attempt, source_sha, root=ROOT):
+    """Atomically stage the exact-source host reports without runner paths or binaries."""
+    build, output, root = Path(build), Path(output), Path(root)
+    _remove_safety_export(output)
+    if not isinstance(run_id, str) or not run_id.isdecimal():
+        raise ValueError("host-export-run-id-invalid")
+    if type(run_attempt) is not int or run_attempt < 1:
+        raise ValueError("host-export-run-attempt-invalid")
+    if not isinstance(source_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", source_sha):
+        raise ValueError("host-export-source-invalid")
+    identity = public_source_identity(root)
+    if identity["source_revision"] != source_sha:
+        raise ValueError("host-export-source-mismatch")
+    desktop = build / "tools/desktop/genewhip-desktop"
+    headless = build / "tools/session/gw_headless"
+    cache = build / "CMakeCache.txt"
+    paths = {"software": build / "evidence/phase4-host-sessions.json",
+             "live": build / "evidence/phase4-host-live.json"}
+    if any(not path.is_file() or path.is_symlink() for path in (desktop, headless, cache, *paths.values())):
+        raise ValueError("host-export-input-missing")
+    try:
+        reports = {name: json.loads(path.read_text()) for name, path in paths.items()}
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("host-export-report-invalid") from exc
+    if any(report.get("outcome") != "pass" for report in reports.values()):
+        raise ValueError("host-export-report-not-pass")
+    expected_identity = {"build_configuration_sha256": sha(cache),
+                         "desktop_build_sha256": sha(desktop),
+                         "headless_build_sha256": sha(headless)}
+    problems = validate_host_sessions(reports, expected_revision=source_sha,
+                                      expected_identity=expected_identity)
+    if problems:
+        raise ValueError("host-export-validation:" + ",".join(sorted({reason for reason, _ in problems})))
+
+    hygiene_spec = importlib.util.spec_from_file_location(
+        "gw_host_export_public_hygiene", root / "scripts/ci/public_hygiene.py")
+    if hygiene_spec is None or hygiene_spec.loader is None:
+        raise ValueError("host-export-hygiene-unavailable")
+    hygiene = importlib.util.module_from_spec(hygiene_spec)
+    hygiene_spec.loader.exec_module(hygiene)
+    payloads = {"phase4-host-sessions.json": paths["software"].read_bytes(),
+                "phase4-host-live.json": paths["live"].read_bytes()}
+    if any(hygiene.PATTERNS[reason].search(payload)
+           for payload in payloads.values() for reason in hygiene.PATTERNS):
+        raise ValueError("host-export-private-content")
+    receipt = {"schema": "genewhip-phase4-host-evidence-v1", "version": 1,
+               "run_id": run_id, "run_attempt": run_attempt,
+               "source_revision": identity["source_revision"],
+               "source_tree_id": identity["source_tree_id"],
+               "reports": {
+                   "software": {"path": "phase4-host-sessions.json",
+                                "sha256": hashlib.sha256(payloads["phase4-host-sessions.json"]).hexdigest()},
+                   "live": {"path": "phase4-host-live.json",
+                            "sha256": hashlib.sha256(payloads["phase4-host-live.json"]).hexdigest()}}}
+    payloads["host-evidence.json"] = (json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temp_dir = Path(tempfile.mkdtemp(prefix=".host-export-", dir=output.parent))
+    try:
+        for name, payload in payloads.items():
+            target = temp_dir / name
+            target.write_bytes(payload)
+            if hygiene.scan_file(target):
+                raise ValueError("host-export-private-content")
+        os.replace(temp_dir, output)
+    finally:
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir)
+    return output
+
+
 def source_state():
     if os.environ.get("GENEWHIP_SOURCE_SNAPSHOT") == "1":
         return "clean"
@@ -1191,6 +1261,12 @@ def main(argv=None):
     export = sub.add_parser("safety-export")
     export.add_argument("--build", type=Path, required=True)
     export.add_argument("--out", type=Path, required=True)
+    host = sub.add_parser("host-export")
+    host.add_argument("--build", type=Path, required=True)
+    host.add_argument("--out", type=Path, required=True)
+    host.add_argument("--run-id", required=True)
+    host.add_argument("--run-attempt", type=int, required=True)
+    host.add_argument("--source-sha", required=True)
     args = parser.parse_args(argv)
     if args.command == "safety-start":
         safety_start(args.build)
@@ -1216,6 +1292,17 @@ def main(argv=None):
             reason = str(exc) if isinstance(exc, ValueError) else "safety-export-io"
             print("REJECT: " + reason, file=sys.stderr)
             return 1
+        return 0
+    if args.command == "host-export":
+        try:
+            host_export(args.build, args.out, args.run_id, args.run_attempt, args.source_sha)
+        except (OSError, ValueError) as exc:
+            reason = str(exc) if isinstance(exc, ValueError) else "host-export-io"
+            print("REJECT: " + reason, file=sys.stderr)
+            return 1
+        print(json.dumps({"outcome": "pass", "run_id": args.run_id,
+                          "run_attempt": args.run_attempt, "source_sha": args.source_sha,
+                          "staged_reports": 2}, sort_keys=True))
         return 0
     if args.command == "build":
         report = build_report(args.build)
