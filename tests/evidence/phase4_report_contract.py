@@ -6,6 +6,7 @@ import importlib.util
 import copy
 import json
 import math
+import re
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -265,6 +266,141 @@ def synthetic_report():
 
 
 class ReportContract(unittest.TestCase):
+    def _host_export_fixture(self, base):
+        build = base / "desktop-build"
+        (build / "evidence").mkdir(parents=True)
+        desktop = build / "tools/desktop/genewhip-desktop"
+        headless = build / "tools/session/gw_headless"
+        desktop.parent.mkdir(parents=True)
+        headless.parent.mkdir(parents=True)
+        desktop.write_bytes(b"desktop executable identity")
+        headless.write_bytes(b"headless executable identity")
+        (build / "CMakeCache.txt").write_text(
+            "CMAKE_BUILD_TYPE:STRING=Release\n"
+            "CMAKE_C_COMPILER_ID:STRING=AppleClang\n"
+            "CMAKE_C_COMPILER_VERSION:STRING=17.0.0\n"
+            "CMAKE_GENERATOR:INTERNAL=Unix Makefiles\n"
+            "GENEWHIP_BUILD_DESKTOP:BOOL=ON\n"
+            "GENEWHIP_TEST_HOOKS:BOOL=OFF\n")
+        reports = {mode: synthetic_host_report(mode) for mode in ("software", "live")}
+        identity = {"build_configuration_sha256": module.sha(build / "CMakeCache.txt"),
+                    "desktop_build_sha256": module.sha(desktop),
+                    "headless_build_sha256": module.sha(headless)}
+        for mode, report in reports.items():
+            report.update(identity)
+            for row in report["runs"]:
+                row.update(identity)
+            (build / "evidence" / f"phase4-host-{('sessions' if mode == 'software' else 'live')}.json").write_text(
+                json.dumps(report, sort_keys=True) + "\n")
+        return build, reports
+
+    def test_host_export_is_run_attempt_bound_and_curated(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            build, reports = self._host_export_fixture(base)
+            output = build / "host-export"
+            identity = {"source_revision": TEST_REVISION, "source_tree_id": "f" * 40}
+            with patch.object(module, "public_source_identity", return_value=identity):
+                module.host_export(build, output, "123456", 2, TEST_REVISION)
+            self.assertEqual(sorted(path.name for path in output.iterdir()),
+                             ["host-evidence.json", "phase4-host-live.json", "phase4-host-sessions.json"])
+            receipt = json.loads((output / "host-evidence.json").read_text())
+            self.assertEqual((receipt["run_id"], receipt["run_attempt"]), ("123456", 2))
+            self.assertEqual(receipt["source_revision"], TEST_REVISION)
+            self.assertEqual(receipt["source_tree_id"], "f" * 40)
+            for mode, filename in (("software", "phase4-host-sessions.json"),
+                                   ("live", "phase4-host-live.json")):
+                payload = (output / filename).read_bytes()
+                self.assertEqual(receipt["reports"][mode]["sha256"], hashlib.sha256(payload).hexdigest())
+                self.assertEqual(json.loads(payload)["source_revision"], TEST_REVISION)
+
+    def test_host_export_rejects_stale_or_private_reports_without_output(self):
+        identity = {"source_revision": TEST_REVISION, "source_tree_id": "f" * 40}
+        for mutation in ("stale-source", "private-path", "live-skip"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary)
+                build, reports = self._host_export_fixture(base)
+                live = reports["live"]
+                if mutation == "stale-source":
+                    live["source_revision"] = "b" * 40
+                elif mutation == "private-path":
+                    live["host"]["display_identity"]["displays"][0]["_name"] = PRIVATE_TEST_PATH + "/display"
+                else:
+                    live["outcome"] = "skipped"
+                    live["counts"] = {"pass": 0, "skipped": live["denominator"], "fail": 0}
+                    for row in live["runs"]:
+                        row["outcome"] = "skipped"
+                        row["reason"] = "device unavailable"
+                (build / "evidence/phase4-host-live.json").write_text(json.dumps(live, sort_keys=True) + "\n")
+                output = build / "host-export"
+                with patch.object(module, "public_source_identity", return_value=identity):
+                    with self.assertRaises(ValueError):
+                        module.host_export(build, output, "123456", 2, TEST_REVISION)
+                self.assertFalse(output.exists(), "rejected host reports were staged")
+
+    def test_host_export_rejects_output_overlapping_build_without_deleting_it(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            build, _ = self._host_export_fixture(base)
+            identity = {"source_revision": TEST_REVISION, "source_tree_id": "f" * 40}
+            sentinel = build / "keep-me.txt"
+            sentinel.write_text("preserve source build")
+            with patch.object(module, "public_source_identity", return_value=identity):
+                with self.assertRaisesRegex(ValueError, "host-export-output-overlaps-source"):
+                    module.host_export(build, build, "123456", 2, TEST_REVISION)
+            self.assertEqual(sentinel.read_text(), "preserve source build")
+
+    def test_host_export_rejects_non_object_json_report(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            build, _ = self._host_export_fixture(base)
+            identity = {"source_revision": TEST_REVISION, "source_tree_id": "f" * 40}
+            (build / "evidence/phase4-host-live.json").write_text("[]\n")
+            output = build / "host-export"
+            with patch.object(module, "public_source_identity", return_value=identity):
+                with self.assertRaisesRegex(ValueError, "host-export-report-invalid"):
+                    module.host_export(build, output, "123456", 2, TEST_REVISION)
+            self.assertFalse(output.exists())
+
+    def test_host_export_reports_only_path_free_live_capability_diagnostics(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            build, reports = self._host_export_fixture(base)
+            identity = {"source_revision": TEST_REVISION, "source_tree_id": "f" * 40}
+            live = reports["live"]
+            live["runs"][0]["host_settings"]["display_identity"] = {
+                "status": "unavailable", "reason": PRIVATE_TEST_PATH, "displays": []}
+            live["runs"][0]["host_settings"]["video_driver"] = "dummy"
+            live["runs"][1]["id"] = PRIVATE_TEST_PATH + "/fixture"
+            (build / "evidence/phase4-host-live.json").write_text(json.dumps(live, sort_keys=True) + "\n")
+            output = build / "host-export"
+            with patch.object(module, "public_source_identity", return_value=identity):
+                with self.assertRaisesRegex(ValueError, "host-export-validation:desktop-host-capability") as caught:
+                    module.host_export(build, output, "123456", 2, TEST_REVISION)
+            message = str(caught.exception)
+            self.assertIn('"case_index":0', message)
+            self.assertIn('"display_observed":false', message)
+            self.assertIn('"display_count":0', message)
+            self.assertIn('"refresh_count":0', message)
+            self.assertNotIn(PRIVATE_TEST_PATH, message)
+
+    def test_ci_desktop_job_uploads_only_attempt_bound_curated_host_reports(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        desktop_job = workflow.split("  desktop:\n", 1)[1].split("\n  package:", 1)[0]
+        self.assertIn("name: Export exact-source host session evidence", desktop_job)
+        export_command = re.search(
+            r"python3 scripts/evidence/phase4_report\.py host-export\s+--build\s+(\S+)\s+--out\s+(\S+)",
+            desktop_job, re.DOTALL)
+        self.assertIsNotNone(export_command)
+        build_path, output_path = map(Path, export_command.groups())
+        self.assertNotEqual(output_path, build_path)
+        self.assertTrue(output_path.is_relative_to(build_path),
+                        "host-export output must stay below the build root")
+        self.assertIn("name: phase4-host-evidence-${{ github.run_id }}-${{ github.run_attempt }}", desktop_job)
+        upload_path = re.search(r"(?m)^\s+path:\s*(\S+)\s*$", desktop_job)
+        self.assertIsNotNone(upload_path)
+        self.assertEqual(upload_path.group(1), output_path.as_posix() + "/")
+
     def test_exported_package_snapshot_without_safety_inputs_builds_unknown_report(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "source"
@@ -757,6 +893,24 @@ class ReportContract(unittest.TestCase):
             lambda row: row["host_settings"]["display_identity"].update(displays=[{"refresh_hz": math.inf}]),
         )
         for mutate in mutations:
+            with self.subTest(mutation=mutate):
+                self.assert_malformed_live_display_rejected(mutate)
+
+    def test_live_display_inventory_unknown_is_retained_without_claiming_refresh(self):
+        evidence = {"software": synthetic_host_report("software"),
+                    "live": synthetic_host_report("live")}
+        evidence["live"]["runs"][0]["host_settings"]["display_identity"] = {
+            "status": "unavailable", "reason": "system_profiler returned no display rows"}
+        evidence["live"]["runs"][1]["host_settings"]["display_identity"] = {
+            "status": "observed", "displays": [{"refresh_hz": None}]}
+        self.assertEqual(module.validate_host_sessions(evidence), [])
+
+    def test_live_display_unavailable_requires_reason_and_cocoa_driver(self):
+        for mutate in (
+            lambda row: row["host_settings"].update(
+                display_identity={"status": "unavailable", "displays": []}),
+            lambda row: row["host_settings"].update(video_driver="dummy"),
+        ):
             with self.subTest(mutation=mutate):
                 self.assert_malformed_live_display_rejected(mutate)
 

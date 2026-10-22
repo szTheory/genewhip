@@ -421,6 +421,148 @@ def safety_export(build, output, root=ROOT):
     return output
 
 
+def host_export(build, output, run_id, run_attempt, source_sha, root=ROOT):
+    """Atomically stage the exact-source host reports without runner paths or binaries."""
+    build, output, root = Path(build), Path(output), Path(root)
+    build_resolved, output_resolved, root_resolved = (
+        build.resolve(), output.resolve(), root.resolve())
+    try:
+        output_resolved.relative_to(build_resolved)
+    except ValueError as exc:
+        raise ValueError("host-export-output-outside-build") from exc
+    if output_resolved == build_resolved or output_resolved == root_resolved:
+        raise ValueError("host-export-output-overlaps-source")
+    if not isinstance(run_id, str) or not run_id.isdecimal():
+        raise ValueError("host-export-run-id-invalid")
+    if type(run_attempt) is not int or run_attempt < 1:
+        raise ValueError("host-export-run-attempt-invalid")
+    if not isinstance(source_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", source_sha):
+        raise ValueError("host-export-source-invalid")
+    identity = public_source_identity(root)
+    if identity["source_revision"] != source_sha:
+        raise ValueError("host-export-source-mismatch")
+    desktop = build / "tools/desktop/genewhip-desktop"
+    headless = build / "tools/session/gw_headless"
+    cache = build / "CMakeCache.txt"
+    paths = {"software": build / "evidence/phase4-host-sessions.json",
+             "live": build / "evidence/phase4-host-live.json"}
+    protected = (root_resolved, build_resolved, *(path.resolve() for path in
+                 (desktop, headless, cache, *paths.values())))
+    if any(path == output_resolved or output_resolved in path.parents
+           for path in protected):
+        raise ValueError("host-export-output-overlaps-source")
+    if any(not path.is_file() or path.is_symlink() for path in (desktop, headless, cache, *paths.values())):
+        raise ValueError("host-export-input-missing")
+    try:
+        reports = {name: json.loads(path.read_text()) for name, path in paths.items()}
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("host-export-report-invalid") from exc
+    if any(not isinstance(report, dict) for report in reports.values()):
+        raise ValueError("host-export-report-invalid")
+    if any(report.get("outcome") != "pass" for report in reports.values()):
+        raise ValueError("host-export-report-not-pass")
+    expected_identity = {"build_configuration_sha256": sha(cache),
+                         "desktop_build_sha256": sha(desktop),
+                         "headless_build_sha256": sha(headless)}
+    problems = validate_host_sessions(reports, expected_revision=source_sha,
+                                      expected_identity=expected_identity)
+    if problems:
+        reasons = sorted({reason for reason, _ in problems})
+        message = "host-export-validation:" + ",".join(reasons)
+        if "desktop-host-capability" in reasons:
+            message += ";live-display-summary=" + json.dumps(
+                _host_display_summary(reports["live"]), sort_keys=True, separators=(",", ":"))
+        raise ValueError(message)
+
+    hygiene_spec = importlib.util.spec_from_file_location(
+        "gw_host_export_public_hygiene", root / "scripts/ci/public_hygiene.py")
+    if hygiene_spec is None or hygiene_spec.loader is None:
+        raise ValueError("host-export-hygiene-unavailable")
+    hygiene = importlib.util.module_from_spec(hygiene_spec)
+    hygiene_spec.loader.exec_module(hygiene)
+    payloads = {"phase4-host-sessions.json": paths["software"].read_bytes(),
+                "phase4-host-live.json": paths["live"].read_bytes()}
+    if any(hygiene.PATTERNS[reason].search(payload)
+           for payload in payloads.values() for reason in hygiene.PATTERNS):
+        raise ValueError("host-export-private-content")
+    receipt = {"schema": "genewhip-phase4-host-evidence-v1", "version": 1,
+               "run_id": run_id, "run_attempt": run_attempt,
+               "source_revision": identity["source_revision"],
+               "source_tree_id": identity["source_tree_id"],
+               "reports": {
+                   "software": {"path": "phase4-host-sessions.json",
+                                "sha256": hashlib.sha256(payloads["phase4-host-sessions.json"]).hexdigest()},
+                   "live": {"path": "phase4-host-live.json",
+                            "sha256": hashlib.sha256(payloads["phase4-host-live.json"]).hexdigest()}}}
+    payloads["host-evidence.json"] = (json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    _remove_safety_export(output)
+    temp_dir = Path(tempfile.mkdtemp(prefix=".host-export-", dir=output.parent))
+    try:
+        for name, payload in payloads.items():
+            target = temp_dir / name
+            target.write_bytes(payload)
+            if hygiene.scan_file(target):
+                raise ValueError("host-export-private-content")
+        os.replace(temp_dir, output)
+    finally:
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir)
+    return output
+
+
+def _host_display_summary(report):
+    """Return only bounded, non-identifying display capability facts for failure logs."""
+    summary = []
+    rows = report.get("runs")
+    if not isinstance(rows, list):
+        return summary
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            continue
+        settings = row.get("host_settings")
+        settings = settings if isinstance(settings, dict) else {}
+        display = settings.get("display_identity")
+        display = display if isinstance(display, dict) else {}
+        displays = display.get("displays")
+        displays = displays if isinstance(displays, list) else []
+        refresh_count = sum(
+            isinstance(item, dict)
+            and isinstance(item.get("refresh_hz"), (int, float))
+            and not isinstance(item.get("refresh_hz"), bool)
+            and math.isfinite(item.get("refresh_hz"))
+            and item.get("refresh_hz") > 0
+            for item in displays)
+        summary.append({"case_index": index,
+                        "cocoa_driver": settings.get("video_driver") == "cocoa",
+                        "display_observed": display.get("status") == "observed",
+                        "display_count": len(displays), "refresh_count": refresh_count})
+    return summary
+
+
+def _valid_host_display_identity(display):
+    """Accept an observed display with explicit unknown refresh, or a named absence."""
+    if not isinstance(display, dict):
+        return False
+    status = display.get("status")
+    if status == "unavailable":
+        return isinstance(display.get("reason"), str) and bool(display["reason"].strip()) and \
+            not display.get("displays")
+    if status != "observed":
+        return False
+    displays = display.get("displays")
+    if not isinstance(displays, list) or not displays:
+        return False
+    for item in displays:
+        if not isinstance(item, dict) or "refresh_hz" not in item:
+            return False
+        refresh = item["refresh_hz"]
+        if refresh is not None and (not isinstance(refresh, (int, float)) or isinstance(refresh, bool)
+                                    or not math.isfinite(refresh) or refresh <= 0):
+            return False
+    return True
+
+
 def source_state():
     if os.environ.get("GENEWHIP_SOURCE_SNAPSHOT") == "1":
         return "clean"
@@ -684,19 +826,8 @@ def validate_host_sessions(evidence, expected_revision=None, expected_identity=N
                 problems.append(("desktop-host-setup", str(row_id)))
             if mode == "live":
                 display = settings.get("display_identity") if isinstance(settings, dict) else None
-                displays = display.get("displays") if isinstance(display, dict) else None
-                has_refresh = isinstance(displays, list) and any(
-                    isinstance(item, dict)
-                    and isinstance(item.get("refresh_hz"), (int, float))
-                    and not isinstance(item.get("refresh_hz"), bool)
-                    and item.get("refresh_hz") > 0
-                    and (not isinstance(item.get("refresh_hz"), float)
-                         or math.isfinite(item.get("refresh_hz")))
-                    for item in displays
-                )
                 if (not isinstance(settings, dict) or settings.get("video_driver") != "cocoa"
-                        or not isinstance(display, dict) or display.get("status") != "observed"
-                        or not has_refresh):
+                        or not _valid_host_display_identity(display)):
                     problems.append(("desktop-host-capability", str(row_id)))
             stats = row.get("stats")
             if not isinstance(stats, dict) or row.get("stats_schema") != 2 or stats.get("stats_version") != 2:
@@ -1191,6 +1322,12 @@ def main(argv=None):
     export = sub.add_parser("safety-export")
     export.add_argument("--build", type=Path, required=True)
     export.add_argument("--out", type=Path, required=True)
+    host = sub.add_parser("host-export")
+    host.add_argument("--build", type=Path, required=True)
+    host.add_argument("--out", type=Path, required=True)
+    host.add_argument("--run-id", required=True)
+    host.add_argument("--run-attempt", type=int, required=True)
+    host.add_argument("--source-sha", required=True)
     args = parser.parse_args(argv)
     if args.command == "safety-start":
         safety_start(args.build)
@@ -1216,6 +1353,17 @@ def main(argv=None):
             reason = str(exc) if isinstance(exc, ValueError) else "safety-export-io"
             print("REJECT: " + reason, file=sys.stderr)
             return 1
+        return 0
+    if args.command == "host-export":
+        try:
+            host_export(args.build, args.out, args.run_id, args.run_attempt, args.source_sha)
+        except (OSError, ValueError) as exc:
+            reason = str(exc) if isinstance(exc, ValueError) else "host-export-io"
+            print("REJECT: " + reason, file=sys.stderr)
+            return 1
+        print(json.dumps({"outcome": "pass", "run_id": args.run_id,
+                          "run_attempt": args.run_attempt, "source_sha": args.source_sha,
+                          "staged_reports": 2}, sort_keys=True))
         return 0
     if args.command == "build":
         report = build_report(args.build)
