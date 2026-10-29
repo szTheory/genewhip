@@ -7,16 +7,25 @@
 #include "audio.h"
 #include "rom_file.h"
 #include "session.h"
+#include "route_controller.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#ifndef _WIN32
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 
 #define HOST_SCRIPT_MAX 256
 
 #define SCRIPT_LINE_MAX 320
 #define SCRIPT_PATH_MAX 256
 #define AUDIO_DUMP_BUFFER_BYTES 4096u
+#define GW_ROUTE_CAPTURE_AUDIO_MAX_BYTES (16u * 1024u * 1024u)
+#define GW_MAX_FIELD_ROW_BYTES (320u * 4u)
 
 typedef enum { ACTION_PAUSE, ACTION_RESUME, ACTION_RESET, ACTION_QUIT, ACTION_PRESS, ACTION_DROP,
     ACTION_MUTE, ACTION_UNMUTE } host_action;
@@ -71,6 +80,11 @@ static int usage(void)
 {
     fputs("usage: genewhip-desktop [--fields N] [--host-script FILE] [--scale N]\n"
           "       [--record LOG | --replay LOG] [--dump-audio FILE] [--print-field-hashes] [--stats FILE]\n"
+          "       [--route-plan FILE --route-report FILE]\n"
+          "       [--dump-fields DIR [--capture-field N | --capture-attempt-tick A T] --capture-identity SHA256]\n"
+          "       [--route-input-source virtual-gamepad --route-diagnostic FILE]\n"
+          "       [--renderer-capture-field N --renderer-capture-output FILE]\n"
+          "       [--route-input-contract MASK[,MASK...]]\n"
           "       [--stats-interval N]\n"
           "       [--port1 keyboard|gamepad|none] [--port2 keyboard|gamepad|none] ROM\n", stderr);
     return 2;
@@ -149,6 +163,22 @@ static void fatal_box(const char *message)
     (void)SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Genewhip", message, NULL);
 }
 
+static int write_route_capability_report(const char *path, const char *capability)
+{
+    FILE *out = fopen(path, "wbx");
+    int okay;
+    if (!out) return 0;
+    okay = fprintf(out, "{\"schema\":\"genewhip-phase6-sdl-diagnostic-v1\","
+        "\"input_path\":\"unavailable-before-input\",\"core_outcome\":\"unavailable\","
+        "\"host_outcome\":\"fail-diagnostic\",\"capability\":\"%s\","
+        "\"event_pumps\":0,\"input_events\":[],\"presented_frames\":0,"
+        "\"renderer_readback_samples\":0,\"renderer_readback_activity\":false,"
+        "\"pcm_frames\":0,\"audio_submitted_frames\":0,"
+        "\"audio_device_consumed_frames\":0,\"audio_device_activity\":false}\n", capability) > 0;
+    if (fclose(out) != 0) okay = 0;
+    return okay;
+}
+
 typedef struct runner {
     gw_session session;
     runner_audio *audio;
@@ -166,7 +196,347 @@ typedef struct runner {
     unsigned gamepad_slot[2];          /* Which connected gamepad feeds each port. */
     SDL_Gamepad *gamepads[MAX_GAMEPADS];
     uint32_t script_mask[2];           /* Masks from host-script press commands. */
+    int route_virtual_gamepad;
+    int route_input_suppress;
+    FILE *route_audio_dump;
+    uint64_t route_audio_dump_bytes;
+    int route_print_hashes;
+    SDL_JoystickID route_virtual_id;
+    SDL_Gamepad *route_virtual_pad;
+    SDL_JoystickID route_virtual_ids[2];
+    SDL_Gamepad *route_virtual_pads[2];
+    uint64_t route_event_pumps, route_presented_frames, route_readback_samples;
+    uint64_t route_readback_hash, route_pcm_frames, route_pcm_hash;
+    uint32_t route_input_count;
+    struct { uint32_t requested, effective, joystick_mask; unsigned port; SDL_JoystickID gamepad_id; } route_inputs[64];
+    const char *route_renderer_capture_path;
+    uint64_t route_renderer_capture_field;
+    uint64_t route_renderer_capture_hash;
+    uint32_t route_virtual_add_events, route_virtual_remove_events;
+    int route_window_raise_requested;
+    int route_renderer_capture_done;
+    const char *route_capture_dir;
+    const char *route_capture_identity;
+    unsigned long long route_capture_field_sequence;
+    unsigned long long route_capture_attempt;
+    unsigned long long route_capture_source_tick;
+    int route_capture_done;
 } runner;
+
+static int route_capture_directory_ready(const char *dir)
+{
+    struct stat info;
+    DIR *directory;
+    struct dirent *entry;
+#ifndef _WIN32
+    if (lstat(dir, &info) != 0 || !S_ISDIR(info.st_mode) || S_ISLNK(info.st_mode) || info.st_uid != geteuid()) return 0;
+#else
+    if (stat(dir, &info) != 0 || !S_ISDIR(info.st_mode)) return 0;
+#endif
+    directory = opendir(dir);
+    if (!directory) return 0;
+    while ((entry = readdir(directory)) != NULL) {
+        if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..")) {
+            (void)closedir(directory);
+            return 0;
+        }
+    }
+    return closedir(directory) == 0;
+}
+
+static FILE *route_capture_open_exclusive(const char *path)
+{
+#ifndef _WIN32
+    int fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0600);
+    FILE *out;
+    if (fd < 0) return NULL;
+    out = fdopen(fd, "wb");
+    if (!out) (void)close(fd);
+    return out;
+#else
+    return fopen(path, "wbx");
+#endif
+}
+
+static int route_capture_field_pixels(const runner *r, const gw_video_field *field, const uint32_t *pixels)
+{
+    char path[4096];
+    uint8_t row[GW_MAX_FIELD_ROW_BYTES];
+    FILE *out;
+    if (!r->route_capture_dir || field->width != 320u || field->height != 224u ||
+        field->width * 4u > sizeof(row) || !pixels || !route_capture_directory_ready(r->route_capture_dir)) return 1;
+    if (snprintf(path, sizeof(path), "%s/field-%llu.bin", r->route_capture_dir,
+        (unsigned long long)field->sequence) >= (int)sizeof(path)) return 1;
+    out = route_capture_open_exclusive(path);
+    if (!out) return 1;
+    for (uint32_t y = 0; y < field->height; ++y) {
+        const uint32_t *src = (const uint32_t *)((const uint8_t *)pixels + (size_t)y * field->pitch_bytes);
+        for (uint32_t x = 0; x < field->width; ++x) {
+            row[x * 4u] = (uint8_t)(src[x] & 0xffu);
+            row[x * 4u + 1u] = (uint8_t)((src[x] >> 8) & 0xffu);
+            row[x * 4u + 2u] = (uint8_t)((src[x] >> 16) & 0xffu);
+            row[x * 4u + 3u] = (uint8_t)(src[x] >> 24);
+        }
+        if (fwrite(row, 1, field->width * 4u, out) != field->width * 4u) {
+            (void)fclose(out);
+            return 1;
+        }
+    }
+    if (fclose(out) != 0) return 1;
+    if (snprintf(path, sizeof(path), "%s/field-%llu.json", r->route_capture_dir,
+        (unsigned long long)field->sequence) >= (int)sizeof(path)) return 1;
+    out = route_capture_open_exclusive(path);
+    if (!out) return 1;
+    if (fprintf(out, "{\"sequence\":%llu,\"width\":%u,\"height\":%u,\"row_bytes\":%u,"
+            "\"pixel\":\"uint32 0x00RRGGBB little-endian\",\"end_tick\":%llu}\n",
+            (unsigned long long)field->sequence, (unsigned)field->width, (unsigned)field->height,
+            (unsigned)(field->width * 4u), (unsigned long long)field->end_tick) < 0) {
+        (void)fclose(out);
+        return 1;
+    }
+    return fclose(out) != 0;
+}
+
+static int route_capture_metadata(runner *r, const gw_session *session, const gw_video_field *field)
+{
+    uint8_t x_hi[2], y_hi[2];
+    uint32_t attempt = 0, source_tick = 0, x = 0, y = 0;
+    char path[4096];
+    FILE *out;
+    int rec = r->route_capture_attempt != 0;
+    if (rec) {
+        uint8_t attempt_bytes[2], tick_bytes[2];
+        if (gw_peek_memory(session->machine, 0x00ff140e, attempt_bytes, 2) != GW_OK ||
+            gw_peek_memory(session->machine, 0x00ff1410, tick_bytes, 2) != GW_OK) return 1;
+        attempt = (uint32_t)((uint16_t)attempt_bytes[0] << 8 | attempt_bytes[1]);
+        source_tick = (uint32_t)((uint16_t)tick_bytes[0] << 8 | tick_bytes[1]);
+        if (attempt != r->route_capture_attempt || source_tick < r->route_capture_source_tick) return 0;
+        if (gw_peek_memory(session->machine, 0x00ff18c5, x_hi, 2) != GW_OK ||
+            gw_peek_memory(session->machine, 0x00ff18c9, y_hi, 2) != GW_OK) return 1;
+        x = (uint32_t)x_hi[0] * 256u + x_hi[1];
+        y = (uint32_t)y_hi[0] * 256u + y_hi[1];
+    } else {
+        uint8_t p1x[2], p1y[2], p2x[2], p2y[2];
+        if (session->fields != r->route_capture_field_sequence) return 1;
+        if (gw_peek_memory(session->machine, 0x00ff042c, p1x, 2) != GW_OK ||
+            gw_peek_memory(session->machine, 0x00ff042e, p1y, 2) != GW_OK ||
+            gw_peek_memory(session->machine, 0x00ff0438, p2x, 2) != GW_OK ||
+            gw_peek_memory(session->machine, 0x00ff043a, p2y, 2) != GW_OK) return 1;
+        if (snprintf(path, sizeof(path), "%s/route-capture.json", r->route_capture_dir) >= (int)sizeof(path)) return 1;
+        out = route_capture_open_exclusive(path);
+        if (!out) return 1;
+        if (fprintf(out, "{\"schema\":\"genewhip-phase6-route-capture-v1\",\"candidate_sha256\":\"%s\",\"field_sequence\":%llu,\"field\":%llu,\"p1_x\":%u,\"p1_y\":%u,\"p2_x\":%u,\"p2_y\":%u}\n",
+            r->route_capture_identity, (unsigned long long)field->sequence, (unsigned long long)session->fields,
+            (unsigned)p1x[0] * 256u + p1x[1], (unsigned)p1y[0] * 256u + p1y[1],
+            (unsigned)p2x[0] * 256u + p2x[1], (unsigned)p2y[0] * 256u + p2y[1]) < 0) { (void)fclose(out); return 1; }
+        if (fclose(out) != 0) return 1;
+        r->route_capture_done = 1;
+        return 0;
+    }
+    if (snprintf(path, sizeof(path), "%s/route-capture.json", r->route_capture_dir) >= (int)sizeof(path)) return 1;
+    out = route_capture_open_exclusive(path);
+    if (!out) return 1;
+    if (fprintf(out, "{\"schema\":\"genewhip-phase6-route-capture-v1\",\"candidate_sha256\":\"%s\",\"field_sequence\":%llu,\"field\":%llu,\"attempt\":%u,\"source_tick\":%u,\"actor_x_px\":%u,\"actor_y_px\":%u}\n",
+        r->route_capture_identity, (unsigned long long)field->sequence, (unsigned long long)session->fields,
+        attempt, source_tick, x, y) < 0) { (void)fclose(out); return 1; }
+    if (fclose(out) != 0) return 1;
+    r->route_capture_done = 1;
+    return 0;
+}
+
+static uint64_t route_hash_bytes(uint64_t hash, const void *data, size_t length)
+{
+    const uint8_t *bytes = (const uint8_t *)data;
+    if (!hash) hash = UINT64_C(14695981039346656037);
+    for (size_t i = 0; i < length; ++i) { hash ^= bytes[i]; hash *= UINT64_C(1099511628211); }
+    return hash;
+}
+
+/* Capture one field from the renderer's actual target. SDL3 logical presentation
+ * returns the destination rectangle in output pixels; nearest sampling maps
+ * the integer-scaled renderer image back to the 320x224 core coordinate grid. */
+static int route_capture_renderer_target(runner *r, uint64_t field_sequence)
+{
+    SDL_FRect logical;
+    SDL_Rect crop;
+    SDL_Surface *surface;
+    uint8_t *rgba;
+    size_t rgba_bytes;
+    FILE *out;
+    uint64_t hash = 0;
+    if (!r->route_renderer_capture_path || r->route_renderer_capture_done ||
+        field_sequence != r->route_renderer_capture_field) return 1;
+    if (!SDL_GetRenderLogicalPresentationRect(r->renderer, &logical)) return 0;
+    crop.x = (int)(logical.x + 0.5f);
+    crop.y = (int)(logical.y + 0.5f);
+    crop.w = (int)(logical.w + 0.5f);
+    crop.h = (int)(logical.h + 0.5f);
+    if (crop.x < 0 || crop.y < 0 || crop.w < 320 || crop.h < 224) return 0;
+    surface = SDL_RenderReadPixels(r->renderer, &crop);
+    if (!surface || !surface->pixels || surface->w != crop.w || surface->h != crop.h) {
+        if (surface) SDL_DestroySurface(surface);
+        return 0;
+    }
+    if ((size_t)crop.w > SIZE_MAX / 4u / (size_t)crop.h) {
+        SDL_DestroySurface(surface);
+        return 0;
+    }
+    rgba_bytes = (size_t)crop.w * (size_t)crop.h * 4u;
+    if (rgba_bytes > 80u * 1024u * 1024u) { SDL_DestroySurface(surface); return 0; }
+    rgba = (uint8_t *)SDL_malloc(rgba_bytes);
+    if (!rgba) { SDL_DestroySurface(surface); return 0; }
+    if (!SDL_ConvertPixels(surface->w, surface->h, surface->format, surface->pixels,
+            surface->pitch, SDL_PIXELFORMAT_RGBA32, rgba, crop.w * 4)) {
+        SDL_free(rgba);
+        SDL_DestroySurface(surface);
+        return 0;
+    }
+    out = route_capture_open_exclusive(r->route_renderer_capture_path);
+    if (!out) { SDL_free(rgba); SDL_DestroySurface(surface); return 0; }
+    for (unsigned y = 0; y < 224; ++y) {
+        unsigned sy = (unsigned)(((uint64_t)(2u * y + 1u) * (unsigned)crop.h) / (2u * 224u));
+        for (unsigned x = 0; x < 320; ++x) {
+            unsigned sx = (unsigned)(((uint64_t)(2u * x + 1u) * (unsigned)crop.w) / (2u * 320u));
+            const uint8_t *pixel = rgba + ((size_t)sy * (unsigned)crop.w + sx) * 4u;
+            uint8_t serialized[4] = {pixel[2], pixel[1], pixel[0], 0};
+            hash = route_hash_bytes(hash, serialized, sizeof(serialized));
+            if (fwrite(serialized, 1, sizeof(serialized), out) != sizeof(serialized)) {
+                (void)fclose(out); SDL_free(rgba); SDL_DestroySurface(surface); return 0;
+            }
+        }
+    }
+    if (fclose(out) != 0) { SDL_free(rgba); SDL_DestroySurface(surface); return 0; }
+    SDL_free(rgba);
+    SDL_DestroySurface(surface);
+    r->route_renderer_capture_done = 1;
+    r->route_renderer_capture_hash = hash;
+    return 1;
+}
+
+static int attach_one_route_virtual_gamepad(runner *r, unsigned port)
+{
+    SDL_VirtualJoystickDesc desc;
+    uint32_t mask = 0;
+    for (size_t i = 0; i < sizeof(PAD_MAP) / sizeof(PAD_MAP[0]); ++i)
+        if (PAD_MAP[i].mask != GW_BUTTON_UP && PAD_MAP[i].mask != GW_BUTTON_DOWN &&
+            PAD_MAP[i].mask != GW_BUTTON_LEFT && PAD_MAP[i].mask != GW_BUTTON_RIGHT)
+            mask |= UINT32_C(1) << PAD_MAP[i].button;
+    SDL_INIT_INTERFACE(&desc);
+    desc.type = SDL_JOYSTICK_TYPE_GAMEPAD;
+    desc.nbuttons = SDL_GAMEPAD_BUTTON_COUNT;
+    desc.nhats = 1;
+    desc.button_mask = mask;
+    desc.name = port ? "Genewhip Phase 6 port two" : "Genewhip Phase 6 port one";
+    r->route_virtual_ids[port] = SDL_AttachVirtualJoystick(&desc);
+    if (!r->route_virtual_ids[port]) return 0;
+    {
+        SDL_GUID guid = SDL_GetJoystickGUIDForID(r->route_virtual_ids[port]);
+        char guid_text[33];
+        char mapping[384];
+        SDL_GUIDToString(guid, guid_text, sizeof(guid_text));
+        if (SDL_snprintf(mapping, sizeof(mapping),
+                "%s,Genewhip Phase 6 virtual controller,a:b0,b:b1,x:b2,y:b3,start:b6,"
+                "dpup:h0.1,dpright:h0.2,dpdown:h0.4,dpleft:h0.8", guid_text) >= (int)sizeof(mapping) ||
+            !SDL_SetGamepadMapping(r->route_virtual_ids[port], mapping)) {
+            (void)SDL_DetachVirtualJoystick(r->route_virtual_ids[port]);
+            r->route_virtual_ids[port] = 0;
+            return 0;
+        }
+    }
+    r->route_virtual_pads[port] = SDL_OpenGamepad(r->route_virtual_ids[port]);
+    if (!r->route_virtual_pads[port]) {
+        (void)SDL_DetachVirtualJoystick(r->route_virtual_ids[port]);
+        r->route_virtual_ids[port] = 0;
+        return 0;
+    }
+    r->gamepads[port] = r->route_virtual_pads[port];
+    r->source[port] = SOURCE_GAMEPAD;
+    r->gamepad_slot[port] = port;
+    if (port == 0) {
+        r->route_virtual_id = r->route_virtual_ids[0];
+        r->route_virtual_pad = r->route_virtual_pads[0];
+    }
+    r->route_virtual_gamepad = 1;
+    return 1;
+}
+
+static int attach_route_virtual_gamepads(runner *r)
+{
+    if (!attach_one_route_virtual_gamepad(r, 0)) return 0;
+    if (attach_one_route_virtual_gamepad(r, 1)) return 1;
+    SDL_CloseGamepad(r->route_virtual_pads[0]);
+    r->route_virtual_pads[0] = NULL;
+    r->gamepads[0] = NULL;
+    (void)SDL_DetachVirtualJoystick(r->route_virtual_ids[0]);
+    r->route_virtual_ids[0] = 0;
+    r->route_virtual_pad = NULL;
+    r->route_virtual_id = 0;
+    r->route_virtual_gamepad = 0;
+    return 0;
+}
+
+static int route_apply_mask(void *context, unsigned port, uint32_t mask, uint32_t *effective);
+static uint32_t sample_port(const runner *r, unsigned port);
+
+static int route_input_contract(const char *text)
+{
+    runner r;
+    char *copy, *cursor;
+    int result = 0, with_video = 0;
+    memset(&r, 0, sizeof(r));
+    r.source[0] = SOURCE_GAMEPAD;
+    r.source[1] = SOURCE_GAMEPAD;
+    with_video = SDL_getenv("GENEWHIP_PHASE6_INPUT_VIDEO") &&
+        SDL_strcmp(SDL_getenv("GENEWHIP_PHASE6_INPUT_VIDEO"), "1") == 0;
+    if (with_video) (void)SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+    if (!text || !*text || !SDL_Init(with_video ? (SDL_INIT_VIDEO | SDL_INIT_GAMEPAD) : SDL_INIT_GAMEPAD)) return 1;
+    if (with_video) {
+        r.window = SDL_CreateWindow("Genewhip input contract", 320, 224, 0);
+        if (!r.window) { SDL_Quit(); return 1; }
+    }
+    if (!attach_route_virtual_gamepads(&r)) {
+        if (r.window) SDL_DestroyWindow(r.window);
+        SDL_Quit(); return 1;
+    }
+    if (with_video) r.route_window_raise_requested = SDL_RaiseWindow(r.window) ? 1 : 0;
+    copy = SDL_strdup(text);
+    if (!copy) { result = 1; goto done; }
+    fprintf(stderr, "route-input-contract: checking requested masks through SDL_Gamepad/sample_port\n");
+    printf("{\"schema\":\"genewhip-sdl-virtual-input-contract-v1\",\"video_driver\":\"%s\",\"window_flags\":%" PRIu64 ",\"window_input_focus\":%s,\"window_raise_requested\":%s,\"background_events_hint\":\"%s\",\"virtual_gamepad_ids\":[%d,%d],\"inputs\":[\n",
+        SDL_GetCurrentVideoDriver() ? SDL_GetCurrentVideoDriver() : "unavailable",
+        r.window ? (uint64_t)SDL_GetWindowFlags(r.window) : UINT64_C(0),
+        (r.window && (SDL_GetWindowFlags(r.window) & SDL_WINDOW_INPUT_FOCUS)) ? "true" : "false",
+        r.route_window_raise_requested ? "true" : "false",
+        with_video ? "1" : "unchanged", r.route_virtual_ids[0], r.route_virtual_ids[1]);
+    cursor = copy;
+    for (unsigned index = 0; cursor && *cursor && index < 64; ++index) {
+        char *end = NULL;
+        unsigned long port = SDL_strtoul(cursor, &end, 10);
+        unsigned long value;
+        uint32_t effective = 0, other = 0;
+        if (end == cursor || *end != ':' || port > 1) { result = 1; break; }
+        value = SDL_strtoul(end + 1, &end, 10);
+        if (value > 255 || (*end && *end != ',')) { result = 1; break; }
+        if (route_apply_mask(&r, (unsigned)port, (uint32_t)value, &effective) != 0) { result = 1; break; }
+        other = sample_port(&r, 1u - (unsigned)port);
+        printf("%s{\"port\":%lu,\"requested_mask\":%lu,\"effective_mask\":%u,\"joystick_mask\":%u,\"gamepad_id\":%d,\"other_port_mask\":%u}",
+            index ? "," : "", port, value, effective, r.route_inputs[r.route_input_count-1].joystick_mask,
+            r.route_inputs[r.route_input_count-1].gamepad_id, other);
+        if (effective != value) result = 1;
+        cursor = *end == ',' ? end + 1 : NULL;
+    }
+    if (cursor != NULL) result = 1;
+    puts("]}");
+    SDL_free(copy);
+done:
+    for (unsigned port = 0; port < 2; ++port) {
+        if (r.route_virtual_pads[port]) SDL_CloseGamepad(r.route_virtual_pads[port]);
+        if (r.route_virtual_ids[port]) (void)SDL_DetachVirtualJoystick(r.route_virtual_ids[port]);
+    }
+    if (r.window) SDL_DestroyWindow(r.window);
+    SDL_Quit();
+    return result;
+}
 
 static void set_title(runner *r, const char *state)
 {
@@ -237,6 +607,7 @@ static void apply_action(runner *r, const script_entry *entry)
 static void open_gamepad(runner *r, SDL_JoystickID id)
 {
     for (int i = 0; i < MAX_GAMEPADS; ++i) {
+        if (r->gamepads[i] && SDL_GetGamepadID(r->gamepads[i]) == id) return;
         if (!r->gamepads[i]) { r->gamepads[i] = SDL_OpenGamepad(id); return; }
     }
 }
@@ -289,8 +660,12 @@ static void handle_events(runner *r)
         } else if (event.type == SDL_EVENT_DROP_FILE) {
             if (event.drop.data) load_dropped(r, event.drop.data);
         } else if (event.type == SDL_EVENT_GAMEPAD_ADDED) {
+            for (unsigned port = 0; port < 2; ++port)
+                if (event.gdevice.which == r->route_virtual_ids[port]) r->route_virtual_add_events++;
             open_gamepad(r, event.gdevice.which);
         } else if (event.type == SDL_EVENT_GAMEPAD_REMOVED) {
+            for (unsigned port = 0; port < 2; ++port)
+                if (event.gdevice.which == r->route_virtual_ids[port]) r->route_virtual_remove_events++;
             close_gamepad(r, event.gdevice.which);
         }
     }
@@ -337,10 +712,188 @@ static int present_field(runner *r)
         PRESENT_FAILURE("SDL_UpdateTexture");
     if (!SDL_RenderClear(r->renderer)) PRESENT_FAILURE("SDL_RenderClear");
     if (!SDL_RenderTexture(r->renderer, r->texture, NULL, NULL)) PRESENT_FAILURE("SDL_RenderTexture");
+    if (r->route_virtual_gamepad) {
+        int output_w = 0, output_h = 0;
+        if (!SDL_GetRenderOutputSize(r->renderer, &output_w, &output_h) || output_w <= 0 || output_h <= 0)
+            PRESENT_FAILURE("SDL_GetRenderOutputSize");
+        SDL_Rect probe = {output_w / 2, output_h / 2, 1, 1};
+        SDL_Surface *surface = SDL_RenderReadPixels(r->renderer, &probe);
+        if (!surface || !surface->pixels || surface->pitch <= 0) {
+            if (surface) SDL_DestroySurface(surface);
+            PRESENT_FAILURE("SDL_RenderReadPixels");
+        }
+        r->route_readback_hash = route_hash_bytes(r->route_readback_hash,
+            surface->pixels, (size_t)surface->pitch);
+        r->route_readback_samples++;
+        SDL_DestroySurface(surface);
+    }
+    if (r->route_renderer_capture_path &&
+        !route_capture_renderer_target(r, field.sequence)) PRESENT_FAILURE("SDL renderer field capture");
     if (!SDL_RenderPresent(r->renderer)) PRESENT_FAILURE("SDL_RenderPresent");
+    if (r->route_virtual_gamepad) r->route_presented_frames++;
     runner_stats_present(&r->stats, field.sequence, 1, NULL);
 #undef PRESENT_FAILURE
     return 1;
+}
+
+static int route_field_present(void *context, const gw_session *session)
+{
+    runner *r = (runner *)context;
+    gw_video_field field;
+    const uint32_t *pixels = NULL;
+    const int16_t *frames = NULL;
+    uint32_t count = 0;
+    gw_audio_read_result audio_result;
+    handle_events(r);
+    r->route_event_pumps++;
+    if (r->quit) return 1;
+    memset(&field, 0, sizeof(field));
+    field.struct_size = sizeof(field);
+    field.version = GW_API_VERSION;
+    if (gw_session_field(session, &field, &pixels) != 0) return 1;
+    if (r->route_capture_dir && !r->route_capture_done) {
+        int selected = 0;
+        if (r->route_capture_attempt) {
+            uint8_t attempt_bytes[2], tick_bytes[2];
+            if (gw_peek_memory(session->machine, 0x00ff140e, attempt_bytes, 2) != GW_OK ||
+                gw_peek_memory(session->machine, 0x00ff1410, tick_bytes, 2) != GW_OK) return 1;
+            selected = ((uint32_t)attempt_bytes[0] * 256u + attempt_bytes[1]) == r->route_capture_attempt &&
+                ((uint32_t)tick_bytes[0] * 256u + tick_bytes[1]) >= r->route_capture_source_tick;
+        } else {
+            selected = session->fields == r->route_capture_field_sequence;
+        }
+        if (selected && (route_capture_field_pixels(r, &field, pixels) != 0 ||
+            route_capture_metadata(r, session, &field) != 0)) return 1;
+    }
+    if (r->route_print_hashes && gw_session_print_field(session, stdout) != 0) return 1;
+    runner_stats_field(&r->stats, field.sequence, field.sequence != 0);
+    if (gw_session_audio(session, &frames, &count, &audio_result) != 0) return 1;
+    if (r->route_audio_dump) {
+        uint64_t bytes = (uint64_t)count * 4u;
+        if (bytes > GW_ROUTE_CAPTURE_AUDIO_MAX_BYTES - r->route_audio_dump_bytes ||
+            dump_audio_frames(r->route_audio_dump, frames, count) != 0) return 1;
+        r->route_audio_dump_bytes += bytes;
+    }
+    if (r->route_virtual_gamepad && count && frames) {
+        r->route_pcm_hash = route_hash_bytes(r->route_pcm_hash, frames,
+            (size_t)count * 2u * sizeof(*frames));
+        r->route_pcm_frames += count;
+    }
+    runner_audio_put_field(r->audio, frames, count, session->audio_total_frames,
+        audio_result.lost, audio_result.clipped);
+    return present_field(r) ? 0 : 1;
+}
+
+static int route_apply_mask(void *context, unsigned port, uint32_t mask, uint32_t *effective)
+{
+    runner *r = (runner *)context;
+    script_entry action;
+    if (r->route_virtual_gamepad) {
+        SDL_Gamepad *pad;
+        SDL_Joystick *joystick;
+        Uint8 hat = SDL_HAT_CENTERED;
+        int up, down, left, right;
+        if (port > 1 || r->route_input_count >= 64) return 1;
+        pad = r->route_virtual_pads[port];
+        joystick = pad ? SDL_GetGamepadJoystick(pad) : NULL;
+        if (!joystick) return 1;
+        up = (mask & GW_BUTTON_UP) != 0; down = (mask & GW_BUTTON_DOWN) != 0;
+        left = (mask & GW_BUTTON_LEFT) != 0; right = (mask & GW_BUTTON_RIGHT) != 0;
+        if (up) hat = left ? SDL_HAT_LEFTUP : right ? SDL_HAT_RIGHTUP : SDL_HAT_UP;
+        else if (down) hat = left ? SDL_HAT_LEFTDOWN : right ? SDL_HAT_RIGHTDOWN : SDL_HAT_DOWN;
+        else if (left) hat = SDL_HAT_LEFT;
+        else if (right) hat = SDL_HAT_RIGHT;
+        for (size_t i = 0; i < sizeof(PAD_MAP) / sizeof(PAD_MAP[0]); ++i) {
+            if (PAD_MAP[i].mask == GW_BUTTON_UP || PAD_MAP[i].mask == GW_BUTTON_DOWN ||
+                PAD_MAP[i].mask == GW_BUTTON_LEFT || PAD_MAP[i].mask == GW_BUTTON_RIGHT) continue;
+            if (!SDL_SetJoystickVirtualButton(joystick, (int)PAD_MAP[i].button,
+                    !r->route_input_suppress && (mask & PAD_MAP[i].mask) != 0)) return 1;
+        }
+        if (r->route_input_suppress) hat = SDL_HAT_CENTERED;
+        if (!SDL_SetJoystickVirtualHat(joystick, 0, hat)) return 1;
+        SDL_UpdateJoysticks();
+        handle_events(r);
+        r->route_inputs[r->route_input_count].requested = mask;
+        r->route_inputs[r->route_input_count].port = port;
+        r->route_inputs[r->route_input_count].gamepad_id = SDL_GetGamepadID(pad);
+        r->route_inputs[r->route_input_count].joystick_mask = 0;
+        for (size_t i = 0; i < sizeof(PAD_MAP) / sizeof(PAD_MAP[0]); ++i) {
+            if (PAD_MAP[i].mask == GW_BUTTON_UP || PAD_MAP[i].mask == GW_BUTTON_DOWN ||
+                PAD_MAP[i].mask == GW_BUTTON_LEFT || PAD_MAP[i].mask == GW_BUTTON_RIGHT) continue;
+            if (SDL_GetJoystickButton(joystick, (int)PAD_MAP[i].button))
+                r->route_inputs[r->route_input_count].joystick_mask |= PAD_MAP[i].mask;
+        }
+        {
+            Uint8 actual_hat = SDL_GetJoystickHat(joystick, 0);
+            if (actual_hat & SDL_HAT_UP) r->route_inputs[r->route_input_count].joystick_mask |= GW_BUTTON_UP;
+            if (actual_hat & SDL_HAT_DOWN) r->route_inputs[r->route_input_count].joystick_mask |= GW_BUTTON_DOWN;
+            if (actual_hat & SDL_HAT_LEFT) r->route_inputs[r->route_input_count].joystick_mask |= GW_BUTTON_LEFT;
+            if (actual_hat & SDL_HAT_RIGHT) r->route_inputs[r->route_input_count].joystick_mask |= GW_BUTTON_RIGHT;
+        }
+        *effective = sample_port(r, port);
+        r->route_inputs[r->route_input_count].effective = *effective;
+        r->route_input_count++;
+        return r->quit ? 1 : 0;
+    }
+    memset(&action, 0, sizeof(action));
+    action.action = ACTION_PRESS; action.port = port; action.mask = mask;
+    apply_action(r, &action);
+    *effective = sample_port(r, port);
+    return 0;
+}
+
+static int write_route_diagnostic(const runner *r, const runner_audio *audio,
+    const char *path, int core_status)
+{
+    FILE *out = fopen(path, "wb");
+    int host_pass;
+    if (!out) return 0;
+    host_pass = r->route_virtual_gamepad && r->route_input_count > 0 && r->route_event_pumps > 0 &&
+        r->route_presented_frames > 0 && r->route_readback_samples > 0 && r->route_pcm_frames > 0 &&
+        (!r->route_renderer_capture_path || r->route_renderer_capture_done) &&
+        audio->enabled && audio->counters.produced_frames > 0 && audio->counters.consumed_frames > 0;
+    for (uint32_t i = 0; host_pass && i < r->route_input_count; ++i)
+        if (r->route_inputs[i].requested != r->route_inputs[i].effective) host_pass = 0;
+    if (fprintf(out, "{\"schema\":\"genewhip-phase6-sdl-diagnostic-v1\",\"input_path\":\"sdl-virtual-gamepad/sample_port\","
+        "\"core_outcome\":\"%s\",\"host_outcome\":\"%s\",\"capability\":\"%s\","
+        "\"event_pumps\":%" PRIu64 ",\"input_events\":[", core_status == 0 ? "pass" : "fail",
+        host_pass ? "pass-diagnostic" : "fail-diagnostic", audio->enabled ? "audio-enabled" : "audio-unavailable",
+        r->route_event_pumps) < 0) goto fail;
+    for (uint32_t i = 0; i < r->route_input_count; ++i)
+        if (fprintf(out, "%s{\"port\":%u,\"requested_mask\":%u,\"effective_mask\":%u,\"joystick_mask\":%u,\"gamepad_id\":%d,\"handler\":\"SDL_Gamepad/sample_port\"}",
+            i ? "," : "", r->route_inputs[i].port, r->route_inputs[i].requested,
+            r->route_inputs[i].effective, r->route_inputs[i].joystick_mask, r->route_inputs[i].gamepad_id) < 0) goto fail;
+    if (fprintf(out, "],\"presented_frames\":%" PRIu64 ",\"renderer_readback_samples\":%" PRIu64
+        ",\"renderer_readback_hash\":\"%016" PRIx64 "\",\"pcm_frames\":%" PRIu64
+        ",\"pcm_hash\":\"%016" PRIx64 "\",\"audio_submitted_frames\":%" PRIu64
+        ",\"audio_device_consumed_frames\":%" PRIu64 ",\"audio_device_activity\":%s"
+        ",\"renderer\":\"%s\",\"video_driver\":\"%s\",\"audio_driver\":\"%s\","
+        "\"audio_device_id\":%u,\"audio_device_name\":\"%s\",\"renderer_capture_path\":\"%s\","
+        "\"renderer_capture_field\":%" PRIu64 ",\"renderer_capture_fnv1a64\":\"%016" PRIx64 "\","
+        "\"virtual_gamepad_ids\":[%d,%d],\"virtual_gamepad_add_events\":%u,\"virtual_gamepad_remove_events\":%u,"
+        "\"renderer_capture_pixel\":\"320x224 uint32 0x00RRGGBB little-endian\","
+        "\"window_flags\":%" PRIu64 ",\"window_input_focus\":%s,\"window_raise_requested\":%s,"
+        "\"renderer_readback_activity\":%s}\n",
+        r->route_presented_frames, r->route_readback_samples, r->route_readback_hash,
+        r->route_pcm_frames, r->route_pcm_hash, audio->counters.produced_frames,
+        audio->counters.consumed_frames, audio->counters.consumed_frames ? "true" : "false",
+        r->renderer ? SDL_GetRendererName(r->renderer) : "unavailable",
+        SDL_GetCurrentVideoDriver() ? SDL_GetCurrentVideoDriver() : "unavailable",
+        SDL_GetCurrentAudioDriver() ? SDL_GetCurrentAudioDriver() : "unavailable",
+        audio->stream ? (unsigned)SDL_GetAudioStreamDevice(audio->stream) : 0u,
+        audio->stream && SDL_GetAudioDeviceName(SDL_GetAudioStreamDevice(audio->stream)) ?
+            SDL_GetAudioDeviceName(SDL_GetAudioStreamDevice(audio->stream)) : "unavailable",
+        r->route_renderer_capture_path ? r->route_renderer_capture_path : "",
+        r->route_renderer_capture_field, r->route_renderer_capture_hash,
+        r->route_virtual_ids[0], r->route_virtual_ids[1], r->route_virtual_add_events, r->route_virtual_remove_events,
+        r->window ? (uint64_t)SDL_GetWindowFlags(r->window) : UINT64_C(0),
+        (r->window && (SDL_GetWindowFlags(r->window) & SDL_WINDOW_INPUT_FOCUS)) ? "true" : "false",
+        r->route_window_raise_requested ? "true" : "false",
+        r->route_renderer_capture_done ? "true" : "false") < 0) goto fail;
+    return fclose(out) == 0 && host_pass;
+fail:
+    (void)fclose(out);
+    return 0;
 }
 
 int main(int argc, char **argv)
@@ -357,6 +910,19 @@ int main(int argc, char **argv)
     uint64_t stats_start_ns = 0;
     const char *rom_path = NULL, *script_path = NULL, *reason = NULL, *record_path = NULL, *replay_path = NULL;
     const char *stats_path = NULL, *dump_audio_path = NULL;
+    const char *route_plan_path = NULL, *route_report_path = NULL;
+    const char *route_diagnostic_path = NULL;
+    const char *route_input_contract_text = NULL;
+    const char *route_capture_dir = NULL, *route_capture_identity = NULL;
+    const char *route_renderer_capture_path = NULL;
+    unsigned long long route_renderer_capture_field = 0;
+    unsigned long long route_capture_field_sequence = 0, route_capture_attempt = 0, route_capture_source_tick = 0;
+    int route_virtual_gamepad = 0, route_core_status = 0;
+    uint64_t route_probe_pc = 0;
+    uint64_t route_stop_horizon = 308;
+    int route_instruction_probe = 0;
+    int route_probe_only = 0;
+    gw_session_route_plan route_plan = {0};
     FILE *audio_dump = NULL;
     int status, exit_code = 0;
 
@@ -380,6 +946,45 @@ int main(int argc, char **argv)
             replay_path = argv[++i];
         } else if (!strcmp(argv[i], "--dump-audio") && i + 1 < argc) {
             dump_audio_path = argv[++i];
+        } else if (!strcmp(argv[i], "--dump-fields") && i + 1 < argc) {
+            route_capture_dir = argv[++i];
+        } else if (!strcmp(argv[i], "--capture-field") && i + 1 < argc) {
+            if (!parse_count(argv[++i], UINT32_MAX, &route_capture_field_sequence) || !route_capture_field_sequence) return usage();
+        } else if (!strcmp(argv[i], "--capture-attempt-tick") && i + 2 < argc) {
+            if (!parse_count(argv[++i], UINT16_MAX, &route_capture_attempt) || !route_capture_attempt ||
+                !parse_count(argv[++i], UINT16_MAX, &route_capture_source_tick)) return usage();
+        } else if (!strcmp(argv[i], "--capture-identity") && i + 1 < argc) {
+            route_capture_identity = argv[++i];
+            if (strlen(route_capture_identity) != 64u) return usage();
+            for (size_t n = 0; n < 64; ++n)
+                if (!((route_capture_identity[n] >= '0' && route_capture_identity[n] <= '9') ||
+                      (route_capture_identity[n] >= 'a' && route_capture_identity[n] <= 'f') ||
+                      (route_capture_identity[n] >= 'A' && route_capture_identity[n] <= 'F'))) return usage();
+        } else if (!strcmp(argv[i], "--route-probe-only")) {
+            route_probe_only = 1;
+        } else if (!strcmp(argv[i], "--route-stop-horizon") && i + 1 < argc) {
+            if (!parse_count(argv[++i], 308, &route_stop_horizon) || !route_stop_horizon) return usage();
+        } else if (!strcmp(argv[i], "--route-instruction-probe") && i + 1 < argc) {
+            if (!parse_count(argv[++i], 0xffffffu, &route_probe_pc)) return usage();
+            route_instruction_probe = 1;
+        } else if (!strcmp(argv[i], "--route-plan") && i + 1 < argc) {
+            route_plan_path = argv[++i];
+            config.diagnostics = 1;
+        } else if (!strcmp(argv[i], "--route-report") && i + 1 < argc) {
+            route_report_path = argv[++i];
+        } else if (!strcmp(argv[i], "--route-diagnostic") && i + 1 < argc) {
+            route_diagnostic_path = argv[++i];
+        } else if (!strcmp(argv[i], "--route-input-source") && i + 1 < argc) {
+            if (strcmp(argv[++i], "virtual-gamepad")) return usage();
+            route_virtual_gamepad = 1;
+        } else if (!strcmp(argv[i], "--route-input-suppress")) {
+            r.route_input_suppress = 1;
+        } else if (!strcmp(argv[i], "--route-input-contract") && i + 1 < argc) {
+            route_input_contract_text = argv[++i];
+        } else if (!strcmp(argv[i], "--renderer-capture-field") && i + 1 < argc) {
+            if (!parse_count(argv[++i], UINT32_MAX, &route_renderer_capture_field) || !route_renderer_capture_field) return usage();
+        } else if (!strcmp(argv[i], "--renderer-capture-output") && i + 1 < argc) {
+            route_renderer_capture_path = argv[++i];
         } else if (!strcmp(argv[i], "--print-field-hashes")) {
             print_hashes = 1;
         } else if ((!strcmp(argv[i], "--port1") || !strcmp(argv[i], "--port2")) && i + 1 < argc) {
@@ -397,7 +1002,46 @@ int main(int argc, char **argv)
             return usage();
         }
     }
-    if (!rom_path || (record_path && replay_path)) return usage();
+    if (route_input_contract_text) {
+        if (rom_path || route_plan_path || route_report_path || route_diagnostic_path || script_path ||
+            record_path || replay_path || stats_path || dump_audio_path || route_virtual_gamepad)
+            return usage();
+        return route_input_contract(route_input_contract_text);
+    }
+    if (!rom_path || (record_path && replay_path) ||
+        ((route_plan_path == NULL) != (route_report_path == NULL)) ||
+        (route_virtual_gamepad && (!route_plan_path || !route_diagnostic_path)) ||
+        (route_diagnostic_path && !route_virtual_gamepad) ||
+        (route_probe_only && (!route_instruction_probe || !route_plan_path)) ||
+        (route_plan_path && (record_path || replay_path || script_path)) ||
+        ((route_capture_dir || route_capture_identity || route_capture_field_sequence || route_capture_attempt || route_capture_source_tick) &&
+         (!route_plan_path || !route_capture_dir || !route_capture_identity ||
+          !dump_audio_path ||
+          (!route_capture_field_sequence && !route_capture_attempt) ||
+          (route_capture_field_sequence && route_capture_attempt) || (!route_capture_attempt && route_capture_source_tick) ||
+          (route_capture_attempt && route_capture_source_tick == 0))) ||
+        ((route_renderer_capture_path == NULL) != (route_renderer_capture_field == 0)) ||
+        (route_renderer_capture_path && (!route_plan_path || !route_virtual_gamepad || !route_diagnostic_path)) ||
+        (r.route_input_suppress && (!route_plan_path || !route_virtual_gamepad || !route_diagnostic_path))) return usage();
+    if (route_plan_path && gw_session_route_load(route_plan_path, &route_plan) != 0) {
+        fputs("REJECT: route-plan\n", stderr);
+        return 1;
+    }
+    if (route_probe_only && !route_plan.controller) {
+        gw_session_route_plan_free(&route_plan);return usage();
+    }
+    if (route_virtual_gamepad) { r.source[0] = SOURCE_GAMEPAD; r.source[1] = SOURCE_GAMEPAD; }
+    r.route_capture_dir = route_capture_dir;
+    r.route_capture_identity = route_capture_identity;
+    r.route_capture_field_sequence = route_capture_field_sequence;
+    r.route_capture_attempt = route_capture_attempt;
+    r.route_capture_source_tick = route_capture_source_tick;
+    r.route_renderer_capture_path = route_renderer_capture_path;
+    r.route_renderer_capture_field = route_renderer_capture_field;
+    if (route_capture_dir && !route_capture_directory_ready(route_capture_dir)) {
+        fputs("ERROR: route capture directory must be an existing empty owned directory\n", stderr);
+        return 1;
+    }
     {
         unsigned used = 0;
         for (unsigned port = 0; port < 2; ++port) {
@@ -434,7 +1078,20 @@ int main(int argc, char **argv)
     }
     if (have_log) (void)gw_session_attach_log(&r.session, &log, replay_path ? GW_SESSION_REPLAY : GW_SESSION_RECORD);
 
+    if (route_virtual_gamepad)
+        (void)SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
+        if (route_virtual_gamepad && route_diagnostic_path) {
+            const char *requested = SDL_getenv("SDL_VIDEODRIVER");
+            fprintf(stderr, "ERROR: Could not initialise SDL video; requested_driver=%s; compiled_drivers=",
+                requested && *requested ? requested : "automatic");
+            for (int i = 0; i < SDL_GetNumVideoDrivers(); ++i)
+                fprintf(stderr, "%s%s", i ? "," : "", SDL_GetVideoDriver(i));
+            fprintf(stderr, "; SDL_GetError=%s\n", SDL_GetError());
+            (void)write_route_capability_report(route_diagnostic_path, "video-unavailable");
+            gw_session_close(&r.session);
+            return 77;
+        }
         fatal_box("Could not initialise SDL video");
         gw_session_close(&r.session);
         return 1;
@@ -442,16 +1099,41 @@ int main(int argc, char **argv)
     r.window = SDL_CreateWindow("Genewhip", (int)(320 * scale), (int)(224 * scale), SDL_WINDOW_RESIZABLE);
     if (r.window) r.renderer = SDL_CreateRenderer(r.window, NULL);
     if (!r.window || !r.renderer) {
+        if (route_virtual_gamepad && route_diagnostic_path) {
+            const char *requested = SDL_getenv("SDL_VIDEODRIVER");
+            fprintf(stderr, "ERROR: Could not create the window or renderer; requested_driver=%s; compiled_drivers=",
+                requested && *requested ? requested : "automatic");
+            for (int i = 0; i < SDL_GetNumVideoDrivers(); ++i)
+                fprintf(stderr, "%s%s", i ? "," : "", SDL_GetVideoDriver(i));
+            fprintf(stderr, "; SDL_GetError=%s\n", SDL_GetError());
+            (void)write_route_capability_report(route_diagnostic_path, "renderer-unavailable");
+            if (r.renderer) SDL_DestroyRenderer(r.renderer);
+            if (r.window) SDL_DestroyWindow(r.window);
+            SDL_Quit();
+            gw_session_close(&r.session);
+            return 77;
+        }
         fatal_box("Could not create the window or renderer");
         if (r.window) SDL_DestroyWindow(r.window);
         SDL_Quit();
         gw_session_close(&r.session);
         return 1;
     }
+    if (route_virtual_gamepad && !attach_route_virtual_gamepads(&r)) {
+        fputs("ERROR: could not attach SDL virtual gamepad\n", stderr);
+        SDL_DestroyRenderer(r.renderer);
+        SDL_DestroyWindow(r.window);
+        SDL_Quit();
+        gw_session_close(&r.session);
+        return 1;
+    }
+    if (route_virtual_gamepad && SDL_GetCurrentVideoDriver() &&
+        SDL_strcmp(SDL_GetCurrentVideoDriver(), "cocoa") == 0)
+        r.route_window_raise_requested = SDL_RaiseWindow(r.window) ? 1 : 0;
     (void)runner_audio_open(&audio);
     r.audio = &audio;
     if (dump_audio_path) {
-        audio_dump = fopen(dump_audio_path, "wb");
+        audio_dump = fopen(dump_audio_path, route_plan_path ? "wbx" : "wb");
         if (!audio_dump) {
             fputs("ERROR: could not write audio dump\n", stderr);
             runner_audio_close(&audio);
@@ -463,12 +1145,86 @@ int main(int argc, char **argv)
             return 1;
         }
     }
+    r.route_audio_dump = audio_dump;
+    r.route_print_hashes = print_hashes;
     (void)SDL_SetRenderVSync(r.renderer, 1);
     set_title(&r, NULL);
 
     period_ns = ((uint64_t)GW_FIELD_TICKS * UINT64_C(1000000000)) / GW_MASTER_HZ;
     next_ns = SDL_GetTicksNS();
     stats_start_ns = next_ns;
+    if (route_plan_path) {
+        r.session.route_instruction_probe = route_instruction_probe;
+        r.session.route_probe_only = route_probe_only;
+        r.session.route_stop_horizon = (uint32_t)route_stop_horizon;
+        r.session.route_probe_pc = (uint32_t)route_probe_pc;
+        FILE *route_report = fopen(route_report_path, route_capture_dir ? "wbx" : "wb");
+        if (!route_report) { fputs("ERROR: could not write route report\n", stderr); exit_code = 1; }
+        if (!exit_code && route_plan.controller) {
+            route_core_status = gw_route_controller_run(&r.session, route_plan.controller, route_report,
+                route_apply_mask, &r, route_field_present, &r, audio.enabled);
+            if (route_core_status != 0) exit_code = 1;
+            if (fclose(route_report) != 0) exit_code = 1;
+        } else {
+        if (!exit_code && fprintf(route_report,
+            "{\"schema\":\"genewhip-phase6-tracer-v1\",\"host\":{\"renderer\":\"sdl\",\"audio_open\":%s},\"observations\":[",
+            audio.enabled ? "true" : "false") < 0)
+            exit_code = 1;
+        for (size_t n = 0; !exit_code && n < route_plan.operation_count; ++n) {
+            gw_session_route_op *op = &route_plan.operations[n];
+            uint64_t instructions = 0;
+            uint64_t observations_before = r.session.route_observation_count;
+            int route_status = gw_session_route_observe(&r.session, &route_plan, op,
+                route_field_present, &r, &instructions);
+            script_entry action;
+            uint32_t effective_mask;
+            if (route_status != 0) {
+                fprintf(stderr, "ERROR: route observation %zu stopped (status %d)\n", n, route_status);
+                exit_code = 1;
+                break;
+            }
+            memset(&action, 0, sizeof(action));
+            action.action = ACTION_PRESS;
+            action.port = op->port;
+            action.mask = op->mask;
+            apply_action(&r, &action); /* Same host-script handler used by --host-script. */
+            effective_mask = sample_port(&r, op->port);
+            route_status = gw_session_route_dispatch(&r.session, op->port, effective_mask, op->dispatch_tick);
+            if (route_status != 0) {
+                fprintf(stderr, "ERROR: route dispatch %zu failed (status %d)\n", n, route_status);
+                exit_code = 1;
+                break;
+            }
+            if (fprintf(route_report, "%s{\"operation\":%zu,\"tick\":%llu,\"instructions\":%llu,\"observations\":%llu,"
+                "\"address\":%u,\"value\":%u,\"port\":%u,\"mask\":%u,\"handler\":\"host-script\"}",
+                n ? "," : "", n, (unsigned long long)r.session.tick,
+                (unsigned long long)instructions,
+                (unsigned long long)(r.session.route_observation_count - observations_before),
+                op->address, op->value, op->port, effective_mask) < 0) exit_code = 1;
+        }
+        if (route_report) {
+            if (fprintf(route_report, "],\"queue_high_water\":%u}\n", r.session.route_queue_high_water) < 0)
+                exit_code = 1;
+            if (fclose(route_report) != 0) exit_code = 1;
+        }
+        }
+        if (!exit_code && !route_plan.controller) {
+            status = gw_session_step_field(&r.session);
+            if (status != 0 || route_field_present(&r, &r.session) != 0) {
+                fputs("ERROR: route host field/audio/presentation path failed\n", stderr);
+                exit_code = 1;
+            }
+        }
+        if (route_capture_dir && (!r.route_capture_done || !audio.enabled || !r.route_audio_dump_bytes)) {
+            fputs("ERROR: route capture failed: no eligible field or enabled PCM output\n", stderr);
+            exit_code = 1;
+        }
+        if (route_diagnostic_path && !write_route_diagnostic(&r, &audio, route_diagnostic_path, route_core_status)) {
+            fputs("ERROR: SDL route diagnostic did not establish all host paths\n", stderr);
+            exit_code = 1;
+        }
+        r.quit = 1;
+    }
     while (!r.quit) {
         uint64_t now;
         int due = 0, stepped = 0;
@@ -588,12 +1344,15 @@ int main(int argc, char **argv)
     }
     if (fflush(stdout) != 0) exit_code = 1;
     for (int i = 0; i < MAX_GAMEPADS; ++i) if (r.gamepads[i]) SDL_CloseGamepad(r.gamepads[i]);
+    for (unsigned port = 0; port < 2; ++port)
+        if (r.route_virtual_ids[port]) (void)SDL_DetachVirtualJoystick(r.route_virtual_ids[port]);
     if (r.texture) SDL_DestroyTexture(r.texture);
     SDL_DestroyRenderer(r.renderer);
     SDL_DestroyWindow(r.window);
     runner_audio_close(&audio);
     SDL_Quit();
     gw_session_close(&r.session);
+    gw_session_route_plan_free(&route_plan);
     if (have_log) gw_input_log_free(&log);
     return exit_code;
 }

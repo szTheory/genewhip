@@ -1,0 +1,102 @@
+{
+  "schema": "genewhip-phase6-d122-observer-halt-v1",
+  "status": "halted",
+  "plan": "06-18",
+  "halt_reason": "stack-pair-missing-enabled",
+  "halt_detail": "The native process exited zero and retired the expected instruction, but its retained report contains one boundary call and no before/after stack_observation pair. This does not establish the required eight actual byte reads or stack bytes.",
+  "frozen_closure": {
+    "source_identity": "f459150eabcb0eae4d43c0aa22164b0a37300d2c230b571877d985bdd37a2659",
+    "successor_manifest": "evidence/phase6-stack-observation-manifest-d122.json",
+    "successor_manifest_sha256": "fa767d0c09b568d2586fb7bfcd0eb90b818e84f4f706f6a42f39303a1fbc8d7f",
+    "original_manifest_sha256": "d8821aca38b898c81dbb6c1ce490d10792526f486081a6f8b95c717726737e23",
+    "original_17_summary_sha256": "8526d3c3cc139e51258d3141a0ceeb448bbc15d69ebeecdd291703b5bfbd7f89",
+    "original_binary_retention": {
+      "manifest_path": "build/phase6-d122-original-binaries/manifest.json",
+      "manifest_sha256": "95870e6cba0ae795800a3e3557aab707bedbfb3542467f509b1359f2ac90d2ee",
+      "recovery_manifest_sha256": "f3bea1d760873298b940d00aa0c5e70147cdd78a64907c4704d90f62d1e87146",
+      "binary_sha256": {
+        "native": "131009e734225960783944ead01e81faca3ecd376eeabc8d5992445195400514",
+        "sanitize": "689f1671085c5ecf6b4f5976e26b8a1caa27b328c837ca78b8f57bbc7c2f14ac",
+        "hooks-off": "ccb99b27902dec2e912f657660900e008df3bb78c795bf91b8e67a39a0e65869"
+      }
+    },
+    "new_binary_sha256": {
+      "native": "78f282d5a824fb4bf8988c3aef55f1c6362f7ddf8f386cee42d1b8cbdb7ebda1",
+      "sanitize": "298cbfd1dd85500b96b530d42bee16e52d9cdbccd2e893dc69242bfa8c1a647c",
+      "hooks-off": "532fa4ec4ef29884073139977506ac82d88cbb65364df8ff5de6a70c1d0ebff8"
+    },
+    "new_binary_paths": {
+      "native": "build/phase6/tools/session/gw_headless",
+      "sanitize": "build/phase6-movem-sanitize/tools/session/gw_headless",
+      "hooks-off": "build/phase6-movem-hooks-off/tools/session/gw_headless"
+    }
+  },
+  "builds": {
+    "aggregate_watchdog_seconds": 300,
+    "aggregate_authorization_charge_seconds": 0.494,
+    "aggregate_child_wall_seconds": 0.466,
+    "completed": 3,
+    "unreached": 0,
+    "rows": [
+      {"variant": "native", "command": ["cmake", "--build", "build/phase6", "--target", "gw_headless", "--parallel", "2"], "return_code": 0, "child_wall_seconds": 0.163, "stdout_raw": "build/phase6/d122-observer/build-native.stdout.raw", "stdout_sha256": "9f508739dd6bdb70887bd054b391e41b7ed9d2cfc8d891df0352c73fc98f1e2a", "stderr_raw": "build/phase6/d122-observer/build-native.stderr.raw", "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "truncated": false},
+      {"variant": "sanitize", "command": ["cmake", "--build", "build/phase6-movem-sanitize", "--target", "gw_headless", "--parallel", "2"], "return_code": 0, "child_wall_seconds": 0.178, "stdout_raw": "build/phase6/d122-observer/build-sanitize.stdout.raw", "stdout_sha256": "ec9daa349805f0451041f15fd9559b22e8bfcae47c84c457ee1f7c7b71d91f29", "stderr_raw": "build/phase6/d122-observer/build-sanitize.stderr.raw", "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "truncated": false},
+      {"variant": "hooks-off", "command": ["cmake", "--build", "build/phase6-movem-hooks-off", "--target", "gw_headless", "--parallel", "2"], "return_code": 0, "child_wall_seconds": 0.125, "stdout_raw": "build/phase6/d122-observer/build-hooks-off.stdout.raw", "stdout_sha256": "ec9daa349805f0451041f15fd9559b22e8bfcae47c84c457ee1f7c7b71d91f29", "stderr_raw": "build/phase6/d122-observer/build-hooks-off.stderr.raw", "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "truncated": false}
+    ]
+  },
+  "proofs": {
+    "purpose_ids": ["stack-observer-native-1", "stack-observer-sanitize-1", "stack-observer-hooks-off-1"],
+    "attempted": 1,
+    "qualified": 0,
+    "unreached": ["stack-observer-sanitize-1", "stack-observer-hooks-off-1"],
+    "attempted_purpose_status": "interrupted",
+    "attempted_purpose_failure_type": "ValueError",
+    "authorization_charge_seconds": 0.019,
+    "native_child_wall_seconds": 0.004,
+    "child_return_code": 0,
+    "child_timeout": false,
+    "target_attempts_before_and_after": 1,
+    "native_assertion_observed": {
+      "pc": "0x000200",
+      "opcode": "0x4879",
+      "retired": true,
+      "master_ticks_before_after": [112, 252],
+      "a7_before_after": ["0xa5ff0010", "0xa5ff000c"],
+      "sr_preserved": true,
+      "boundary_calls": 1,
+      "stack_observation_pair_present": false
+    },
+    "safe_command_binding": {
+      "normalized_argv": ["build/phase6/tools/session/gw_headless", "<rom>", "--route-plan", "<route>", "--route-report", "<report>", "--route-instruction-probe", "512", "--route-probe-only", "--route-probe-stack-before-a7"],
+      "original_private_argv_sha256": "13188d8a4d4531b4debb5b7710db0db92e7bfff1fa19f0e17f935b39b4de7f02"
+    },
+    "proof_raw": {
+      "rows_path": "build/phase6/d122-observer/observer-proof-rows.json",
+      "rows_sha256": "b2f1608689e3342891cdccaeca4662628594761c2b6fb70c6eb487e8f49759be",
+      "report_path": "build/phase6/d122-observer/stack-observer-native-1.report.json",
+      "report_sha256": "f284a9ac5c87fe0c8c862c10a1d05bf761f4d43f181940448510f111421d9670",
+      "stdout_path": "build/phase6/d122-observer/stack-observer-native-1.stdout.raw",
+      "stdout_sha256": "c4bf92f4e06f7a7d360955da3a0508c63ef158b57542dbebb5804d6475584e46",
+      "stderr_path": "build/phase6/d122-observer/stack-observer-native-1.stderr.raw",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "guest_path": "build/phase6/d122-observer/stack-observer-native-1.rom",
+      "guest_sha256": "7d174bfef54dd2d6a8e25629a969e0ef0734b67e0087e454dc7219821af036fe",
+      "descriptor_path": "build/phase6/d122-observer/stack-observer-native-1.route",
+      "descriptor_sha256": "6eca64ca2401bfe76ab0312cefed0001a46f47a420f95950c06961d525ae6acf",
+      "streams_truncated": false
+    }
+  },
+  "accounting": {
+    "measured_anchor_active_seconds": 5079.355,
+    "anchor_charge_scope": "global-only, counted once; anchor cleared",
+    "estimated_closeout_reserve_seconds": 120,
+    "estimated_closeout_reserve_basis": "existing D122 engineering closeout reserve; global-only conservative upper bound, estimated rather than measured",
+    "global_cumulative_seconds": 18627.534,
+    "global_remaining_seconds": 24572.466,
+    "pea_used_seconds": 6813.497,
+    "pea_remaining_seconds": 2589.738,
+    "partitions_remaining_seconds": {"observer_builds": 299.506, "observer_proofs": 89.981, "14_processes": 1800, "14_other": 400.251},
+    "actual_independent_proof_review": false,
+    "bridge_created": false,
+    "14_authority": false
+  }
+}

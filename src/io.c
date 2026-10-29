@@ -13,6 +13,8 @@
 #define IO_DATA1_ADDRESS UINT32_C(0xa10005)
 #define IO_CTRL0_ADDRESS UINT32_C(0xa10009)
 #define IO_CTRL1_ADDRESS UINT32_C(0xa1000b)
+#define IO_EXT_DATA_ADDRESS UINT32_C(0xa10007)
+#define IO_EXT_CTRL_ADDRESS UINT32_C(0xa1000d)
 /* Assumption A6: bit 7 overseas, bit 6 NTSC (0), bit 5 no expansion unit (1),
  * bits 3-0 hardware version 0. plutiedev io-ports documents this layout; the
  * value is the profile's documented choice, not measured from a console. */
@@ -29,6 +31,7 @@ void gw_io_cold_init(gw_machine *m)
 
 void gw_io_console_reset(gw_machine *m)
 {
+    m->io.ext_data = m->io.ext_ctrl = 0;
     for (unsigned i = 0; i < GW_IO_PORTS; ++i) {
         m->io.data[i] = 0;
         m->io.ctrl[i] = 0;
@@ -54,7 +57,8 @@ int gw_io_decodes(uint32_t address)
 {
     return address == IO_VERSION_ADDRESS || address == IO_DATA0_ADDRESS ||
            address == IO_DATA1_ADDRESS || address == IO_CTRL0_ADDRESS ||
-           address == IO_CTRL1_ADDRESS;
+           address == IO_CTRL1_ADDRESS || address == IO_EXT_DATA_ADDRESS ||
+           address == IO_EXT_CTRL_ADDRESS;
 }
 
 uint32_t gw_io_pad_pins(uint32_t buttons, int th_high)
@@ -90,6 +94,12 @@ void gw_io_read(gw_machine *m, uint32_t address, uint32_t *value)
 {
     switch (address) {
     case IO_VERSION_ADDRESS: *value = m->io.version; break;
+    case IO_EXT_CTRL_ADDRESS: *value = m->io.ext_ctrl; break;
+    case IO_EXT_DATA_ADDRESS: {
+        uint32_t outputs=(uint32_t)m->io.ext_ctrl|0x80u;
+        *value=((uint32_t)m->io.ext_data&outputs)|(PIN_ALL_HIGH&~outputs);
+        break;
+    }
     case IO_DATA0_ADDRESS:
     case IO_DATA1_ADDRESS: *value = read_data(m, port_index(address)); break;
     default: *value = m->io.ctrl[port_index(address)]; break;
@@ -100,6 +110,8 @@ void gw_io_write(gw_machine *m, uint32_t address, uint32_t value)
 {
     switch (address) {
     case IO_VERSION_ADDRESS: break; /* Read-only: writes are ignored. */
+    case IO_EXT_CTRL_ADDRESS: m->io.ext_ctrl=(uint8_t)value; break;
+    case IO_EXT_DATA_ADDRESS: m->io.ext_data=(uint8_t)value; break;
     case IO_DATA0_ADDRESS:
     case IO_DATA1_ADDRESS: m->io.data[port_index(address)] = (uint8_t)value; break;
     default: m->io.ctrl[port_index(address)] = (uint8_t)value; break;
