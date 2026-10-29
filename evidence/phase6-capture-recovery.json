@@ -1,0 +1,578 @@
+{
+  "schema": "genewhip-phase6-capture-recovery-v1",
+  "status": "verified-bounded-infrastructure",
+  "review_status": "approved",
+  "independent_review": "recovery_review LOOKS_GOOD after bounded stdout/stderr retention before decode and existing same-boot/global/target/debug preflight revision; exact3 ordered tiny rows only; no full routes",
+  "independent_result_review": "LOOKS_GOOD; independently checked all3 retained artifacts, source/binary/report hashes and9 assertions each;4 boundary calls/0fields/0target attempts; no emulator reruns",
+  "source_identity": "597d400ce791b447f14104028d4b83aeacc3907c9d844972eb9f1ee58dbf9ccf",
+  "proof_inputs_sha256": {
+    "tests/evidence/phase6_capture_recovery_contract.py": "08fa4bdbe982b13182f8481ddc5914bfadc059d87316d20337d2477117176bfa",
+    "tests/evidence/phase6_accounting_contract.py": "680bad0a4012fb4dc00d5f61bb3fd591ebcece29755059babc3ed34cea93add9",
+    "tests/fixtures/phase6_repairs.py": "950d3761cdac48168ccabab927c7b820545523a9247b6750f44824bf1b2f318e",
+    "scripts/evidence/phase6_accounting.py": "19e754d8ed07cb201e34ed32eb52501059943c0f5593c7276f4f3e8ff818dee3",
+    "scripts/evidence/phase6_routes.py": "ae80307204b08fb556df0da4e77ae3a36be351b2f5bb7d1cf7fbba2635a1b541",
+    "tests/session/phase6_route_contract.py": "11ba7c89e590a82c7602f2b9e6455c803e6e1ac23641d6984f55e27501c7aaf4",
+    "tools/session/route_controller.c": "175da93b90cf253827aa92336ec18d53362f3acf7ac6121fdd5ecb67fff716fb",
+    "tools/session/session.c": "e1310ec60c323d9bb934c07fee2ce75b315734a9a17851bedb7d7945c0415fc9",
+    "tools/headless/main.c": "0fbc50eab81a82b4eab03c609f6218f526cf047cb9dc846009facbb37ca94f6b",
+    "src/cpu68000.c": "2c4f9e0a8285ac036abb65b45036e3ee8cda0c1dd7c6caaa571ec581baa598e9"
+  },
+  "scope": "capture infrastructure and three tiny authored public-client rows only; no game compatibility",
+  "historical_invariants": {
+    "semantic_rows_spent": 10,
+    "tank_attempts_spent": 1,
+    "controls_used": 0,
+    "rec_processes_used": 0,
+    "original_tank_stop": "unknown",
+    "frozen_d118": "unchanged",
+    "phase7_started": false
+  },
+  "accounting": {
+    "owner": "parent/root; existing boot-bound active anchor; parallel wall counted once",
+    "anchor_id": "GW-06-debug-tank-proof-recovery",
+    "closed_global_seconds_at_entry": 9475.377,
+    "target_upper_bound_seconds_at_entry": 3124.95,
+    "target_headroom_seconds_at_entry": 2275.05,
+    "debug_total_wall_ceiling_seconds": 1800,
+    "global_limit_seconds": 43200,
+    "target_limit_seconds": 5400,
+    "new_target_attempts": 0,
+    "reason": "short producer conformance only; no target/game attempt; all active investigation charged to existing target headroom",
+    "preflight": "Driver observes existing boot-bound root anchor before every row; caps include full30s row reservation. No close/reset/production mutation."
+  },
+  "offline_tests": {
+    "command": "python3 -I tests/evidence/phase6_accounting_contract.py",
+    "test_methods": 32,
+    "guest_launches": 0,
+    "purpose": "fake launcher and temporary ledger; discriminates earlier stop, malformed raw report, metadata disagreement and producer invalidation",
+    "result": {
+      "passed": 32,
+      "total": 32,
+      "seconds": 4.578,
+      "guest_launches": 0,
+      "authored_python_decode_failure_processes": 1
+    }
+  },
+  "synthetic_process_rows": [
+    {
+      "case": "debug-current-native-producer",
+      "variant": "native",
+      "status": "passed",
+      "client_sha256": "131009e734225960783944ead01e81faca3ecd376eeabc8d5992445195400514",
+      "guest_sha256": "6ade9be937d545d52aecff5021e9639625092e0f858093fa8e9d0fb5ee65f059",
+      "plan_sha256": "78965c61dbe31983897aad941757dea646720bd0aaa1908d44b805bb9626e613",
+      "limits": {
+        "watchdog_seconds": 30,
+        "max_boundary_calls": 128,
+        "fields": 1,
+        "guest_instructions": 128,
+        "stdout_bytes": 1048576,
+        "stderr_bytes": 1048576,
+        "summary_bytes": 8388608
+      },
+      "new_target_attempts": 0,
+      "retries": 0,
+      "read_only_preflight": {
+        "status": "ready",
+        "historical_closed_cumulative_seconds": 5827.378,
+        "finalized_research_seconds": 1226.049,
+        "closed_cumulative_seconds": 9475.377,
+        "active_seconds_since_anchor": 524.518,
+        "cumulative_seconds_including_current": 9999.895,
+        "remaining_cumulative_seconds": 33200.105,
+        "observed_signatures_used": 9,
+        "observed_signatures_remaining": 3,
+        "tank_pea_attempts_used": 1,
+        "tank_pea_attempts_remaining": 2,
+        "tank_pea_active_seconds_used": 3124.95,
+        "tank_pea_active_seconds_remaining": 2275.05,
+        "reserved_process_rows": 11,
+        "reserved_case_rows": 11,
+        "authorization_reservations": 11,
+        "historical_binding_rec_halt": true,
+        "launches": 0,
+        "read_only": true
+      },
+      "retained_streams": {
+        "stdout": {
+          "text": "{\"fields\":0,\"ram_fnv1a64\":\"f82e27a96a8853b5\"}\n",
+          "sha256": "4539d248c965d1ba3c0c417f973a4a499408754249c255f000f3bb43cf45179d",
+          "retained_bytes": 46,
+          "observed_bytes": 46,
+          "truncated": false
+        },
+        "stderr": {
+          "text": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "retained_bytes": 0,
+          "observed_bytes": 0,
+          "truncated": false
+        }
+      },
+      "processes": [
+        {
+          "client": "headless",
+          "return_code": 1,
+          "wall_seconds": 0.018296041002031416,
+          "stdout_bytes": 46,
+          "stderr_bytes": 0,
+          "bound_violation": false,
+          "report_schema": "genewhip-route-native-v1",
+          "report_status": 9,
+          "report_bytes": 1673
+        }
+      ],
+      "command": [
+        "build/phase6/tools/session/gw_headless",
+        "--route-plan",
+        "build/phase6/capture-recovery/native/route.gwrc",
+        "--route-report",
+        "build/phase6/capture-recovery/native/native.json",
+        "--route-instruction-probe",
+        "512",
+        "build/phase6/capture-recovery/native/guest.bin"
+      ],
+      "native_report_path": "build/phase6/capture-recovery/native/native.json",
+      "native_report_sha256": "7856b65a4e5e0d901ef70023d18c76453791f2f863ffcc1d76c27d83a971a211",
+      "assertions": 9,
+      "fields": 0,
+      "route_qualification": false
+    },
+    {
+      "case": "debug-current-sanitize-producer",
+      "variant": "sanitize",
+      "status": "passed",
+      "client_sha256": "689f1671085c5ecf6b4f5976e26b8a1caa27b328c837ca78b8f57bbc7c2f14ac",
+      "guest_sha256": "6ade9be937d545d52aecff5021e9639625092e0f858093fa8e9d0fb5ee65f059",
+      "plan_sha256": "78965c61dbe31983897aad941757dea646720bd0aaa1908d44b805bb9626e613",
+      "limits": {
+        "watchdog_seconds": 30,
+        "max_boundary_calls": 128,
+        "fields": 1,
+        "guest_instructions": 128,
+        "stdout_bytes": 1048576,
+        "stderr_bytes": 1048576,
+        "summary_bytes": 8388608
+      },
+      "new_target_attempts": 0,
+      "retries": 0,
+      "read_only_preflight": {
+        "status": "ready",
+        "historical_closed_cumulative_seconds": 5827.378,
+        "finalized_research_seconds": 1226.049,
+        "closed_cumulative_seconds": 9475.377,
+        "active_seconds_since_anchor": 529.376,
+        "cumulative_seconds_including_current": 10004.753,
+        "remaining_cumulative_seconds": 33195.247,
+        "observed_signatures_used": 9,
+        "observed_signatures_remaining": 3,
+        "tank_pea_attempts_used": 1,
+        "tank_pea_attempts_remaining": 2,
+        "tank_pea_active_seconds_used": 3124.95,
+        "tank_pea_active_seconds_remaining": 2275.05,
+        "reserved_process_rows": 11,
+        "reserved_case_rows": 11,
+        "authorization_reservations": 11,
+        "historical_binding_rec_halt": true,
+        "launches": 0,
+        "read_only": true
+      },
+      "retained_streams": {
+        "stdout": {
+          "text": "{\"fields\":0,\"ram_fnv1a64\":\"f82e27a96a8853b5\"}\n",
+          "sha256": "4539d248c965d1ba3c0c417f973a4a499408754249c255f000f3bb43cf45179d",
+          "retained_bytes": 46,
+          "observed_bytes": 46,
+          "truncated": false
+        },
+        "stderr": {
+          "text": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "retained_bytes": 0,
+          "observed_bytes": 0,
+          "truncated": false
+        }
+      },
+      "processes": [
+        {
+          "client": "headless",
+          "return_code": 1,
+          "wall_seconds": 0.1388572920113802,
+          "stdout_bytes": 46,
+          "stderr_bytes": 0,
+          "bound_violation": false,
+          "report_schema": "genewhip-route-native-v1",
+          "report_status": 9,
+          "report_bytes": 1673
+        }
+      ],
+      "command": [
+        "build/phase6-movem-sanitize/tools/session/gw_headless",
+        "--route-plan",
+        "build/phase6/capture-recovery/sanitize/route.gwrc",
+        "--route-report",
+        "build/phase6/capture-recovery/sanitize/native.json",
+        "--route-instruction-probe",
+        "512",
+        "build/phase6/capture-recovery/sanitize/guest.bin"
+      ],
+      "native_report_path": "build/phase6/capture-recovery/sanitize/native.json",
+      "native_report_sha256": "7856b65a4e5e0d901ef70023d18c76453791f2f863ffcc1d76c27d83a971a211",
+      "assertions": 9,
+      "fields": 0,
+      "route_qualification": false
+    },
+    {
+      "case": "debug-current-hooks-off-producer",
+      "variant": "hooks-off",
+      "status": "passed",
+      "client_sha256": "ccb99b27902dec2e912f657660900e008df3bb78c795bf91b8e67a39a0e65869",
+      "guest_sha256": "6ade9be937d545d52aecff5021e9639625092e0f858093fa8e9d0fb5ee65f059",
+      "plan_sha256": "78965c61dbe31983897aad941757dea646720bd0aaa1908d44b805bb9626e613",
+      "limits": {
+        "watchdog_seconds": 30,
+        "max_boundary_calls": 128,
+        "fields": 1,
+        "guest_instructions": 128,
+        "stdout_bytes": 1048576,
+        "stderr_bytes": 1048576,
+        "summary_bytes": 8388608
+      },
+      "new_target_attempts": 0,
+      "retries": 0,
+      "read_only_preflight": {
+        "status": "ready",
+        "historical_closed_cumulative_seconds": 5827.378,
+        "finalized_research_seconds": 1226.049,
+        "closed_cumulative_seconds": 9475.377,
+        "active_seconds_since_anchor": 533.49,
+        "cumulative_seconds_including_current": 10008.867,
+        "remaining_cumulative_seconds": 33191.133,
+        "observed_signatures_used": 9,
+        "observed_signatures_remaining": 3,
+        "tank_pea_attempts_used": 1,
+        "tank_pea_attempts_remaining": 2,
+        "tank_pea_active_seconds_used": 3124.95,
+        "tank_pea_active_seconds_remaining": 2275.05,
+        "reserved_process_rows": 11,
+        "reserved_case_rows": 11,
+        "authorization_reservations": 11,
+        "historical_binding_rec_halt": true,
+        "launches": 0,
+        "read_only": true
+      },
+      "retained_streams": {
+        "stdout": {
+          "text": "{\"fields\":0,\"ram_fnv1a64\":\"f82e27a96a8853b5\"}\n",
+          "sha256": "4539d248c965d1ba3c0c417f973a4a499408754249c255f000f3bb43cf45179d",
+          "retained_bytes": 46,
+          "observed_bytes": 46,
+          "truncated": false
+        },
+        "stderr": {
+          "text": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "retained_bytes": 0,
+          "observed_bytes": 0,
+          "truncated": false
+        }
+      },
+      "processes": [
+        {
+          "client": "headless",
+          "return_code": 1,
+          "wall_seconds": 0.017538916028570384,
+          "stdout_bytes": 46,
+          "stderr_bytes": 0,
+          "bound_violation": false,
+          "report_schema": "genewhip-route-native-v1",
+          "report_status": 9,
+          "report_bytes": 1673
+        }
+      ],
+      "command": [
+        "build/phase6-movem-hooks-off/tools/session/gw_headless",
+        "--route-plan",
+        "build/phase6/capture-recovery/hooks-off/route.gwrc",
+        "--route-report",
+        "build/phase6/capture-recovery/hooks-off/native.json",
+        "--route-instruction-probe",
+        "512",
+        "build/phase6/capture-recovery/hooks-off/guest.bin"
+      ],
+      "native_report_path": "build/phase6/capture-recovery/hooks-off/native.json",
+      "native_report_sha256": "7856b65a4e5e0d901ef70023d18c76453791f2f863ffcc1d76c27d83a971a211",
+      "assertions": 9,
+      "fields": 0,
+      "route_qualification": false
+    }
+  ],
+  "oracle": {
+    "type": "specified",
+    "guest": "PEA abs.l 0x00e00010; MOVE.L #0x12345678,D0; SWAP D0; ILLEGAL",
+    "expected": "PEA stack 00e00010 at0xfffefc, A7=0xfffefc, unchanged SR,20 CPU clocks/140 master ticks; SWAP gives0x56781234; intentional unsupported0x4afc at0x20e has exact before/after boundary and no retirement",
+    "basis": "current corrected tests/api/phase6_repairs_contract.c and MC68000UM section8.9 table8-10; no game-derived golden"
+  },
+  "failure_branch": "Any failure spends that row and halts remaining rows; retain native report/process prefix; no retry, offset tuning, full-route fallback or PEA qualification.",
+  "source_invalidation": "Any changed source_identity, proof_inputs_sha256, client/guest/plan hash blocks before launch; future source mutation invalidates affected successful rows.",
+  "future_game_continuation": {
+    "status": "not-authorized-by-this-manifest",
+    "owner": "separately reviewed active Phase6 recovery plan",
+    "max_tank_processes": 1,
+    "target_attempts_to_charge": 1,
+    "retries": 0,
+    "max_controls_after_valid_current_capture": 2,
+    "rec_processes": 0,
+    "prerequisites": [
+      "independent manifest review",
+      "all three current short rows pass",
+      "source/binary closure frozen",
+      "concrete append-only production reservation counts one remaining target attempt",
+      "remaining target and global active wall prove sufficient before launch"
+    ],
+    "failure_branch": "Valid earlier stop, missing/malformed pair, bounds or control drift halt; register newly observed stop against12 only if actually observed; original11 remains historical halted; no repair loop"
+  },
+  "qualification": "PLAY-02/HOST-04/SAFE-02 pending; downstream12/09/05/06/07 blocked; no game or phase pass",
+  "stream_retention": "stdout/stderr bounded text/hash/observed length/truncation copied into each row before optional report JSON decode; native report retained under build/phase6/capture-recovery.",
+  "retained_native_reports": {
+    "7856b65a4e5e0d901ef70023d18c76453791f2f863ffcc1d76c27d83a971a211": {
+      "raw_utf8": "{\"schema\":\"genewhip-route-native-v1\",\"plan_fnv1a64\":\"b13ce5a63559ebb8\",\"handler\":\"headless\",\"audio_open\":false,\"samples\":[],\"inputs\":[],\"predicates\":[],\"status\":9,\"active_ticks\":0,\"fields\":0,\"final_tick\":392,\"first_stop_tick\":392,\"stop_reason\":2,\"instruction_address\":526,\"opcode\":19196,\"render_requested\":false,\"render_tick\":0,\"boundary_calls\":4,\"queue_high_water\":0,\"audio_complete\":true,\"audio_frames\":0,\"audio_hash\":\"c9e620461f692810\",\"termination\":\"error\",\"probe_boundary\":{\"instruction_address\":512,\"opcode\":18553,\"fault_address\":0,\"stop_reason\":0,\"target_tick\":113,\"returned_overshoot\":139,\"fields\":0,\"returned_undershoot\":0,\"active_ticks\":0,\"event_index\":0,\"masks\":[0,0],\"retired\":true,\"before\":{\"tick\":112,\"pc\":512,\"sr\":9984,\"instructions\":0,\"diagnostic_dropped\":0,\"d\":[0,0,0,0,0,0,0,0],\"a\":[0,0,0,0,0,0,0,16776960],\"spans\":[{\"address\":16776956,\"bytes\":\"00000000\"}]},\"after\":{\"tick\":252,\"pc\":518,\"sr\":9984,\"instructions\":1,\"diagnostic_dropped\":0,\"d\":[0,0,0,0,0,0,0,0],\"a\":[0,0,0,0,0,0,0,16776956],\"spans\":[{\"address\":16776956,\"bytes\":\"00e00010\"}]}},\"last_boundary\":{\"instruction_address\":526,\"opcode\":19196,\"fault_address\":0,\"stop_reason\":2,\"target_tick\":365,\"returned_overshoot\":27,\"fields\":0,\"returned_undershoot\":0,\"active_ticks\":0,\"event_index\":0,\"masks\":[0,0],\"retired\":false,\"before\":{\"tick\":364,\"pc\":526,\"sr\":9984,\"instructions\":3,\"diagnostic_dropped\":0,\"d\":[1450709556,0,0,0,0,0,0,0],\"a\":[0,0,0,0,0,0,0,16776956],\"spans\":[{\"address\":16776956,\"bytes\":\"00e00010\"}]},\"after\":{\"tick\":392,\"pc\":528,\"sr\":9984,\"instructions\":3,\"diagnostic_dropped\":0,\"d\":[1450709556,0,0,0,0,0,0,0],\"a\":[0,0,0,0,0,0,0,16776956],\"spans\":[{\"address\":16776956,\"bytes\":\"00e00010\"}]}}}\n",
+      "parsed": {
+        "schema": "genewhip-route-native-v1",
+        "plan_fnv1a64": "b13ce5a63559ebb8",
+        "handler": "headless",
+        "audio_open": false,
+        "samples": [],
+        "inputs": [],
+        "predicates": [],
+        "status": 9,
+        "active_ticks": 0,
+        "fields": 0,
+        "final_tick": 392,
+        "first_stop_tick": 392,
+        "stop_reason": 2,
+        "instruction_address": 526,
+        "opcode": 19196,
+        "render_requested": false,
+        "render_tick": 0,
+        "boundary_calls": 4,
+        "queue_high_water": 0,
+        "audio_complete": true,
+        "audio_frames": 0,
+        "audio_hash": "c9e620461f692810",
+        "termination": "error",
+        "probe_boundary": {
+          "instruction_address": 512,
+          "opcode": 18553,
+          "fault_address": 0,
+          "stop_reason": 0,
+          "target_tick": 113,
+          "returned_overshoot": 139,
+          "fields": 0,
+          "returned_undershoot": 0,
+          "active_ticks": 0,
+          "event_index": 0,
+          "masks": [
+            0,
+            0
+          ],
+          "retired": true,
+          "before": {
+            "tick": 112,
+            "pc": 512,
+            "sr": 9984,
+            "instructions": 0,
+            "diagnostic_dropped": 0,
+            "d": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "a": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              16776960
+            ],
+            "spans": [
+              {
+                "address": 16776956,
+                "bytes": "00000000"
+              }
+            ]
+          },
+          "after": {
+            "tick": 252,
+            "pc": 518,
+            "sr": 9984,
+            "instructions": 1,
+            "diagnostic_dropped": 0,
+            "d": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "a": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              16776956
+            ],
+            "spans": [
+              {
+                "address": 16776956,
+                "bytes": "00e00010"
+              }
+            ]
+          }
+        },
+        "last_boundary": {
+          "instruction_address": 526,
+          "opcode": 19196,
+          "fault_address": 0,
+          "stop_reason": 2,
+          "target_tick": 365,
+          "returned_overshoot": 27,
+          "fields": 0,
+          "returned_undershoot": 0,
+          "active_ticks": 0,
+          "event_index": 0,
+          "masks": [
+            0,
+            0
+          ],
+          "retired": false,
+          "before": {
+            "tick": 364,
+            "pc": 526,
+            "sr": 9984,
+            "instructions": 3,
+            "diagnostic_dropped": 0,
+            "d": [
+              1450709556,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "a": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              16776956
+            ],
+            "spans": [
+              {
+                "address": 16776956,
+                "bytes": "00e00010"
+              }
+            ]
+          },
+          "after": {
+            "tick": 392,
+            "pc": 528,
+            "sr": 9984,
+            "instructions": 3,
+            "diagnostic_dropped": 0,
+            "d": [
+              1450709556,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "a": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              16776956
+            ],
+            "spans": [
+              {
+                "address": 16776956,
+                "bytes": "00e00010"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "result": {
+    "current_public_client_rows_passed": 3,
+    "required_rows": 3,
+    "assertions_per_row": 9,
+    "full_tank_processes": 0,
+    "control_processes": 0,
+    "rec_processes": 0,
+    "mame_processes": 0,
+    "new_target_attempts": 0,
+    "identical_native_reports": true,
+    "source_binding_verified": true,
+    "game_outcome": "pending",
+    "downstream_unlock": false,
+    "original_exact_stop": "unknown",
+    "no_phase_transition": true
+  },
+  "parent_closeout": {
+    "closed_interval": {
+      "id": "GW-06-debug-tank-proof-recovery",
+      "active": true,
+      "active_seconds": 791.503,
+      "basis": "persisted-parent-monotonic-anchor; debugger/review wall counted once",
+      "monotonic_started_at": 312735.032729,
+      "monotonic_closed_at": 313526.535670041,
+      "boot_identity": "1792439667.541373",
+      "prior_cumulative_seconds": 9475.376999999999,
+      "cumulative_seconds": 10266.88
+    },
+    "closed_cumulative_seconds": 10266.88,
+    "target_investigation_upper_bound_seconds": 3916.453,
+    "target_limit_seconds": 5400,
+    "target_attempts_used": 1,
+    "target_attempts_remaining": 2,
+    "active_anchor": null,
+    "inactive_review": true,
+    "parent_offline_verification": {
+      "passed": 32,
+      "total": 32,
+      "seconds": 3.892,
+      "guest_launches": 0
+    },
+    "preservation": "All prior ledger records/current_pea_outcome/closed history and frozen reference bytes unchanged",
+    "downstream_ready_plans": [],
+    "phase7_started": false
+  }
+}

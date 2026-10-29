@@ -1,0 +1,345 @@
+{
+  "schema": "genewhip-phase6-media-expectations-v1",
+  "authority": "source-derived scene and signal assertions; client hashes are determinism evidence only",
+  "sample_rate_hz": 48000,
+  "pcm": {
+    "encoding": "interleaved signed 16-bit little-endian stereo",
+    "duration_basis": "completed public-core fields and GW_MASTER_HZ/GW_FIELD_TICKS from include/genewhip/genewhip.h; minimum is floor((fields-1)*GW_FIELD_TICKS*sample_rate/GW_MASTER_HZ)",
+    "maximum_capture_bytes": 16777216,
+    "source_claims": [
+      {
+        "fixture": "recursion94",
+        "source": "fixtures/phase5-b/source.tar:reviewed-export/src/main.asm includes hardware/audio_bridge.asm, which incbins generated z80_driver.bin assembled from src/audio/z80_driver.asm; DriverInit/DriverVInt/TickSequencer/PlayCurrentMotifNote",
+        "expected": "Selected v1 driver initializes C then alternates its C/E motif every15 NTSC VDP interrupts. Validate exact high-before-low FM0 and PSG signatures,15-field cadence, and source-clocked PCM pitch features. Note names follow original source; frequency derives from programmed registers."
+      },
+      {
+        "fixture": "tank-battle",
+        "source": "fixtures/phase5-a/oracle.json#visual_audio; fixtures/phase5-a/source.tar:retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/tank-battle/src/main.c",
+        "expected": "Source shot requests800Hz and masked envelope7. Explosion requests100..149Hz through SGDK10bit period writes with masked envelope11 andWHITE/TONE3 noise. Validate source packets and timedPCM onset/mute; assert shotpitch only where source gate supportsit."
+      }
+    ],
+    "reference_limit": "D-118 WAVs do not calibrate signal thresholds: reference report has zero captured API samples and waveform does not corroborate declared notes. Retain as differential/unknown only. Acceptance below is source/theory-derived before candidate capture."
+  },
+  "captures": [
+    {
+      "fixture": "recursion94",
+      "case": "full-route",
+      "attempt": 4,
+      "minimum_source_tick": 690,
+      "scene": "B01 terminal approach with the current actor in the generated x288 exit corridor",
+      "image": {
+        "width": 320,
+        "height": 224,
+        "format": "native public-core pixels, packed 0x00RRGGBB",
+        "source": "fixtures/phase5-b/oracle.json#visual_audio; fixtures/phase5-b/scenario.json B01_DOOR_A/B01_COMMIT geometry",
+        "reference": {
+          "path": "local-fixtures/phase5/reference-captures/capture-ncqpyw0g/render.png",
+          "sha256": "8400e498170fd4cda9f439ed076a68a84fb12f4f805c79e879ad0412c6cca6d0"
+        },
+        "actor_source_address": {
+          "x": "0xFF18C5",
+          "y": "0xFF18C9",
+          "source": "phase5-b/scenario.json current_x_px_hi/current_y_px_hi"
+        },
+        "expected_actor_region_px": {
+          "x": [
+            280,
+            304
+          ],
+          "y": [
+            104,
+            120
+          ]
+        },
+        "required_features": [
+          "source-coordinate actor pixels in B01 terminal corridor",
+          "retained D-118 B01 occupancy pattern"
+        ],
+        "occupancy_tolerance": {
+          "minimum_foreground_fraction": 0.5,
+          "minimum_background_fraction": 0.75,
+          "basis": "Pre-capture bounded silhouette corroboration allows frame-animation differences while rejecting blank/constant/filled/checkerboard substitutes; exact cross-client pixels are checked separately."
+        },
+        "reference_occupancy_rows": [
+          ".############.#.........",
+          ".############.##........",
+          ".#######.#######........",
+          "##################......",
+          "###################.....",
+          "##################......",
+          "##################......",
+          "############............",
+          "###################.....",
+          "###################.....",
+          "################........",
+          "###############.........",
+          "#..############.........",
+          "###############.........",
+          ".######.#######.........",
+          "##.####..####..........."
+        ],
+        "reference_occupancy_origin": "Exact crop [280,104,24,16] of the pinned independent D-118 PNG; derived before candidate capture. Full reference digest retained above; no candidate-derived pixels."
+      },
+      "audio_signal": {
+        "source": "fixtures/phase5-b/source.tar:reviewed-export/src/main.asm includes hardware/audio_bridge.asm, which incbins generated z80_driver.bin assembled from src/audio/z80_driver.asm; DriverInit/DriverVInt/TickSequencer/PlayCurrentMotifNote",
+        "reference": {
+          "path": "local-fixtures/phase5/reference-captures/capture-ncqpyw0g/capture.wav",
+          "sha256": "48b57f40ee3cd9a6ba138f2b8355ae33a2702b90e781af4a96815f024dd90e15"
+        },
+        "required_features": [
+          "Selected v1 FM0 registers A4=0x22 then A0=0x84/0xD3/0x84, key-off/key-on and corresponding PSG0 periods0xD6/0xAA/0xD6",
+          "15 NTSC VBlank interrupt note cadence and independently source-derived FM pitch features in complete PCM"
+        ],
+        "reference_role": "differential/unknown, not a threshold oracle"
+      }
+    },
+    {
+      "fixture": "tank-battle",
+      "case": "full-route",
+      "field": 120,
+      "scene": "Source arena geometry at unchanged reference field120; tanks are not visible in the independent capture",
+      "image": {
+        "width": 320,
+        "height": 224,
+        "format": "native public-core pixels, packed 0x00RRGGBB",
+        "source": "fixtures/phase5-a/oracle.json#visual_audio; fixtures/phase5-a/scenario.json render_field=120; fixtures/phase5-a/source.tar:retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/tank-battle/src/main.c",
+        "reference": {
+          "path": "local-fixtures/phase5/reference-captures/capture-_0dy8sp_/render.png",
+          "sha256": "7a1fe018443e6e7c1eadc1ff99c8faa94259a048bec0268fbae582d3ff97d590"
+        },
+        "tile_geometry": {
+          "tile_pixels": 8,
+          "arena_offset_tiles": [
+            2,
+            3
+          ],
+          "p1_source_cell": [
+            3,
+            9
+          ],
+          "p2_source_cell": [
+            32,
+            9
+          ],
+          "source": "phase5-a/source.tar tank-battle/src/main.c drawGame/ARENA_OFFSET_X/ARENA_OFFSET_Y"
+        },
+        "expected_tank_ram_cells": [
+          [
+            3,
+            9
+          ],
+          [
+            32,
+            9
+          ]
+        ],
+        "required_features": [
+          "Every visible occupied arena tile in the independently retained D-118 field120 PNG, plus exact source-guaranteed empty corridors; procedural draw-in-progress elsewhere remains unknown",
+          "Wall color from source TILE_WALL nibble4/PAL1 index20 and pinned SGDK default palette_red[4]=0x0008; documented normal CRAM expansion gives RGB146,0,0"
+        ],
+        "reference_arena_rows": [
+          "####################################",
+          "#..................................#",
+          "#..................................#",
+          "#..................................#",
+          "#...#..............................#",
+          "#..................................#",
+          "#..................................#",
+          "#..................................#",
+          "#..................................#",
+          "#..................................#",
+          "#..................................#",
+          "#..................................#",
+          "#.................##...............#",
+          "#.................##...............#",
+          "#..................................#",
+          "#...................................",
+          "....................................",
+          "....................................",
+          "....................................",
+          "....................................",
+          "....................................",
+          "....................................",
+          "....................................",
+          "...................................."
+        ],
+        "reference_arena_roi_px": [
+          16,
+          24,
+          288,
+          192
+        ],
+        "wall_pixel_xrgb_le_hex": "00009200",
+        "palette_source": {
+          "sdk_revision": "2f50a4b80bcd1667bdd4a208882619ce4ec97701",
+          "source": "SGDK src/vdp.c VDP_init loads palette_red intoPAL1; src/pal.c palette_red[4]=0x0008; original tank src/main.c createTiles/drawArena use nibble4/PAL1",
+          "pal_c_sha256": "e033ee9a8c32d7b54f8216afe6a789da80fd45679a73cf9052b777c15a0314b1"
+        },
+        "correction_basis": "Initial unqualified descriptor mistook source color comments for actual palette indices and assumed tanks were visible at field120. The unchanged independently pinned MAME PNG has arena walls and no visible tanks. Original scene field120 and source RAM checks stay fixed; validate exact independent arena geometry and source/SDK wall palette, not candidate-derived pixels. Source drawArena updates the tilemap procedurally across completed video fields; exact blankness of undrawn reference tiles cannot distinguish later valid arena writes. Require every independent observed wall and source-guaranteed empty corridors; preserve unknown draw completion elsewhere without a whole-frame accuracy claim.",
+        "source_empty_cell_rectangles": [
+          [
+            1,
+            1,
+            34,
+            3
+          ],
+          [
+            1,
+            1,
+            2,
+            22
+          ]
+        ],
+        "empty_basis": "generateArena puts random walls only at x>=4,y>=4, border only x0/x35/y0/y23, center x18/19,y12/13. Thus interior rows1..3 and columns1..2 are empty. At field120 retained source coordinates are x3/32,y9, no fire has occurred, so no tank/bullet occupies these tested cells."
+      },
+      "audio_signal": {
+        "source": "fixtures/phase5-a/oracle.json#visual_audio; fixtures/phase5-a/scenario.json#audio; source playShoot/playExplosion in fixtures/phase5-a/source.tar:retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/tank-battle/src/main.c",
+        "reference": {
+          "path": "local-fixtures/phase5/reference-captures/capture-_0dy8sp_/capture.wav",
+          "sha256": "6c919e603890bfa4e0a0e5c25b1ac0e9bb3350f980e3fa95b45141a23446f2f1"
+        },
+        "required_features": [
+          "Source800Hz period139 plus level7 shot command and timed PCM onset/mute",
+          "Source100..149Hz truncated10bit period plus level11 explosion, WHITE/TONE3 command and timed PCM onset/mute",
+          "Stable shot-pitch check only for source gates at least10ms; shorter-gate pitch remainsunknown"
+        ],
+        "reference_role": "differential/unknown, not a threshold oracle"
+      }
+    }
+  ],
+  "limits": {
+    "reference_role": "source and retained reference observations corroborate media semantics; no candidate-fitted threshold",
+    "hash_role": "exact client equality is reported separately and cannot satisfy source corroboration",
+    "gameplay_role": "media checks do not establish source predicates, causal progress, duration, or completion"
+  },
+  "audio_checks": {
+    "authority": "Source program register writes, original scene/event clocks, documented YM and PSG divisors, GW_MIX_V1; normalized features are invariant to positive gain and DC. No candidate-fit thresholds.",
+    "recursion94": {
+      "driver_source_sha256": "12d7a8262389a0c942036227a9ebf4dc5fd7494856b6bbf4cbb029cebc791971",
+      "selected_driver": "v1 IM1 VBlank motif; v2 score and bridge are standalone/inactive",
+      "source": "fixtures/phase5-b/source.tar:reviewed-export/src/main.asm includes hardware/audio_bridge.asm, which incbins generated z80_driver.bin assembled from src/audio/z80_driver.asm; DriverInit/DriverVInt/TickSequencer/PlayCurrentMotifNote",
+      "fm0_low_sequence": [
+        132,
+        211,
+        132
+      ],
+      "fm0_fnums": [
+        644,
+        723,
+        644
+      ],
+      "high_register": 34,
+      "block": 4,
+      "psg_periods": [
+        214,
+        170,
+        214
+      ],
+      "psg_volume": 10,
+      "note_fields": 15,
+      "timing_tolerance_fields": 2,
+      "pcm_notes": [
+        0,
+        1,
+        2
+      ],
+      "window_offset_seconds": 0.03,
+      "window_seconds": 0.1,
+      "frequency_tolerance_ratio": 0.05,
+      "minimum_prominence_ratio": 4.0,
+      "minimum_periodicity": 0.55,
+      "frequency_latch_basis": "Selected PlayCurrentMotifNote writes high before low, then explicit key-on. Frequency follows the committed F-number/block and documented master clock; original source note labels do not override programmed pitch.",
+      "provenance_correction": "Initial rejected collection used inactive z80_driver_v2.asm/BANK_BOOT_PULSE. Corrected by following main include to v1 bridge and pinned deterministic ROM build chain. Initial canonical raw artifacts remain unchanged and unqualified."
+    },
+    "tank-battle": {
+      "shot_hz": 800,
+      "shot_hz_range": [
+        760,
+        840
+      ],
+      "shot_window_fields": 5,
+      "shot_delay_fields": 1,
+      "minimum_prominence_ratio": 4.0,
+      "minimum_periodicity": 0.55,
+      "explosion_window_fields": 10,
+      "explosion_limit": "Validate the exact source-derived 10-bit integer period set for requested100..149Hz, envelope11, WHITE/TONE3 programming, and master-timed PCM onset/mute. No broadband or exact noise-pitch claim.",
+      "shot_period": 139,
+      "shot_level": 7,
+      "explosion_periods": [
+        2,
+        11,
+        21,
+        31,
+        41,
+        51,
+        62,
+        72,
+        83,
+        94,
+        750,
+        755,
+        760,
+        766,
+        771,
+        776,
+        782,
+        787,
+        793,
+        799,
+        804,
+        810,
+        816,
+        822,
+        828,
+        834,
+        841,
+        847,
+        853,
+        860,
+        867,
+        873,
+        880,
+        887,
+        894,
+        902,
+        909,
+        916,
+        924,
+        932,
+        940,
+        947,
+        956,
+        964,
+        972,
+        981,
+        989,
+        998,
+        1007,
+        1016
+      ],
+      "explosion_level": 11,
+      "noise_control": 7,
+      "maximum_gate_fields": 5,
+      "minimum_pcm_step": 16,
+      "transient_pre_samples": [
+        128,
+        32
+      ],
+      "transient_post_samples": 160,
+      "pitch_minimum_gate_samples": 480,
+      "source_limit": "SGDK MAX=0,MIN=15; envelope sums are masked to4bits (shot7/explosion11). Tone periods truncate to10bits; no inventedclamp. Noise isWHITE/TONE3; bandwidth depends on prior tone2. updateSound mutes all channels every4updates, so short gates do not support a stable pitch claim. Corroborate actualsource register signatures and master-timed PCM onset/mute; verify800Hz where gate>=10ms. PSG_setFrequency uses integer floor division:3579545/(800*32)=139, not a nearest-rounded140.",
+      "inspected_sdk_sources": [
+        {
+          "path": "local-fixtures/phase5/review-tank/sgdk-v2.09-2f50a4b80bcd1667bdd4a208882619ce4ec97701/inc/psg.h",
+          "revision": "2f50a4b80bcd1667bdd4a208882619ce4ec97701",
+          "sha256": "460169a056063499d9bb3d92b70af1f7995a1998042a149b41e0a8fa5297f6eb"
+        },
+        {
+          "path": "local-fixtures/phase5/review-tank/sgdk-v2.09-2f50a4b80bcd1667bdd4a208882619ce4ec97701/src/psg.c",
+          "revision": "2f50a4b80bcd1667bdd4a208882619ce4ec97701",
+          "sha256": "7ceec5c00ecd43bf044113eed7d0cf04b1ea213f1947e250e45e85ea2f55470b"
+        }
+      ]
+    }
+  }
+}

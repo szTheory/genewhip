@@ -1,17 +1,85 @@
 # CI delivery and repository preflight
 
-The pull request, default-branch push, merge-queue (`merge_group`), and manual
-workflows use the same single `required-ci` aggregate. A schedule runs the
-informational extended workflow. The aggregate requires the safety, gameplay,
-desktop, package, and performance-measurement lanes to succeed for the same
-source, checked-out head, and base/integration SHA. Performance thresholds are
-informational; the benchmark's correctness and measurement contract is
-required. Fork pull requests have read-only workflow permissions, no secrets,
-and checkout credentials disabled. The trusted merge-group lane builds the
-merge-group commit itself; successful PR artifacts do not qualify a later
-integration SHA.
+## v0.2.0 exact-byte adoption status
+
+The currently staged v0.2.0 SDK and desktop archives are local development-only
+qualification outputs. Their adjacent receipts bind local source-snapshot SHAs,
+exact archive SHA-256 values, inventory identities, and extracted-byte smoke
+results; they do not establish trusted publication provenance. The public source,
+hosted qualification, protected promotion, and post-publication download-adoption
+steps remain pending. Public v0.1.0 remains immutable.
+
+For an actual download, the protected publisher validates the exact source,
+workflow, ref, run and attempt, inventory, signed attestation invocation, and
+archive subject digests before promotion. The adopter must complete those trusted
+checks before executing a bundled verifier, executable, or build script. An
+authenticated archive may provide its own verifier after that check; a separate
+source download is not an adopter prerequisite. A checksum sidecar and an
+archive's self-hashed manifest establish byte consistency, not trusted origin.
+
+Package version 0.2.0 retains C API version 4 and input-log format
+`genewhip-input-log 1`; neither contract changed for this package release. SDK
+build/embed examples run offline from relocated package bytes. A host that cannot
+open audio continues video-only, but that outcome cannot qualify an audio row.
+
+Pull requests, default-branch pushes, merge-queue (`merge_group`) events, and
+manual runs use the same `required-ci` aggregate. The required fast lanes include
+privacy, rights, package, documentation, schema, matrix, and delivery contracts,
+plus a bounded current-source smoke through both public title paths. Expensive
+v0.2 runtime and three-workload qualification lanes run only on a default-branch
+push or explicit manual dispatch. Their source, head, base, run, and attempt
+identities are joined before attestation; the three workload jobs are ordered
+serially and keep separate host identities. A schedule runs the informational
+extended workflow. Performance thresholds remain informational; measurement
+and output contracts are required. Fork pull requests have read-only workflow
+permissions, no secrets, and checkout credentials disabled. The trusted
+merge-group lane builds the merge-group commit itself; successful PR artifacts
+do not qualify a later integration SHA. A passing plan-only receipt does not
+establish compatibility, native capability, or publication provenance.
+
+The package job emits an attempt-scoped evidence closure that retains bounded
+dimension inputs and referenced child reports. The final qualification job
+reopens those bytes and calls the same semantic validators as the producer; it
+does not rerun guest workloads. This is prepublication readiness only. Final
+release credit still requires authenticated downloaded-byte adoption.
 
 ## Local repository preflight
+
+### Phase 7 v0.2 sanitized source preparation
+
+The v0.2 coordinator resolves the previously authorized public destination from
+the retained local Phase 4 preflight packet. It checks out the destination's
+current `main`, overlays only the tracked product source, and excludes planning
+history, generated build/package output, Phase 5 historical evidence/receipts
+and screening ledger, crosswalks, environment files, and local caches. The
+source, retained fixture bytes, and
+upstream notices remain together. For the two Phase 5 fixtures, preparation
+revalidates the full local historical admission first, then emits
+`evidence/phase5-public-admissions.json`, a narrow projection of source archive,
+material terms, ROM, route-input, and notice identities. The public validator
+checks those retained bytes without `.planning`; it does not reproduce the
+omitted private selection ledger or historical run receipts. It then requires
+the new snapshot's only
+parent to be the observed public `main`, scans the reachable public history and
+current tree, and re-reads the destination's visibility, branch policy, write
+capability, head, and base through the repository preflight.
+
+Prepare a reviewable local candidate and policy packet with:
+
+```sh
+python3 -I scripts/release/v02_qualification.py \
+  --mode stage-public --prepare-only \
+  --publication-copy build/v02/publication \
+  --scope evidence/v02-execution.json \
+  --out build/v02/preflight.json
+```
+
+This command does not push, open a pull request, merge, or dispatch hosted
+work. The packet records separate private-source, public-tree, public-base, and
+public-head identities. A `blocked` packet preserves the observed preflight
+blockers; a local snapshot or synthetic contract alone does not qualify any
+Phase 7 requirement. The candidate and packet are ignored local outputs and
+must be reviewed before the later protected pull request step.
 
 Run the synthetic contract check with:
 

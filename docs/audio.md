@@ -4,6 +4,34 @@ This page describes the deterministic core PCM interface and the audio behavior
 implemented across the Phase 3 sound slice and the bounded Phase 4 game/desktop
 qualification. The core owns no host audio device and uses no host clock.
 
+Phase 6 route capture uses the session's completed-field callback. Headless route
+mode enables PCM explicitly at 48,000 Hz, serializes each returned stereo frame
+once as signed 16-bit little-endian samples, and records callback field output;
+the SDL route writes the same callback PCM buffer to `--dump-audio` before it is
+submitted to the host queue. Capture failure or a short write fails the run.
+Source-derived feature checks are kept separate from client hash equality and
+from gameplay predicates. The Phase 6 B01 expectation is tied to the source
+`MUS_BOOT_PULSE` selection; the Tank Battle expectation is tied to its source
+shoot and live-collision explosion routines. These bounded captures do not
+establish general audio fidelity or subjective output quality.
+
+The current source feature oracle is fixed before the canonical capture. REC's
+BOOT bank has16 rows at80BPM/24PPQN and six ticks per row (a3second phrase).
+Its driver writes FM frequency low before high; the existing high-latch contract
+is honored when checking the programmed period against PCM. The checker does
+not silently substitute the score's intended octave. Source-defined non-percussion
+notes provide normalized pitch/periodicity checks; a static DC offset cannot pass.
+
+Tank's pinned SGDK envelope constants are MAX=0 and MIN=15, and envelope writes
+mask to four bits. Its source additions therefore select levels7 (shot) and11
+(explosion). Tone values truncate to10 bits; the oracle does not invent frequency
+clamping. The source mutes sounds every four updates, so short gates support a
+timed PCM onset/mute observation rather than a stable pitch claim. Shot pitch is
+checked where the programmed gate lasts at least10ms. WHITE/TONE3 noise is checked
+as the source command; its bandwidth depends on tone3's prior state. The retained
+D-118 WAV is differential/unknown for these signal thresholds. Exact full-PCM
+repeat/client equality remains a separate requirement.
+
 ## Phase 3 evidence and limits
 
 Build the consolidated report with `python3 -I scripts/evidence/phase3_report.py
@@ -373,3 +401,27 @@ minimum pulse width is asserted. Console reset asserts this same provisional
 chip reset as a separately documented model choice. The extended public-route
 and split-run reset contract belongs to Plan 03-18; hardware reset truth,
 analog behavior and model comparison remain unqualified here.
+
+### Phase 6 source media validation
+
+Route captures retain completed core pixels and full 48 kHz stereo PCM from
+one drain before host submission. Hash equality establishes client determinism;
+source media checks separately test a declared image scene and source-programmed
+sound features. Reference WAVs remain uncalibrated differential observations.
+
+REC uses the v1 bridge actually included by its pinned main assembly file. Its
+own generated driver is assembled from `src/audio/z80_driver.asm` into the
+reproducible cartridge; the standalone v2 bridge and music score are inactive.
+The selected driver keys FM channel0 off, writes A4=`0x22` before
+A0=`0x84`/`0xD3`, then keys on and programs PSG0 periods214/170 at volume10.
+Its IM1 handler changes motif every15 NTSC vertical interrupts. Checks use these
+register-derived frequencies and source cadence, including PCM prominence and
+periodicity. Source note names are descriptive; they do not override the actual
+programmed F-number. Missing note changes, lost register observations, silence,
+DC, wrong pitch and truncated PCM fail. The initial v2 expectation was rejected
+following include-chain review; its first attempted collection is preserved.
+
+Tank checks the original source's PSG shot/explosion packets, their timed PCM
+onset and mute, and source pitch where the gate lasts at least10ms. Short gates
+retain unknown pitch. These bounded checks establish neither general sound
+accuracy nor listening quality, full-game compatibility, or completion.

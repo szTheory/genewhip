@@ -1,0 +1,58 @@
+{
+  "schema": "phase6-tank-continuation-v1",
+  "status": "blocked-prelaunch",
+  "plan": "06-14",
+  "created_at": "2026-10-24T21:26:09.907620Z",
+  "source_identity": "bc4d31aa500494b6b74d18ae06dacb23bf2f01013ce8ee42481b28dae88866ad",
+  "observer": {
+    "manifest": "evidence/phase6-stack-observation-manifest-d123-g02.json",
+    "manifest_sha256": "bcdea865c38137fe70d4ded4c571d2612b5232dd4d0fcd4f3e36fa1fbbf7501c",
+    "bridge": "evidence/phase6-tank-observer-bridge-d123-g02.json",
+    "bridge_sha256": "6ff8254b4f072f7c29ee55e311f1703567291799636ddc60dc3b511c1762c0f7",
+    "review_check": "evidence/phase6-tank-observer-review-check-d123-g02.json",
+    "review_check_sha256": "e4f70ecdf40f6eef0040867ba834d69148579a814a076ea0cff2cad367bdd025",
+    "independent_review": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/06-19-PROOF-REVIEW.md",
+    "review_sha256": "3099a58334e2d04421e30bbf4385410b0b997d02b90d48d23a102468c6b9d211",
+    "source_binary_identity": "f15b0cadc720f4c8c4c6dca3b9deb02f13df647b23de5a78324637ad591bd7c2"
+  },
+  "prelaunch_checks": {
+    "current_generation_review": {
+      "command": "python3 -I tests/evidence/phase6_tank_continuation_contract.py --verify-18-review --bridge evidence/phase6-tank-observer-bridge-d123-g02.json --review-check evidence/phase6-tank-observer-review-check-d123-g02.json --build build/phase6",
+      "status": "accepted-current-review",
+      "launches": 0
+    },
+    "accounting_and_fake_launcher_guards": {
+      "command": "python3 -I tests/fixtures/phase6_repairs.py --accounting-preflight; python3 -I tests/fixtures/phase6_repairs.py --tank-continuation-offline",
+      "status": "passed",
+      "boot_identity": "boot-session:2493cd26-ed27-49e3-ba91-bc1afadea884",
+      "launches": 0,
+      "target_attempts_added": 0
+    }
+  },
+  "execution": {
+    "command": "python3 -I tests/fixtures/phase6_repairs.py --tank-continuation-once --bridge evidence/phase6-tank-observer-bridge-d123-g02.json --proof-review .planning/phases/GW-06-shared-repairs-and-two-playable-routes/06-19-PROOF-REVIEW.md --build build/phase6 --output evidence/phase6-tank-continuation.json",
+    "status": "blocked",
+    "failure": "FileNotFoundError: evidence/phase6-tank-observer-review-check.json",
+    "failure_stage": "no-launch preflight: frozen Plan14 coordinator resolves the generation-01 review-check path instead of the accepted generation-02 review-check",
+    "target_reservation": null,
+    "target_processes": 0,
+    "control_driver_processes": 0,
+    "control_case_rows": 0,
+    "rec_or_reference_processes": 0,
+    "launches": 0,
+    "route_qualification": false
+  },
+  "accounting": {
+    "anchor_id": "GW-06-D123-19-global-0ddd213226de4d078c76dc00668ebf1e",
+    "boot_identity": "boot-session:2493cd26-ed27-49e3-ba91-bc1afadea884",
+    "preflight_other_charge_seconds": 1.612,
+    "preflight_charge_status": "interrupted",
+    "pea_attempts_before": 1,
+    "pea_attempts_after": 1,
+    "pea_attempts_remaining": 2,
+    "pea_process_seconds_remaining": 1800.0,
+    "pea_other_seconds_remaining": 398.639,
+    "pea_global_seconds_remaining_at_last_preflight": 22102.275
+  },
+  "disposition": "halted-before-reservation; retain every historical outcome and attempt; do not launch the Tank process or either control driver; implementation change requires a separately planned successor."
+}

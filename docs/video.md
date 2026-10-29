@@ -4,6 +4,34 @@ This page is the contract for the field query, VDP timing, write FIFO, DMA,
 unsupported-mode stops, background planes A and B, the window plane, scrolling, priority,
 sprites and shadow/highlight. Consolidated Phase 2 limitations are at the end of this page.
 
+## Observed I/O amendment (GW-06-04)
+
+The existing [input contract](input.md) will be consolidated in06-07. The current
+shared bus now permits aligned word reads of the implemented version, pad and
+EXT GPIO registers; long reads perform two independent ordered word reads.
+Existing canonical byte accesses remain. Odd word accesses, unsupported serial
+registers and public pad port2 remain rejected. Word writes and even-byte
+accesses are still unsupported; no broader I/O completeness is implied.
+
+Sega's Genesis Software Manual, Rev02/20/92, printedp74, permits byte/word
+I/O access and specifies only the meaningful lower byte. The retrieved primary
+scan is [Sega/Ozisoft's1992 manual](https://drive.google.com/uc?export=download&id=1wcpCpxszzCYjdhlHMcmoiA3XU9FLeKwV),
+SHA256 `b70081d47ab877024a6f06c1d2024cbfc94aebdc21f51972e51d038026bc146a`,
+PDFp84. It is research material, not redistributed as a project fixture.
+[Charles MacDonald's hardware notes v0.8, section3](https://www.neperos.com/article/picov96e5792f069)
+independently report even/odd read aliases and cold control00/data7F.
+Duplicating a register byte into the unused upper word lane is an explicit
+coherent model inference from those aliases, not a manufacturer word-lane claim.
+
+The unconnected EXT pair at0xA10007/0xA1000D has separate instance-owned data
+and direction latches. Input pins read high; output pins read the data latch,
+with bit7 latch-backed as in the existing model. Load/cold/reset clear the
+latches as deterministic policy; this does not establish physical VA3 reset
+wiring. No EXT peripheral, third host pad or serial behavior is implemented.
+The private digest distinguishes every nonzero latch bit using a tagged
+zero-default-compatible extension. Original guests check independent pad
+latches, read lanes, reset, state discrimination and rejected third-pad events.
+
 ## Field contract
 
 `gw_get_video_field(machine, &field, &pixels)` describes the newest completed field and
