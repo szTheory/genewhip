@@ -1,0 +1,52 @@
+{
+  "schema": "d125-owner24-bounded-repair-regression-v1",
+  "scope": "bounded synthetic API repair only",
+  "plan24_status": "terminal-halted-unchanged",
+  "game_admission": false,
+  "green": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "preimport_denials": 10,
+    "unexpected_process_requests": 0
+  },
+  "red": {
+    "tests": 7,
+    "failures": 6,
+    "errors": 3,
+    "missing_file_neighbor": "passes original and current; original strict path resolution already rejects"
+  },
+  "source_inventory": {
+    "scripts/evidence/phase6_accounting.py": "0a0c583768906c0bddf8396226107ca65b6ed672d20de7e2095811a835c79ab6",
+    "tests/evidence/phase6_d125_consumers_contract.py": "e694ecc711a61dbe14b2609ef5bda0a37c7f67435ae4e0200e84025f43f1c4d0",
+    "tests/evidence/phase6_d125_authored_fixture.py": "e4277fc56796b41139dccc11efae850e1a505c7629962f8e16e7a9fffe7f5530",
+    "tests/evidence/test_engineering24_accounting.py": "53721880864c3755df5166dad05c175e9ed0c5af6c5fd96b2bc2d406fed96a2c",
+    "tests/evidence/phase6_owner24_debug_guard.py": "d515bf3b51ee09daa4cb43c8b096efe1e501769fba3eb5b63ac347377039dc5a"
+  },
+  "retained_artifacts": {
+    "build/phase6/d125-owner24-debug/red.json": "fcea848c624a9f317ccfa43c228b56939ca6ed7bb69f5f43d8685f320fdf8ff1",
+    "build/phase6/d125-owner24-debug/red.log": "cc47a9645e28c165a4c78630584cdbf9066b2212d67aeab92a668708e44f8b06",
+    "build/phase6/d125-owner24-debug/green.json": "87830a626d4f43cc1accd3955efde5e3d8b342c0233606a89c90d48359bd88b5",
+    "build/phase6/d125-owner24-debug/green.log": "22043561193d34782b739e4ae192ee2d2bd41afd89d9d099a298a3981eed099a",
+    "build/phase6/d125-owner24-debug/guard-preimport.json": "63715852e3594c3e05a4e7dba5d8b4d82249f5a5a0e763eac53db753c28c7299",
+    "build/phase6/d125-owner24-debug/guard-current-preimport.json": "2d6c366b0ef05dccb795a1213041e01ba6ec5bc61f7bc76e59f7bf4c3f7b6b5f",
+    "build/phase6/d125-owner24-debug/parent-preimport-last.json": "330d6b93b9803402b80d7fe29edb5c6ba65574924f7e7cd6df02f76f09ece251",
+    "build/phase6/d125-owner24-debug/close_stdlib.py": "7a6ed02a34790e087772f94fe52052822e5e37fd3f46740743fc936fd049bee5"
+  },
+  "independent_review": {
+    "path": ".planning/debug/d125-owner24-review.md",
+    "sha256": "cbf2cfcfbce18cef3f0b5c13778f45125e4fff95c236e069d4f7c8dab560273f",
+    "high": 0,
+    "critical": 0,
+    "blockers": 0,
+    "warnings": 1
+  },
+  "limitations": [
+    "accepted-engineering24 close explicitly unsupported pending full proof/final-current tuple",
+    "retained qualification CLI explicitly unsupported",
+    "synthetic begin/finalize/replay transaction is not complete qualified consumer acceptance",
+    "WR01 forecast string can raise TypeError without ledger mutation"
+  ],
+  "builds": 0,
+  "workloads_launched": 0
+}

@@ -1,0 +1,48 @@
+{
+  "schema": "genewhip-v02-execution-v1",
+  "scope_id": "phase7-serial-child-workloads",
+  "workload": {
+    "serial_children": true,
+    "max_fields": 7200,
+    "max_calls": 100000000,
+    "tank_route_max_calls": 10000000
+  },
+  "per_child_limits": {
+    "wall_seconds": 600,
+    "cleanup_grace_seconds": 30,
+    "max_rss_bytes": 4294967296,
+    "max_stdout_stderr_bytes": 16777216,
+    "max_json_bytes": 33554432,
+    "max_binary_file_bytes": 2147483648,
+    "max_capture_bytes": 2147483648,
+    "max_scratch_bytes": 17179869184,
+    "max_retained_bytes": 4294967296,
+    "max_fields": 7200,
+    "max_calls": 100000000
+  },
+  "setup_limits": {
+    "wall_seconds": 1800,
+    "parallel_build_jobs": 2,
+    "max_log_bytes": 1073741824,
+    "max_build_tree_bytes": 12884901888
+  },
+  "qualification_batch": {
+    "wall_seconds": 86400,
+    "runtime_wall_seconds": 64800,
+    "package_wall_seconds": 14400,
+    "close_wall_seconds": 7200,
+    "publication_reserve_seconds": 7200,
+    "benchmark_sub_batch_seconds": 43200
+  },
+  "per_batch_wall_seconds": 79200,
+  "final_reserve_seconds": 7200,
+  "cleanup_grace_seconds": 30,
+  "owned_roots": ["build/v02", "artifacts/v02"],
+  "launch_identities": {},
+  "observed_exposure": {"child_starts": 0, "guest_starts": 0},
+  "provenance": {
+    "phase6_windows_read": false,
+    "phase6_windows_written": false,
+    "plan49_or_retired_queue_replayed": false
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "schema": "genewhip-phase5-current-reference-v1",
+  "decision": "D-118",
+  "status": "qualified-pair",
+  "report": {
+    "path": "evidence/phase5-reference-d118.json",
+    "sha256": "d1295806831a0d20586e83a75fd1f86ee52d543d27fe900cf6d79cf230e064bc"
+  },
+  "attempt": {
+    "path": "evidence/phase5-reference-input-delivery-attempt.json",
+    "sha256": "7ed6ed3b6fbde8d6e5db1282aca6c95b2503c71da0d59e11d7c0aa5b69e70372"
+  },
+  "freeze": {
+    "path": "evidence/phase5-reference-input-delivery-freeze.json",
+    "sha256": "4ff54cf8ece9731673a681917eee4cbd6d594a282629cbea882afc93b3494926"
+  },
+  "outcome": {
+    "path": "evidence/phase5-reference-d118-outcome.json",
+    "sha256": "d6aa6d2d4e571314920eff22ef6ed29dd4e16fcd113e0128f0a1272af01215b3"
+  },
+  "selected_pair": [
+    "tank-battle",
+    "recursion94"
+  ],
+  "source_packages": {
+    "tank-battle": "local-fixtures/phase5/tank-battle/route-v3",
+    "recursion94": "local-fixtures/phase5/recursion94/route-v4"
+  },
+  "candidate_baseline": "not-run"
+}

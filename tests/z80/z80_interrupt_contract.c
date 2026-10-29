@@ -108,6 +108,41 @@ int main(void)
           "INT remains high for the declared pulse width");
     CHECK(!gw_z80_int_asserted(m, pulse + GW_Z80_INT_PULSE_TICKS),
           "INT deasserts after the declared pulse width");
+
+    /* A released RESET level is not a new reset edge. Real audio clients
+     * write $0100 on every BUSREQ poll and bus release. */
+    state = (gw_test_z80_state){0};
+    state.pc = 0x2345; state.sp = 0x9000; state.iff1 = 1; state.iff2 = 1; state.im = 1;
+    CHECK(gw_test_z80_set_state(m, &state), "released RESET idempotence state");
+    m->z80.busreq = 1;
+    m->z80.next_cycle_tick = UINT64_MAX;
+    m->z80.ram[0x0100] = 0x5a;
+    uint32_t reset_release = 0x0100;
+    CHECK(gw_bus_write(m, 0x00a11200u, 2, reset_release), "repeat released RESET during BUSREQ");
+    CHECK(!m->z80.reset_pending, "released RESET level does not schedule another reset");
+    CHECK(gw_bus_write(m, 0x00a11100u, 2, 0), "release BUSREQ after repeated RESET level");
+    gw_z80_sync(m, m->tick + 100u);
+    CHECK(m->z80.pc == 0x2345 && m->z80.iff1 && m->z80.iff2 && m->z80.im == 1,
+          "repeated released RESET preserves running CPU state");
+    CHECK(m->z80.ram[0x0100] == 0x5a, "repeated released RESET preserves Z80 RAM");
+
+    /* A duplicate release while reset is already asserted and a release edge
+     * is pending must leave the originally selected edge unchanged. */
+    state = (gw_test_z80_state){0};
+    CHECK(gw_test_z80_set_state(m, &state), "pending release state");
+    m->z80.busreq = 1;
+    m->z80.reset_asserted = 1;
+    m->z80.reset_pending = 0;
+    m->tick = UINT64_C(3000);
+    m->z80.next_cycle_tick = UINT64_MAX;
+    uint32_t control_value = reset_release;
+    CHECK(gw_z80_bus_access(m, 0x00a11200u, 2, 1, &control_value), "schedule first reset release edge");
+    uint64_t selected_reset_edge = m->z80.reset_tick;
+    CHECK(m->z80.reset_pending, "first release while asserted schedules an edge");
+    CHECK(gw_z80_bus_access(m, 0x00a11200u, 2, 1, &control_value), "repeat pending reset release");
+    CHECK(m->z80.reset_pending && m->z80.reset_tick == selected_reset_edge,
+          "duplicate pending release does not postpone the selected reset edge");
+
     puts("z80_interrupt_contract: NMI, IM0/1/2, masking, and pulse pass");
     return 0;
 }

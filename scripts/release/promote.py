@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -29,8 +30,14 @@ API = "https://api.github.com"
 API_VERSION = "2026-03-10"
 RELEASE_BODY = "Qualified Genewhip preview artifacts; see the attached package inventory and checksums."
 MAX_RELEASE_ASSET_BYTES = 2 * 1024 * 1024 * 1024
+_ARCHIVE_SPEC = importlib.util.spec_from_file_location(
+    "genewhip_package_archive", pathlib.Path(__file__).resolve().parents[1] / "package_archive.py")
+_ARCHIVE_LIMITS = importlib.util.module_from_spec(_ARCHIVE_SPEC)
+_ARCHIVE_SPEC.loader.exec_module(_ARCHIVE_LIMITS)
 WORKFLOW_PATH = ".github/workflows/ci.yml"
 RELEASE_TAG_PREFIX = "v"
+V02_RELEASE_VERSION = "0.2.0"
+V02_INVENTORY_SCHEMA = "genewhip.release-inventory.v2"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -158,6 +165,8 @@ def validate_release_inventory(
 def validate_qualified_inventory(directory: pathlib.Path, inventory: dict[str, Any],
                                  source_sha: str) -> list[str]:
     """Bind both fixed package archives to their source-matched smoke receipts."""
+    if inventory.get("version") == V02_RELEASE_VERSION:
+        return validate_v02_inventory(directory, inventory, source_sha)
     if inventory.get("source_revision") != source_sha or inventory.get("version") != "0.1.0":
         return ["inventory-source-mismatch"]
     prefix = f"genewhip-0.1.0-"
@@ -203,6 +212,8 @@ def validate_qualified_inventory(directory: pathlib.Path, inventory: dict[str, A
         if not isinstance(row, dict) or row.get("sha256") != archive_digest or row.get("size") != len(archive_bytes):
             return ["inventory-package-receipt-invalid"]
         try:
+            _ARCHIVE_LIMITS.preflight_tar_gz(archive_bytes, max_members=4096,
+                max_expanded_bytes=MAX_RELEASE_ASSET_BYTES)
             with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:*") as package:
                 members = package.getmembers()
                 if any(pathlib.PurePosixPath(member.name).is_absolute()
@@ -210,12 +221,131 @@ def validate_qualified_inventory(directory: pathlib.Path, inventory: dict[str, A
                        or not (member.isfile() or member.isdir()) for member in members):
                     return ["inventory-package-archive-invalid"]
                 present = {pathlib.PurePosixPath(member.name).name for member in members if member.isfile()}
-        except (OSError, tarfile.TarError):
+        except (OSError, tarfile.TarError, ValueError, json.JSONDecodeError):
             return ["inventory-package-archive-invalid"]
         if not members_required[kind].issubset(present):
             return ["inventory-package-evidence-incomplete"]
         observed_kinds.add(kind)
     return [] if observed_kinds == set(packages) else ["inventory-package-roster-incomplete"]
+
+
+def validate_recovery_version(version: str, authorized_recovery_release_id: int) -> list[str]:
+    """Keep the one-time v0.1 draft recovery authority out of v0.2 publication."""
+    if type(authorized_recovery_release_id) is not int:
+        return ["release-draft-recovery-id-invalid"]
+    if version == V02_RELEASE_VERSION and authorized_recovery_release_id != 0:
+        return ["release-draft-recovery-version-forbidden"]
+    if version == "0.1.0" and authorized_recovery_release_id < 1:
+        return ["release-draft-recovery-id-invalid"]
+    if version not in ("0.1.0", V02_RELEASE_VERSION):
+        return ["release-version-not-allowed"]
+    return []
+
+
+def validate_v02_inventory(directory: pathlib.Path, inventory: dict[str, Any],
+                           source_sha: str) -> list[str]:
+    """Validate the v2 receipt contract and exact reviewed archive members."""
+    if inventory.get("schema") != V02_INVENTORY_SCHEMA or inventory.get("version") != V02_RELEASE_VERSION:
+        return ["inventory-version-invalid"]
+    if inventory.get("source_revision") != source_sha or not SHA_RE.fullmatch(source_sha):
+        return ["inventory-source-mismatch"]
+    assets = inventory.get("assets")
+    if not isinstance(assets, dict):
+        return ["inventory-package-roster-incomplete"]
+    suffix = f"-{source_sha[:12]}.tar.gz"
+    packages = {
+        "sdk": (f"genewhip-0.2.0-sdk-diagnostic-darwin-arm64{suffix}",
+                "SDL-free SDK/diagnostic archive"),
+        "desktop": (f"genewhip-0.2.0-playable-preview-macos-arm64{suffix}",
+                    "curated SDL3 desktop archive"),
+    }
+    expected_names = {name for archive, _ in packages.values()
+                      for name in (archive, archive + ".sha256", archive + ".qualification.json")}
+    if set(assets) != expected_names:
+        return ["inventory-package-roster-incomplete"]
+    try:
+        roster = json.loads((pathlib.Path(__file__).resolve().parents[2] /
+                             "packaging/v02-members.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ["inventory-member-roster-unavailable"]
+    if roster.get("schema") != "genewhip-v02-package-members-v1" or roster.get("release_version") != V02_RELEASE_VERSION:
+        return ["inventory-member-roster-version-invalid"]
+    rights = roster.get("rights")
+    if not isinstance(rights, dict):
+        return ["inventory-member-rights-unavailable"]
+    for role, (archive_name, kind) in packages.items():
+        receipt_name, checksum_name = archive_name + ".qualification.json", archive_name + ".sha256"
+        try:
+            receipt = json.loads((directory / receipt_name).read_text(encoding="utf-8"))
+            archive_data = (directory / archive_name).read_bytes()
+            checksum = (directory / checksum_name).read_text(encoding="utf-8")
+        except (OSError, json.JSONDecodeError):
+            return ["inventory-package-receipt-invalid"]
+        if not isinstance(receipt, dict):
+            return ["inventory-package-receipt-invalid"]
+        digest = sha256_bytes(archive_data)
+        row = assets.get(archive_name)
+        if (receipt.get("schema") != "genewhip-local-package-qualification" or receipt.get("version") != 2
+                or receipt.get("release_version") != V02_RELEASE_VERSION or receipt.get("outcome") != "pass"
+                or receipt.get("kind") != kind or receipt.get("source_revision") != source_sha
+                or receipt.get("source_state") != "clean"
+                or receipt.get("archive") != archive_name or receipt.get("archive_sha256") != digest
+                or not isinstance(receipt.get("smoke"), dict) or receipt["smoke"].get("outcome") != "pass"
+                or checksum != f"{digest}  {archive_name}\n"
+                or not isinstance(row, dict) or row.get("sha256") != digest
+                or row.get("size") != len(archive_data)):
+            return ["inventory-package-source-not-public" if receipt.get("source_state") != "clean"
+                    else "inventory-package-receipt-invalid"]
+        entries = roster.get(role, {}).get("members")
+        if not isinstance(entries, list) or not entries:
+            return ["inventory-member-roster-incomplete"]
+        expected_members = set()
+        for member in entries:
+            path = member.get("path") if isinstance(member, dict) else None
+            right = member.get("rights") if isinstance(member, dict) else None
+            pure = pathlib.PurePosixPath(path or "")
+            if (not isinstance(path, str) or not path or pure.is_absolute() or ".." in pure.parts
+                    or "\\" in path or right not in rights):
+                return ["inventory-member-roster-invalid"]
+            right_row = rights[right]
+            if not isinstance(right_row, dict):
+                return ["inventory-member-rights-incomplete"]
+            notice = right_row.get("notice_members", {}).get(role, right_row.get("notice_member"))
+            if not right_row.get("license") or not notice:
+                return ["inventory-member-rights-incomplete"]
+            expected_members.add(path)
+        try:
+            _ARCHIVE_LIMITS.preflight_tar_gz(archive_data, max_members=4096,
+                max_expanded_bytes=MAX_RELEASE_ASSET_BYTES)
+            with tarfile.open(fileobj=io.BytesIO(archive_data), mode="r:*") as package:
+                members = package.getmembers()
+                if any(pathlib.PurePosixPath(member.name).is_absolute()
+                       or ".." in pathlib.PurePosixPath(member.name).parts
+                       or "\\" in member.name or not (member.isfile() or member.isdir()) for member in members):
+                    return ["inventory-package-archive-invalid"]
+                files = [member for member in members if member.isfile()]
+                roots = {pathlib.PurePosixPath(member.name).parts[0] for member in files}
+                observed_members = {"/".join(pathlib.PurePosixPath(member.name).parts[1:]) for member in files
+                                   if len(pathlib.PurePosixPath(member.name).parts) > 1}
+                by_relative = {"/".join(pathlib.PurePosixPath(member.name).parts[1:]): member
+                               for member in files if len(pathlib.PurePosixPath(member.name).parts) > 1}
+                performance_name = ("share/genewhip/evidence/performance.json" if role == "sdk" else
+                                     "share/genewhip/evidence/performance.json")
+                metadata_member = by_relative.get("metadata.json")
+                performance_member = by_relative.get(performance_name)
+                if not metadata_member or not performance_member:
+                    return ["inventory-performance-evidence-missing"]
+                metadata = json.loads(package.extractfile(metadata_member).read())
+                performance_digest = hashlib.sha256(package.extractfile(performance_member).read()).hexdigest()
+                if (metadata.get("performance_evidence_digest") != performance_digest or
+                        receipt.get("performance_evidence_digest") != performance_digest):
+                    return ["inventory-performance-evidence-identity"]
+        except (OSError, tarfile.TarError):
+            return ["inventory-package-archive-invalid"]
+        if (len(roots) != 1 or observed_members != expected_members
+                or len(files) != len(expected_members)):
+            return ["inventory-package-members-mismatch"]
+    return []
 
 
 def verify_run_event(event: dict[str, Any], expected_repo: str, source_sha: str,
@@ -349,7 +479,8 @@ def _attestation_statement(result: Any, expected_invocation: str) -> dict[str, A
 
 
 def verify_attestation(path: pathlib.Path, repository: str, source_sha: str,
-                       run_id: str, attempt: int) -> dict[str, Any]:
+                       run_id: str, attempt: int, expected_sha256: str | None = None,
+                       runner: Any = None) -> dict[str, Any]:
     """Use gh's Sigstore verifier and additionally bind SLSA invocation to this attempt."""
     if not REPO_RE.fullmatch(repository) or not SHA_RE.fullmatch(source_sha):
         raise PromotionError("provenance-expected-identity-invalid")
@@ -361,7 +492,8 @@ def verify_attestation(path: pathlib.Path, repository: str, source_sha: str,
         "https://token.actions.githubusercontent.com", "--format", "json",
     ]
     try:
-        completed = subprocess.run(command, check=False, capture_output=True, text=True, timeout=60)
+        completed = (runner(command) if runner is not None else
+                     subprocess.run(command, check=False, capture_output=True, text=True, timeout=60))
     except (OSError, subprocess.TimeoutExpired):
         raise PromotionError("attestation-verifier-unavailable") from None
     if completed.returncode:
@@ -372,6 +504,12 @@ def verify_attestation(path: pathlib.Path, repository: str, source_sha: str,
         raise PromotionError("attestation-verifier-output-invalid") from None
     invocation = f"https://github.com/{repository}/actions/runs/{run_id}/attempts/{attempt}"
     statement = _attestation_statement(result, invocation)
+    if expected_sha256 is not None:
+        subjects = statement.get("subject")
+        if not isinstance(subjects, list) or not any(
+                isinstance(row, dict) and isinstance(row.get("digest"), dict)
+                and row["digest"].get("sha256") == expected_sha256 for row in subjects):
+            raise PromotionError("attestation-subject-digest-mismatch")
     predicate = statement.get("predicate")
     if not isinstance(predicate, dict):
         raise PromotionError("attestation-predicate-missing")
@@ -390,10 +528,13 @@ def verify_attestation(path: pathlib.Path, repository: str, source_sha: str,
     }
 
 
-def prepare_assets(input_dir: pathlib.Path, output_dir: pathlib.Path, source_sha: str) -> dict[str, Any]:
+def prepare_assets(input_dir: pathlib.Path, output_dir: pathlib.Path, source_sha: str,
+                   release_version: str = "0.1.0") -> dict[str, Any]:
     """Collect exactly the two already-smoked archives and create a deterministic inventory."""
     if not SHA_RE.fullmatch(source_sha):
         raise PromotionError("source-sha-invalid")
+    if release_version not in ("0.1.0", V02_RELEASE_VERSION):
+        raise PromotionError("release-version-not-allowed")
     receipts = sorted(input_dir.glob("*.tar.gz.qualification.json"))
     selected: list[tuple[pathlib.Path, pathlib.Path, pathlib.Path, dict[str, Any]]] = []
     seen_kinds: set[str] = set()
@@ -401,6 +542,16 @@ def prepare_assets(input_dir: pathlib.Path, output_dir: pathlib.Path, source_sha
         receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
         if receipt.get("schema") != "genewhip-local-package-qualification" or receipt.get("outcome") != "pass":
             continue
+        if release_version == V02_RELEASE_VERSION:
+            if receipt.get("release_version") != release_version:
+                continue
+            if receipt.get("source_revision") != source_sha:
+                continue
+            if receipt.get("source_state") != "clean":
+                raise PromotionError("package-source-not-public")
+            if (receipt.get("version") != 2 or not isinstance(receipt.get("smoke"), dict)
+                    or receipt["smoke"].get("outcome") != "pass"):
+                raise PromotionError("package-v02-qualification-invalid")
         if receipt.get("source_revision") != source_sha:
             continue
         archive_name = receipt.get("archive")
@@ -417,13 +568,19 @@ def prepare_assets(input_dir: pathlib.Path, output_dir: pathlib.Path, source_sha
         if checksum.read_text(encoding="utf-8") != f"{digest}  {archive_name}\n":
             raise PromotionError("package-checksum-mismatch")
         kind = receipt.get("kind")
-        if kind not in ("native macOS arm64 desktop archive", "SDL-free API 4 SDK archive"):
+        allowed_kinds = (("curated SDL3 desktop archive", "SDL-free SDK/diagnostic archive")
+                         if release_version == V02_RELEASE_VERSION else
+                         ("native macOS arm64 desktop archive", "SDL-free API 4 SDK archive"))
+        if kind not in allowed_kinds:
             continue
         if kind in seen_kinds:
             raise PromotionError("duplicate-qualified-package-kind")
         seen_kinds.add(kind)
         selected.append((archive, checksum, receipt_path, receipt))
-    if seen_kinds != {"native macOS arm64 desktop archive", "SDL-free API 4 SDK archive"}:
+    required_kinds = ({"curated SDL3 desktop archive", "SDL-free SDK/diagnostic archive"}
+                      if release_version == V02_RELEASE_VERSION else
+                      {"native macOS arm64 desktop archive", "SDL-free API 4 SDK archive"})
+    if seen_kinds != required_kinds:
         raise PromotionError("required-qualified-packages-missing")
 
     required_members = {
@@ -433,10 +590,14 @@ def prepare_assets(input_dir: pathlib.Path, output_dir: pathlib.Path, source_sha
                                        "diagnostic-evidence.json", "metadata.json"},
     }
     for archive, _, _, receipt in selected:
+        if release_version == V02_RELEASE_VERSION:
+            continue
         try:
+            _ARCHIVE_LIMITS.preflight_tar_gz(archive, max_members=4096,
+                max_expanded_bytes=MAX_RELEASE_ASSET_BYTES)
             with tarfile.open(archive, "r:*") as package:
                 members = {pathlib.PurePosixPath(row.name).name for row in package.getmembers() if row.isfile()}
-        except (OSError, tarfile.TarError):
+        except (OSError, tarfile.TarError, ValueError):
             raise PromotionError("qualified-package-archive-invalid") from None
         if not required_members[receipt["kind"]].issubset(members):
             raise PromotionError("package-evidence-or-notices-incomplete")
@@ -450,11 +611,12 @@ def prepare_assets(input_dir: pathlib.Path, output_dir: pathlib.Path, source_sha
             data = path.read_bytes()
             staged[path.name] = data
             file_rows[path.name] = {"sha256": sha256_bytes(data), "size": len(data)}
-        receipt_version = "0.1.0"
+        receipt_version = release_version
         if version is not None and version != receipt_version:
             raise PromotionError("package-version-mismatch")
         version = receipt_version
-    inventory = {"schema": "genewhip.release-inventory.v1", "version": version,
+    inventory = {"schema": (V02_INVENTORY_SCHEMA if release_version == V02_RELEASE_VERSION
+                             else "genewhip.release-inventory.v1"), "version": version,
                  "source_revision": source_sha, "assets": dict(sorted(file_rows.items()))}
     inventory_data = _json_bytes(inventory)
     staged["inventory.json"] = inventory_data
@@ -668,13 +830,19 @@ class GitHub:
             result.append({"name": row.get("name"), "sha256": digest[7:]})
         return result
 
-    def verify_required_check(self, run_id: str, attempt: int) -> None:
+    def verify_required_check(self, run_id: str, attempt: int, release_version: str = "0.1.0") -> None:
         path = f"/repos/{self.repository}/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100"
         response = self.get(path)
         rows = response.get("jobs") if isinstance(response, dict) else None
         matching = [row for row in rows or [] if isinstance(row, dict) and row.get("name") == "required-ci"]
         if len(matching) != 1 or matching[0].get("status") != "completed" or matching[0].get("conclusion") != "success":
             raise PromotionError("required-qualification-check-not-success")
+        if release_version == V02_RELEASE_VERSION:
+            qualified = [row for row in rows or [] if isinstance(row, dict)
+                         and row.get("name") == "v02-release-qualification"]
+            if (len(qualified) != 1 or qualified[0].get("status") != "completed"
+                    or qualified[0].get("conclusion") != "success"):
+                raise PromotionError("v02-qualification-job-not-success")
         attestation = [row for row in rows or [] if isinstance(row, dict) and row.get("name") == "attestation"]
         if (len(attestation) != 1 or attestation[0].get("status") != "completed"
                 or attestation[0].get("conclusion") != "success"):
@@ -691,7 +859,7 @@ class GitHub:
                                                 and release_tag.startswith("untagged-")))
                 or release.get("target_commitish") != source_sha
                 or release.get("draft") is not True or release.get("prerelease") is not True
-                or not isinstance(name, str) or name != "0.1.0"
+                or not isinstance(name, str) or name != tag.removeprefix("v")
                 or body != RELEASE_BODY
                 or self.tag_commit(tag) != source_sha):
             raise PromotionError("publication-write-probe-input-invalid")
@@ -870,18 +1038,23 @@ def _asset_digest_map(digests: dict[str, str]) -> dict[str, str]:
 
 def publish(repository: str, source_sha: str, run_id: str, attempt: int,
             event_path: pathlib.Path, asset_dir: pathlib.Path, token: str,
-            authorized_recovery_release_id: int) -> str:
+            authorized_recovery_release_id: int,
+            release_version: str = "0.1.0") -> str:
     if (not REPO_RE.fullmatch(repository) or ".." in repository.split("/")
             or not SHA_RE.fullmatch(source_sha) or not RUN_ID_RE.fullmatch(str(run_id))
-            or attempt < 1 or type(authorized_recovery_release_id) is not int
-            or authorized_recovery_release_id < 1):
+            or attempt < 1 or type(authorized_recovery_release_id) is not int):
         raise PromotionError("expected-identity-invalid")
+    blockers = validate_recovery_version(release_version, authorized_recovery_release_id)
+    if blockers:
+        raise PromotionError(blockers[0])
     event = json.loads(event_path.read_text(encoding="utf-8"))
     event_blockers = verify_dispatch_event(event, repository, source_sha, run_id, attempt)
     if event_blockers:
         raise PromotionError(event_blockers[0])
     inventory = json.loads((asset_dir / "inventory.json").read_text(encoding="utf-8"))
-    if inventory.get("schema") != "genewhip.release-inventory.v1" or inventory.get("source_revision") != source_sha:
+    expected_schema = V02_INVENTORY_SCHEMA if release_version == V02_RELEASE_VERSION else "genewhip.release-inventory.v1"
+    if (inventory.get("schema") != expected_schema or inventory.get("version") != release_version
+            or inventory.get("source_revision") != source_sha):
         raise PromotionError("inventory-source-mismatch")
     digests, blockers = validate_release_inventory(asset_dir, inventory)
     if blockers:
@@ -914,17 +1087,25 @@ def publish(repository: str, source_sha: str, run_id: str, attempt: int,
     workflow = api.get(f"/repos/{repository}/actions/workflows/{workflow_id}")
     if not isinstance(workflow, dict) or workflow.get("path") != WORKFLOW_PATH:
         raise PromotionError("provenance-workflow-mismatch")
-    api.verify_required_check(run_id, attempt)
+    api.verify_required_check(run_id, attempt, release_version)
     version = inventory.get("version")
-    if version != "0.1.0":
+    if version != release_version:
         raise PromotionError("release-version-not-allowed")
     tag = RELEASE_TAG_PREFIX + version
     api.ensure_tag(tag, source_sha)
     release = api.release_by_tag(tag)
     if release is None:
-        release = api.recover_untagged_draft(tag, source_sha, version,
-                                             _asset_digest_map(digests),
-                                             authorized_recovery_release_id)
+        release = (api.recover_untagged_draft(tag, source_sha, version,
+                                              _asset_digest_map(digests),
+                                              authorized_recovery_release_id)
+                   if release_version == "0.1.0" else None)
+        if release_version == V02_RELEASE_VERSION and release is None:
+            matches = [row for row in api.get(f"/repos/{repository}/releases?per_page=100&page=1")
+                       if isinstance(row, dict) and row.get("draft") is True
+                       and isinstance(row.get("tag_name"), str) and row["tag_name"].startswith("untagged-")
+                       and row.get("target_commitish") == source_sha]
+            if matches:
+                raise PromotionError("release-draft-recovery-version-forbidden")
         if release is None:
             release = api.create_draft(tag, version, source_sha)
             # Re-read after creation so later decisions use server state, not POST response order.
@@ -966,7 +1147,7 @@ def publish(repository: str, source_sha: str, run_id: str, attempt: int,
         return "identical-published-release-no-op"
     if decision["upload"]:
         raise PromotionError("release-inventory-incomplete-before-publish")
-    api.verify_required_check(run_id, attempt)
+    api.verify_required_check(run_id, attempt, release_version)
     if tag_sha != source_sha:
         raise PromotionError("tag-source-conflict-before-publish")
     if release.get("draft") is not True:
@@ -1010,6 +1191,7 @@ def main(argv: list[str] | None = None) -> int:
     prepare.add_argument("--input-dir", type=pathlib.Path, required=True)
     prepare.add_argument("--output-dir", type=pathlib.Path, required=True)
     prepare.add_argument("--source-sha", required=True)
+    prepare.add_argument("--release-version", choices=("0.1.0", V02_RELEASE_VERSION), default="0.1.0")
     publish_parser = sub.add_parser("publish", help="publish a trusted workflow-dispatch artifact")
     publish_parser.add_argument("--repository", required=True)
     publish_parser.add_argument("--source-sha", required=True)
@@ -1018,10 +1200,11 @@ def main(argv: list[str] | None = None) -> int:
     publish_parser.add_argument("--event", type=pathlib.Path, required=True)
     publish_parser.add_argument("--asset-dir", type=pathlib.Path, required=True)
     publish_parser.add_argument("--authorized-recovery-release-id", type=int, required=True)
+    publish_parser.add_argument("--release-version", choices=("0.1.0", V02_RELEASE_VERSION), default="0.1.0")
     args = parser.parse_args(argv)
     try:
         if args.mode == "prepare":
-            inventory = prepare_assets(args.input_dir, args.output_dir, args.source_sha)
+            inventory = prepare_assets(args.input_dir, args.output_dir, args.source_sha, args.release_version)
             print(json.dumps({"outcome": "prepared", "source_revision": args.source_sha,
                               "asset_count": len(expected_asset_names(inventory)),
                               "inventory_sha256": sha256_bytes((args.output_dir / "inventory.json").read_bytes())},
@@ -1032,7 +1215,7 @@ def main(argv: list[str] | None = None) -> int:
         token = os.environ.get("GH_TOKEN", "")
         result = publish(args.repository, args.source_sha, args.run_id, args.run_attempt,
                          args.event, args.asset_dir, token,
-                         args.authorized_recovery_release_id)
+                         args.authorized_recovery_release_id, args.release_version)
         print(json.dumps({"outcome": result, "source_revision": args.source_sha,
                           "run_id": args.run_id, "run_attempt": args.run_attempt}, sort_keys=True))
         return 0

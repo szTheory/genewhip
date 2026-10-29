@@ -1,0 +1,304 @@
+{
+  "candidate_sha256": "88b4cc0bb53f89b2b07e7fd27b8d2894b18dce54073cc8028bed3439f1bc1139",
+  "parser_rejection": {
+    "path": "build/phase6/evidence/controller.json",
+    "sha256": "176df6841971904f1b8291c0cee5f3b261da82bc4ac4398598d5fde13e2065ec"
+  },
+  "reader_reconciliation": {
+    "path": "build/phase6/evidence/parent53-close-history/close-mutant-correction.json",
+    "sha256": "1da29247c56509d4f8a3ce5fa9fb6a81926071425ea9c2aac0b4276505715c92"
+  },
+  "registered_tests": [
+    "load_contract",
+    "time_contract",
+    "reset_contract",
+    "bus_boundary_contract",
+    "gameplay_bus_contract",
+    "movem_contract",
+    "phase6_repairs_contract",
+    "session_contract",
+    "input_log_contract",
+    "phase6_chunk_contract",
+    "phase6_safety",
+    "phase6_delivery_map_contract"
+  ],
+  "schema": "genewhip-phase6-safety-v1",
+  "source_provenance": {
+    "CMakeLists.txt": "311eb5e9b1e969f74a703e46c5aced555aeec727d4c2c8f13a90d4baa9c6d15f",
+    "tests/api/bounded_fuzz.c": "329b897314c46135bfc58b6b44f34f8c9b92e43a639fc1944694c49eac6e74ba",
+    "tests/api/bus_boundary_contract.c": "49d9f0bd27a72e29df12078540ad764a2f9426dad30d50a9f953c1e26f5f06d3",
+    "tests/api/contract.h": "2543fda78f4c7e386e8d6cf4bd61aa9202d8fd71d33cb1f66fa38f136e654777",
+    "tests/api/gameplay_bus_contract.c": "a81f95fdd43ddb854edb399b875db9d53405766f6321466aebb707a8b54da338",
+    "tests/api/load_contract.c": "84010f0465395b6c219ae2bdabd06156704e36e8300dd52194261dcc4c4e170d",
+    "tests/api/movem_contract.c": "fdd227abd4a3add470e52e30e44a80a6f49b4db53688d6f8f0169d1749ed0e88",
+    "tests/api/phase6_repairs_contract.c": "7747ab7aa40a162526fb14efa2712b4dfa942ee2318f862f88c6fed7e1d493c5",
+    "tests/api/phase6_safety.c": "ae1371797516aa107edcc89261a87e3c9831c33ba4890a5e931d919db9d06b04",
+    "tests/api/reset_contract.c": "1973b5147950a96247b6b620a77c57286b6b6af84b559a8f6d2dade7bb1ef684",
+    "tests/api/safety_contract.py": "5f030d96eb41a5a071cfa2b60dc8db56be60160b0f1aba7aa3190d8e8012f154",
+    "tests/api/time_contract.c": "35b18f7571324dcd09d041734b0cba1f01dcc5beca2610a88f07c1fcfc3b1e5e",
+    "tests/fixtures/phase6_game.py": "44237556a2d48ab0048a7d78478cbc1c3c1c569e4853d2a5d6709d83531593e7",
+    "tests/session/input_log_contract.c": "9dc807bafc163fee1549e314a46f682699d1ec50fb5e16cdfd7e85a587c6cf1e",
+    "tests/session/phase6_chunk_contract.c": "816383d7b7e70a339ea2949d5ad4c5b061b53cbd26a9e6a5ee8671313f108ed9",
+    "tests/session/phase6_controller_contract.py": "c8031ed4bd62f65ecf345a2c38514c52404196d683c71c05687fe28311d14a73",
+    "tests/session/session_contract.c": "40b98fe12257f9122211be957948b835fcbc229a5febdce11fc6a637f98ed3b9",
+    "tools/session/CMakeLists.txt": "61e22bdfd07f5cb68b682395daf7ee93106dbc505c4b790f83fb2220aa403a57"
+  },
+  "status": "pass",
+  "variants": [
+    {
+      "allocation_count_peak": 2,
+      "allocation_instrumented": true,
+      "api_contract": {
+        "path": "build/phase6/evidence/phase6-safety-contract.json",
+        "sha256": "9b4be10f013837f94c6f2ca43af28a61dee32809e72b8918764f2205a1d751a5"
+      },
+      "bounded_fuzz": {
+        "accepted_loads": 2048,
+        "denominator": 4096,
+        "fail": 0,
+        "pass": 4096,
+        "rejected_loads": 2048,
+        "skipped": 0,
+        "tick_budget": 128,
+        "unknown": 0
+      },
+      "build_identity": {
+        "cache_sha256": "5227ad4b419b9156ef779781c07abd277976f29eacbf1d74aa24659f138550f5",
+        "hooks_off": false,
+        "phase6_safety_sha256": "62e3a82d007364356838921bbf56c807dabab05dfd6c5d52acd5d8c8249a954f",
+        "sanitizers": false,
+        "test_executables": {
+          "build/phase6/bus_boundary_contract": "2aad86597d4e602997140e7308df4d661428e8de3beee176f62b5e9da9284c28",
+          "build/phase6/gameplay_bus_contract": "960b9f66f1f12d68fb0c34165f42ab96ddad2f078f1e3673b3d1498a20569bbd",
+          "build/phase6/gw_bounded_fuzz": "551c7e514d1d96120d7cfec1b2af499a7e7b59c6d6a01e78b567bf25eaa0cbd6",
+          "build/phase6/load_contract": "00dbca8481221d164b94b4bf7f9b9f75cdb1a8fc5b2c5df4b8d45fb0000d7a84",
+          "build/phase6/movem_contract": "f54618a8fa45272be37365b40c96f97d183e51aae71919644760d5029abbee15",
+          "build/phase6/phase6_repairs_contract": "aebc2b7d17c24e715567ae70b6a140ade69ca83889b1f4d02c09be00d52258de",
+          "build/phase6/phase6_safety": "62e3a82d007364356838921bbf56c807dabab05dfd6c5d52acd5d8c8249a954f",
+          "build/phase6/reset_contract": "ff56c816c800e6af0bcfe35eb173dccdac75af13afff9a1e8e5cd37c72b0dd98",
+          "build/phase6/time_contract": "e251a677745b6897bc4aa98da96d140b85ce49ca16dacb8fd0f5af81a4e1620c",
+          "build/phase6/tools/session/input_log_contract": "63dcc806203b98f70705fc2f50790bca130c1e614070cc595969e64c27d94031",
+          "build/phase6/tools/session/phase6_chunk_contract": "16f7e4229d1220d846a44fec9e3482db67d993a30171025c318a11d799378920",
+          "build/phase6/tools/session/session_contract": "851f661b9e1144cacbef0f7da4515bbf8f213909e66ce40ce3f7ecce70063170"
+        }
+      },
+      "ctest_json_sha256": "750dc33210397a078d8dad12c73f7ea9927ec712d20bf07cae111db11d8f2d13",
+      "denominator": 12,
+      "fail": 0,
+      "fuzz": {
+        "command": [
+          "build/phase6/gw_bounded_fuzz"
+        ],
+        "summary": {
+          "accepted_loads": 2048,
+          "denominator": 4096,
+          "fail": 0,
+          "pass": 4096,
+          "rejected_loads": 2048,
+          "seed": "47573105",
+          "skipped": 0,
+          "tick_budget": 128,
+          "unknown": 0
+        }
+      },
+      "guards_checked": 16,
+      "max_tick": 179032,
+      "output_cap": 2048,
+      "owned_bytes_limit": 1073741824,
+      "owned_bytes_peak": 49430528,
+      "pass": 12,
+      "returned_frames": 416,
+      "selected_tests": [
+        "load_contract",
+        "time_contract",
+        "reset_contract",
+        "bus_boundary_contract",
+        "gameplay_bus_contract",
+        "movem_contract",
+        "phase6_repairs_contract",
+        "session_contract",
+        "input_log_contract",
+        "phase6_chunk_contract",
+        "phase6_safety",
+        "phase6_delivery_map_contract"
+      ],
+      "skipped": 0,
+      "steady_allocations": 0,
+      "step_limit": 128,
+      "steps": 128,
+      "tick_budget": 180000,
+      "unknown": 0,
+      "variant": "native"
+    },
+    {
+      "allocation_count_peak": 2,
+      "allocation_instrumented": true,
+      "api_contract": {
+        "path": "build/phase6-sanitize/evidence/phase6-safety-contract.json",
+        "sha256": "9b4be10f013837f94c6f2ca43af28a61dee32809e72b8918764f2205a1d751a5"
+      },
+      "bounded_fuzz": {
+        "accepted_loads": 2048,
+        "denominator": 4096,
+        "fail": 0,
+        "pass": 4096,
+        "rejected_loads": 2048,
+        "skipped": 0,
+        "tick_budget": 128,
+        "unknown": 0
+      },
+      "build_identity": {
+        "cache_sha256": "8fbc9f1bef4ec55a083748c7c569cdd27c7e34a59302adefea0a85de4ed37c5a",
+        "hooks_off": false,
+        "phase6_safety_sha256": "f62e472e49238d05ce75829b2311a97e5752ff37470fe1587817797b12961745",
+        "sanitizers": true,
+        "test_executables": {
+          "build/phase6-sanitize/bus_boundary_contract": "ee218d83b1f2f77f3724cfd12d629b309c8d0b5bc3f18190a9531c158f1bb5a2",
+          "build/phase6-sanitize/gameplay_bus_contract": "30e5e69139c06a4c735a3dfdd22b8bd084a4c235180d6bdfee5eea27f5cf3b37",
+          "build/phase6-sanitize/gw_bounded_fuzz": "87e7e5996a0ab004f488675aa7250200c01118b1e795df7235c4cdb13ca12215",
+          "build/phase6-sanitize/load_contract": "417c06eddecbe9f1d83117320c7ec8e861c5749d168853493b2380f9d5174e7a",
+          "build/phase6-sanitize/movem_contract": "7aaf11869c8d12697d904305756c0424812b479f8e38aaf49530e529a7b83b1e",
+          "build/phase6-sanitize/phase6_repairs_contract": "71e26a43bd6c79dda3723cfb0ed6f7dbd15c07dacff9bd9c5e2d00eaad370185",
+          "build/phase6-sanitize/phase6_safety": "f62e472e49238d05ce75829b2311a97e5752ff37470fe1587817797b12961745",
+          "build/phase6-sanitize/reset_contract": "e6f835b72ca1af241f6adcc8019d036187103445fbf158cd70d59f6d9342e5b1",
+          "build/phase6-sanitize/time_contract": "99bb5fe5278a2de1111c0118dbf8c2ded609243df3e150a14f412f965654fc52",
+          "build/phase6-sanitize/tools/session/input_log_contract": "176b676fd724e7954eb79ac86dc6fc2aba2e372dd3f314ab2b068887767e2438",
+          "build/phase6-sanitize/tools/session/phase6_chunk_contract": "119c87cd2132e35a66108c48b29d6074c78e923888d62a34f2f52125867203ec",
+          "build/phase6-sanitize/tools/session/session_contract": "42eb70b7fa94ec7df8206bd6c63d12ebd949df69bdc74feaa6c5b9b0f2bf7828"
+        }
+      },
+      "ctest_json_sha256": "d43010c2d28a3254c03ae8cfb786c51a265d2a8f47258a536b7f447dc6137358",
+      "denominator": 12,
+      "fail": 0,
+      "fuzz": {
+        "command": [
+          "build/phase6-sanitize/gw_bounded_fuzz"
+        ],
+        "summary": {
+          "accepted_loads": 2048,
+          "denominator": 4096,
+          "fail": 0,
+          "pass": 4096,
+          "rejected_loads": 2048,
+          "seed": "47573105",
+          "skipped": 0,
+          "tick_budget": 128,
+          "unknown": 0
+        }
+      },
+      "guards_checked": 16,
+      "max_tick": 179032,
+      "output_cap": 2048,
+      "owned_bytes_limit": 1073741824,
+      "owned_bytes_peak": 332677120,
+      "pass": 12,
+      "returned_frames": 416,
+      "selected_tests": [
+        "load_contract",
+        "time_contract",
+        "reset_contract",
+        "bus_boundary_contract",
+        "gameplay_bus_contract",
+        "movem_contract",
+        "phase6_repairs_contract",
+        "session_contract",
+        "input_log_contract",
+        "phase6_chunk_contract",
+        "phase6_safety",
+        "phase6_delivery_map_contract"
+      ],
+      "skipped": 0,
+      "steady_allocations": 0,
+      "step_limit": 128,
+      "steps": 128,
+      "tick_budget": 180000,
+      "unknown": 0,
+      "variant": "sanitize"
+    },
+    {
+      "allocation_count_peak": 0,
+      "allocation_instrumented": false,
+      "api_contract": {
+        "path": "build/phase6-hooks-off/evidence/phase6-safety-contract.json",
+        "sha256": "3867f4f9c291f20e0c35efd0faefb3a4a92a92ebac1571d0abe390e33e415938"
+      },
+      "bounded_fuzz": {
+        "accepted_loads": 2048,
+        "denominator": 4096,
+        "fail": 0,
+        "pass": 4096,
+        "rejected_loads": 2048,
+        "skipped": 0,
+        "tick_budget": 128,
+        "unknown": 0
+      },
+      "build_identity": {
+        "cache_sha256": "307295f5c52d279f8738647ab1269f61092ad72965786330c65814cb9b6a5136",
+        "hooks_off": true,
+        "phase6_safety_sha256": "1f71372a64164c90b5ce83ce308afe4868946540c48adcc346c522895a0f0aa7",
+        "sanitizers": false,
+        "test_executables": {
+          "build/phase6-hooks-off/bus_boundary_contract": "6819563ab93e965446bc849d5bb994d33033d895284d2e34f44ffa7c7eeced6d",
+          "build/phase6-hooks-off/gameplay_bus_contract": "1be3235b0db5035206daf3524a4845c1fb9d71af5afeea9dbce69d378d708648",
+          "build/phase6-hooks-off/gw_bounded_fuzz": "8288f72b9143aef10e1d7544cb2abc3a38b7bc768871b36f5365f5950a3d81c2",
+          "build/phase6-hooks-off/load_contract": "6a8fb3bf683db836296b98e7901b3c637b5d9e67c118f7fb87768954d54cf46e",
+          "build/phase6-hooks-off/movem_contract": "19b1efd17fd511e33f4519c08009a3aec18f901d7cea0800ad558ccc08f94d5e",
+          "build/phase6-hooks-off/phase6_repairs_contract": "c44ba421003abc93c457f9ad54d2b421ec241176902be99ea382dc1cd1e14748",
+          "build/phase6-hooks-off/phase6_safety": "1f71372a64164c90b5ce83ce308afe4868946540c48adcc346c522895a0f0aa7",
+          "build/phase6-hooks-off/reset_contract": "f8365854443272fc032630b7f0642ca5e196d6cd4c22d353092a1d4d638cab05",
+          "build/phase6-hooks-off/time_contract": "d89e0e5f205394c6bcc32feb15b6d93d00541ef6aef658ea07ffbe15bb41bcac",
+          "build/phase6-hooks-off/tools/session/input_log_contract": "f600ef4e6e9dc6945e5f7dad6084ce67223651d4fb8720daa65fa6db0d9c647e",
+          "build/phase6-hooks-off/tools/session/phase6_chunk_contract": "dc5866cd5f6df78a7ec934247bfa0a197fd12309967bd9003aef05e520397180",
+          "build/phase6-hooks-off/tools/session/session_contract": "f4fd0037d984b760d699c1bd923540cf76abcd4f559db2e4c2d84ec603c370dc"
+        }
+      },
+      "ctest_json_sha256": "95d8ee900004d2efcbf5a097160d9fd6e017bed437813a524f5f897bc26378ab",
+      "denominator": 12,
+      "fail": 0,
+      "fuzz": {
+        "command": [
+          "build/phase6-hooks-off/gw_bounded_fuzz"
+        ],
+        "summary": {
+          "accepted_loads": 2048,
+          "denominator": 4096,
+          "fail": 0,
+          "pass": 4096,
+          "rejected_loads": 2048,
+          "seed": "47573105",
+          "skipped": 0,
+          "tick_budget": 128,
+          "unknown": 0
+        }
+      },
+      "guards_checked": 16,
+      "max_tick": 179032,
+      "output_cap": 2048,
+      "owned_bytes_limit": 1073741824,
+      "owned_bytes_peak": 332677120,
+      "pass": 12,
+      "returned_frames": 416,
+      "selected_tests": [
+        "load_contract",
+        "time_contract",
+        "reset_contract",
+        "bus_boundary_contract",
+        "gameplay_bus_contract",
+        "movem_contract",
+        "phase6_repairs_contract",
+        "session_contract",
+        "input_log_contract",
+        "phase6_chunk_contract",
+        "phase6_safety",
+        "phase6_delivery_map_contract"
+      ],
+      "skipped": 0,
+      "steady_allocations": 0,
+      "step_limit": 128,
+      "steps": 128,
+      "tick_budget": 180000,
+      "unknown": 0,
+      "variant": "hooks-off"
+    }
+  ]
+}

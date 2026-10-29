@@ -1,0 +1,111 @@
+{
+  "candidate_sha256": "88b4cc0bb53f89b2b07e7fd27b8d2894b18dce54073cc8028bed3439f1bc1139",
+  "captures": [
+    {
+      "attempt": 4,
+      "audio": {
+        "encoding": "s16le-stereo",
+        "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-full-route-1/audio.pcm",
+        "sample_rate_hz": 48000,
+        "sha256": "5453830f84ab326e068d1e39a698afd37979274d1236f72218941b44070ba644"
+      },
+      "audio_features": {
+        "notes": [
+          {
+            "frequency_hz": 261.7185,
+            "periodicity": 0.9931,
+            "prominence_ratio": 226469.6148
+          },
+          {
+            "frequency_hz": 293.8238,
+            "periodicity": 0.5504,
+            "prominence_ratio": 145640.2794
+          },
+          {
+            "frequency_hz": 261.7185,
+            "periodicity": 0.993,
+            "prominence_ratio": 248394.2795
+          }
+        ],
+        "reference_waveform": "unknown; source/chip-contract checks only",
+        "score": "selected-v1-vblank-motif",
+        "trace_dropped": 0
+      },
+      "audio_trace": {
+        "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-full-route-1/audio-trace.jsonl",
+        "sha256": "d628cca57b0078cd2f61679b1976c130c417912a91666ebca68938fbc073d351"
+      },
+      "case": "full-route",
+      "completed_fields": 3631,
+      "field": 3602,
+      "field_sequence": 3601,
+      "fixture": "recursion94",
+      "image": {
+        "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-full-route-1/fields/field-3601.bin",
+        "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+      },
+      "native_report": {
+        "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-full-route-1/native.json",
+        "sha256": "9a689d834778e5dfc0a0e484fdf67c80643d58c7772880fe91c2580d0b5df292"
+      },
+      "scene_metadata": {
+        "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-full-route-1/fields/route-capture.json",
+        "sha256": "d5475eb89d6d2d13f55abedddd96b3fa30b225c13b9d94b273a9fe9bc99dcfbb"
+      },
+      "source_tick": 690
+    },
+    {
+      "attempt": null,
+      "audio": {
+        "encoding": "s16le-stereo",
+        "path": "build/phase6/evidence/canonical-core-vstv9lcg/tank-battle-full-route-1/audio.pcm",
+        "sample_rate_hz": 48000,
+        "sha256": "756185bde82ee09a83377db2b7964d1576ba8281e9787f4afb901f684f5173e8"
+      },
+      "audio_features": {
+        "explosion_period": 94,
+        "explosion_source_envelope_pcm": true,
+        "noise": "WHITE/TONE3 programmed; no unsupported broadband pitch claim",
+        "reference_waveform": "unknown; source packet/onset/mute checks only",
+        "shot": [
+          {
+            "gate_samples": 18,
+            "onset_and_mute_pcm": true,
+            "pitch": "unknown: source gate shorter than10ms"
+          }
+        ],
+        "trace_dropped": 0
+      },
+      "audio_trace": {
+        "path": "build/phase6/evidence/canonical-core-vstv9lcg/tank-battle-full-route-1/audio-trace.jsonl",
+        "sha256": "76e1f4018fd07982b3eafd041ddd08aaec8249675b11cba250efbb7d18501e57"
+      },
+      "case": "full-route",
+      "completed_fields": 4196,
+      "field": 120,
+      "field_sequence": 119,
+      "fixture": "tank-battle",
+      "image": {
+        "path": "build/phase6/evidence/canonical-core-vstv9lcg/tank-battle-full-route-1/fields/field-119.bin",
+        "sha256": "2287e53d2bf3bf35b42e55deb9e49dcf870a6f85bb51ee3cda3396dd496afedd"
+      },
+      "native_report": {
+        "path": "build/phase6/evidence/canonical-core-vstv9lcg/tank-battle-full-route-1/native.json",
+        "sha256": "ef692e554237671c5a9204dbef08ea81fe3949d6123a0645b6726ee8902fc8be"
+      },
+      "scene_metadata": {
+        "path": "build/phase6/evidence/canonical-core-vstv9lcg/tank-battle-full-route-1/fields/route-capture.json",
+        "sha256": "642f38565870c7a37c3d5d9c051d0a11b35a54ab3268219f35a73a258f1c31d5"
+      },
+      "source_tick": null
+    }
+  ],
+  "core_routes": {
+    "path": "evidence/phase6-core-routes.json",
+    "sha256": "28fe942663493e829b639e0053c45e81b677cb268193bd7667baab73780fa443"
+  },
+  "core_routes_sha256": "28fe942663493e829b639e0053c45e81b677cb268193bd7667baab73780fa443",
+  "media_expectations_sha256": "09087f6397aa8c3249a0af9c489958892fdee039cfbf21892b27bc12cf2df386",
+  "result": "pass",
+  "schema": "genewhip-phase6-media-v1"
+}

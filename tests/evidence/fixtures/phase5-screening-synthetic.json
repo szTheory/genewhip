@@ -1,0 +1,39 @@
+{
+  "schema": "genewhip-phase5-screening-v1",
+  "limits": {
+    "documentary_leads": 5,
+    "full_title_screens": 4,
+    "build_environment_corrections_per_title": 1,
+    "route_authoring_corrections_per_title_before_freeze": 1,
+    "reference_harness_corrections_per_title": 1,
+    "rom_build_invocations_per_title": 4,
+    "network_fetch_seconds": 120,
+    "network_retries": 1,
+    "toolchain_setup_seconds": 1800,
+    "build_invocation_seconds": 1800,
+    "build_processes": 4,
+    "address_space_bytes_per_process": 8589934592,
+    "active_workspace_bytes_per_title": 8589934592,
+    "total_quarantine_bytes": 25769803776,
+    "stdout_bytes_per_process": 1048576,
+    "stderr_bytes_per_process": 1048576,
+    "rom_bytes": 16777216,
+    "source_archive_compressed_bytes": 268435456,
+    "source_archive_unpacked_bytes": 1073741824,
+    "source_archive_entries": 20000,
+    "route_watchdog_seconds": 600,
+    "route_run_disk_bytes": 6442450944,
+    "targeted_trace_bytes": 16777216,
+    "targeted_trace_rows": 100000,
+    "summary_bytes_per_run": 8388608
+  },
+  "candidate_order": ["tank-battle", "alex-vs-bus", "space-shooter", "recursion94", "kleleatoms-md"],
+  "selected_pair": null,
+  "candidates": [
+    {"id":"tank-battle","title":"Tank Battle","repository":"monteslu/retro-homebrew-games","source_revision":"eb7dc3044f9d2f76047f3b3573971bf86575ca52","source_location":"genesis/tank-battle","lineage_id":"monteslu/retro-homebrew-games","role":"primary","state":"unattempted","outcome":"unknown","reason":"Synthetic counter-contract fixture.","identity_history":[],"counters":{"full_screens":0,"build_environment_corrections":0,"route_authoring_corrections":0,"reference_harness_corrections":0,"rom_build_invocations":0}},
+    {"id":"alex-vs-bus","title":"Alex vs Bus","repository":"M374LX/alexvsbus-md","source_revision":"49923878904a9b0d1e098fc940f6c071962e6454","source_location":".","lineage_id":"M374LX/alexvsbus-md","role":"primary","state":"unattempted","outcome":"unknown","reason":"Synthetic counter-contract fixture.","identity_history":[],"counters":{"full_screens":0,"build_environment_corrections":0,"route_authoring_corrections":0,"reference_harness_corrections":0,"rom_build_invocations":0}},
+    {"id":"space-shooter","title":"Space Shooter","repository":"monteslu/retro-homebrew-games","source_revision":"eb7dc3044f9d2f76047f3b3573971bf86575ca52","source_location":"genesis/space-shooter","lineage_id":"monteslu/retro-homebrew-games","role":"reserve-same-lineage","state":"unattempted","outcome":"unknown","reason":"Synthetic counter-contract fixture.","identity_history":[],"counters":{"full_screens":0,"build_environment_corrections":0,"route_authoring_corrections":0,"reference_harness_corrections":0,"rom_build_invocations":0}},
+    {"id":"recursion94","title":"RECURSION 94","repository":"baba20o/RECURSION94","source_revision":"ab73bc9c7d2bbc4fcd94b3e0e2b89756cb1dc0cd","source_location":".","lineage_id":"baba20o/RECURSION94","role":"reserve-distinct-lineage","state":"unattempted","outcome":"unknown","reason":"Synthetic counter-contract fixture.","identity_history":[],"counters":{"full_screens":0,"build_environment_corrections":0,"route_authoring_corrections":0,"reference_harness_corrections":0,"rom_build_invocations":0}},
+    {"id":"kleleatoms-md","title":"KłełeAtoms MD","repository":"Nightwolf-47/KleleAtoms-MD","source_revision":"53f2344636c65b66ae0033e5345fa5502ebb0a21","source_location":".","lineage_id":"Nightwolf-47/KleleAtoms-MD","role":"reserve-distinct-lineage","state":"unattempted","outcome":"unknown","reason":"Synthetic counter-contract fixture.","identity_history":[],"counters":{"full_screens":0,"build_environment_corrections":0,"route_authoring_corrections":0,"reference_harness_corrections":0,"rom_build_invocations":0}}
+  ]
+}
