@@ -1,0 +1,893 @@
+{
+  "schema": "genewhip-phase5-route-v1",
+  "title_id": "recursion94",
+  "profile": "VA3-NTSC-U",
+  "reset": "fresh-process; source-defined initial state; no RAM pokes",
+  "source_basis": {
+    "intended": "B01 BOOT echo cap 2. Enter the x64 pressure-switch interval, retain two source-recorded holds through explicit at-cap replacement, cross the opened x160 door, and complete the generated x288 exit-terminal interaction with 24 uninterrupted B steps.",
+    "source_materials": [
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/content/campaign.json",
+        "sha256": "b1c84119d945117ef285d2214a684e8ff9180f0a2883cda5630f068e66afbd15"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/content/encounters/boot/B01.json",
+        "sha256": "375ce76544b6f0a62a3a1bd46aaaf810a4e82595cee5c7edac22e2e1f040961e"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/gameplay/gameplay_core.asm",
+        "sha256": "df9b9056d65c7bbb987d7a42f56f9fa84bc01ec67db1d1d1fe15a842f7058a49"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/gameplay/gameplay_layout.asm",
+        "sha256": "21d4228b7deb091897efaa3bbb91e0d3e3c754009e429cf7c004dba89b895d35"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/gameplay/campaign_runtime.asm",
+        "sha256": "6f086b083d0676401bd43cedc265d3ba03b2f412f90bb20761cd24078643b2fe"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/gameplay/actor_sim.asm",
+        "sha256": "b14b2388f1a516bd2d0fbbb411c0363a47f89a5866b3c81003eaedb155bdf671"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/gameplay/campaign_collision.asm",
+        "sha256": "7bf69bd8d040f1f4facaa5d6a1ecad6986d42a4dcd24ac709bca4d75cbdab677"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/gameplay/replay.asm",
+        "sha256": "90994c2ba8662d48907b511c68565fe9a8a0964f948900a334dac56a74da50c2"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/game/engine_core.asm",
+        "sha256": "f30c1c6a096cd570354be57258c33e9f6836e7179839b4022832609d2f0f8b19"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/game/engine_layout.asm",
+        "sha256": "38fb6316ce2ac1b6f3ed6baa7ce8c45bad7936d2c099e1129447db9a2132ac54"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/gameplay/vocabulary_interactions.asm",
+        "sha256": "51cb483f263a826c1c1a246d58f075ef65abe071a0c4ff9b8a0888503c26b3dd"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/ui/timeline_control.asm",
+        "sha256": "7e973afaf3325f49af5dbabeef839d75b3ab488dd07192197952214dde10cb03"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/gameplay/vocabulary_layout.asm",
+        "sha256": "2f3039ce461efa1740d19c76e413db76a34dcbc42caf4a3292706c6b64eb9d43"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/hardware/memory_map.asm",
+        "sha256": "d66acf9922a25e436d6d80aa63d88343edc7e071b77c64f71ddc27105d34e0c8"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/boot/startup.asm",
+        "sha256": "141a561bebd89133b716c7f4753b68dc269758ecea1f9a9e471cdfa3b13966ef"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/gameplay/vocabulary_core.asm",
+        "sha256": "638f6b03ffd1feb4654ca13dd0ec439c830f1431d68ad0df1a0a154ef5d186b9"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/tools/campaign_runtime/compiler.py",
+        "sha256": "2af3f40464ca2ca5a11d40bb6c200c404f823ab9b73c8f52f7ed6baa0684d5b2"
+      }
+    ],
+    "route_derivation": "Attempt 0 and 1 each hold Right until the current actor enters B01_PLATE_A, then remain neutral to timeout. Under-cap timeout commits automatically. At attempts 2 and 3, the two-echo cap opens the timeline; C selects cursor ordinal 0 and commits, with the runtime rejecting protected descriptors. Attempt 4 moves Up from y112 to y106, waits in the walkable corridor until observed tick500, then holds Right through tick671 to x288.5 along the generated y96\u2013111 doorway opening, and Down four steps to terminal y112. B begins at observed tick696; the next 24 consumed steps finish the terminal interaction at attempt4 tick720. Each prior timeout consumes 720 source ticks; the two UI replacement pauses consume none. No partial manual commit is used.",
+    "engine_clock": {
+      "attempt_address": "FF140E",
+      "attempt_width_bytes": 2,
+      "tick_address": "FF1410",
+      "tick_width_bytes": 2,
+      "state_address": "FF1408",
+      "active_value": 1,
+      "terminal_value": 2,
+      "ticks_per_timeout": 720,
+      "active_limit": 3600,
+      "accounting": "One per observed completed GameplayStep at phase-idle write, strictly next source tick in same/new attempt; no assumed suffixes, no reset/UI ticks."
+    },
+    "campaign_inputs": {
+      "entry": "GameplayInitialize -> CampaignLoadEncounter directory index 0 (B01)",
+      "boot_echo_cap": 2,
+      "spawn_px": [
+        32,
+        112
+      ],
+      "switch": "B01_PLATE_A center (64,112), half extent 8, occupancy 1 frame",
+      "door": "B01_DOOR_A at (160,96), generated dependency from plate occupancy",
+      "terminal": "B01_COMMIT at (288,112), interact_frames 24",
+      "speed": "cardinal 0x180 16.8 = 1.5 px per consumed tick"
+    },
+    "observation_repair": "Source phase-idle write observer captures after actor/device/tick/result work, before next input poll; initial tick0 active targets are dispatched at first completedtick1. Existing target thresholds/oracle bytes remain unchanged and frozen before diagnostic."
+  },
+  "budget": {
+    "boot_fields": 120,
+    "interaction_fields": 600,
+    "active_fields": 3600,
+    "total_fields": 7200,
+    "watchdog_seconds": 600,
+    "stdout_bytes": 1048576,
+    "stderr_bytes": 1048576,
+    "trace_bytes": 16777216,
+    "trace_rows": 100000,
+    "summary_bytes": 8388608,
+    "disk_bytes": 6442450944
+  },
+  "progress_clock": "active_ticks",
+  "stop_rule": {
+    "kind": "active-fields-or-total",
+    "active_fields": 3600
+  },
+  "active_clock": {
+    "name": "active_ticks",
+    "kind": "observed-completed-source-steps",
+    "state": "engine_state",
+    "state_address": "FF1408",
+    "active_value": 1,
+    "attempt": "engine_attempt",
+    "attempt_address": "FF140E",
+    "tick": "engine_tick",
+    "tick_address": "FF1410",
+    "ticks_per_attempt": 720,
+    "attempt_fields": 720,
+    "limit": 3600,
+    "count_rule": "One per observed completed GameplayStep at phase-idle write, strictly next source tick in same/new attempt; no assumed suffixes, no reset/UI ticks."
+  },
+  "controls": [
+    "P1 Right",
+    "P1 B",
+    "P1 C",
+    "P1 Up",
+    "P1 Down"
+  ],
+  "input_schedule": [],
+  "input_program": {
+    "clock": "engine_attempt_tick",
+    "attempt_address": "FF140E",
+    "tick_address": "FF1410",
+    "state_address": "FF1408",
+    "state_values": {
+      "active": 1,
+      "terminal": 2
+    },
+    "dispatch": "Dispatch active events after a completed source step at or beyond declared attempt/tick; following source poll consumes input. Frame notifier handles only C/meta release while UI is paused. No guest writes.",
+    "render_when": {
+      "attempt": 4,
+      "tick": 690,
+      "state": "active"
+    },
+    "events": [
+      {
+        "field": 1,
+        "order": 1,
+        "attempt": 0,
+        "tick": 0,
+        "state": "active",
+        "control": "P1 Right",
+        "asserted": true,
+        "cases": [
+          "full-route",
+          "withhold-final-b"
+        ]
+      },
+      {
+        "field": 23,
+        "order": 2,
+        "attempt": 0,
+        "tick": 22,
+        "state": "active",
+        "control": "P1 Right",
+        "asserted": false,
+        "cases": [
+          "full-route",
+          "withhold-final-b"
+        ]
+      },
+      {
+        "field": 721,
+        "order": 3,
+        "attempt": 1,
+        "tick": 0,
+        "state": "active",
+        "control": "P1 Right",
+        "asserted": true,
+        "cases": [
+          "full-route",
+          "withhold-first-plate",
+          "withhold-final-b"
+        ]
+      },
+      {
+        "field": 743,
+        "order": 4,
+        "attempt": 1,
+        "tick": 22,
+        "state": "active",
+        "control": "P1 Right",
+        "asserted": false,
+        "cases": [
+          "full-route",
+          "withhold-first-plate",
+          "withhold-final-b"
+        ]
+      },
+      {
+        "field": 1441,
+        "order": 5,
+        "attempt": 2,
+        "tick": 0,
+        "state": "active",
+        "control": "P1 Right",
+        "asserted": true,
+        "cases": [
+          "full-route",
+          "withhold-first-plate",
+          "withhold-final-b"
+        ]
+      },
+      {
+        "field": 1463,
+        "order": 6,
+        "attempt": 2,
+        "tick": 22,
+        "state": "active",
+        "control": "P1 Right",
+        "asserted": false,
+        "cases": [
+          "full-route",
+          "withhold-first-plate",
+          "withhold-final-b"
+        ]
+      },
+      {
+        "field": 2161,
+        "order": 7,
+        "attempt": 2,
+        "tick": 720,
+        "state": "terminal",
+        "control": "P1 C",
+        "asserted": true,
+        "cases": [
+          "full-route",
+          "withhold-first-plate",
+          "withhold-final-b"
+        ]
+      },
+      {
+        "field": 2162,
+        "order": 8,
+        "attempt": 3,
+        "tick": 0,
+        "state": "active",
+        "control": "P1 C",
+        "asserted": false,
+        "cases": [
+          "full-route",
+          "withhold-first-plate",
+          "withhold-final-b"
+        ]
+      },
+      {
+        "field": 2163,
+        "order": 9,
+        "attempt": 3,
+        "tick": 0,
+        "state": "active",
+        "control": "P1 Right",
+        "asserted": true,
+        "cases": [
+          "full-route",
+          "withhold-first-plate",
+          "withhold-final-b"
+        ]
+      },
+      {
+        "field": 2183,
+        "order": 10,
+        "attempt": 3,
+        "tick": 22,
+        "state": "active",
+        "control": "P1 Right",
+        "asserted": false,
+        "cases": [
+          "full-route",
+          "withhold-first-plate",
+          "withhold-final-b"
+        ]
+      },
+      {
+        "field": 2881,
+        "order": 11,
+        "attempt": 3,
+        "tick": 720,
+        "state": "terminal",
+        "control": "P1 C",
+        "asserted": true,
+        "cases": [
+          "full-route",
+          "withhold-first-plate",
+          "withhold-final-b"
+        ]
+      },
+      {
+        "field": 2882,
+        "order": 12,
+        "attempt": 4,
+        "tick": 0,
+        "state": "active",
+        "control": "P1 C",
+        "asserted": false,
+        "cases": [
+          "full-route",
+          "withhold-first-plate",
+          "withhold-final-b"
+        ]
+      },
+      {
+        "field": 2883,
+        "order": 13,
+        "attempt": 4,
+        "tick": 0,
+        "state": "active",
+        "control": "P1 Up",
+        "asserted": true,
+        "cases": [
+          "full-route",
+          "withhold-first-plate",
+          "withhold-final-b"
+        ]
+      },
+      {
+        "field": 2887,
+        "order": 14,
+        "attempt": 4,
+        "tick": 4,
+        "state": "active",
+        "control": "P1 Up",
+        "asserted": false,
+        "cases": [
+          "full-route",
+          "withhold-first-plate",
+          "withhold-final-b"
+        ]
+      },
+      {
+        "field": 3383,
+        "order": 15,
+        "attempt": 4,
+        "tick": 500,
+        "state": "active",
+        "control": "P1 Right",
+        "asserted": true,
+        "cases": [
+          "full-route",
+          "withhold-first-plate",
+          "withhold-final-b"
+        ]
+      },
+      {
+        "field": 3554,
+        "order": 16,
+        "attempt": 4,
+        "tick": 671,
+        "state": "active",
+        "control": "P1 Right",
+        "asserted": false,
+        "cases": [
+          "full-route",
+          "withhold-first-plate",
+          "withhold-final-b"
+        ]
+      },
+      {
+        "field": 3555,
+        "order": 17,
+        "attempt": 4,
+        "tick": 671,
+        "state": "active",
+        "control": "P1 Down",
+        "asserted": true,
+        "cases": [
+          "full-route",
+          "withhold-first-plate",
+          "withhold-final-b"
+        ]
+      },
+      {
+        "field": 3559,
+        "order": 18,
+        "attempt": 4,
+        "tick": 675,
+        "state": "active",
+        "control": "P1 Down",
+        "asserted": false,
+        "cases": [
+          "full-route",
+          "withhold-first-plate",
+          "withhold-final-b"
+        ]
+      },
+      {
+        "field": 3577,
+        "order": 19,
+        "attempt": 4,
+        "tick": 695,
+        "state": "active",
+        "control": "P1 B",
+        "asserted": true,
+        "cases": [
+          "full-route",
+          "withhold-first-plate"
+        ]
+      }
+    ],
+    "ticks_per_attempt": 720
+  },
+  "cases": [
+    {
+      "id": "full-route",
+      "kind": "primary",
+      "render": true,
+      "audio": true
+    },
+    {
+      "id": "withhold-first-plate",
+      "kind": "causal-control",
+      "withheld_predicates": [
+        "early_dependency_interaction"
+      ]
+    },
+    {
+      "id": "withhold-final-b",
+      "kind": "causal-control",
+      "withheld_predicates": [
+        "late_program_stable"
+      ]
+    }
+  ],
+  "render_when": {
+    "attempt": 4,
+    "tick": 690,
+    "state": "active"
+  },
+  "audio": {
+    "expectation": "B01 BOOT campaign theme MUS_BOOT_PULSE remains audible; PCM is corroboration, never a progress predicate",
+    "require_non_silent": true
+  },
+  "addresses": [
+    {
+      "name": "engine_state",
+      "address": "FF1409",
+      "width": "u8"
+    },
+    {
+      "name": "engine_attempt_lo",
+      "address": "FF140F",
+      "width": "u8"
+    },
+    {
+      "name": "engine_tick_hi",
+      "address": "FF1410",
+      "width": "u8"
+    },
+    {
+      "name": "engine_tick_lo",
+      "address": "FF1411",
+      "width": "u8"
+    },
+    {
+      "name": "echo_count",
+      "address": "FF13F0",
+      "width": "u8"
+    },
+    {
+      "name": "echo_order_0",
+      "address": "FF13F2",
+      "width": "u8"
+    },
+    {
+      "name": "echo_order_1",
+      "address": "FF13F3",
+      "width": "u8"
+    },
+    {
+      "name": "selected_ordinal",
+      "address": "FF13F8",
+      "width": "u8"
+    },
+    {
+      "name": "timeline_flags",
+      "address": "FF13F9",
+      "width": "u8"
+    },
+    {
+      "name": "timeline_ui_flags",
+      "address": "FF16FA",
+      "width": "u16"
+    },
+    {
+      "name": "timeline_ui_cursor",
+      "address": "FF16FC",
+      "width": "u8"
+    },
+    {
+      "name": "descriptor_bank0_flags",
+      "address": "FF13B6",
+      "width": "u8"
+    },
+    {
+      "name": "descriptor_bank1_flags",
+      "address": "FF13BE",
+      "width": "u8"
+    },
+    {
+      "name": "descriptor_bank2_flags",
+      "address": "FF13C6",
+      "width": "u8"
+    },
+    {
+      "name": "descriptor_bank3_flags",
+      "address": "FF13CE",
+      "width": "u8"
+    },
+    {
+      "name": "descriptor_bank4_flags",
+      "address": "FF13D6",
+      "width": "u8"
+    },
+    {
+      "name": "descriptor_bank5_flags",
+      "address": "FF13DE",
+      "width": "u8"
+    },
+    {
+      "name": "descriptor_bank6_flags",
+      "address": "FF13E6",
+      "width": "u8"
+    },
+    {
+      "name": "campaign_dependency_event",
+      "address": "FF16F7",
+      "width": "u8"
+    },
+    {
+      "name": "gameplay_result",
+      "address": "FF150B",
+      "width": "u8"
+    },
+    {
+      "name": "gameplay_last_commit_reason",
+      "address": "FF1519",
+      "width": "u8"
+    },
+    {
+      "name": "campaign_flags_lo",
+      "address": "FF16C9",
+      "width": "u8"
+    },
+    {
+      "name": "current_x_word_hi",
+      "address": "FF18C4",
+      "width": "u8"
+    },
+    {
+      "name": "current_x_px_hi",
+      "address": "FF18C5",
+      "width": "u8"
+    },
+    {
+      "name": "current_x_px_lo",
+      "address": "FF18C6",
+      "width": "u8"
+    },
+    {
+      "name": "current_x_frac",
+      "address": "FF18C7",
+      "width": "u8"
+    },
+    {
+      "name": "boot_stage_lo",
+      "address": "FFF019",
+      "width": "u8"
+    },
+    {
+      "name": "current_y_px_hi",
+      "address": "FF18C9",
+      "width": "u8"
+    },
+    {
+      "name": "current_y_px_lo",
+      "address": "FF18CA",
+      "width": "u8"
+    },
+    {
+      "name": "current_y_frac",
+      "address": "FF18CB",
+      "width": "u8"
+    },
+    {
+      "name": "source_phase",
+      "address": "FF1516",
+      "width": "u16"
+    },
+    {
+      "name": "source_step_count",
+      "address": "FF1522",
+      "width": "u16"
+    },
+    {
+      "name": "source_input_held",
+      "address": "FF9800",
+      "width": "u8"
+    },
+    {
+      "name": "engine_input_held",
+      "address": "FF1422",
+      "width": "u8"
+    },
+    {
+      "name": "gameplay_current_input",
+      "address": "FF1512",
+      "width": "u8"
+    },
+    {
+      "name": "interaction_result",
+      "address": "FF1614",
+      "width": "u16"
+    },
+    {
+      "name": "last_interaction_actor",
+      "address": "FF16F8",
+      "width": "u8"
+    },
+    {
+      "name": "last_interaction_object",
+      "address": "FF16F9",
+      "width": "u8"
+    },
+    {
+      "name": "gameplay_flags",
+      "address": "FF1508",
+      "width": "u16"
+    },
+    {
+      "name": "vocabulary_flags",
+      "address": "FF160A",
+      "width": "u16"
+    },
+    {
+      "name": "device0_active",
+      "address": "FF2600",
+      "width": "u8"
+    },
+    {
+      "name": "device0_id",
+      "address": "FF2601",
+      "width": "u8"
+    },
+    {
+      "name": "device0_state",
+      "address": "FF2602",
+      "width": "u16"
+    },
+    {
+      "name": "device0_x_hi",
+      "address": "FF2605",
+      "width": "u8"
+    },
+    {
+      "name": "device0_x_lo",
+      "address": "FF2606",
+      "width": "u8"
+    },
+    {
+      "name": "device0_y_hi",
+      "address": "FF2609",
+      "width": "u8"
+    },
+    {
+      "name": "device0_y_lo",
+      "address": "FF260A",
+      "width": "u8"
+    },
+    {
+      "name": "device0_timer",
+      "address": "FF2614",
+      "width": "u16"
+    },
+    {
+      "name": "device0_param",
+      "address": "FF2616",
+      "width": "u16"
+    },
+    {
+      "name": "device1_active",
+      "address": "FF2618",
+      "width": "u8"
+    },
+    {
+      "name": "device1_id",
+      "address": "FF2619",
+      "width": "u8"
+    },
+    {
+      "name": "device1_state",
+      "address": "FF261A",
+      "width": "u16"
+    },
+    {
+      "name": "device1_x_hi",
+      "address": "FF261D",
+      "width": "u8"
+    },
+    {
+      "name": "device1_x_lo",
+      "address": "FF261E",
+      "width": "u8"
+    },
+    {
+      "name": "device1_y_hi",
+      "address": "FF2621",
+      "width": "u8"
+    },
+    {
+      "name": "device1_y_lo",
+      "address": "FF2622",
+      "width": "u8"
+    },
+    {
+      "name": "device1_timer",
+      "address": "FF262C",
+      "width": "u16"
+    },
+    {
+      "name": "device1_param",
+      "address": "FF262E",
+      "width": "u16"
+    },
+    {
+      "name": "device2_active",
+      "address": "FF2630",
+      "width": "u8"
+    },
+    {
+      "name": "device2_id",
+      "address": "FF2631",
+      "width": "u8"
+    },
+    {
+      "name": "device2_state",
+      "address": "FF2632",
+      "width": "u16"
+    },
+    {
+      "name": "device2_x_hi",
+      "address": "FF2635",
+      "width": "u8"
+    },
+    {
+      "name": "device2_x_lo",
+      "address": "FF2636",
+      "width": "u8"
+    },
+    {
+      "name": "device2_y_hi",
+      "address": "FF2639",
+      "width": "u8"
+    },
+    {
+      "name": "device2_y_lo",
+      "address": "FF263A",
+      "width": "u8"
+    },
+    {
+      "name": "device2_timer",
+      "address": "FF2644",
+      "width": "u16"
+    },
+    {
+      "name": "device2_param",
+      "address": "FF2646",
+      "width": "u16"
+    }
+  ],
+  "identities": {
+    "source": "local-fixtures/phase5/recursion94/clean-2/src",
+    "source_revision": "ab73bc9c7d2bbc4fcd94b3e0e2b89756cb1dc0cd",
+    "source_sha256": "9177d9c950e1be5acc43c4edcbd41de6e19d9d0df3c8a6f537324ab2fe06acf8",
+    "source_archive_sha256": "9177d9c950e1be5acc43c4edcbd41de6e19d9d0df3c8a6f537324ab2fe06acf8",
+    "source_materials": [
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/content/campaign.json",
+        "sha256": "b1c84119d945117ef285d2214a684e8ff9180f0a2883cda5630f068e66afbd15"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/content/encounters/boot/B01.json",
+        "sha256": "375ce76544b6f0a62a3a1bd46aaaf810a4e82595cee5c7edac22e2e1f040961e"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/gameplay/gameplay_core.asm",
+        "sha256": "df9b9056d65c7bbb987d7a42f56f9fa84bc01ec67db1d1d1fe15a842f7058a49"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/gameplay/gameplay_layout.asm",
+        "sha256": "21d4228b7deb091897efaa3bbb91e0d3e3c754009e429cf7c004dba89b895d35"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/gameplay/campaign_runtime.asm",
+        "sha256": "6f086b083d0676401bd43cedc265d3ba03b2f412f90bb20761cd24078643b2fe"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/gameplay/actor_sim.asm",
+        "sha256": "b14b2388f1a516bd2d0fbbb411c0363a47f89a5866b3c81003eaedb155bdf671"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/gameplay/campaign_collision.asm",
+        "sha256": "7bf69bd8d040f1f4facaa5d6a1ecad6986d42a4dcd24ac709bca4d75cbdab677"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/gameplay/replay.asm",
+        "sha256": "90994c2ba8662d48907b511c68565fe9a8a0964f948900a334dac56a74da50c2"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/game/engine_core.asm",
+        "sha256": "f30c1c6a096cd570354be57258c33e9f6836e7179839b4022832609d2f0f8b19"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/game/engine_layout.asm",
+        "sha256": "38fb6316ce2ac1b6f3ed6baa7ce8c45bad7936d2c099e1129447db9a2132ac54"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/gameplay/vocabulary_interactions.asm",
+        "sha256": "51cb483f263a826c1c1a246d58f075ef65abe071a0c4ff9b8a0888503c26b3dd"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/ui/timeline_control.asm",
+        "sha256": "7e973afaf3325f49af5dbabeef839d75b3ab488dd07192197952214dde10cb03"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/gameplay/vocabulary_layout.asm",
+        "sha256": "2f3039ce461efa1740d19c76e413db76a34dcbc42caf4a3292706c6b64eb9d43"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/hardware/memory_map.asm",
+        "sha256": "d66acf9922a25e436d6d80aa63d88343edc7e071b77c64f71ddc27105d34e0c8"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/boot/startup.asm",
+        "sha256": "141a561bebd89133b716c7f4753b68dc269758ecea1f9a9e471cdfa3b13966ef"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/src/gameplay/vocabulary_core.asm",
+        "sha256": "638f6b03ffd1feb4654ca13dd0ec439c830f1431d68ad0df1a0a154ef5d186b9"
+      },
+      {
+        "path": "local-fixtures/phase5/recursion94/clean-2/tools/campaign_runtime/compiler.py",
+        "sha256": "2af3f40464ca2ca5a11d40bb6c200c404f823ab9b73c8f52f7ed6baa0684d5b2"
+      }
+    ],
+    "build_summary_path": "evidence/phase5-recursion-build-summary.json",
+    "build_sha256": "578ff1011299d4bf484f2f9343ce40b455cac730dc7fcbf63ffaea38c1316d3a",
+    "build_receipt_path": "local-fixtures/phase5/recursion94/d114-attempt/receipts/recursion94-1396f9c91bf8d2de.json",
+    "build_receipt_sha256": "1396f9c91bf8d2deae6627f8a895993a3a06d19d97505da4bca9b30760ee4f86",
+    "rom_path": "local-fixtures/phase5/recursion94/clean-2/build/recursion94-release.bin",
+    "rom_sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff",
+    "input_sha256": "67e81e5dbab490c621948b84cc8cc3bd6ef7ab98e7baeaa6a30febb621749bef",
+    "mame_script_sha256": "af58935f7993de92ce659381f367ab7578ecf1b57426b2e200a2c24efe1414f3",
+    "mame_source_revision": "f34f02505e32c1993c6a782b6814232cbfc74e36",
+    "mame_patch_sha256": "323f00f433f730ea682a26aaf4c142430538072d7389dd6fe8292477d0b6ac73",
+    "mame_build_sha256": "07e811e49b38a5e2378ccf070fad5b6b48008dcfe5bcc746c6941dd8fe06b5bb",
+    "mame_source_sha256": "0929cc749afabcef892900e10dd90bd8b05f94a7dde8f367ac6a5d2082589f84"
+  },
+  "observation": {
+    "kind": "completed-source-step-write-tap-v1",
+    "phase_address": "FF1516",
+    "phase_idle_data": 0,
+    "tap_return": "nil-preserves-guest-data",
+    "guest_writes": false,
+    "meta_frame_callback": "C-only while source UI/reset paused",
+    "trace_order": "strict sequence; nondecreasing physical field; completed source step clock"
+  }
+}

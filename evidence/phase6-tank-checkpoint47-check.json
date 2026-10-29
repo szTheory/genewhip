@@ -1,0 +1,129 @@
+{
+  "schema": "genewhip-phase6-tank-checkpoint47-check-v1",
+  "status": "rejected-bounded-checkpoint",
+  "accepted": false,
+  "reviewer": "/root/continuation47_result",
+  "source_head": "c7da829416ee9a3a1d14120e41c32f4156d6b721",
+  "authority": {
+    "continuation_response": "Authorize two-hour continuation",
+    "continuation_sha256": "8d408a310b35dc0392a1c23fb5b6f7f51e02308302722f01882dbad903472e54",
+    "selected_plan_sha256": "bc83fe2b64b98b39b22389ad8a2291db20ec94700db4466cc1d0651fbdfad2cb",
+    "selection_sha256": "6a0033f4b763af736773e4efa46b0ccf2b027b23e41904a008f175fbe255f187",
+    "historical_ledger_sha256": "18fd6dbc2f892e4aa5c4c1847adf3b272e6cc71e31f91093d8a6fe1dd6281e5a",
+    "config_sha256": "f914ff106b1004d0ef50a5ed2bd0be911530aef2e73d63cbcb3c861d65753035"
+  },
+  "input_hash_bindings": {
+    "manifest_sha256": "05014ceeaba752e5a6824dd523988df54506d99ba88a8032628f880dd8cf242d",
+    "source_identity_sha256": "1f317326d6af6762927f8c1577596f96404251b64391df450f56c4c3cc53d0e3",
+    "source_hashes": {
+      "scripts/evidence/phase6_tank_checkpoint.py": "573c5fe281880da22066ce0fdcac8588941517a9584e8664d914b7c2b7d08c88",
+      "tests/evidence/phase6_tank_checkpoint_contract.py": "94997226a6d081a554eb4be97c339c298ea762c1309fb988c850e51d45edda30",
+      "tests/fixtures/phase6_repairs.py": "b8f1c503ce803c16534a6b578de90ba33a2a65023897bc104cca377f312c06ce",
+      "tests/fixtures/phase4_game.py": "de7821de93a49256806ee6539d97c2fc5f73a8c33164eee4dcb45ee2e21d9921"
+    },
+    "route_descriptor_sha256": "f5ec4a0f4e154cacab94cbdeac8affa6e9fad01cd05eebeeeb155a1bfa3fc2e4",
+    "raw_report_sha256": "17f2bef84ae9dc19f3f20c9f1d274733a2cf78c849a08c84c774421e6cfb44d5",
+    "command_sha256": "e3d4fb757dd1df12baeedce55ce450aedf7e146c36bafdbdb3dc67c76cb3b668",
+    "client_sha256": "b23e16411ec9424ee3138430ac2d726bc6c67b3fa80ebe9be45b303e1ea980df",
+    "tests_sha256": "d8fe277ae7a25b605fee2b0d5096fab4843461288fa4949f359d84393cbce556",
+    "setup_observations_sha256": "7046a86d381d33bcf76bfb1b82c92cf5736b016247d86f16788412e77f378fa4"
+  },
+  "independent_observation": {
+    "pea": {
+      "probe_pc": "0x0000ec32",
+      "opcode": "0x4879",
+      "tick_before": 8718528,
+      "tick_after": 8718668,
+      "master_ticks": 140,
+      "a7_before": "0xe0fffdf4",
+      "a7_after": "0xe0fffdf0",
+      "a7_delta_modulo_2_32": 4294967292,
+      "sr_before": "0x2704",
+      "sr_after": "0x2704",
+      "stack_addresses24": ["0x00fffdf0", "0x00fffdf1", "0x00fffdf2", "0x00fffdf3"],
+      "stack_before_hex": "00000000",
+      "stack_after_hex": "0006923c",
+      "stack_status": [0, 0, 0, 0],
+      "retired": true
+    },
+    "actual_next_stop": {
+      "pc": "0x0002006c",
+      "opcode": "0x13fc",
+      "fault_address": "0x00a130f1",
+      "stop_reason": 3,
+      "stop_reason_name": "GW_STOP_UNSUPPORTED_ADDRESS",
+      "report_status": 9,
+      "report_status_name": "GW_ERROR_UNSUPPORTED",
+      "instructions_before_pea": 163873,
+      "instructions_after_pea": 163874,
+      "instructions_before_next_stop_boundary": 163936,
+      "first_stop_tick": 8724688,
+      "final_tick": 8724688,
+      "classification": "actual unsupported-address stop; not route success and not independently a 68000 bus-error interpretation"
+    },
+    "descriptor": {
+      "magic": "GWRC",
+      "header_words": 32,
+      "descriptor_bytes": 816,
+      "section_counts": [11, 0, 2, 8, 10, 18, 0, 2],
+      "section_strides_words": [4, 2, 5, 2, 4, 3, 6, 4],
+      "computed_total_words": 204,
+      "observed_total_words": 204,
+      "header_word_30_boundary_ceiling": 1000000000,
+      "selected_boundary_limit": 128,
+      "watch_addresses": ["0x0000ec32", "0x0000ec34", "0x0000ec36"]
+    }
+  },
+  "resource_violation": {
+    "field": "boundary_calls",
+    "selected_limit": 128,
+    "observed": 163937,
+    "over_by": 163809,
+    "ratio": 1280.7578125,
+    "enforced_before_native_execution": false,
+    "explanation": "The selected bound is checked post-run by the consumer; the descriptor header word 30 permits 1,000,000,000 calls. The PEA was reached after 163873 prior instructions and the count immediately after it was 163874; an enforced 128-call cap cannot be assumed to preserve the observation. Any future useful run needs a separately explicit, enforceable cap. No silent reinterpretation or workload retry is allowed."
+  },
+  "process_denominators": {
+    "top_level_workload_starts_observed": 1,
+    "top_level_workload_starts_maximum": 3,
+    "os_workload_process_creations_observed": 1,
+    "os_workload_process_creations_maximum": 15,
+    "tank_runs": 1,
+    "control_drivers": 0,
+    "control_rows_of_12": 0,
+    "pcm_outputs_of_12": 0,
+    "workload_retries": 0,
+    "tank_returncode": 1,
+    "tank_wall_seconds": 0.097113
+  },
+  "preparation": {
+    "contract_checks_reported": 71,
+    "native_contract_tests": {"passed": 7, "total": 7},
+    "sanitizer_contract_tests": {"passed": 7, "total": 7},
+    "guard_review": "approved exact four source hashes; separate source reviewer",
+    "preparation_parser_failure_preserved": true
+  },
+  "history": {
+    "ledger_sha256_before": "18fd6dbc2f892e4aa5c4c1847adf3b272e6cc71e31f91093d8a6fe1dd6281e5a",
+    "ledger_sha256_after": "18fd6dbc2f892e4aa5c4c1847adf3b272e6cc71e31f91093d8a6fe1dd6281e5a",
+    "history_mutation_observed": false
+  },
+  "blocking_findings": [
+    {
+      "severity": "BLOCKER",
+      "id": "BOUNDARY-CAP-NOT-ENFORCED",
+      "issue": "Observed 163937 boundary calls exceed the selected 128 cap because descriptor header word 30 carries a 1000000000 ceiling; the bound was post-hoc only.",
+      "required_owner": "route descriptor/runtime resource-limit enforcement and its launch-contract test"
+    },
+    {
+      "severity": "BLOCKER",
+      "id": "CHECKPOINT-REJECTED",
+      "issue": "Producer predicate rejected bounds, no root Tank metadata was accepted, and conditional controls were not run. The raw observation cannot be promoted to an accepted bounded checkpoint."
+    }
+  ],
+  "limitations": [
+    "No controls, 12-row/full-PCM denominator, two-title compatibility, or route success.",
+    "No PLAY-02, HOST-04, SAFE-02, complete Phase 6, host, or release acceptance.",
+    "No workload retry, next plan, or Phase 7 dispatch."
+  ]
+}

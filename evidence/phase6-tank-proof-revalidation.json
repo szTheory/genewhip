@@ -1,0 +1,78 @@
+{
+  "schema": "genewhip-phase6-tank-proof-revalidation-v1",
+  "plan": "06-15",
+  "status": "halted-static-observability-unproven",
+  "read_only": true,
+  "guest_launches": 0,
+  "builds": 0,
+  "ctests": 0,
+  "reference_runs": 0,
+  "synthetic_processes": 0,
+  "failure": {
+    "gate": "actual-tank-stack-range-not-source-bounded-under-unchanged-observer",
+    "detail": "No retained actual boundary reaches Tank PC 0x00ec32, and admitted static/source evidence does not bound the complete actual pre/post stack address range. The fixed-span observer has no register-relative A7 memory watch. Reset-vector or synthetic A7 values do not qualify."
+  },
+  "observer": {
+    "source": "tools/session/route_controller.c",
+    "source_sha256": "175da93b90cf253827aa92336ec18d53362f3acf7ac6121fdd5ecb67fff716fb",
+    "source_contract": "Observer spans are derived from configured fixed signal addresses; snapshots copy only those configured spans.",
+    "span_count_max": 64,
+    "span_bytes_max": 64,
+    "total_copied_bytes_max": 4096,
+    "register_relative_stack_watch": false
+  },
+  "retained_actual_tank_boundaries": [
+    {
+      "record_id": "GW-06-04-tank-battle:cpu:000204:4e67:2-ATTEMPT-001",
+      "fixture_rom_sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723",
+      "headless_client_sha256": "74d58db8aee03b33d98327d46fbf76ef76b3dfbaad8912857331cd19e84f6dbc",
+      "probed_input_relative_path": "fixtures/phase5-a/game.bin",
+      "native_report_sha256": "ceb298a1ca0a997e52552a87896d0bbe7900a717e5c1a143e8cf3ee791a9835c",
+      "probe_pc": "0x000204",
+      "probe_a7_before": "0xe1000000",
+      "probe_a7_after": "0xe1000000",
+      "final_boundary_pc": "0x000204",
+      "final_boundary_a7": "0xe1000000"
+    },
+    {
+      "record_id": "GW-06-04-tank-battle:cpu:000204:4e67:2-ATTEMPT-002",
+      "fixture_rom_sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723",
+      "headless_client_sha256": "971a6d0caca1fb3a09ed27632a9225e7c587d9b974c7bf193561e532c2639e64",
+      "probed_input_relative_path": "fixtures/phase5-a/game.bin",
+      "native_report_sha256": "6828093c7c45f408d5d178f4710ef6a39f3485b3c76448b06d393cd7f7ed358e",
+      "probe_pc": "0x000204",
+      "probe_a7_before": "0xe1000000",
+      "probe_a7_after": "0xe1000000",
+      "final_boundary_pc": "0x00021a",
+      "final_boundary_a7": "0xe0fffe00"
+    }
+  ],
+  "missing_actual_pea_receipt": {
+    "path": "evidence/phase6-pea-next-stop.json",
+    "sha256": "1cf6ca7ad6a8c977e0042b7350608fdb584267e6f315b9a8971e2c843eac2719",
+    "status": "halted-infrastructure",
+    "failure": "missing-instruction-boundary",
+    "native_report": "unavailable; temporary capture report was not retained"
+  },
+  "result": "No bridge qualification or 06-14 authorization. Preserve unknown runtime A7 and require a future explicitly authorized observability decision or source-grounded retained proof before resumption. The two earlier retained route probes use the admitted Tank ROM but stop at 0x204/0x21a; they are not a boundary at 0xec32 and do not establish A7 there.",
+  "active_accounting": {
+    "status": "halted-static-observability-unproven",
+    "anchor_id": "GW-06-15-D121-closeout",
+    "active_seconds": 355.002,
+    "conservative_final_commit_bound_seconds": 5,
+    "bootstrap_prefix_seconds": 213,
+    "prior_measured_interval_seconds": 89.82,
+    "offline_segment_total_seconds": 657.822,
+    "offline_segment_maximum_seconds": 1800,
+    "offline_segment_remaining_seconds": 1142.178,
+    "global_closed_total_seconds": 12007.998,
+    "pea_total_seconds": 5657.571,
+    "pea_cap_seconds": 9000,
+    "pea_remaining_seconds": 3342.429,
+    "global_cap_seconds": 43200,
+    "process_reserve_seconds": 1800,
+    "other_work_reserve_seconds": 400.251,
+    "new_target_attempts": 0,
+    "active_anchor": null
+  }
+}

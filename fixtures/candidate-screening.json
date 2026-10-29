@@ -1,0 +1,357 @@
+{
+  "schema": "genewhip-phase5-screening-v1",
+  "screening_bound": {
+    "documentary_leads": 5,
+    "full_title_screens": 4,
+    "candidate_order": [
+      "tank-battle",
+      "alex-vs-bus",
+      "space-shooter",
+      "recursion94",
+      "kleleatoms-md"
+    ],
+    "primaries": [
+      "tank-battle",
+      "alex-vs-bus"
+    ],
+    "reserve_rules": {
+      "selection_requires_documented_missing_lineage_and_resolved_documentary_build_route_viability": true,
+      "space-shooter_can_replace": "tank-battle",
+      "space-shooter_is_same_lineage_as": "tank-battle"
+    },
+    "stop_when": "two suitable distinct lineages qualify; otherwise stop when no documentary-eligible primary or permitted reserve can produce the required pair, or when the four-title-screen bound is exhausted"
+  },
+  "limits": {
+    "documentary_leads": 5,
+    "full_title_screens": 4,
+    "build_environment_corrections_per_title": 1,
+    "route_authoring_corrections_per_title_before_freeze": 1,
+    "reference_harness_corrections_per_title": 1,
+    "rom_build_invocations_per_title": 4,
+    "network_fetch_seconds": 120,
+    "network_retries": 1,
+    "toolchain_setup_seconds": 1800,
+    "build_invocation_seconds": 1800,
+    "build_processes": 4,
+    "address_space_bytes_per_process": 8589934592,
+    "active_workspace_bytes_per_title": 8589934592,
+    "total_quarantine_bytes": 25769803776,
+    "stdout_bytes_per_process": 1048576,
+    "stderr_bytes_per_process": 1048576,
+    "rom_bytes": 16777216,
+    "source_archive_compressed_bytes": 268435456,
+    "source_archive_unpacked_bytes": 1073741824,
+    "source_archive_entries": 20000,
+    "route_watchdog_seconds": 600,
+    "route_run_disk_bytes": 6442450944,
+    "targeted_trace_bytes": 16777216,
+    "targeted_trace_rows": 100000,
+    "summary_bytes_per_run": 8388608
+  },
+  "candidate_order": [
+    "tank-battle",
+    "alex-vs-bus",
+    "space-shooter",
+    "recursion94",
+    "kleleatoms-md"
+  ],
+  "selected_pair": null,
+  "candidates": [
+    {
+      "id": "tank-battle",
+      "title": "Tank Battle",
+      "repository": "monteslu/retro-homebrew-games",
+      "source_revision": "eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+      "source_location": "genesis/tank-battle",
+      "lineage_id": "monteslu/retro-homebrew-games",
+      "lineage_evidence": "repository author/source ancestry must be checked against exact material before eligibility",
+      "correlations": [
+        "shares repository and SGDK ancestry with Space Shooter"
+      ],
+      "role": "primary",
+      "state": "build-setup-blocked",
+      "outcome": "infrastructure-error",
+      "reason": "The pinned SGDK image Java tool failed to create its Finalizer thread under the enforced four-task cgroup cap, including a minimized-JVM probe; no candidate code or ROM build ran.",
+      "documentary": {
+        "summary": {
+          "source_terms": true,
+          "asset_terms": true,
+          "font_music_terms": true,
+          "runtime_terms": true,
+          "generated_rom_terms": false,
+          "retained_notices": true,
+          "pinned_inputs": false,
+          "lineage_evidence": true,
+          "source_evidence": [
+            "https://github.com/monteslu/retro-homebrew-games/tree/eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/tank-battle",
+            "https://github.com/Stephane-D/SGDK/tree/2f50a4b80bcd1667bdd4a208882619ce4ec97701"
+          ]
+        },
+        "eligibility": "unknown; not build-qualified"
+      },
+      "identity_history": [
+        {
+          "ordinal": 1,
+          "title_id": "tank-battle",
+          "event": "documentary_review",
+          "identity_sha256": "da87dc688694fc6b06328715a4166f292f000dd40d54df8c7c3e2ae5cfadbd60",
+          "previous_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "sha256": "3ef62dad1ca9ce14bcb28cf1a71222c2524485fd1af0a17467315e6f89160f52"
+        },
+        {
+          "ordinal": 2,
+          "title_id": "tank-battle",
+          "event": "screen_started",
+          "identity_sha256": "59f6f8f8b66167e66f66912ab2cf7f03be4a16939539ee896d98fb461ab8d723",
+          "previous_sha256": "3ef62dad1ca9ce14bcb28cf1a71222c2524485fd1af0a17467315e6f89160f52",
+          "sha256": "b3372e46df731d9762fd027d88d6d6bf1342e308fd3a54f5ab7a327d8fd9a5ed"
+        },
+        {
+          "ordinal": 3,
+          "title_id": "tank-battle",
+          "event": "build_environment_correction",
+          "identity_sha256": "b2865c59b4b6648dc2b2a03b066a5aa8cbf8a77fe306afc3496e193bc1b5a52a",
+          "previous_sha256": "b3372e46df731d9762fd027d88d6d6bf1342e308fd3a54f5ab7a327d8fd9a5ed",
+          "sha256": "690293b9d062183d7b1aa5a4022afc2701ff3e4e4e59e4be29d2c27c120f8abc"
+        },
+        {
+          "ordinal": 4,
+          "title_id": "tank-battle",
+          "event": "build_setup_failed",
+          "identity_sha256": "59f6f8f8b66167e66f66912ab2cf7f03be4a16939539ee896d98fb461ab8d723",
+          "previous_sha256": "690293b9d062183d7b1aa5a4022afc2701ff3e4e4e59e4be29d2c27c120f8abc",
+          "details": {
+            "elapsed_seconds": 379.039387,
+            "failure_sha256": "a3163940cc7f4f0993855a27ea7155c4901aaa8b99fcb374ab568d77162ecdda",
+            "probe_receipts": [
+              {
+                "file": "java-probe.json",
+                "sha256": "d0ad4d96e6da78b8312dab9dfd63eed30ad117e2e6991a3cbe7f03732704c596"
+              },
+              {
+                "file": "java-minimal.json",
+                "sha256": "c71d98cd426311bb98c5f1b76d4d0c82b66b20497a328b270d153d0c253f1d56"
+              },
+              {
+                "file": "java-probe.stdout",
+                "sha256": "fa8cb193417787f1d160acbf8bea017c4c96e1f8278fc0d361b703394cb68206"
+              },
+              {
+                "file": "java-minimal.stdout",
+                "sha256": "7e293b72b17cd55ea07ecf13d328ad21c8433be2327f0fc4c3187f4acce76664"
+              }
+            ]
+          },
+          "elapsed_seconds": 379.039387,
+          "sha256": "8102cb2763deccdda4074cf1657bc62d5122a616ea279605ffcc44ee8358f663"
+        }
+      ],
+      "counters": {
+        "full_screens": 1,
+        "build_environment_corrections": 1,
+        "route_authoring_corrections": 0,
+        "reference_harness_corrections": 0,
+        "rom_build_invocations": 0
+      }
+    },
+    {
+      "id": "alex-vs-bus",
+      "title": "Alex vs Bus",
+      "repository": "M374LX/alexvsbus-md",
+      "source_revision": "49923878904a9b0d1e098fc940f6c071962e6454",
+      "source_location": ".",
+      "lineage_id": "M374LX/alexvsbus-md",
+      "lineage_evidence": "repository author and lineage ancestry require material-level verification",
+      "correlations": [
+        "source/assets use distinct declared license grants; included third-party fonts and vasm terms require exact review"
+      ],
+      "role": "primary",
+      "state": "documentary-reviewed",
+      "outcome": "unknown",
+      "reason": "Distinct Genesis-port lineage; not eligible while ROM logo rights scope remains unresolved.",
+      "documentary": {
+        "summary": {
+          "source_terms": true,
+          "asset_terms": true,
+          "font_music_terms": false,
+          "runtime_terms": true,
+          "generated_rom_terms": false,
+          "retained_notices": true,
+          "pinned_inputs": true,
+          "lineage_evidence": true,
+          "source_evidence": [
+            "https://github.com/M374LX/alexvsbus-md/tree/49923878904a9b0d1e098fc940f6c071962e6454",
+            "https://yoworks.com/telegrama/",
+            "https://yoworks.com/yofonts/free.html"
+          ]
+        },
+        "eligibility": "unknown; not build-qualified"
+      },
+      "identity_history": [
+        {
+          "ordinal": 1,
+          "title_id": "alex-vs-bus",
+          "event": "documentary_review",
+          "identity_sha256": "e57df29b9e7032d3fa2a254c498cbd8845aed31a00c9e625beb49c60d6ffd4fb",
+          "previous_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "sha256": "0cbe93e4968f5aeb652a5c3b8dc35530060339b9ddb8740ac5e20d185a7b3c41"
+        }
+      ],
+      "counters": {
+        "full_screens": 0,
+        "build_environment_corrections": 0,
+        "route_authoring_corrections": 0,
+        "reference_harness_corrections": 0,
+        "rom_build_invocations": 0
+      }
+    },
+    {
+      "id": "space-shooter",
+      "title": "Space Shooter",
+      "repository": "monteslu/retro-homebrew-games",
+      "source_revision": "eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+      "source_location": "genesis/space-shooter",
+      "lineage_id": "monteslu/retro-homebrew-games",
+      "lineage_evidence": "same author/repository lineage as Tank Battle; cannot provide the second lineage",
+      "correlations": [
+        "shares repository and SGDK ancestry with Tank Battle"
+      ],
+      "role": "reserve-same-lineage",
+      "state": "documentary-reviewed",
+      "outcome": "unknown",
+      "reason": "Same source lineage as Tank Battle; same candidate build-blocking SGDK Java/tool cap.",
+      "documentary": {
+        "summary": {
+          "source_terms": true,
+          "asset_terms": true,
+          "font_music_terms": true,
+          "runtime_terms": true,
+          "generated_rom_terms": false,
+          "retained_notices": true,
+          "pinned_inputs": false,
+          "lineage_evidence": true,
+          "source_evidence": [
+            "https://github.com/monteslu/retro-homebrew-games/tree/eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/space-shooter"
+          ]
+        },
+        "eligibility": "unknown; not build-qualified"
+      },
+      "identity_history": [
+        {
+          "ordinal": 1,
+          "title_id": "space-shooter",
+          "event": "documentary_review",
+          "identity_sha256": "da87dc688694fc6b06328715a4166f292f000dd40d54df8c7c3e2ae5cfadbd60",
+          "previous_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "sha256": "7b35befdbec4b9acffd4a2e65ff77fd1a90d62648ec82d436e653bd9e4b42d8f"
+        }
+      ],
+      "counters": {
+        "full_screens": 0,
+        "build_environment_corrections": 0,
+        "route_authoring_corrections": 0,
+        "reference_harness_corrections": 0,
+        "rom_build_invocations": 0
+      }
+    },
+    {
+      "id": "recursion94",
+      "title": "RECURSION 94",
+      "repository": "baba20o/RECURSION94",
+      "source_revision": "ab73bc9c7d2bbc4fcd94b3e0e2b89756cb1dc0cd",
+      "source_location": ".",
+      "lineage_id": "baba20o/RECURSION94",
+      "lineage_evidence": "repository author/source ancestry requires exact source inspection",
+      "correlations": [
+        "vasm/build path was previously unresolved"
+      ],
+      "role": "reserve-distinct-lineage",
+      "state": "documentary-reviewed",
+      "outcome": "unknown",
+      "reason": "Distinct source lineage and strongest alternate rights path, but its Linux-equivalent vasm/Zig/sjasmplus pipeline and two-build route remain untested; a single reserve cannot make the two-lineage pair.",
+      "documentary": {
+        "summary": {
+          "source_terms": true,
+          "asset_terms": true,
+          "font_music_terms": true,
+          "runtime_terms": true,
+          "generated_rom_terms": true,
+          "retained_notices": true,
+          "pinned_inputs": false,
+          "lineage_evidence": true,
+          "source_evidence": [
+            "https://github.com/baba20o/RECURSION94/tree/ab73bc9c7d2bbc4fcd94b3e0e2b89756cb1dc0cd",
+            "https://sun.hasenbraten.de/vasm/release/vasm.pdf"
+          ]
+        },
+        "eligibility": "unknown; not build-qualified"
+      },
+      "identity_history": [
+        {
+          "ordinal": 1,
+          "title_id": "recursion94",
+          "event": "documentary_review",
+          "identity_sha256": "eb8c53cc95b9c14aedd5e3fd6a4f8615f1eb0d14ec87805c11c53a6628101659",
+          "previous_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "sha256": "7e93208d20bc788be8ae0628c845898c920a19e9d7be68d0a2d08cef6fdd79cb"
+        }
+      ],
+      "counters": {
+        "full_screens": 0,
+        "build_environment_corrections": 0,
+        "route_authoring_corrections": 0,
+        "reference_harness_corrections": 0,
+        "rom_build_invocations": 0
+      }
+    },
+    {
+      "id": "kleleatoms-md",
+      "title": "KłełeAtoms MD",
+      "repository": "Nightwolf-47/KleleAtoms-MD",
+      "source_revision": "53f2344636c65b66ae0033e5345fa5502ebb0a21",
+      "source_location": ".",
+      "lineage_id": "Nightwolf-47/KleleAtoms-MD",
+      "lineage_evidence": "repository author/source ancestry requires exact source inspection",
+      "correlations": [
+        "external art, SRAM and additional controller/mouse requirements need review"
+      ],
+      "role": "reserve-distinct-lineage",
+      "state": "documentary-reviewed",
+      "outcome": "unknown",
+      "reason": "Distinct lineage, blocked by missing applicable grant for specifically credited external graphics and an unpinned SGDK2.11 runtime.",
+      "documentary": {
+        "summary": {
+          "source_terms": true,
+          "asset_terms": false,
+          "font_music_terms": true,
+          "runtime_terms": false,
+          "generated_rom_terms": false,
+          "retained_notices": false,
+          "pinned_inputs": false,
+          "lineage_evidence": true,
+          "source_evidence": [
+            "https://github.com/Nightwolf-47/KleleAtoms-MD/tree/53f2344636c65b66ae0033e5345fa5502ebb0a21"
+          ]
+        },
+        "eligibility": "unknown; not build-qualified"
+      },
+      "identity_history": [
+        {
+          "ordinal": 1,
+          "title_id": "kleleatoms-md",
+          "event": "documentary_review",
+          "identity_sha256": "1bb1f5a4f8d6c30fba7e28639c511348ac16d6cd401fef63021e1bfd6b7cc8ad",
+          "previous_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "sha256": "0202de7aa798b8abac00cc2bbd9f60bd2feeda67a4205a459ef10938936430de"
+        }
+      ],
+      "counters": {
+        "full_screens": 0,
+        "build_environment_corrections": 0,
+        "route_authoring_corrections": 0,
+        "reference_harness_corrections": 0,
+        "rom_build_invocations": 0
+      }
+    }
+  ]
+}

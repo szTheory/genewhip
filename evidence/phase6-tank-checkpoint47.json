@@ -1,0 +1,177 @@
+{
+  "controls": [],
+  "failed_prefix_preserved": true,
+  "halt_reason": "ValueError: pea-check-failed:bounds",
+  "historical_ledger_sha256": "18fd6dbc2f892e4aa5c4c1847adf3b272e6cc71e31f91093d8a6fe1dd6281e5a",
+  "historical_ledger_sha256_after": "18fd6dbc2f892e4aa5c4c1847adf3b272e6cc71e31f91093d8a6fe1dd6281e5a",
+  "historical_ledger_unchanged": true,
+  "limitations": [
+    "This is one bounded Tank PEA checkpoint, not route success.",
+    "No complete Phase6, PLAY-02, HOST-04, SAFE-02, full-control compatibility, or hostile containment claim."
+  ],
+  "manifest_sha256": "05014ceeaba752e5a6824dd523988df54506d99ba88a8032628f880dd8cf242d",
+  "observed_native_child_prefix": [],
+  "os_process_creations": 1,
+  "plan_sha256": "bc83fe2b64b98b39b22389ad8a2291db20ec94700db4466cc1d0651fbdfad2cb",
+  "processes": [],
+  "schema": "genewhip-phase6-tank-checkpoint47-v1",
+  "selection_sha256": "6a0033f4b763af736773e4efa46b0ccf2b027b23e41904a008f175fbe255f187",
+  "slot_prefix": [
+    {
+      "command": [
+        "build/phase6-checkpoint47/tools/session/gw_headless",
+        "--route-plan",
+        ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/47-evidence/raw/tank/route.gwrc",
+        "--route-report",
+        ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/47-evidence/raw/tank/report.json",
+        "--route-instruction-probe",
+        "60466",
+        "--route-probe-stack-before-a7",
+        "fixtures/phase5-a/game.bin"
+      ],
+      "command_sha256": "e3d4fb757dd1df12baeedce55ce450aedf7e146c36bafdbdb3dc67c76cb3b668",
+      "launch_attempt": {
+        "command": [
+          "build/phase6-checkpoint47/tools/session/gw_headless",
+          "--route-plan",
+          ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/47-evidence/raw/tank/route.gwrc",
+          "--route-report",
+          ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/47-evidence/raw/tank/report.json",
+          "--route-instruction-probe",
+          "60466",
+          "--route-probe-stack-before-a7",
+          "fixtures/phase5-a/game.bin"
+        ],
+        "monotonic": 577653.705382625,
+        "status": "attempted"
+      },
+      "limits": {
+        "active_ticks": 3600,
+        "boundary_calls": 128,
+        "disk_bytes": 6442450944,
+        "events": 64,
+        "fields": 4500,
+        "report_bytes": 8388608,
+        "seconds": 600,
+        "stderr_bytes": 1048576,
+        "stdout_bytes": 1048576,
+        "trace_bytes": 16777216,
+        "trace_rows": 100000
+      },
+      "manifest_sha256": "05014ceeaba752e5a6824dd523988df54506d99ba88a8032628f880dd8cf242d",
+      "monotonic": 577653.704846416,
+      "observed": {
+        "command": [
+          "build/phase6-checkpoint47/tools/session/gw_headless",
+          "--route-plan",
+          ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/47-evidence/raw/tank/route.gwrc",
+          "--route-report",
+          ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/47-evidence/raw/tank/report.json",
+          "--route-instruction-probe",
+          "60466",
+          "--route-probe-stack-before-a7",
+          "fixtures/phase5-a/game.bin"
+        ],
+        "command_sha256": "e3d4fb757dd1df12baeedce55ce450aedf7e146c36bafdbdb3dc67c76cb3b668",
+        "finished_monotonic": 577653.802527041,
+        "pgid": 10330,
+        "pid": 10330,
+        "reservation": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/47-evidence/slots/47-tank.json",
+        "returncode": 1,
+        "started_monotonic": 577653.705380583,
+        "status": "finished",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_bytes": 46,
+        "stdout_sha256": "2bbc0759f7e3923eaf2866100588a759639deb98604b5a2c40fc9f2eef7df008",
+        "streams": {
+          "stderr": {
+            "observed_bytes": 0,
+            "path": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/47-evidence/raw/47-tank.stderr.raw",
+            "path_normalized": true,
+            "retained_bytes": 0,
+            "retained_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "stdout": {
+            "observed_bytes": 46,
+            "path": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/47-evidence/raw/47-tank.stdout.raw",
+            "path_normalized": true,
+            "retained_bytes": 46,
+            "retained_sha256": "2bbc0759f7e3923eaf2866100588a759639deb98604b5a2c40fc9f2eef7df008",
+            "sha256": "2bbc0759f7e3923eaf2866100588a759639deb98604b5a2c40fc9f2eef7df008"
+          }
+        },
+        "wall_seconds": 0.097113
+      },
+      "observed_start": {
+        "monotonic": 577653.708103041,
+        "pgid": 10330,
+        "pid": 10330,
+        "process_creations": 1
+      },
+      "plan_sha256": "bc83fe2b64b98b39b22389ad8a2291db20ec94700db4466cc1d0651fbdfad2cb",
+      "route_descriptor": {
+        "path": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/47-evidence/raw/tank/route.gwrc",
+        "sha256": "f5ec4a0f4e154cacab94cbdeac8affa6e9fad01cd05eebeeeb155a1bfa3fc2e4"
+      },
+      "schema": "genewhip-plan47-slot-v1",
+      "selection_sha256": "6a0033f4b763af736773e4efa46b0ccf2b027b23e41904a008f175fbe255f187",
+      "slot": "47-tank",
+      "source_identity_sha256": "1f317326d6af6762927f8c1577596f96404251b64391df450f56c4c3cc53d0e3",
+      "status": "reserved-before-launch"
+    }
+  ],
+  "source_identity_sha256": "1f317326d6af6762927f8c1577596f96404251b64391df450f56c4c3cc53d0e3",
+  "source_identity_sha256_after": "1f317326d6af6762927f8c1577596f96404251b64391df450f56c4c3cc53d0e3",
+  "source_unchanged": true,
+  "status": "halted",
+  "top_level_workload_starts": 1,
+  "workload_process_wall_seconds": 0.097113,
+  "workload_slots": [
+    {
+      "command": [
+        "build/phase6-checkpoint47/tools/session/gw_headless",
+        "--route-plan",
+        ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/47-evidence/raw/tank/route.gwrc",
+        "--route-report",
+        ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/47-evidence/raw/tank/report.json",
+        "--route-instruction-probe",
+        "60466",
+        "--route-probe-stack-before-a7",
+        "fixtures/phase5-a/game.bin"
+      ],
+      "command_sha256": "e3d4fb757dd1df12baeedce55ce450aedf7e146c36bafdbdb3dc67c76cb3b668",
+      "finished_monotonic": 577653.802527041,
+      "pgid": 10330,
+      "pid": 10330,
+      "reservation": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/47-evidence/slots/47-tank.json",
+      "returncode": 1,
+      "started_monotonic": 577653.705380583,
+      "status": "finished",
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 46,
+      "stdout_sha256": "2bbc0759f7e3923eaf2866100588a759639deb98604b5a2c40fc9f2eef7df008",
+      "streams": {
+        "stderr": {
+          "observed_bytes": 0,
+          "path": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/47-evidence/raw/47-tank.stderr.raw",
+          "path_normalized": true,
+          "retained_bytes": 0,
+          "retained_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "observed_bytes": 46,
+          "path": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/47-evidence/raw/47-tank.stdout.raw",
+          "path_normalized": true,
+          "retained_bytes": 46,
+          "retained_sha256": "2bbc0759f7e3923eaf2866100588a759639deb98604b5a2c40fc9f2eef7df008",
+          "sha256": "2bbc0759f7e3923eaf2866100588a759639deb98604b5a2c40fc9f2eef7df008"
+        }
+      },
+      "wall_seconds": 0.097113
+    }
+  ]
+}

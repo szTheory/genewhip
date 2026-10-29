@@ -1,0 +1,32 @@
+{
+  "schema": "genewhip-movem-verification-v1",
+  "recorded_at": "2026-10-23T19:59:51.739529+00:00",
+  "runs": [
+    {
+      "cwd": "build/phase6-movem-sanitize",
+      "command": [
+        "ctest",
+        "--output-on-failure",
+        "--no-tests=error",
+        "-R",
+        "^movem_contract$|^load_contract$|^gameplay_bus_contract$"
+      ],
+      "return_code": 0,
+      "output": "Test project <project>/build/phase6-movem-sanitize\n    Start  6: load_contract\n1/3 Test  #6: load_contract ....................   Passed    0.10 sec\n    Start 10: gameplay_bus_contract\n2/3 Test #10: gameplay_bus_contract ............   Passed    0.06 sec\n    Start 11: movem_contract\n3/3 Test #11: movem_contract ...................   Passed    0.06 sec\n\n100% tests passed out of 3\n\nTotal Test time (real) =   0.22 sec\n"
+    },
+    {
+      "cwd": "build/phase6-movem-hooks-off",
+      "command": [
+        "ctest",
+        "--output-on-failure",
+        "--no-tests=error",
+        "-R",
+        "^movem_contract$|^load_contract$|^gameplay_bus_contract$"
+      ],
+      "return_code": 0,
+      "output": "Test project <project>/build/phase6-movem-hooks-off\n    Start  6: load_contract\n1/3 Test  #6: load_contract ....................   Passed    0.01 sec\n    Start 10: gameplay_bus_contract\n2/3 Test #10: gameplay_bus_contract ............   Passed    0.00 sec\n    Start 11: movem_contract\n3/3 Test #11: movem_contract ...................   Passed    0.00 sec\n\n100% tests passed out of 3\n\nTotal Test time (real) =   0.02 sec\n"
+    }
+  ],
+  "scope": "local macOS arm64; sanitizer and hooks-off contracts, not broad platform qualification",
+  "output_redaction": "Only absolute workspace prefix replaced with <project> for privacy; test result lines unchanged."
+}

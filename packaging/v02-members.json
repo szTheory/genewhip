@@ -1,0 +1,559 @@
+{
+  "schema": "genewhip-v02-package-members-v1",
+  "release_version": "0.2.0",
+  "api_version_source": "include/genewhip/genewhip.h:GW_API_VERSION",
+  "input_log_version_source": "docs/desktop.md:genewhip-input-log",
+  "rights": {
+    "project-mit": {
+      "license": "MIT",
+      "source": "Genewhip repository LICENSE",
+      "notice_member": "share/genewhip/LICENSE",
+      "redistribution": "permitted-with-notice"
+    },
+    "ymfm-bsd": {
+      "license": "BSD-3-Clause",
+      "source": "packaging/notices/THIRD-PARTY-ymfm.txt; pinned ymfm revision 81aec25ccbb98f4873a255f7551ac4dadac59b4a",
+      "notice_member": "share/genewhip/notices/THIRD-PARTY-ymfm.txt",
+      "notice_members": {"sdk": "share/genewhip/notices/THIRD-PARTY-ymfm.txt", "desktop": "share/genewhip/THIRD-PARTY-ymfm.txt"},
+      "redistribution": "permitted-with-notice"
+    },
+    "diagnostic-mit": {
+      "license": "MIT",
+      "source": "Genewhip-authored diagnostic fixture; fixtures/manifest.json exact digest",
+      "notice_member": "share/genewhip/LICENSE",
+      "redistribution": "permitted-with-notice"
+    },
+    "independent-game-mit": {
+      "license": "MIT",
+      "source": "fixtures/independent-game-v2/NOTICES.md and admitted fixture manifest identity",
+      "notice_member": "share/genewhip/independent-game-v2-NOTICES.md",
+      "redistribution": "admitted-exact-rom-and-source-with-notice"
+    },
+    "tank-battle-admitted": {
+      "license": "MIT title with embedded contributions as listed in the admitted materials record",
+      "source": "fixtures/phase5-a/materials.json; fixture revision eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+      "notice_member": "share/genewhip/tank-battle-NOTICES.md",
+      "redistribution": "admitted-exact-rom-and-route-metadata-with-all-applicable-notices"
+    },
+    "recursion94-admitted": {
+      "license": "MIT title; vasm use restricted to the reviewed non-commercial purpose",
+      "source": "fixtures/phase5-b/materials.json; fixture revision ab73bc9c7d2bbc4fcd94b3e0e2b89756cb1dc0cd",
+      "notice_member": "share/genewhip/recursion94-NOTICES.md",
+      "redistribution": "admitted-exact-rom-and-route-metadata-for-this-project-with-notice"
+    },
+    "sdl3-zlib": {
+      "license": "zlib License",
+      "source": "packaging/dependencies/sdl3.json pinned SDL3 release and upstream license",
+      "notice_member": "share/genewhip/SDL3-LICENSE.txt",
+      "redistribution": "permitted-with-notice"
+    }
+  },
+  "sdk": {
+    "archive_suffix": "sdk-diagnostic",
+    "members": [
+      {
+        "path": "bin/gw_diagnostic_runner",
+        "source": "installed diagnostic runner",
+        "role": "diagnostic",
+        "rights": "project-mit"
+      },
+      {
+        "path": "bin/gw_validate_evidence",
+        "source": "installed evidence validator",
+        "role": "diagnostic",
+        "rights": "project-mit"
+      },
+      {
+        "path": "include/genewhip/genewhip.h",
+        "source": "installed public header",
+        "role": "api",
+        "rights": "project-mit"
+      },
+      {
+        "path": "lib/libgenewhip_core.a",
+        "source": "installed static library",
+        "role": "core",
+        "rights": "project-mit"
+      },
+      {
+        "path": "lib/cmake/Genewhip/GenewhipConfig.cmake",
+        "source": "installed CMake config",
+        "role": "consumer-build",
+        "rights": "project-mit"
+      },
+      {
+        "path": "lib/cmake/Genewhip/GenewhipConfigVersion.cmake",
+        "source": "installed CMake package version",
+        "role": "consumer-build",
+        "rights": "project-mit"
+      },
+      {
+        "path": "lib/cmake/Genewhip/GenewhipTargets.cmake",
+        "source": "installed CMake targets",
+        "role": "consumer-build",
+        "rights": "project-mit"
+      },
+      {
+        "path": "lib/cmake/Genewhip/GenewhipTargets-release.cmake",
+        "source": "installed CMake release targets",
+        "role": "consumer-build",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/LICENSE",
+        "source": "LICENSE",
+        "role": "notice",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/README.md",
+        "source": "generated package support summary",
+        "role": "support",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/core.md",
+        "source": "docs/core.md",
+        "role": "api-documentation",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/input.md",
+        "source": "docs/input.md",
+        "role": "input-documentation",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/schema.json",
+        "source": "evidence/schema.json",
+        "role": "diagnostic-evidence-schema",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/input.json",
+        "source": "evidence/input.json",
+        "role": "diagnostic-input",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/diagnostic.bin",
+        "source": "installed diagnostic fixture",
+        "role": "diagnostic-fixture",
+        "rights": "diagnostic-mit"
+      },
+      {
+        "path": "share/genewhip/diagnostic-evidence.json",
+        "source": "fresh diagnostic runner output",
+        "role": "diagnostic-observation",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/notices/THIRD-PARTY-ymfm.txt",
+        "source": "packaging/notices/THIRD-PARTY-ymfm.txt",
+        "role": "notice",
+        "rights": "ymfm-bsd"
+      },
+      {
+        "path": "share/genewhip/SingleStepTests-LICENSE",
+        "source": "tests/vectors/upstream/LICENSE",
+        "role": "upstream-test-provenance-notice",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/consumer/CMakeLists.txt",
+        "source": "tests/consumer/CMakeLists.txt",
+        "role": "external-consumer-smoke",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/consumer/header.cpp",
+        "source": "tests/consumer/header.cpp",
+        "role": "C++-header-check",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/consumer/install_smoke.cmake",
+        "source": "tests/consumer/install_smoke.cmake",
+        "role": "external-consumer-smoke",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/consumer/main.c",
+        "source": "v0.2 adaptation of tests/consumer/main.c: MULU.W now supported; legal TAS D0 remains outside the selected CPU subset",
+        "role": "C-consumer-check",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/consumer/negative_oracle.cmake",
+        "source": "tests/consumer/negative_oracle.cmake",
+        "role": "negative-consumer-check",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/v02-members.json",
+        "source": "packaging/v02-members.json",
+        "role": "reviewed-members-and-rights-roster",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/evidence/compatibility-matrix.md",
+        "source": "validated public closure; unknown rows unless supplied proof supports a claim",
+        "role": "scoped-compatibility-matrix",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/evidence/manifest.json",
+        "source": "validated public closure manifest",
+        "role": "public-evidence-identity",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/evidence/observations.json",
+        "source": "validated public closure observations",
+        "role": "scoped-route-observations",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/evidence/roster.json",
+        "source": "validated public closure roster",
+        "role": "independent-expected-roster",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/evidence/schema.json",
+        "source": "validated public closure schema",
+        "role": "public-evidence-schema",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/evidence/verifier.py",
+        "source": "validated public closure verifier",
+        "role": "offline-public-evidence-verifier",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/evidence/execution-identity.json",
+        "source": "verified current runtime source/build/head/base/run/attempt identity",
+        "role": "current-runtime-launch-identity",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/evidence/performance.json",
+        "source": "source-identified 07-05 development report",
+        "role": "development-performance-observations",
+        "rights": "project-mit"
+      },
+      {
+        "path": "metadata.json",
+        "source": "builder-generated identity manifest",
+        "role": "package-metadata",
+        "rights": "project-mit"
+      },
+      {
+        "path": "checksums.json",
+        "source": "builder-generated exact inventory",
+        "role": "package-inventory",
+        "rights": "project-mit"
+      }
+    ]
+  },
+  "desktop": {
+    "archive_suffix": "playable-preview-macos-arm64",
+    "members": [
+      {
+        "path": "bin/genewhip-desktop",
+        "source": "current native SDL desktop runner",
+        "role": "desktop-runtime",
+        "rights": "project-mit"
+      },
+      {
+        "path": "bin/gw_headless",
+        "source": "current headless route client",
+        "role": "route-runtime",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/README.md",
+        "source": "packaging/desktop/README.md",
+        "role": "play-and-controls-guide",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/LICENSE",
+        "source": "LICENSE",
+        "role": "notice",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/SDL3-LICENSE.txt",
+        "source": "packaging/notices/SDL3-LICENSE.txt",
+        "role": "notice",
+        "rights": "sdl3-zlib"
+      },
+      {
+        "path": "share/genewhip/THIRD-PARTY-ymfm.txt",
+        "source": "packaging/notices/THIRD-PARTY-ymfm.txt",
+        "role": "notice",
+        "rights": "ymfm-bsd"
+      },
+      {
+        "path": "share/genewhip/sdl3.json",
+        "source": "packaging/dependencies/sdl3.json",
+        "role": "dependency-identity",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/manifest.json",
+        "source": "fixtures/manifest.json",
+        "role": "fixture-identities",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/independent-game-v2.bin",
+        "source": "fixtures/independent-game-v2/game.bin",
+        "role": "admitted-game",
+        "rights": "independent-game-mit"
+      },
+      {
+        "path": "share/genewhip/independent-game-v2.s",
+        "source": "fixtures/independent-game-v2/src/game.s",
+        "role": "admitted-game-source",
+        "rights": "independent-game-mit"
+      },
+      {
+        "path": "share/genewhip/independent-game-v2-NOTICES.md",
+        "source": "fixtures/independent-game-v2/NOTICES.md",
+        "role": "notice",
+        "rights": "independent-game-mit"
+      },
+      {
+        "path": "share/genewhip/independent-game-v2-scenario.json",
+        "source": "fixtures/independent-game-v2/scenario.json",
+        "role": "scenario",
+        "rights": "independent-game-mit"
+      },
+      {
+        "path": "share/genewhip/independent-game-v2-oracle.json",
+        "source": "fixtures/independent-game-v2/oracle.json",
+        "role": "progress-oracle",
+        "rights": "independent-game-mit"
+      },
+      {
+        "path": "share/genewhip/independent-game-v2-host-controls.json",
+        "source": "fixtures/independent-game-v2/host-controls.json",
+        "role": "host-route",
+        "rights": "independent-game-mit"
+      },
+      {
+        "path": "share/genewhip/tank-battle.bin",
+        "source": "fixtures/phase5-a/game.bin",
+        "role": "admitted-game",
+        "rights": "tank-battle-admitted"
+      },
+      {
+        "path": "share/genewhip/tank-battle-NOTICES.md",
+        "source": "fixtures/phase5-a/NOTICES.md",
+        "role": "notice",
+        "rights": "tank-battle-admitted"
+      },
+      {
+        "path": "share/genewhip/tank-battle-scenario.json",
+        "source": "fixtures/phase5-a/scenario.json",
+        "role": "scenario",
+        "rights": "tank-battle-admitted"
+      },
+      {
+        "path": "share/genewhip/tank-battle-input-program.json",
+        "source": "fixtures/phase5-a/input-program.json",
+        "role": "controller-input",
+        "rights": "tank-battle-admitted"
+      },
+      {
+        "path": "share/genewhip/tank-battle-input-schedule.json",
+        "source": "fixtures/phase5-a/input-schedule.json",
+        "role": "controller-input",
+        "rights": "tank-battle-admitted"
+      },
+      {
+        "path": "share/genewhip/tank-battle-linked-runtime.json",
+        "source": "fixtures/phase5-a/linked-runtime.json",
+        "role": "runtime-identity",
+        "rights": "tank-battle-admitted"
+      },
+      {
+        "path": "share/genewhip/tank-battle-oracle.json",
+        "source": "fixtures/phase5-a/oracle.json",
+        "role": "progress-oracle",
+        "rights": "tank-battle-admitted"
+      },
+      {
+        "path": "share/genewhip/recursion94.bin",
+        "source": "fixtures/phase5-b/game.bin",
+        "role": "admitted-game",
+        "rights": "recursion94-admitted"
+      },
+      {
+        "path": "share/genewhip/recursion94-NOTICES.md",
+        "source": "fixtures/phase5-b/NOTICES.md",
+        "role": "notice",
+        "rights": "recursion94-admitted"
+      },
+      {
+        "path": "share/genewhip/recursion94-scenario.json",
+        "source": "fixtures/phase5-b/scenario.json",
+        "role": "scenario",
+        "rights": "recursion94-admitted"
+      },
+      {
+        "path": "share/genewhip/recursion94-input-program.json",
+        "source": "fixtures/phase5-b/input-program.json",
+        "role": "controller-input",
+        "rights": "recursion94-admitted"
+      },
+      {
+        "path": "share/genewhip/recursion94-input-schedule.json",
+        "source": "fixtures/phase5-b/input-schedule.json",
+        "role": "controller-input",
+        "rights": "recursion94-admitted"
+      },
+      {
+        "path": "share/genewhip/recursion94-linked-runtime.json",
+        "source": "fixtures/phase5-b/linked-runtime.json",
+        "role": "runtime-identity",
+        "rights": "recursion94-admitted"
+      },
+      {
+        "path": "share/genewhip/recursion94-oracle.json",
+        "source": "fixtures/phase5-b/oracle.json",
+        "role": "progress-oracle",
+        "rights": "recursion94-admitted"
+      },
+      {
+        "path": "share/genewhip/recursion94-consumed-map-v1.json",
+        "source": "fixtures/phase6/recursion94-consumed-map-v1.json",
+        "role": "delivery-map",
+        "rights": "recursion94-admitted"
+      },
+      {
+        "path": "share/genewhip/raster-toy.bin",
+        "source": "fixtures/raster-toy/toy.bin",
+        "role": "original-demo",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/raster-toy.s",
+        "source": "fixtures/raster-toy/src/toy.s",
+        "role": "original-demo-source",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/raster-toy-z80-driver.s",
+        "source": "fixtures/raster-toy/z80/driver.s",
+        "role": "original-demo-source",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/raster-toy-z80-driver.inc",
+        "source": "fixtures/raster-toy/z80/driver.inc",
+        "role": "original-demo-source",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/raster-toy-NOTICES.md",
+        "source": "fixtures/raster-toy/NOTICES.md",
+        "role": "notice",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/raster-toy-scenario.json",
+        "source": "fixtures/raster-toy/scenario.json",
+        "role": "demo-scenario",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/video.md",
+        "source": "docs/video.md",
+        "role": "support",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/input.md",
+        "source": "docs/input.md",
+        "role": "support",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/desktop.md",
+        "source": "docs/desktop.md",
+        "role": "support",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/v02-members.json",
+        "source": "packaging/v02-members.json",
+        "role": "reviewed-members-and-rights-roster",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/evidence/compatibility-matrix.md",
+        "source": "validated public closure; unknown rows unless proof supports a claim",
+        "role": "scoped-compatibility-matrix",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/evidence/manifest.json",
+        "source": "validated public closure manifest",
+        "role": "public-evidence-identity",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/evidence/observations.json",
+        "source": "validated public closure observations",
+        "role": "scoped-route-observations",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/evidence/roster.json",
+        "source": "canonical evidence/v02-roster.json",
+        "role": "independent-expected-roster",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/evidence/schema.json",
+        "source": "canonical evidence/v02-schema.json",
+        "role": "public-evidence-schema",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/evidence/verifier.py",
+        "source": "checked-in public matrix consumer",
+        "role": "offline-public-evidence-verifier",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/evidence/execution-identity.json",
+        "source": "verified current runtime source/build/head/base/run/attempt identity",
+        "role": "current-runtime-launch-identity",
+        "rights": "project-mit"
+      },
+      {
+        "path": "share/genewhip/evidence/performance.json",
+        "source": "source-identified 07-05 development report",
+        "role": "development-performance-observations",
+        "rights": "project-mit"
+      },
+      {
+        "path": "metadata.json",
+        "source": "builder-generated identity manifest",
+        "role": "package-metadata",
+        "rights": "project-mit"
+      },
+      {
+        "path": "checksums.json",
+        "source": "builder-generated exact inventory",
+        "role": "package-inventory",
+        "rights": "project-mit"
+      }
+    ]
+  }
+}
