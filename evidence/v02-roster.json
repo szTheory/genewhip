@@ -1,0 +1,109 @@
+{
+  "schema": "genewhip-v02-roster-v1",
+  "fixture_id": "genewhip-independent-game-v2",
+  "profile": "VA3-NTSC-U",
+  "machine": {
+    "driver": "genesis",
+    "region": "NTSC-U",
+    "cartridge": "ordinary-linear",
+    "controller": "three-button"
+  },
+  "source_identity": {
+    "scenario_sha256": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2",
+    "oracle_sha256": "1a9d99cb01496f26fe3dc33d0c1bcb0cf22bd9178088fa183e5bba37a8600f42",
+    "rom_sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb",
+    "source_sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe"
+  },
+  "case_ids": [
+    "title-no-start",
+    "start-idle",
+    "start-move",
+    "action-sound",
+    "action-no-trigger",
+    "sustained-play"
+  ],
+  "stage_ids": ["load", "boot", "interaction", "sustained", "completion"],
+  "completion_policy": "unknown-unless-separate-source-oracle-proves-completion",
+  "matrix": {
+    "titles": [
+      {
+        "title_id": "genewhip-independent-game-v2", "fixture_id": "genewhip-independent-game-v2",
+        "lineage_id": "genewhip/independent-game-v2", "source_revision": "802eebb590cd553e7fb83679a9bf22d985f9f076",
+        "profile": "VA3-NTSC-U", "cases": ["title-no-start", "start-idle", "start-move", "action-sound", "action-no-trigger", "sustained-play"],
+        "core_repetitions": 2, "scenario_sha256": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2",
+        "oracle_sha256": "1a9d99cb01496f26fe3dc33d0c1bcb0cf22bd9178088fa183e5bba37a8600f42",
+        "rom_sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb",
+        "source_sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe",
+        "build_sha256": "6cd5eb7b5f8da0c216f2927ee35bf3b89196fb11cb3da9786d01c41db55c8684",
+        "configuration_sha256": "5227ad4b419b9156ef779781c07abd277976f29eacbf1d74aa24659f138550f5",
+        "input_sha256": "de7821de93a49256806ee6539d97c2fc5f73a8c33164eee4dcb45ee2e21d9921",
+        "delivery_map_sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff",
+        "media_expectations_sha256": "09087f6397aa8c3249a0af9c489958892fdee039cfbf21892b27bc12cf2df386",
+        "client_identity": {"core": "public-core-client; executable identity is proof-bound per run", "software-sdl": "software-SDL-client; executable identity is proof-bound per run", "native-sdl": "native-SDL-client; executable identity is proof-bound per run"},
+        "ancestry": ["shared-genewhip-c17-runtime", "shared-cmake-toolchain", "phase6-build-configuration-retained-not-phase7-qualified"],
+        "historic_disposition": {"phase5": "not-applicable", "failed_attempts": "none", "excluded": "none", "independently_verifiable": false, "reason": "No historical Phase 5 candidate claim is made for this title."}
+      },
+      {
+        "title_id": "tank-battle", "fixture_id": "genewhip-phase5-a",
+        "lineage_id": "monteslu/retro-homebrew-games", "source_revision": "eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+        "profile": "VA3-NTSC-U", "cases": ["full-route", "withhold-early-hit", "withhold-late-hit"],
+        "core_repetitions": 2, "scenario_sha256": "0df6c9a42d9ba90a96f681e8f4ab7396c1f8c56d47dc887f64cab5a766792bb1",
+        "oracle_sha256": "2bf285d507c3e7c917329f3c4601c48d17fcdc14f4c01c8665fb98bbfe94fc3e",
+        "rom_sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723",
+        "source_sha256": "a5c6c554372b0d23b8717326be9de8ca97bb69b92a85759115f7ca9a8398c9a9",
+        "build_sha256": "2016b4909c24d742463bba894eb7df5b4133e905cb53edff5c68d9ff523477b9",
+        "configuration_sha256": "5227ad4b419b9156ef779781c07abd277976f29eacbf1d74aa24659f138550f5",
+        "input_sha256": "e3478d34dcd98a71265b97f33c56b9f5f0f858628a516a9034cc3dbe0b5c8ed2",
+        "delivery_map_sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff",
+        "media_expectations_sha256": "09087f6397aa8c3249a0af9c489958892fdee039cfbf21892b27bc12cf2df386",
+        "client_identity": {"core": "public-core-client; executable identity is proof-bound per run", "software-sdl": "software-SDL-client; executable identity is proof-bound per run", "native-sdl": "native-SDL-client; executable identity is proof-bound per run"},
+        "ancestry": ["shared-genewhip-c17-runtime", "shared-cmake-toolchain", "phase6-build-configuration-retained-not-phase7-qualified"],
+        "historic_disposition": {"phase5": "load-fail", "phase5_reason": "public core rejected admitted 512 KiB ROM", "failed_attempts": "preserved-in-phase5-failure-inventory", "excluded": "none", "independently_verifiable": false, "reason": "Historical Phase 5 details are retained by digest and source record; this sanitized summary is not an external re-verification."}
+      },
+      {
+        "title_id": "recursion94", "fixture_id": "genewhip-phase5-b",
+        "lineage_id": "baba20o/RECURSION94", "source_revision": "ab73bc9c7d2bbc4fcd94b3e0e2b89756cb1dc0cd",
+        "profile": "VA3-NTSC-U", "cases": ["full-route", "withhold-first-plate", "withhold-final-b"],
+        "core_repetitions": 2, "scenario_sha256": "31e9c22129a6ce1b3ac2d1980c325e86bfbefb4e2fda85ae018c311e2cb40700",
+        "oracle_sha256": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389",
+        "rom_sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff",
+        "source_sha256": "f30c1c6a096cd570354be57258c33e9f6836e7179839b4022832609d2f0f8b19",
+        "build_sha256": "878a0574549ec07b8c4b8e34897a6bebcc8817d1f6eee97e11a39511a29a3e7b",
+        "configuration_sha256": "5227ad4b419b9156ef779781c07abd277976f29eacbf1d74aa24659f138550f5",
+        "input_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "delivery_map_sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff",
+        "media_expectations_sha256": "09087f6397aa8c3249a0af9c489958892fdee039cfbf21892b27bc12cf2df386",
+        "client_identity": {"core": "public-core-client; executable identity is proof-bound per run", "software-sdl": "software-SDL-client; executable identity is proof-bound per run", "native-sdl": "native-SDL-client; executable identity is proof-bound per run"},
+        "ancestry": ["shared-genewhip-c17-runtime", "shared-cmake-toolchain", "phase6-build-configuration-retained-not-phase7-qualified"],
+        "historic_disposition": {"phase5": "boot-fail", "phase5_reason": "unsupported opcode during bounded boot", "failed_attempts": "preserved-in-phase5-failure-inventory", "excluded": "none", "independently_verifiable": false, "reason": "Historical Phase 5 details are retained by digest and source record; this sanitized summary is not an external re-verification."}
+      }
+    ],
+    "stages": ["load", "boot", "interaction", "sustained", "completion"],
+    "outcomes": ["pass", "fail", "unsupported", "skipped", "unknown", "infrastructure-error"],
+    "client_scopes": ["core", "software-sdl", "native-sdl"],
+    "host_case_ids": [
+      {"title_id": "tank-battle", "case_id": "full-route"},
+      {"title_id": "tank-battle", "case_id": "withhold-early-hit"},
+      {"title_id": "tank-battle", "case_id": "withhold-late-hit"},
+      {"title_id": "recursion94", "case_id": "full-route"},
+      {"title_id": "recursion94", "case_id": "withhold-first-plate"},
+      {"title_id": "recursion94", "case_id": "withhold-final-b"}
+    ],
+    "control_session_roster": {"schema": "phase6-control-session-roster-v1", "sessions": ["independent-game-v2", "sounded-diagnostic"], "controls": ["pause", "resume", "reset", "mute", "unmute", "replace", "drop", "reject-cartridge", "exit"], "sha256": "008d6ef4da5e8c6a3d15c6e49893ede59de2f1d961caf6d4299179a367e358bf"},
+    "denominators": {"titles": 3, "authored_source_lineages": 3, "scenarios": 3, "core_executions": 24, "core_stage_cells": 120, "software_sdl_cases": 6, "native_sdl_cases": 6},
+    "history": {
+      "baseline_sha256": "38c4eafbf094a5ce5db4cb07b21731e10b84d5447cc8572eadefc80efc95fd98",
+      "failure_inventory_sha256": "dc535a6b3f79fb84a5aae4c500363c3ce87e0f3e92a88987bafc268ba36d9562",
+      "preserved_dispositions": ["failed", "unattempted", "excluded", "unknown"],
+      "screening_dispositions": [
+        {"id": "tank-battle", "lineage_id": "monteslu/retro-homebrew-games", "outcome": "fail", "state": "reference-route-blocked", "reason": "Reference input program error blocked the route; no later execution was claimed."},
+        {"id": "alex-vs-bus", "lineage_id": "M374LX/alexvsbus-md", "outcome": "unknown", "state": "documentary-reviewed", "reason": "Distinct Genesis-port lineage; ROM-logo rights scope remains unresolved."},
+        {"id": "space-shooter", "lineage_id": "monteslu/retro-homebrew-games", "outcome": "unknown", "state": "documentary-reviewed", "reason": "Same source lineage as Tank Battle; candidate build-blocking SGDK Java/tool cap."},
+        {"id": "recursion94", "lineage_id": "baba20o/RECURSION94", "outcome": "unknown", "state": "reference-not-run", "reason": "Pair cycle stopped after the Tank first-case failure; no later execution was claimed."},
+        {"id": "kleleatoms-md", "lineage_id": "Nightwolf-47/KleleAtoms-MD", "outcome": "unknown", "state": "documentary-reviewed", "reason": "External graphics grant and pinned SGDK runtime remain unresolved."}
+      ],
+      "independently_verifiable": false,
+      "reason": "Phase 5 source records remain preserved separately; this public matrix does not claim to re-verify those historical records."
+    }
+  }
+}

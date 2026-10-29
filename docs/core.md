@@ -1,5 +1,28 @@
 # Diagnostic core contract and limits
 
+<a id="v02-embed"></a>
+
+## Embed the exact v0.2.0 SDK
+
+The SDK contains an external C17 consumer and C++11 header/link check. Extract the archive only after trusted provenance and the archive subject digest have been checked; the local development-only archive instead uses the trusted checkout's receipt verifier. Prerequisites are a trusted checkout, the exact SDK archive/receipt/sidecar, CMake 3.27 or newer, Ninja, and C17/C++11 compilers. This consumer needs no network or developer cache:
+
+```sh
+python3 -I "$CHECKOUT/tests/package/docs_commands.py" --verify-local \
+  --local-artifacts "$ARTIFACT_DIR" --archive "$SDK_ARCHIVE" --role sdk --version 0.2.0
+cd "$ARTIFACT_DIR"
+shasum -a 256 -c "$ARTIFACT_DIR/$SDK_ARCHIVE.sha256"
+mkdir -p "$EXTRACT_DIR"
+tar -xzf "$ARTIFACT_DIR/$SDK_ARCHIVE" -C "$EXTRACT_DIR"
+SDK_DIR="$EXTRACT_DIR/${SDK_ARCHIVE%.tar.gz}"
+cmake -S "$SDK_DIR/share/genewhip/consumer" -B "$BUILD_DIR" -G Ninja \
+  -DCMAKE_PREFIX_PATH="$SDK_DIR" \
+  -DGW_ROM="$SDK_DIR/share/genewhip/diagnostic.bin"
+cmake --build "$BUILD_DIR"
+ctest --test-dir "$BUILD_DIR" --output-on-failure --no-tests=error
+```
+
+The example checks the installed C API, compiles and links the public header from C++, and runs the diagnostic consumer. Package 0.2.0 is not an API version: this header still reports API 4. Input logs independently use `genewhip-input-log 1`.
+
 The C17 API 4 core executes original diagnostic and independent-game guests through
 an instance-owned 68000 subset, ROM/RAM bus, bounded VDP path, two controller ports,
 connected Z80 sound path, PSG, discrete YM2612 FM/timers/status/DAC, and deterministic
@@ -16,8 +39,10 @@ No firmware, TMSS bypass, environment configuration or runtime dependency is use
 
 ## Integrator contract (API 4)
 
-`GW_API_VERSION` is 4 and is independent of package version 0.1.0 and the input-log
-format string `genewhip-input-log 1`. Configuration/event/result structures must be
+`GW_API_VERSION` is 4 and is independent of the published 0.1.0 package and local
+v0.2.0 development package. Input logs use the separate format string
+`genewhip-input-log 1`; neither contract changed for package version 0.2.0.
+Configuration/event/result structures must be
 zero-initialized with `struct_size = sizeof(value)` and the current version; exact
 size/version mismatches return `GW_ERROR_VERSION`. Unknown flags/invalid pointers,
 overlapping caller buffers, invalid lengths and malformed events return
@@ -69,8 +94,27 @@ mirrored in the 0xe00000–0xffffff region. CPU addresses are masked to 24 bits.
 There is no open-bus approximation or mapper fallback. Header strings and region
 hints never override the caller's explicit profile. Loader validation initially
 requires even size 514–4,194,304, an even reset PC in loaded ROM at/after 0x200,
-and an even initial stack pointer in mapped RAM with six bytes of headroom.
-These are supported-input policies, not a complete cartridge identification test.
+and an even 32-bit reset A7 whose first six-byte exception-frame span after
+predecrement maps contiguously to work RAM on the 24-bit bus. The 68000 address
+register remains 32 bits; validation does not rewrite it to a 24-bit value. This
+admits valid one-past-RAM reset pointers such as the admitted Tank vector
+0xe1000000, whose first frame begins at bus address 0xfffffa, while retaining
+rejection of zero, odd, unmapped, and boundary-crossing stack vectors. These are
+supported-input policies, not a complete cartridge identification test.
+
+For the ordinary linear-ROM/no-SRAM profile, one narrow cartridge-control
+operation is modeled: a byte write of zero to 24-bit address `0x00a130f1`
+completes without changing ROM. The address role follows Sega's 1993 register
+description; Charles MacDonald's *Sega Genesis hardware notes* v0.8 §4.3 reports
+the observed zero value and ROM overlay. This is medium-confidence evidence for
+that byte operation, not proof for every board or SRAM configuration. The
+existing four-CPU-clock bus-transfer cost is a bounded model inference; physical
+byte-lane and exact timing behavior remain unverified. Reads, other widths,
+nonzero values and neighboring addresses remain unsupported.
+
+The address-register width and MC68000 24-bit bus distinction follow the
+[NXP-hosted M68000 User's Manual](https://www.nxp.com/docs/en/reference-manual/MC68000UM.pdf),
+sections 2.1 and 2.3.2.
 The two bytes at the reset PC must exist. A 512-byte header alone is therefore
 not executable input. Unsupported profile/region returns `GW_ERROR_PROFILE`;
 unsupported initialization policy returns `GW_ERROR_UNSUPPORTED`. No profile is
@@ -140,6 +184,49 @@ bus record observes the first 16 writes over an instance lifetime, including
 ticks and RAM before each side effect. It is not public diagnostics or machine
 state, and is omitted entirely when `GENEWHIP_TEST_HOOKS=OFF`.
 
+### Phase 6 bounded safety and chunk probes
+
+The retained [Phase 6 safety report](../evidence/phase6-safety.json) is bound to
+its candidate and records the same 12 named contracts passing in native,
+ASan+UBSan, and test-hooks-off builds. The finite malformed-input run reports
+4096/4096 malformed-load cases with a128-tick limit. The separate finite API
+safety run records16 cases,128 total steps, a180,000-tick budget, a2,048-frame
+output bound,416 returned frames and16 checked guards; its maximum observed
+tick was179,032. Reported process memory high-water marks remain below the1 GiB
+bound; see the report for each variant's measured value. These are the recorded
+bounded probes, not a claim that all malformed inputs or allocations have been
+exhausted.
+
+The [Phase6 chunk report](../evidence/phase6-chunk.json) records independent
+baseline and varied-chunk instances for both complete routes. RECURSION94
+compared3,631 fields,20 ordered input events and28,127,873 instruction events;
+Tank Battle compared4,196 fields,22 events and48,964,930 instruction events.
+Every compared field has equal full RAM, CPU state, pixel rows and complete
+PCM bytes. Bounded diagnostic windows retain every instruction event, including
+repeated source markers, with zero dropped records. The terminal source boundary
+also has equal RAM and CPU state, including REC's last source marker after its
+last completed video field. Reset and both-port segmentation cases are exercised
+separately by the short three-variant contracts.
+
+REC used37,680,953 aggregate API calls in42.04 seconds; Tank used3,381,981 in39.74
+seconds, within their respective100-million/600-second and10-million/300-second
+child limits. The REC pair uses an instruction-step baseline; Tank uses bounded
+4,096-tick baseline windows. Both compare against varied target requests. Full
+PCM and the selected frame also retain FNV-1a64 equality with the earlier
+canonical captures; those cross-capture fingerprints retain their collision
+limitation. Byte equality between instances establishes bounded determinism;
+independent source-media evidence supplies the separate hardware corroboration.
+
+The REC route client requests one tick at a time while its CPU is running;
+the separate chunk replay varies bounded target requests. The supported-STOP
+observation horizon is separately bounded to at most 308 master ticks. With no
+wake source, `GW_STOP_CPU_STOPPED` means the CPU remains stopped while emulated
+time advances to the requested horizon; field-stop requests still return at a
+field boundary. The 308-tick route limit is a client-side observation bound, not
+a general CPU timing or maximum-overshoot guarantee. See
+`evidence/phase6-safety.json` and `evidence/phase6-chunk.json` for the exact
+candidate identities and retained results.
+
 Future-affecting state inventory: selected profile/reset policy and audio rate,
 copied ROM and length, 64 KiB RAM, D0–D7, A0–A7, PC/SR, current tick, last attempted
 instruction address/opcode, terminal stop/fault, pending reset events in stable
@@ -175,6 +262,13 @@ Exact VA3 reset wiring, pulse width, envelope/phase reset replay and continuatio
 future save/restore remain unknown. See [docs/audio.md](audio.md) for the FM field inventory
 and evidence boundaries.
 
+The existing Z80 serial bank register is reachable by a granted 68000 byte write
+at exact `0xA06000`; both masters use the same nine-bit bank and partial-write
+count. See [Z80 mapping and model limits](z80.md#z80-memory-and-device-map-plan-03-15)
+for the primary sources, ownership/reset contract, unsupported reads/widths and
+unverified physical timing/partial-write behavior. This integration adds no bank
+storage, mapper mode or public API.
+
 ## API 3 additions (historical)
 
 Source API version 3 added `gw_get_video_field`, which describes the newest completed
@@ -206,7 +300,7 @@ The resampler kernel and its hash check are described by
 `tests/audio/resampler_kernel_hash.py`.
 
 `gw_config.port_device[2]` and `GW_EVENT_PAD_STATE` drive the I/O device
-(see [input.md](input.md)): `GW_DEVICE_NONE` and `GW_DEVICE_PAD3` are accepted at
+(see [input.md](input.md) and the [GW-06-04 I/O amendment](video.md#observed-io-amendment-gw-06-04)): `GW_DEVICE_NONE` and `GW_DEVICE_PAD3` are accepted at
 creation and any other value returns `GW_ERROR_UNSUPPORTED`. The VDP supports the
 documented subset described in [video.md](video.md); unsupported modes stop with
 `GW_STOP_UNSUPPORTED_STATE` (see also [cpu.md](cpu.md)). `tests/consumer/main.c` pulls a field
@@ -368,7 +462,8 @@ still no public snapshot, so native layouts must not be serialized.
 | VINT/HINT pending, HINT counter, scheduled VINT | cleared | cleared | yes |
 | Sprite overflow/collision flags | cleared | kept (cleared by a status read) | yes (status) |
 | VDP advance tick | cleared | kept | yes |
-| I/O data and control latches (two ports) | cleared | cleared | yes |
+| I/O data and control latches (two pads plus unconnected EXT GPIO) | cleared | cleared | yes |
+| CPU USP (explicit supervisor MOVE access only) | zero policy | zero policy | yes, tagged nonzero extension |
 | Held buttons per port | cleared | kept | yes |
 | Port device configuration, version register | from `gw_config`; 0xA0 | kept | yes |
 | Field buffers (2 x 224 lines, XRGB8888), widths, has-field | cleared | kept (completed field survives) | no, output only |
@@ -380,6 +475,37 @@ still no public snapshot, so native layouts must not be serialized.
 
 Guest `RESET` resets neither the VDP, I/O devices nor PSG. Session state (input log,
 held masks, field cadence) belongs to the host layer, not the core (`docs/desktop.md`).
+
+GW-06-04 adds on-chip EXT data/control latches without a third public pad or
+serial device. Nonzero EXT latches append a tagged little-endian extension to
+the private digest; default zero preserves old control values. Digest hashes
+are comparisons with collision risk, not a state serialization/proof of equality.
+See the [current I/O amendment](video.md#observed-io-amendment-gw-06-04).
+
+The private route tools support `--route-instruction-probe PC` (decimal),
+retaining at most the first identified boundary pair and the last boundary pair,
+each with at most64 spans of64bytes. No cumulative instruction dump is retained.
+`--route-probe-only` requires that option and a GWRC descriptor; it stops at that
+specific instruction and labels the result `diagnostic-prefix`. Evidence
+validators reject such a prefix as route evidence. All original descriptors,
+source clocks and host input handlers stay in use.
+
+Headless `--route-probe-stack-before-a7` requires an instruction probe and a
+GWRC descriptor. It adds four one-byte reads at the original A7 minus four
+before and after that first probe; read errors remain explicit. It can accompany
+a continuing capture or `--route-probe-only`. The observer itself does not
+change termination: a full capture retains the later stop separately, while a
+prefix remains diagnostic evidence and cannot satisfy capture acceptance.
+
+Running CPUs use target=current+1. A STOP-only horizon up to308 master ticks
+cannot cross a modeled44-clock interrupt entry and then retire an instruction:
+GWRC has only pad events, no queued resets, and entry faults stop immediately.
+STOP requests honor field stops so field callbacks, meta input and PCM draining
+remain at the same boundary. `--route-stop-horizon 1` retains the reference path;
+the default is308. Original IRQ/marker/stack-fault guests compare exact source,
+input, field and PCM observations in both clients. The first243 real RECURSION
+source samples match the measured unoptimized prefix exactly. This changes
+tool call frequency, not the core scheduler or emulated clock.
 
 ## Consolidated limitations (Phase 2/4)
 
@@ -428,3 +554,196 @@ declared build floor, not evidence it was run. Evidence tools/tests require CMak
 3.27+ and single-config Unix Makefiles or Ninja to bind generated target settings.
 Cross-compilation with `BUILD_TESTING=OFF` and `GENEWHIP_BUILD_TOOLS=OFF` does not
 require a host fixture generator or C++ compiler.
+
+## Bounded source-step route tracer
+
+The headless and SDL clients accept `--route-plan FILE --route-report FILE` for
+the tool-private GWRP v1 tracer. The plan has a 12-byte header, at most 4096
+operations, and a file-size limit of 1 MiB. Each operation observes 1–64
+nonwrapping memory spans of 1–64 bytes at completed instruction boundaries,
+with an instruction budget no greater than 100000. Addresses are 24-bit bus
+addresses checked against the public read range. Dispatch masks are full
+three-button pad states; explicit ticks must be nondecreasing, within the
+public target-tick limit, and no earlier than the current session tick. A
+`UINT64_MAX` tick selects the observed boundary. The parser rejects malformed,
+truncated, oversized, or unknown operation data before opening or mutating a
+session. GWRP is not a public API or evidence interchange format.
+
+Reports from the route compiler keep load, boot, interaction, sustained, and
+completion outcomes separate. Each stage can be pass, fail, unsupported,
+skipped, unknown, or infrastructure-error and records whether it was reached.
+An unreached stage remains visible; sustained play never implies completion.
+`scripts/evidence/phase6_routes.py --validate REPORT` checks the frozen case
+denominator, D-118/admission identities, source definitions, clocks, host
+receipts, and stage evidence. `--self-test` exercises corrupt report mutants
+without loading a game ROM. `--compile DIRECTORY` validates and lowers all twelve
+admitted cases into executable `.gwrc` files, provenance sidecars and `roster.json`.
+Pass receipts bind the compiled digest and a digest-checked native sample report;
+the validator recomputes oracle facts from signal rows. A claimed predicate or
+completion flag alone cannot establish a pass. Absence claims require the entire
+declared observation window. Tank has no independently defined completion predicate.
+
+GWRC v1 is the shared native frozen-controller format, accepted by both clients
+through the same flags. Its 128-byte header and records contain little-endian
+u32 words. Header words are: magic `GWRC`, version1, clock kind (1 field state
+count, 2 completed source steps, 3 field schedule), total fields, active limit,
+boot bound, eight section counts, state/attempt/tick/phase signal indices,
+ticks per attempt, active/terminal state values, launch field/release interval/
+port/button, render kind/field/attempt/tick/state, boundary-call limit, zero
+reserved word. The eight sections have these record layouts:
+
+| Section | u32 fields per record |
+|---|---|
+| Signals | source effective address, low24 bus address, byte width1/2, endian0 big/1 little |
+| Markers | completed instruction PC, opcode (CLR.W absolute long, 0x4279) |
+| Actions | first condition, condition count, first step, step count, physical-field timeout |
+| Steps | first target, target count |
+| Targets | port, single button bit, first condition, condition count |
+| Conditions | signal index (0xFFFFFFFF means active ticks), comparison0 EQ/1 GE/2 LT, value |
+| Events | attempt, source tick (physical field for kind3), state, port, button, asserted0/1 |
+| Predicates | signal index, equals, inclusive lower/upper active-clock bounds |
+
+At most4096 total records and1MiB are accepted. At most128 signal aliases are
+read through at most64 nonwrapping spans, each at most64 bytes. Effective source
+addresses remain in the descriptor and sidecar; tool reads explicitly use the
+documented low24 CPU bus mapping. `gw_peek_memory` remains strict and rejects
+addresses above0xFFFFFF. All structure/index/clock/capacity checks precede session
+creation; source marker bytes are also checked against the loaded ROM before
+execution. Unknown versions, kinds, reserved words, truncated/trailing records,
+malformed buttons and nonmonotonic event clocks are rejected as `route-plan`.
+
+Tank snapshots guest state once per published field, increments active ticks
+only in state1, and releases each parallel target independently. Completed steps
+advance on the next field. RECURSION recognizes the four source-proven completed
+phase clears from the pinned ROM, ignores reset/duplicate publications, requires
+contiguous attempt/tick progression, and dispatches ordered events at or beyond
+their declared tick before the next guest instruction. Field callbacks dispatch
+only C while the source UI/reset is paused; they never supply world predicates
+or source ticks. Its B target remains the frozen D118 value695. Supported STOP
+waits continue under the bounds; they are not unsupported instructions.
+
+Native reports retain raw signal samples, desired/effective input masks, clock
+counts, render requests, boundary-call/queue measurements and exact first
+unsupported-stop tick separately from final tick. These are observations, not
+automatic gameplay or stage passes. The bounded runner retains per-field PCM
+draining and SDL presentation. Source observation uses one safe instruction
+boundary at a time, including STOP waits; no device timing is guessed. Maximum
+physical/active counts are7200/3600 (Tank uses4500/3600), and at most64 pad events
+can be pending. The Python subprocess harness enforces600s,1MiB stdout/stderr,
+8MiB reports and process-group termination. No real-game success beyond existing
+load/CPU stops is established by the authored controller contracts.
+
+### RECURSION94 Plan49 public-core tracer
+
+The first bounded current-source RECURSION94 run used the unchanged B01 ROM,
+source archive, input program and oracle. It reached all four declared
+predicates and consumed7200 fields, but the final guest became terminal at
+attempt4/tick719 after3599 observed completed source steps; the frozen
+acceptance remains3600. The terminal transition is included: the four pinned
+markers include the `.program_stable` phase clear, and the controller counts
+each retired listed marker. The current evidence therefore does not indicate a
+missing terminal marker or a CPU/bus stop, and does not justify changing the
+observer, input timing, ROM or oracle. The route's declared24-step final B
+interaction starting at observed tick696 predicts completion at tick720, while
+this run completed at tick719; the one-step acceptance gap remains unresolved.
+
+The retained causal public-core guest separately verifies poll, guest latch,
+completed marker, host event dispatch and next poll: the sampled port word was
+`0x7f`, `0x77`, `0x7f` for release/press/release, with marker words1/2/3 and
+effective masks8/0/0. This establishes the small input seam only. It does not
+qualify the route, its withheld-input cases, rendered frame or PCM evidence.
+See `evidence/phase6-recursion49.json` and its checked companion for the
+source-bound partial result; the six-run qualification and media/whole-phase
+obligations remain pending.
+
+### RECURSION94 Plan50 mapped delivery receipt
+
+Plan50 adds `fixtures/phase6/recursion94-consumed-map-v1.json`: nineteen
+source-ordered events with a separate source target, public-client dispatch,
+consumed poll, expected mask and per-row provenance. The source is the pinned
+Phase5-B input program at revision `459bf06`, bound by its SHA-256 in each row.
+Sparse MAME observations remain marked unknown except for the retained final B
+hold. Cleanup release is a separate controller action, not a twentieth map
+event. The source-derived client schedule dispatches final B after tick696 so
+the guest consumes it at tick697 through720; MAME's retained effective start
+is tick697. This is a client delivery distinction, not a new CPU timing claim.
+Paused C/meta requests use the source attempt/tick/state at eligible completed
+field or source-marker boundaries. The frozen reference's field numbers stay
+in `reference_request`; they are not native absolute-field predictions. The
+consumer checks terminal publication, paused completed-step counts, C release,
+and the next attempt's first completed step against the retained raw report.
+
+The mapped public-core REC receipt passes 3600 completed source steps and the
+four pinned predicates. It records 3631 observed fields (within the 7200-field
+cap), 32,044,795 boundary calls, and queue high-water2. The final B poll is
+observed at tick697 and the hold continues through tick720. This is one
+developmental route receipt, not repeated title qualification or a phase
+compatibility claim. `evidence/phase6-tracer-reviewed.json` revalidates the exact
+retained raw execution under the corrected C/meta metadata and stricter
+consumer, with its own immutable candidate snapshot. Its execution origin
+links the unchanged original `evidence/phase6-tracer.json`; it is not another
+game run or a corrected SDL game result.
+
+The early SDL software diagnostic used a virtual hat without an explicit SDL
+gamepad mapping. Its complete child reports show the core process completed,
+but directional masks were not effective through `SDL_Gamepad`, so the mapped
+guest route failed. The diagnostic still retained 3631 presentations and
+center-pixel readback samples, 2,908,428 submitted PCM frames, and disk-audio
+device activity; these observations do not make the input route pass. The
+later no-ROM virtual-input contract adds explicit SDL GUID bindings and checks
+all nineteen requested masks through the actual SDL event handler and
+`sample_port`; it passes, but it does not repeat the guest, renderer or audio
+route. The prior diagnostic and post-child wrapper exception remain preserved
+in `evidence/phase6-sdl-diagnostic.json` and
+`evidence/phase6-sdl-diagnostic-reconciled.json`. Those early diagnostic results
+remain failed. Current full core/media and software/native SDL qualification
+is recorded separately in the Plan51–53 reports and independent phase review.
+
+
+### Retained Tank instruction observation (Plan 47, rejected checkpoint)
+
+A single current headless run retained the PEA at `0x00ec32` (`0x4879`):
+A7 decreased from `0xe0fffdf4` to `0xe0fffdf0`, the observed stack bytes became
+`0006923c`, and the instruction consumed 140 master ticks. The later stop was
+`GW_STOP_UNSUPPORTED_ADDRESS` at PC `0x02006c`, opcode `0x13fc`, for address
+`0x00a130f1`, at master tick 8,724,688. This is an observed unsupported address;
+it does not establish a hardware bus-error exception or route success.
+
+The checkpoint was rejected: it selected at most 128 native boundary calls,
+but the serialized route retained a 1,000,000,000-call ceiling and the run
+reported 163,937 calls. The limit was checked after execution instead of being
+enforced by the launched descriptor. This launch-contract defect remains open;
+source and workload slots are frozen, and the two conditional control runs did
+not start. The PEA prefix itself required 163,874 retired instructions, so
+simply enforcing 128 calls would prevent reaching the observation. A future
+useful checkpoint needs a deliberately selected suitable bound and matching
+runtime enforcement; this result does not authorize another run.
+
+See `evidence/phase6-tank-checkpoint47.json` and its rejected checked companion
+for raw identities, observations, and limits. The corrected no-process contract
+passed 71 checks, and native and sanitizer preparation each passed seven named
+core contracts. Those checks and this retained prefix do not complete PLAY-02,
+HOST-04, SAFE-02, the two-title/control/PCM denominator, actual-host evidence,
+or full safety and chunk-determinism duties.
+
+Phase6 canonical reports keep the immutable execution candidate separate from
+current offline reader and media-expectation identities. A reader correction
+revalidates retained raw plans, owned process receipts, complete stdout field
+streams and captures without launching the emulator again. Changed native
+runtime or controller bytes invalidate affected execution proof.
+
+The Tank field120 media observation corroborates all70 arena wall cells visible
+in the independently pinned reference PNG, the source/SGDK-selected red wall
+palette, and source-guaranteed empty corridors. The procedural arena draw is
+still in progress at that field; no visible tank or exact whole-frame agreement
+is asserted. Source tile indices and actual palettes take precedence over color
+comments. Native and host exact pixel equality is a separate obligation. The
+short Tank shot gate corroborates source packets and PCM onset/mute; stable
+pitch remains unknown when the gate is shorter than10ms.
+
+CMake inputs in a Phase6 execution manifest retain their exact frozen provenance
+snapshots. Freshness checks use the current runtime sources, executable bytes,
+cache and runtime configuration. Test-registration metadata can change without
+rerunning an identical native executable; runtime changes require affected proof
+to be refreshed. Current host evidence also binds each selected run to its exact
+completed process receipt, limits and confirmed group cleanup.

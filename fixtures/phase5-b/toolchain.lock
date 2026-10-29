@@ -1,0 +1,161 @@
+{
+  "build_configuration_sha256": "f843685184ace0831857c3cfe34a3e137fcc31020ed252f541f2317901ea02a2",
+  "build_entrypoint": {
+    "path": "fixtures/phase5-b/source-overrides/build.sh",
+    "sha256": "cf30bc793b1aa519d8808a0e875a635a40591865e77f1dbf8083fda04938d95d",
+    "source_revision": "sha256:cf30bc793b1aa519d8808a0e875a635a40591865e77f1dbf8083fda04938d95d"
+  },
+  "build_image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+  "build_image_id": null,
+  "build_makefile": {
+    "path": "fixtures/phase5-b/source-overrides/build.mk",
+    "sha256": "bc9a686d39e87779192a3dc3d150cfa5b02012595a22cad153cd442b1609d912",
+    "source_revision": "sha256:bc9a686d39e87779192a3dc3d150cfa5b02012595a22cad153cd442b1609d912"
+  },
+  "execution": {
+    "promotion_build_invocations": 0,
+    "validate_only_consumes_rom_build": false,
+    "verify_reproducible_reuses_retained_pair": true
+  },
+  "image_materials": null,
+  "reviewed_toolchain": {
+    "build_image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+    "build_image_tools": {
+      "busybox_license": "GPL-2.0-only; local isolated utilities",
+      "busybox_sha256": "89f85a8b92bdb5ada51bd8ee0d9d687da1a759a0d80f8d012e7f8cbb393a3a0",
+      "gcc": {
+        "license": "GPL-3.0-or-later; local tool build only",
+        "sha256": "ceb739494a2ae79f1968e8722a83ed1979f092536422478ffd7cb0882745f06a",
+        "version": "12.2.1"
+      },
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "image_id": "sha256:a32ce20981559a42da0d7f21a56102ffc800c350f00156638dc9dcb26d09850e",
+      "make": {
+        "license": "GPL-3.0-or-later; local tool build only",
+        "sha256": "f4113a2b7d4fd886e5480035afbc76f59136e1a940a5ce3c14ab923224f717bc",
+        "version": "4.4.1"
+      },
+      "platform": "linux/amd64"
+    },
+    "platform_adapter": "same upstream tool versions built from pinned sources for Linux; candidate .exe paths are retained.",
+    "python": {
+      "archive_sha256": "15d9c623abfd2165fe816ea1fb385d6ed8cf3c664661ab357f1782e3036a6dac",
+      "license": "PSF-2.0",
+      "version": "3.12.10"
+    },
+    "sjasmplus": {
+      "archive_sha256": "0203a01199b16660027fbe04b0a87dc5aff299401b5e3e49bff8468a3801cc54",
+      "license": "BSD-3-Clause",
+      "source_commit": "46aae3fa784cae903345b87bd6b9db16a77c4bea",
+      "version": "1.23.1"
+    },
+    "vasm": {
+      "archive_sha256": "c84b2de1cbb87831795fe64a85c5d9a7002a766e3a7c30b0a2d7d5e99d878f49",
+      "license": "non-commercial-purpose; purpose is recorded in evidence/phase5-vasm-use-purpose.json",
+      "version": "2.0f"
+    },
+    "zlib": {
+      "archive_sha256": "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23",
+      "license": "zlib License",
+      "version": "1.3.1"
+    }
+  },
+  "schema": "genewhip-phase5-build-lock-v1",
+  "source_archive_sha256": "9177d9c950e1be5acc43c4edcbd41de6e19d9d0df3c8a6f537324ab2fe06acf8",
+  "source_export_sha256": "d6302d23168fb7e20e643c97eed0c694ef702b23cea0b26897e0bb8152e3ad1b",
+  "source_revision": "ab73bc9c7d2bbc4fcd94b3e0e2b89756cb1dc0cd",
+  "title_id": "recursion94",
+  "toolchain_inputs": {
+    "build_image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+    "build_image_id": "sha256:a32ce20981559a42da0d7f21a56102ffc800c350f00156638dc9dcb26d09850e",
+    "inputs": [
+      {
+        "path": "inputs/Python-3.12.10.tgz",
+        "sha256": "15d9c623abfd2165fe816ea1fb385d6ed8cf3c664661ab357f1782e3036a6dac",
+        "source_revision": "sha256:15d9c623abfd2165fe816ea1fb385d6ed8cf3c664661ab357f1782e3036a6dac"
+      },
+      {
+        "path": "inputs/sjasmplus-1.23.1-src.tar.xz",
+        "sha256": "0203a01199b16660027fbe04b0a87dc5aff299401b5e3e49bff8468a3801cc54",
+        "source_revision": "sha256:0203a01199b16660027fbe04b0a87dc5aff299401b5e3e49bff8468a3801cc54"
+      },
+      {
+        "path": "inputs/vasm2_0f.tar.gz",
+        "sha256": "c84b2de1cbb87831795fe64a85c5d9a7002a766e3a7c30b0a2d7d5e99d878f49",
+        "source_revision": "sha256:c84b2de1cbb87831795fe64a85c5d9a7002a766e3a7c30b0a2d7d5e99d878f49"
+      },
+      {
+        "path": "inputs/zlib-1.3.1.tar.gz",
+        "sha256": "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23",
+        "source_revision": "sha256:9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23"
+      }
+    ],
+    "policy_sha256": "eb9d3e63906cd2b32ca26520cc569895bde3c932a0660c7350cae582b84081dc",
+    "schema": "genewhip-phase5-recursion-toolchain-inputs-v1",
+    "setup_recipe": "scripts/fixtures/phase5_recursion_setup.sh",
+    "setup_recipe_sha256": "6e7e8f92c638aa4926213de5abd483e9d60c94f27a5760d3e04678c15707f4df",
+    "source_revision": "ab73bc9c7d2bbc4fcd94b3e0e2b89756cb1dc0cd"
+  },
+  "toolchain_materials": [
+    {
+      "category": "build_tools",
+      "license": "vasm non-commercial-purpose",
+      "notice": "phase5-inputs/vasm2_0f.tar.gz#vasm/doc/vasm.texi",
+      "origin": "workspace",
+      "path": "phase5-inputs/vasm2_0f.tar.gz",
+      "sha256": "c84b2de1cbb87831795fe64a85c5d9a7002a766e3a7c30b0a2d7d5e99d878f49",
+      "source_revision": "sha256:c84b2de1cbb87831795fe64a85c5d9a7002a766e3a7c30b0a2d7d5e99d878f49",
+      "terms_source": "https://sun.hasenbraten.de/vasm/release/vasm.pdf"
+    },
+    {
+      "category": "build_tools",
+      "license": "BSD-3-Clause",
+      "notice": "phase5-inputs/sjasmplus-1.23.1-src.tar.xz#sjasmplus-1.23.1/LICENSE.md",
+      "origin": "workspace",
+      "path": "phase5-inputs/sjasmplus-1.23.1-src.tar.xz",
+      "sha256": "0203a01199b16660027fbe04b0a87dc5aff299401b5e3e49bff8468a3801cc54",
+      "source_revision": "sha256:0203a01199b16660027fbe04b0a87dc5aff299401b5e3e49bff8468a3801cc54",
+      "terms_source": "https://github.com/z00m128/sjasmplus/tree/v1.23.1"
+    },
+    {
+      "category": "build_tools",
+      "license": "zlib License",
+      "notice": "phase5-inputs/zlib-1.3.1.tar.gz#zlib-1.3.1/LICENSE",
+      "origin": "workspace",
+      "path": "phase5-inputs/zlib-1.3.1.tar.gz",
+      "sha256": "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23",
+      "source_revision": "sha256:9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23",
+      "terms_source": "https://zlib.net/fossils/zlib-1.3.1.tar.gz"
+    },
+    {
+      "category": "build_tools",
+      "license": "PSF-2.0",
+      "notice": "phase5-inputs/Python-3.12.10.tgz#Python-3.12.10/LICENSE",
+      "origin": "workspace",
+      "path": "phase5-inputs/Python-3.12.10.tgz",
+      "sha256": "15d9c623abfd2165fe816ea1fb385d6ed8cf3c664661ab357f1782e3036a6dac",
+      "source_revision": "sha256:15d9c623abfd2165fe816ea1fb385d6ed8cf3c664661ab357f1782e3036a6dac",
+      "terms_source": "https://www.python.org/ftp/python/3.12.10/Python-3.12.10.tgz"
+    },
+    {
+      "category": "build_tools",
+      "license": "MIT",
+      "notice": "Genewhip LICENSE",
+      "origin": "workspace",
+      "path": "build.sh",
+      "sha256": "cf30bc793b1aa519d8808a0e875a635a40591865e77f1dbf8083fda04938d95d",
+      "source_revision": "sha256:cf30bc793b1aa519d8808a0e875a635a40591865e77f1dbf8083fda04938d95d",
+      "terms_source": "Genewhip project LICENSE"
+    },
+    {
+      "category": "build_tools",
+      "license": "MIT",
+      "notice": "Genewhip LICENSE",
+      "origin": "workspace",
+      "path": "build.mk",
+      "sha256": "bc9a686d39e87779192a3dc3d150cfa5b02012595a22cad153cd442b1609d912",
+      "source_revision": "sha256:bc9a686d39e87779192a3dc3d150cfa5b02012595a22cad153cd442b1609d912",
+      "terms_source": "Genewhip project LICENSE"
+    }
+  ]
+}

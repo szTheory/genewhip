@@ -1,0 +1,97 @@
+{
+  "delivery_map_sha256": "c1a40faca8ddf3a6558b1d9fd3824e2fb0d3dd8f567fe5e6a789f6d4790da623",
+  "desktop_sha256": "2798b8f92722b13a8a25e3eec75551533ee3dabae2a97b973b9eeb14f122ebd7",
+  "desktop_source_sha256": "f5fc0b2b98e0dc5575981c3298c9b174bd1c356ac1ef24f1239b32f9ffa10800",
+  "observations": [
+    {
+      "effective_mask": 8,
+      "requested_mask": 8
+    },
+    {
+      "effective_mask": 0,
+      "requested_mask": 0
+    },
+    {
+      "effective_mask": 8,
+      "requested_mask": 8
+    },
+    {
+      "effective_mask": 0,
+      "requested_mask": 0
+    },
+    {
+      "effective_mask": 8,
+      "requested_mask": 8
+    },
+    {
+      "effective_mask": 0,
+      "requested_mask": 0
+    },
+    {
+      "effective_mask": 32,
+      "requested_mask": 32
+    },
+    {
+      "effective_mask": 0,
+      "requested_mask": 0
+    },
+    {
+      "effective_mask": 8,
+      "requested_mask": 8
+    },
+    {
+      "effective_mask": 0,
+      "requested_mask": 0
+    },
+    {
+      "effective_mask": 32,
+      "requested_mask": 32
+    },
+    {
+      "effective_mask": 0,
+      "requested_mask": 0
+    },
+    {
+      "effective_mask": 1,
+      "requested_mask": 1
+    },
+    {
+      "effective_mask": 0,
+      "requested_mask": 0
+    },
+    {
+      "effective_mask": 8,
+      "requested_mask": 8
+    },
+    {
+      "effective_mask": 0,
+      "requested_mask": 0
+    },
+    {
+      "effective_mask": 2,
+      "requested_mask": 2
+    },
+    {
+      "effective_mask": 0,
+      "requested_mask": 0
+    },
+    {
+      "effective_mask": 16,
+      "requested_mask": 16
+    }
+  ],
+  "outcome": "pass",
+  "process": {
+    "bound_violation": false,
+    "client": "desktop",
+    "process_group_cleanup": "confirmed",
+    "return_code": 0,
+    "stderr_bytes": 79,
+    "stdout_bytes": 830,
+    "wall_seconds": 0.04171666700858623
+  },
+  "production_title_launch": false,
+  "requested_count": 19,
+  "rom_used": false,
+  "schema": "genewhip-phase6-sdl-virtual-input-contract-v1"
+}

@@ -451,6 +451,8 @@ class ReportContract(unittest.TestCase):
         self.assertIn("path: build/safety-export/", safety_job)
         self.assertNotIn("build/ci/", safety_job)
         gate = (ROOT / "scripts/ci/required-gate.sh").read_text()
+        default_gate = gate.split('if [[ "${1:-}" == "--phase6-local" ]]; then', 1)[1]
+        default_gate = default_gate.split("\nfi\n", 1)[1]
         self.assertIn("ctest-junit.raw.xml", gate)
         self.assertIn("safety-sanitize-junit", gate)
         self.assertTrue(gate.startswith("#!/usr/bin/env bash\nset -euo pipefail"),
@@ -458,7 +460,7 @@ class ReportContract(unittest.TestCase):
         self.assertLess(gate.index("ctest --test-dir \"build/ci/$lane\""),
                         gate.index("safety-sanitize-junit"))
         self.assertLess(gate.index("safety-sanitize-junit"), gate.index("check_ctest_skips.py"))
-        self.assertNotIn("--output-on-failure", gate)
+        self.assertNotIn("--output-on-failure", default_gate)
         self.assertNotIn("ctest-junit.raw.xml", safety_job)
         for path in ("build/ci/native/CMakeCache.txt", "build/ci/sanitizer/CMakeCache.txt",
                      "build/ci/production/CMakeCache.txt"):

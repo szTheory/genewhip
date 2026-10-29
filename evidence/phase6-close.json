@@ -1,0 +1,333 @@
+{
+  "candidate_sha256": "88b4cc0bb53f89b2b07e7fd27b8d2894b18dce54073cc8028bed3439f1bc1139",
+  "claims": {
+    "chunk": "two actual variable-chunk routes match retained full PCM and selected full frame by FNV-1a64",
+    "core_routes": "production product report validated; original unknowns preserved",
+    "host": "current software and native reports validated; native capability passed",
+    "ram_diagnostics": "independent instances compare full RAM and CPU state at each field and final boundary; complete instruction-event sequence compared in bounded diagnostic windows",
+    "safety": "three variants and bounded fuzz validated"
+  },
+  "failed_attempt_history": [
+    {
+      "path": "build/phase6/evidence/phase6-chunk-recursion94-7wcyp97_/process.json",
+      "sha256": "a07ae2ac938b59f9642b759d7b4aab93db7c528088685e593aa68768cd97f800"
+    },
+    {
+      "path": "build/phase6/evidence/phase6-chunk-recursion94-ge2s49t7/process.json",
+      "sha256": "6e02f0e26610d33684cd332c9c24569a98e2a70e92ac5507c3b1cf01d25bfaa6"
+    },
+    {
+      "path": "build/phase6/evidence/phase6-chunk-recursion94-iytkvwl1/process.json",
+      "sha256": "c90dd61cd33cb08407e018206955aa56fcc3f0358b594c0bc8ea2224a621cc55"
+    },
+    {
+      "path": "build/phase6/evidence/phase6-chunk-recursion94-jfaauwws/process.json",
+      "sha256": "261ccbe2b4d8611e65301f1e48772b921c73f0871cf732d915b9d737d4227a65"
+    },
+    {
+      "path": "build/phase6/evidence/phase6-chunk-recursion94-nt9k9lwr/process.json",
+      "sha256": "1bde26e40ab2e3863e7f6a2bab6b3549ea34b4a127964889844f1fbdedf32374"
+    },
+    {
+      "path": "build/phase6/evidence/phase6-chunk-recursion94-rcameusv/process.json",
+      "sha256": "708da9f7f53301c995591ababe705c4e7fafcd2902c78a68d789df87bf912f81"
+    },
+    {
+      "path": "build/phase6/evidence/phase6-chunk-recursion94-xb2nblms/process.json",
+      "sha256": "d02a6cd9ce88ad50053cdb95ffdf5c45e29a877fb699b45eb10138ca88c30445"
+    },
+    {
+      "path": "build/phase6/evidence/phase6-chunk-recursion94-ykyllgfx/process.json",
+      "sha256": "6af9758d97d9aed00696350a168b5d79acce4a981a7de74cd1d6e7de5efe9a72"
+    },
+    {
+      "path": "build/phase6/evidence/phase6-chunk-tank-battle-774bitwf/process.json",
+      "sha256": "b9f3f77c06646e4359649521e062492433628ae1465e8a74ad7d21797d680826"
+    },
+    {
+      "path": "build/phase6/evidence/phase6-chunk-tank-battle-ckjhsxl4/process.json",
+      "sha256": "2fd107a1011e1f5fa72824773e7e58b6ddef6e1d38aa7e3c3cec170eecd6f8e9"
+    },
+    {
+      "path": "build/phase6/evidence/phase6-chunk-tank-battle-klq333p2/process.json",
+      "sha256": "7a6a85f13289a64200f0139c4426a74a93e1b4f20278555ada46ad0f68d4d255"
+    },
+    {
+      "path": "build/phase6/evidence/phase6-chunk-tank-battle-ocnzk1le/process.json",
+      "sha256": "70b072b0ebb49e35f089720ba243bdff966ba2f5d10c3b03262ff7d4bc63e420"
+    }
+  ],
+  "negative_controls": {
+    "denominator": 30,
+    "fail": 0,
+    "mutants": [
+      {
+        "actual_reason": "close-core-required",
+        "expected_reason": "close-core-required",
+        "name": "missing-core",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-media-required",
+        "expected_reason": "close-media-required",
+        "name": "missing-media",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-host_software-required",
+        "expected_reason": "close-host_software-required",
+        "name": "missing-host_software",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-host_native-required",
+        "expected_reason": "close-host_native-required",
+        "name": "missing-host_native",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-host_check-required",
+        "expected_reason": "close-host_check-required",
+        "name": "missing-host_check",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-safety-required",
+        "expected_reason": "close-safety-required",
+        "name": "missing-safety",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-chunk-required",
+        "expected_reason": "close-chunk-required",
+        "name": "missing-chunk",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-core_check-required",
+        "expected_reason": "close-core_check-required",
+        "name": "missing-core_check",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-ci_local-required",
+        "expected_reason": "close-ci_local-required",
+        "name": "missing-ci_local",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-core-artifact",
+        "expected_reason": "close-core-artifact",
+        "name": "core-digest",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-requirement-conjunction",
+        "expected_reason": "close-requirement-conjunction",
+        "name": "requirement-loss",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-premature-completion",
+        "expected_reason": "close-premature-completion",
+        "name": "premature-completion",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-core-check-mutants",
+        "expected_reason": "close-core-check-mutants",
+        "name": "missing-core-mutant",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-core-process-wall",
+        "expected_reason": "close-core-process-wall",
+        "name": "core-wall-cap",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-core-process-native-binding",
+        "expected_reason": "close-core-process-native-binding",
+        "name": "core-report-byte-binding",
+        "rejected": true
+      },
+      {
+        "actual_reason": "media-roster",
+        "expected_reason": "media-roster",
+        "name": "missing-media-capture",
+        "rejected": true
+      },
+      {
+        "actual_reason": "host-roster",
+        "expected_reason": "host-roster",
+        "name": "missing-host-case",
+        "rejected": true
+      },
+      {
+        "actual_reason": "host-native-capability",
+        "expected_reason": "host-native-capability",
+        "name": "native-capability-skip",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-safety-proof",
+        "expected_reason": "close-safety-proof",
+        "name": "missing-safety-variant",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-safety-source-identity",
+        "expected_reason": "close-safety-source-identity",
+        "name": "stale-safety-source",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-safety-build-identity",
+        "expected_reason": "close-safety-build-identity",
+        "name": "stale-safety-build",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-safety_api-artifact",
+        "expected_reason": "close-safety_api-artifact",
+        "name": "stale-safety-api-artifact",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-chunk-roster",
+        "expected_reason": "close-chunk-roster",
+        "name": "chunk-route-loss",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-chunk-test-identity",
+        "expected_reason": "close-chunk-test-identity",
+        "name": "chunk-test-identity",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-chunk-recursion94-pair-comparison",
+        "expected_reason": "close-chunk-recursion94-pair-comparison",
+        "name": "chunk-missing-pair-comparison",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-ci-local-status",
+        "expected_reason": "close-ci-local-status",
+        "name": "ci-false-pass",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-host-check-accounting",
+        "expected_reason": "close-host-check-accounting",
+        "name": "host-fault-accounting",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-requirement-conjunction",
+        "expected_reason": "close-requirement-conjunction",
+        "name": "false-PLAY-02",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-requirement-conjunction",
+        "expected_reason": "close-requirement-conjunction",
+        "name": "false-HOST-04",
+        "rejected": true
+      },
+      {
+        "actual_reason": "close-requirement-conjunction",
+        "expected_reason": "close-requirement-conjunction",
+        "name": "false-SAFE-02",
+        "rejected": true
+      }
+    ],
+    "pass": 30
+  },
+  "proofs": {
+    "chunk": {
+      "path": "evidence/phase6-chunk.json",
+      "sha256": "b637136245681408df39e1d49a51af667e28b362bd8c34c5c77eef0b1c0a1516"
+    },
+    "ci_local": {
+      "path": "evidence/phase6-ci-local.json",
+      "sha256": "a3658639fd2c0bd31321527c338e85197e5add56b3dc2c70721c84e03de757b4"
+    },
+    "core": {
+      "path": "evidence/phase6-core-routes.json",
+      "sha256": "28fe942663493e829b639e0053c45e81b677cb268193bd7667baab73780fa443"
+    },
+    "core_check": {
+      "path": "build/phase6/evidence/phase6-core-check.json",
+      "sha256": "3810f7e3e6b0df0649aecc46eab407e559db2b842bbc2eb14b0d1e19d5636b53"
+    },
+    "host_check": {
+      "path": "evidence/phase6-host-check.json",
+      "sha256": "9703069dbfdbc051156dcb08bbbbc281fd86bb74b0b86392942b3a988efe43ea"
+    },
+    "host_native": {
+      "path": "evidence/phase6-host-native.json",
+      "sha256": "aa2dfb8ad42a5f0c61c4c42585d96ef62d45a43222482d7f7589cd3c35a947e1"
+    },
+    "host_software": {
+      "path": "evidence/phase6-host-software-current.json",
+      "sha256": "b45099d4e40793be449558f04703e49b167b72562afaae5adaec8503b054fcd3"
+    },
+    "media": {
+      "path": "evidence/phase6-media.json",
+      "sha256": "f72cffd36e59f3a48feecf9b81b6988c277428cd2b106f1648f338643b6581c0"
+    },
+    "safety": {
+      "path": "evidence/phase6-safety.json",
+      "sha256": "a9f3aac6f064c370b96e932794c45464878f1729aa45999979d9ecd410f32fff"
+    }
+  },
+  "requirements": [
+    {
+      "evidence_status": "pass",
+      "id": "PLAY-02",
+      "phase_status": "pending-independent-review",
+      "reason": "raw production consumers pass; independent full-phase verification remains outstanding"
+    },
+    {
+      "evidence_status": "pass",
+      "id": "HOST-04",
+      "phase_status": "pending-independent-review",
+      "reason": "raw production consumers pass; independent full-phase verification remains outstanding"
+    },
+    {
+      "evidence_status": "pass",
+      "id": "SAFE-02",
+      "phase_status": "pending-independent-review",
+      "reason": "raw production consumers pass; independent full-phase verification remains outstanding"
+    }
+  ],
+  "reviews": [
+    {
+      "id": "reader-acceptance-06-52",
+      "source": "06-52-READER-ACCEPTANCE.md",
+      "status": "accepted"
+    },
+    {
+      "id": "media-review-06-51",
+      "source": "06-51-MEDIA-REVIEW.md",
+      "status": "accepted"
+    },
+    {
+      "id": "independent-phase-verifier",
+      "reason": "parent full-phase review required before any requirement completion",
+      "status": "pending"
+    },
+    {
+      "id": "independent-security-review",
+      "reason": "final threat/guard review remains part of parent verification",
+      "status": "pending"
+    }
+  ],
+  "schema": "genewhip-phase6-close-v1",
+  "status": "pending-independent-review",
+  "unknowns": [
+    "24/120 canonical contextual completion cells remain unknown from the core report",
+    "physical display/acoustic quality, broad accuracy, and unmeasured platforms remain unknown"
+  ]
+}

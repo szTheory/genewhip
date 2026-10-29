@@ -1,0 +1,32 @@
+{
+  "schema": "phase6-d125-qualification23-terminal-v1",
+  "status": "HALTED",
+  "reason": "Independent proof23 review rejected the frozen current proof verifier: missing reviewed_sections, independent identity and findings-schema validation; native qualification3/3 retained, current consumer acceptance not established.",
+  "game_admission": false,
+  "anchor": null,
+  "qualification_count": 3,
+  "qualification_planned": 3,
+  "global_used_seconds": 36728.95533712504,
+  "global_remaining_seconds": 6471.044662874963,
+  "pea_used_seconds": 7098.193,
+  "process_used_seconds": 5.865,
+  "attempts_used": 2,
+  "measured_owner_seconds": 2229.289469875046,
+  "closeout_allowance_seconds": 120.0,
+  "monotonic_closed_at": 425089.432433166,
+  "monotonic_allowance_deadline": 425209.432433166,
+  "boot_identity": "boot-session:2493cd26-ed27-49e3-ba91-bc1afadea884",
+  "phase6_complete": false,
+  "phase7_started": false,
+  "auto_advance": false,
+  "game_purpose_created": false,
+  "closed_at": "2026-10-25T15:36:48.722242+00:00",
+  "accepted_file_sha256": {},
+  "publication_recovery": {
+    "status": "recovered-committed-HALTED-snapshot-only",
+    "project_modules_imported": false,
+    "cause": "close_qualification23 committed ledger/null anchor then called _atomic_write for nonexistent create-once receipt; helper path.stat raised FileNotFoundError.",
+    "method": "stdlib-only same-ledger-lock O_EXCL create-once write, fsync; exact committed terminal event/intervals/counters, no new close/charge/attempt/authority",
+    "recovered_at": "2026-10-25T15:37:38.231001+00:00"
+  }
+}

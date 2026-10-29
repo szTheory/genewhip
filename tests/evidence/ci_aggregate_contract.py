@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/ci.yml"
 AGGREGATE = ROOT / "scripts/ci/aggregate.py"
 ATTESTATION_INPUTS = ROOT / "scripts/ci/verify_attestation_inputs.py"
-LANES = ("safety", "gameplay", "desktop", "package", "performance")
+LANES = ("safety", "gameplay", "desktop", "package", "performance", "product-smoke", "phase7-fast")
 SOURCE_SHA = "1" * 40
 HEAD_SHA = "2" * 40
 BASE_SHA = "3" * 40
@@ -34,6 +34,9 @@ def passing_needs(attestation_result="skipped"):
     needs = {name: {"result": "success", "outputs": {
         "source_sha": SOURCE_SHA, "head_sha": HEAD_SHA, "base_sha": BASE_SHA}}
         for name in LANES}
+    needs["v02-release-qualification"] = {"result":"skipped", "outputs": {
+        "source_sha":SOURCE_SHA,"head_sha":HEAD_SHA,"base_sha":BASE_SHA,
+        "run_id":"123","run_attempt":"2","event_name":"pull_request"}}
     needs["attestation"] = {"result": attestation_result, "outputs": {
         "source_sha": SOURCE_SHA, "head_sha": SOURCE_SHA, "base_sha": BASE_SHA}}
     return needs
@@ -98,6 +101,18 @@ class AggregateContract(unittest.TestCase):
         self.assertIn("required-lane-skipped:package", module.validate_lanes(
             skipped_package, "push", SOURCE_SHA, SOURCE_SHA, BASE_SHA, "refs/heads/main"))
 
+        dispatched = passing_needs("success")
+        for lane in LANES:
+            dispatched[lane]["outputs"].update(head_sha=SOURCE_SHA,
+                run_id="123", run_attempt="2", event_name="workflow_dispatch")
+        dispatched["v02-release-qualification"]["result"] = "success"
+        dispatched["v02-release-qualification"]["outputs"].update(
+            head_sha=SOURCE_SHA, event_name="workflow_dispatch")
+        dispatched["attestation"]["outputs"] = {"source_sha": SOURCE_SHA,
+            "head_sha": SOURCE_SHA, "base_sha": BASE_SHA}
+        self.assertEqual(module.validate_lanes(dispatched, "workflow_dispatch", SOURCE_SHA,
+            SOURCE_SHA, BASE_SHA, "refs/heads/main", "123", "2"), [])
+
     def test_aggregate_cli_requires_attestation_only_for_trusted_main_push(self):
         module = load_aggregate(self)
         values = {"NEEDS_JSON": json.dumps(passing_needs()), "EVENT_NAME": "pull_request",
@@ -128,13 +143,27 @@ class AggregateContract(unittest.TestCase):
                 reasons = module.validate_lanes(needs, "pull_request", SOURCE_SHA, HEAD_SHA, BASE_SHA)
                 self.assertIn(f"{reason}:desktop", reasons)
 
+    def test_new_required_lanes_reject_wrong_event_run_and_attempt(self):
+        module = load_aggregate(self)
+        needs = passing_needs()
+        for lane in ("product-smoke", "phase7-fast"):
+            needs[lane]["outputs"].update(run_id="123", run_attempt="2", event_name="pull_request")
+        self.assertEqual(module.validate_lanes(needs, "pull_request", SOURCE_SHA, HEAD_SHA, BASE_SHA,
+                                               "refs/pull/7/merge", "123", "2"), [])
+        for field, value in (("run_id", "124"), ("run_attempt", "1"), ("event_name", "push")):
+            changed = json.loads(json.dumps(needs))
+            changed["product-smoke"]["outputs"][field] = value
+            self.assertIn(f"lane-event-identity-mismatch:product-smoke:{field}", module.validate_lanes(
+                changed, "pull_request", SOURCE_SHA, HEAD_SHA, BASE_SHA,
+                "refs/pull/7/merge", "123", "2"))
+
     def test_workflow_runs_all_required_lanes_and_always_aggregates_the_current_event(self):
         text = WORKFLOW.read_text()
         for lane in LANES:
             self.assertRegex(text, rf"(?m)^  {lane}:\s*$", f"required-lane-job-missing:{lane}")
         self.assertRegex(text, r"(?ms)^  required-aggregate:\n(?:(?!^  [a-z0-9_-]+:\n).)*?if: always\(\)",
                          "aggregate-must-run-after-failures")
-        self.assertIn("needs: [safety, gameplay, desktop, package, performance, attestation]", text,
+        self.assertIn("needs: [safety, gameplay, desktop, package, performance, product-smoke, phase7-fast, v02-release-qualification, attestation]", text,
                       "aggregate-required-roster-mismatch")
         for identity in ("source_sha", "head_sha", "base_sha"):
             self.assertGreaterEqual(text.count(identity), len(LANES),
@@ -153,10 +182,13 @@ class AggregateContract(unittest.TestCase):
         self.assertNotRegex(text, r"secrets\.[A-Za-z_]+", "fork-visible-secret-reference")
         self.assertIn("persist-credentials: false", text, "checkout-credentials-persist")
         for action in re.findall(r"uses:\s*([^\s]+)", text):
+            if action.startswith("./"):
+                self.assertTrue((ROOT / action[2:] / "action.yml").is_file(), f"local-action-missing:{action}")
+                continue
             owner, separator, revision = action.partition("@")
             self.assertTrue(separator and re.fullmatch(r"[0-9a-f]{40}", revision),
                             f"action-not-immutable:{action}")
-        self.assertRegex(text, r"(?m)^permissions:\n  contents: read\s*$",
+        self.assertRegex(text, r"(?m)^permissions:\n  contents: read\n  actions: read\s*$",
                          "workflow-token-not-minimal")
         self.assertIn("macos-26", text, "locked-arm64-macos-runner-not-selected")
 
@@ -172,18 +204,33 @@ class AggregateContract(unittest.TestCase):
         self.assertRegex(package_body, r"(?ms)^    permissions:\n      contents: read\n")
         for permission in ("attestations: write", "artifact-metadata: write", "id-token: write"):
             self.assertNotIn(permission, package_body, f"package-job-retains-{permission}")
-        self.assertIn("if: github.event_name == 'push' && github.ref == 'refs/heads/main'", attest_body,
-                      "attestation-not-main-push-only")
-        self.assertIn("needs: [package]", attest_body, "attestation-does-not-depend-on-built-package")
+        self.assertIn("github.event_name == 'push' && github.ref == 'refs/heads/main'", attest_body,
+                      "attestation-not-main-push-bound")
+        self.assertIn("github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'", attest_body,
+                      "attestation-not-main-dispatch-bound")
+        self.assertIn("needs: [package, v02-package, v02-release-qualification]", attest_body,
+                      "attestation-does-not-depend-on-qualified-v02-producer")
         self.assertIn("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093", attest_body,
                       "attestation-does-not-download-producer-artifact")
         self.assertIn("verify_attestation_inputs.py verify", attest_body,
                       "attestation-input-identity-not-verified")
         self.assertIn("actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6", attest_body,
                       "attestation-action-missing-from-trusted-job")
-        self.assertIn("needs: [safety, gameplay, desktop, package, performance, attestation]", aggregate_body,
+        self.assertIn("needs: [safety, gameplay, desktop, package, performance, product-smoke, phase7-fast, v02-release-qualification, attestation]", aggregate_body,
                       "required-aggregate-does-not-wait-for-attestation")
         self.assertIn("EVENT_REF", aggregate_body, "aggregate-does-not-type-attestation-policy-by-ref")
+
+    def test_dispatch_jobs_share_validated_journal_clock_and_exact_nonce(self):
+        text = WORKFLOW.read_text()
+        self.assertIn("qualification_started_at:", text)
+        self.assertIn("qualification_base_sha:", text)
+        self.assertIn("qualification_nonce:", text)
+        self.assertIn("Plan10 qualification {0}", text)
+        self.assertGreaterEqual(text.count("uses: ./.github/actions/qualification-clock"), 15)
+        self.assertIn('GENEWHIP_QUALIFICATION_STARTED_AT: ${{ inputs.qualification_started_at }}', text)
+        self.assertIn('GENEWHIP_QUALIFICATION_NONCE: ${{ inputs.qualification_nonce }}', text)
+        self.assertIn("if: github.event_name == 'workflow_dispatch'", text)
+        self.assertIn("if: github.event_name == 'schedule'", text)
 
     def test_attestation_input_cli_accepts_exact_data_and_rejects_stale_run_or_bytes(self):
         spec = importlib.util.spec_from_file_location("attestation_inputs", ATTESTATION_INPUTS)
@@ -222,6 +269,17 @@ class AggregateContract(unittest.TestCase):
             verify_args = ["verify", "--directory", str(directory), "--identity-directory",
                            str(identity_directory)]
             self.assertEqual(module.main(verify_args), 0)
+            dispatch_expected = module.identity("example/genewhip", source, "12345", "2",
+                "workflow_dispatch", "refs/heads/main", "Required preview checks",
+                qualification_started_at="2026-10-29T00:00:00Z",
+                qualification_nonce="a" * 32, base_sha=BASE_SHA)
+            identity_path = identity_directory / "_ci-identity.json"
+            identity_path.write_text(json.dumps(dispatch_expected))
+            self.assertEqual(module.validate_inputs(directory, dispatch_expected, identity_directory), [])
+            with self.assertRaisesRegex(ValueError, "qualification-identity-invalid"):
+                module.identity("example/genewhip", source, "12345", "2", "workflow_dispatch",
+                    "refs/heads/main", "Required preview checks", qualification_nonce="a" * 32,
+                    base_sha=BASE_SHA)
             os.environ["GITHUB_EVENT_NAME"] = "pull_request"
             self.assertEqual(module.main(["write-identity", "--directory", str(identity_directory)]), 0)
             self.assertEqual(module.main(verify_args), 1)

@@ -1,0 +1,1485 @@
+{
+  "schema": "genewhip-consumed-input-map-v1",
+  "map_id": "recursion94-genewhip-public-client-v1",
+  "title_id": "recursion94",
+  "source": {
+    "scenario": "fixtures/phase5-b/scenario.json",
+    "input_program": "fixtures/phase5-b/input-program.json",
+    "input_program_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+    "reference": "evidence/phase5-reference-d118.json",
+    "reference_authority": "Pinned MAME differential evidence; source remains intended-behavior authority",
+    "scenario_sha256": "31e9c22129a6ce1b3ac2d1980c325e86bfbefb4e2fda85ae018c311e2cb40700",
+    "rom_sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff",
+    "oracle_sha256": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389",
+    "d118_sha256": "d1295806831a0d20586e83a75fd1f86ee52d543d27fe900cf6d79cf230e064bc",
+    "source_revision": "459bf06",
+    "gameplay_source": {
+      "path": "fixtures/phase5-b/source.tar:reviewed-export/src/gameplay/gameplay_core.asm",
+      "sha256": "df9b9056d65c7bbb987d7a42f56f9fa84bc01ec67db1d1d1fe15a842f7058a49",
+      "revision": "459bf06"
+    },
+    "rom": "fixtures/phase5-b/game.bin",
+    "oracle": "fixtures/phase5-b/oracle.json"
+  },
+  "semantics": "Map each declared action to the source-consumed guest poll state. Native Genewhip dispatch is after a completed source step and is consumed by the following poll. Paused C/meta actions remain field-boundary UI actions. C/meta client schedules are state-conditioned at a completed-field or source-marker boundary; original reference_request.field is not a native absolute-field schedule.",
+  "consumer": "genewhip-public-core-and-sdl-route-v1",
+  "events": [
+    {
+      "order": 1,
+      "control": "P1 Right",
+      "asserted": true,
+      "cases": [
+        "full-route",
+        "withhold-final-b"
+      ],
+      "source_target": {
+        "attempt": 0,
+        "tick": 0,
+        "field": 1,
+        "state": "active"
+      },
+      "consumer_dispatch": {
+        "clock": "source-step",
+        "attempt": 0,
+        "tick": 0
+      },
+      "consumed": {
+        "attempt": 0,
+        "tick": 2
+      },
+      "provenance": "input-program order 1; source poll follows first active GameplayStep marker",
+      "event_id": "input-event-01",
+      "original_event_index": 1,
+      "intent": "Set P1 Right pressed at its declared source point",
+      "clock_kind": "gameplay-source-step",
+      "source_locator": {
+        "path": "fixtures/phase5-b/input-program.json",
+        "revision": "459bf06",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "event_order": 1
+      },
+      "evidence_class": "independent-source-derivation",
+      "reference_request": {
+        "attempt": 0,
+        "tick": 0,
+        "field": 1,
+        "state": "active"
+      },
+      "reference_consumption": {
+        "status": "unknown",
+        "reason": "D-118 sparse observations do not expose this event transition at source-step granularity"
+      },
+      "scheduled_client_point": {
+        "public-core": {
+          "clock": "source-step",
+          "attempt": 0,
+          "tick": 0
+        },
+        "sdl": {
+          "clock": "source-step",
+          "attempt": 0,
+          "tick": 0
+        }
+      },
+      "expected_guest_poll": {
+        "attempt": 0,
+        "tick": 2
+      },
+      "effective_mask": 8,
+      "hold_end": {
+        "next_event_id": "input-event-02"
+      },
+      "release_boundary": {
+        "at_next_declared_transition": true
+      },
+      "unknowns": [
+        "Exact MAME-consumed transition not retained for this row"
+      ]
+    },
+    {
+      "order": 2,
+      "control": "P1 Right",
+      "asserted": false,
+      "cases": [
+        "full-route",
+        "withhold-final-b"
+      ],
+      "source_target": {
+        "attempt": 0,
+        "tick": 22,
+        "field": 23,
+        "state": "active"
+      },
+      "consumer_dispatch": {
+        "clock": "source-step",
+        "attempt": 0,
+        "tick": 22
+      },
+      "consumed": {
+        "attempt": 0,
+        "tick": 23
+      },
+      "provenance": "input-program order 2; source poll follows completed marker",
+      "event_id": "input-event-02",
+      "original_event_index": 2,
+      "intent": "Set P1 Right released at its declared source point",
+      "clock_kind": "gameplay-source-step",
+      "source_locator": {
+        "path": "fixtures/phase5-b/input-program.json",
+        "revision": "459bf06",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "event_order": 2
+      },
+      "evidence_class": "independent-source-derivation",
+      "reference_request": {
+        "attempt": 0,
+        "tick": 22,
+        "field": 23,
+        "state": "active"
+      },
+      "reference_consumption": {
+        "status": "unknown",
+        "reason": "D-118 sparse observations do not expose this event transition at source-step granularity"
+      },
+      "scheduled_client_point": {
+        "public-core": {
+          "clock": "source-step",
+          "attempt": 0,
+          "tick": 22
+        },
+        "sdl": {
+          "clock": "source-step",
+          "attempt": 0,
+          "tick": 22
+        }
+      },
+      "expected_guest_poll": {
+        "attempt": 0,
+        "tick": 23
+      },
+      "effective_mask": 0,
+      "hold_end": {
+        "next_event_id": "input-event-03"
+      },
+      "release_boundary": {
+        "at_next_declared_transition": true
+      },
+      "unknowns": [
+        "Exact MAME-consumed transition not retained for this row"
+      ]
+    },
+    {
+      "order": 3,
+      "control": "P1 Right",
+      "asserted": true,
+      "cases": [
+        "full-route",
+        "withhold-first-plate",
+        "withhold-final-b"
+      ],
+      "source_target": {
+        "attempt": 1,
+        "tick": 0,
+        "field": 721,
+        "state": "active"
+      },
+      "consumer_dispatch": {
+        "clock": "source-step",
+        "attempt": 1,
+        "tick": 0
+      },
+      "consumed": {
+        "attempt": 1,
+        "tick": 2
+      },
+      "provenance": "input-program order 3; next poll after active marker",
+      "event_id": "input-event-03",
+      "original_event_index": 3,
+      "intent": "Set P1 Right pressed at its declared source point",
+      "clock_kind": "gameplay-source-step",
+      "source_locator": {
+        "path": "fixtures/phase5-b/input-program.json",
+        "revision": "459bf06",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "event_order": 3
+      },
+      "evidence_class": "independent-source-derivation",
+      "reference_request": {
+        "attempt": 1,
+        "tick": 0,
+        "field": 721,
+        "state": "active"
+      },
+      "reference_consumption": {
+        "status": "unknown",
+        "reason": "D-118 sparse observations do not expose this event transition at source-step granularity"
+      },
+      "scheduled_client_point": {
+        "public-core": {
+          "clock": "source-step",
+          "attempt": 1,
+          "tick": 0
+        },
+        "sdl": {
+          "clock": "source-step",
+          "attempt": 1,
+          "tick": 0
+        }
+      },
+      "expected_guest_poll": {
+        "attempt": 1,
+        "tick": 2
+      },
+      "effective_mask": 8,
+      "hold_end": {
+        "next_event_id": "input-event-04"
+      },
+      "release_boundary": {
+        "at_next_declared_transition": true
+      },
+      "unknowns": [
+        "Exact MAME-consumed transition not retained for this row"
+      ]
+    },
+    {
+      "order": 4,
+      "control": "P1 Right",
+      "asserted": false,
+      "cases": [
+        "full-route",
+        "withhold-first-plate",
+        "withhold-final-b"
+      ],
+      "source_target": {
+        "attempt": 1,
+        "tick": 22,
+        "field": 743,
+        "state": "active"
+      },
+      "consumer_dispatch": {
+        "clock": "source-step",
+        "attempt": 1,
+        "tick": 22
+      },
+      "consumed": {
+        "attempt": 1,
+        "tick": 23
+      },
+      "provenance": "input-program order 4; next poll after active marker",
+      "event_id": "input-event-04",
+      "original_event_index": 4,
+      "intent": "Set P1 Right released at its declared source point",
+      "clock_kind": "gameplay-source-step",
+      "source_locator": {
+        "path": "fixtures/phase5-b/input-program.json",
+        "revision": "459bf06",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "event_order": 4
+      },
+      "evidence_class": "independent-source-derivation",
+      "reference_request": {
+        "attempt": 1,
+        "tick": 22,
+        "field": 743,
+        "state": "active"
+      },
+      "reference_consumption": {
+        "status": "unknown",
+        "reason": "D-118 sparse observations do not expose this event transition at source-step granularity"
+      },
+      "scheduled_client_point": {
+        "public-core": {
+          "clock": "source-step",
+          "attempt": 1,
+          "tick": 22
+        },
+        "sdl": {
+          "clock": "source-step",
+          "attempt": 1,
+          "tick": 22
+        }
+      },
+      "expected_guest_poll": {
+        "attempt": 1,
+        "tick": 23
+      },
+      "effective_mask": 0,
+      "hold_end": {
+        "next_event_id": "input-event-05"
+      },
+      "release_boundary": {
+        "at_next_declared_transition": true
+      },
+      "unknowns": [
+        "Exact MAME-consumed transition not retained for this row"
+      ]
+    },
+    {
+      "order": 5,
+      "control": "P1 Right",
+      "asserted": true,
+      "cases": [
+        "full-route",
+        "withhold-first-plate",
+        "withhold-final-b"
+      ],
+      "source_target": {
+        "attempt": 2,
+        "tick": 0,
+        "field": 1441,
+        "state": "active"
+      },
+      "consumer_dispatch": {
+        "clock": "source-step",
+        "attempt": 2,
+        "tick": 0
+      },
+      "consumed": {
+        "attempt": 2,
+        "tick": 2
+      },
+      "provenance": "input-program order 5; next poll after active marker",
+      "event_id": "input-event-05",
+      "original_event_index": 5,
+      "intent": "Set P1 Right pressed at its declared source point",
+      "clock_kind": "gameplay-source-step",
+      "source_locator": {
+        "path": "fixtures/phase5-b/input-program.json",
+        "revision": "459bf06",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "event_order": 5
+      },
+      "evidence_class": "independent-source-derivation",
+      "reference_request": {
+        "attempt": 2,
+        "tick": 0,
+        "field": 1441,
+        "state": "active"
+      },
+      "reference_consumption": {
+        "status": "unknown",
+        "reason": "D-118 sparse observations do not expose this event transition at source-step granularity"
+      },
+      "scheduled_client_point": {
+        "public-core": {
+          "clock": "source-step",
+          "attempt": 2,
+          "tick": 0
+        },
+        "sdl": {
+          "clock": "source-step",
+          "attempt": 2,
+          "tick": 0
+        }
+      },
+      "expected_guest_poll": {
+        "attempt": 2,
+        "tick": 2
+      },
+      "effective_mask": 8,
+      "hold_end": {
+        "next_event_id": "input-event-06"
+      },
+      "release_boundary": {
+        "at_next_declared_transition": true
+      },
+      "unknowns": [
+        "Exact MAME-consumed transition not retained for this row"
+      ]
+    },
+    {
+      "order": 6,
+      "control": "P1 Right",
+      "asserted": false,
+      "cases": [
+        "full-route",
+        "withhold-first-plate",
+        "withhold-final-b"
+      ],
+      "source_target": {
+        "attempt": 2,
+        "tick": 22,
+        "field": 1463,
+        "state": "active"
+      },
+      "consumer_dispatch": {
+        "clock": "source-step",
+        "attempt": 2,
+        "tick": 22
+      },
+      "consumed": {
+        "attempt": 2,
+        "tick": 23
+      },
+      "provenance": "input-program order 6; next poll after active marker",
+      "event_id": "input-event-06",
+      "original_event_index": 6,
+      "intent": "Set P1 Right released at its declared source point",
+      "clock_kind": "gameplay-source-step",
+      "source_locator": {
+        "path": "fixtures/phase5-b/input-program.json",
+        "revision": "459bf06",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "event_order": 6
+      },
+      "evidence_class": "independent-source-derivation",
+      "reference_request": {
+        "attempt": 2,
+        "tick": 22,
+        "field": 1463,
+        "state": "active"
+      },
+      "reference_consumption": {
+        "status": "unknown",
+        "reason": "D-118 sparse observations do not expose this event transition at source-step granularity"
+      },
+      "scheduled_client_point": {
+        "public-core": {
+          "clock": "source-step",
+          "attempt": 2,
+          "tick": 22
+        },
+        "sdl": {
+          "clock": "source-step",
+          "attempt": 2,
+          "tick": 22
+        }
+      },
+      "expected_guest_poll": {
+        "attempt": 2,
+        "tick": 23
+      },
+      "effective_mask": 0,
+      "hold_end": {
+        "next_event_id": "input-event-07"
+      },
+      "release_boundary": {
+        "at_next_declared_transition": true
+      },
+      "unknowns": [
+        "Exact MAME-consumed transition not retained for this row"
+      ]
+    },
+    {
+      "order": 7,
+      "control": "P1 C",
+      "asserted": true,
+      "cases": [
+        "full-route",
+        "withhold-first-plate",
+        "withhold-final-b"
+      ],
+      "source_target": {
+        "attempt": 2,
+        "tick": 720,
+        "field": 2161,
+        "state": "terminal"
+      },
+      "consumer_dispatch": {
+        "clock": "paused-ui-state",
+        "attempt": 2,
+        "tick": 720,
+        "state": "terminal",
+        "dispatch_boundary": "completed-field-or-source-marker"
+      },
+      "consumed": {
+        "clock": "paused-ui-meta",
+        "attempt": 2,
+        "tick": 720,
+        "state": "terminal",
+        "completed_source_steps": 2160
+      },
+      "provenance": "Original source event supplies attempt/tick/state. GWRC events() gates these values after snapshot; meta-only field handling admits C while source steps are paused. Reference field is retained only in reference_request, not imposed on native startup/UI latency.",
+      "event_id": "input-event-07",
+      "original_event_index": 7,
+      "intent": "Set P1 C pressed at its declared source point",
+      "clock_kind": "paused-ui-state",
+      "source_locator": {
+        "path": "fixtures/phase5-b/input-program.json",
+        "revision": "459bf06",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "event_order": 7
+      },
+      "evidence_class": "independent-source-derivation",
+      "reference_request": {
+        "attempt": 2,
+        "tick": 720,
+        "field": 2161,
+        "state": "terminal"
+      },
+      "reference_consumption": {
+        "status": "unknown",
+        "reason": "D-118 sparse observations do not expose this event transition at source-step granularity"
+      },
+      "scheduled_client_point": {
+        "public-core": {
+          "clock": "paused-ui-state",
+          "attempt": 2,
+          "tick": 720,
+          "state": "terminal",
+          "dispatch_boundary": "completed-field-or-source-marker"
+        },
+        "sdl": {
+          "clock": "paused-ui-state",
+          "attempt": 2,
+          "tick": 720,
+          "state": "terminal",
+          "dispatch_boundary": "completed-field-or-source-marker"
+        }
+      },
+      "expected_guest_poll": {
+        "clock": "paused-ui-meta",
+        "attempt": 2,
+        "tick": 720,
+        "state": "terminal",
+        "completed_source_steps": 2160
+      },
+      "effective_mask": 32,
+      "hold_end": {
+        "next_event_id": "input-event-08"
+      },
+      "release_boundary": {
+        "at_next_declared_transition": true
+      },
+      "unknowns": [
+        "Exact independent reference C poll not retained; no native absolute field is predicted.",
+        "C release is evidenced by paused source count between terminal publication and next attempt, not by a fabricated gameplay poll."
+      ]
+    },
+    {
+      "order": 8,
+      "control": "P1 C",
+      "asserted": false,
+      "cases": [
+        "full-route",
+        "withhold-first-plate",
+        "withhold-final-b"
+      ],
+      "source_target": {
+        "attempt": 3,
+        "tick": 0,
+        "field": 2162,
+        "state": "active"
+      },
+      "consumer_dispatch": {
+        "clock": "paused-ui-state",
+        "attempt": 3,
+        "tick": 0,
+        "state": "active",
+        "dispatch_boundary": "completed-field-or-source-marker"
+      },
+      "consumed": {
+        "clock": "paused-ui-meta",
+        "attempt": 3,
+        "tick": 0,
+        "state": "active",
+        "completed_source_steps": 2160
+      },
+      "provenance": "Original source event supplies attempt/tick/state. GWRC events() gates these values after snapshot; meta-only field handling admits C while source steps are paused. Reference field is retained only in reference_request, not imposed on native startup/UI latency.",
+      "event_id": "input-event-08",
+      "original_event_index": 8,
+      "intent": "Set P1 C released at its declared source point",
+      "clock_kind": "paused-ui-state",
+      "source_locator": {
+        "path": "fixtures/phase5-b/input-program.json",
+        "revision": "459bf06",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "event_order": 8
+      },
+      "evidence_class": "independent-source-derivation",
+      "reference_request": {
+        "attempt": 3,
+        "tick": 0,
+        "field": 2162,
+        "state": "active"
+      },
+      "reference_consumption": {
+        "status": "unknown",
+        "reason": "D-118 sparse observations do not expose this event transition at source-step granularity"
+      },
+      "scheduled_client_point": {
+        "public-core": {
+          "clock": "paused-ui-state",
+          "attempt": 3,
+          "tick": 0,
+          "state": "active",
+          "dispatch_boundary": "completed-field-or-source-marker"
+        },
+        "sdl": {
+          "clock": "paused-ui-state",
+          "attempt": 3,
+          "tick": 0,
+          "state": "active",
+          "dispatch_boundary": "completed-field-or-source-marker"
+        }
+      },
+      "expected_guest_poll": {
+        "clock": "paused-ui-meta",
+        "attempt": 3,
+        "tick": 0,
+        "state": "active",
+        "completed_source_steps": 2160
+      },
+      "effective_mask": 0,
+      "hold_end": {
+        "next_event_id": "input-event-09"
+      },
+      "release_boundary": {
+        "at_next_declared_transition": true
+      },
+      "unknowns": [
+        "Exact independent reference C poll not retained; no native absolute field is predicted.",
+        "C release is evidenced by paused source count between terminal publication and next attempt, not by a fabricated gameplay poll."
+      ]
+    },
+    {
+      "order": 9,
+      "control": "P1 Right",
+      "asserted": true,
+      "cases": [
+        "full-route",
+        "withhold-first-plate",
+        "withhold-final-b"
+      ],
+      "source_target": {
+        "attempt": 3,
+        "tick": 0,
+        "field": 2163,
+        "state": "active"
+      },
+      "consumer_dispatch": {
+        "clock": "source-step",
+        "attempt": 3,
+        "tick": 0
+      },
+      "consumed": {
+        "attempt": 3,
+        "tick": 2
+      },
+      "provenance": "input-program order 9; active source poll after marker",
+      "event_id": "input-event-09",
+      "original_event_index": 9,
+      "intent": "Set P1 Right pressed at its declared source point",
+      "clock_kind": "gameplay-source-step",
+      "source_locator": {
+        "path": "fixtures/phase5-b/input-program.json",
+        "revision": "459bf06",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "event_order": 9
+      },
+      "evidence_class": "independent-source-derivation",
+      "reference_request": {
+        "attempt": 3,
+        "tick": 0,
+        "field": 2163,
+        "state": "active"
+      },
+      "reference_consumption": {
+        "status": "unknown",
+        "reason": "D-118 sparse observations do not expose this event transition at source-step granularity"
+      },
+      "scheduled_client_point": {
+        "public-core": {
+          "clock": "source-step",
+          "attempt": 3,
+          "tick": 0
+        },
+        "sdl": {
+          "clock": "source-step",
+          "attempt": 3,
+          "tick": 0
+        }
+      },
+      "expected_guest_poll": {
+        "attempt": 3,
+        "tick": 2
+      },
+      "effective_mask": 8,
+      "hold_end": {
+        "next_event_id": "input-event-10"
+      },
+      "release_boundary": {
+        "at_next_declared_transition": true
+      },
+      "unknowns": [
+        "Exact MAME-consumed transition not retained for this row"
+      ]
+    },
+    {
+      "order": 10,
+      "control": "P1 Right",
+      "asserted": false,
+      "cases": [
+        "full-route",
+        "withhold-first-plate",
+        "withhold-final-b"
+      ],
+      "source_target": {
+        "attempt": 3,
+        "tick": 22,
+        "field": 2183,
+        "state": "active"
+      },
+      "consumer_dispatch": {
+        "clock": "source-step",
+        "attempt": 3,
+        "tick": 22
+      },
+      "consumed": {
+        "attempt": 3,
+        "tick": 23
+      },
+      "provenance": "input-program order 10; active source poll after marker",
+      "event_id": "input-event-10",
+      "original_event_index": 10,
+      "intent": "Set P1 Right released at its declared source point",
+      "clock_kind": "gameplay-source-step",
+      "source_locator": {
+        "path": "fixtures/phase5-b/input-program.json",
+        "revision": "459bf06",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "event_order": 10
+      },
+      "evidence_class": "independent-source-derivation",
+      "reference_request": {
+        "attempt": 3,
+        "tick": 22,
+        "field": 2183,
+        "state": "active"
+      },
+      "reference_consumption": {
+        "status": "unknown",
+        "reason": "D-118 sparse observations do not expose this event transition at source-step granularity"
+      },
+      "scheduled_client_point": {
+        "public-core": {
+          "clock": "source-step",
+          "attempt": 3,
+          "tick": 22
+        },
+        "sdl": {
+          "clock": "source-step",
+          "attempt": 3,
+          "tick": 22
+        }
+      },
+      "expected_guest_poll": {
+        "attempt": 3,
+        "tick": 23
+      },
+      "effective_mask": 0,
+      "hold_end": {
+        "next_event_id": "input-event-11"
+      },
+      "release_boundary": {
+        "at_next_declared_transition": true
+      },
+      "unknowns": [
+        "Exact MAME-consumed transition not retained for this row"
+      ]
+    },
+    {
+      "order": 11,
+      "control": "P1 C",
+      "asserted": true,
+      "cases": [
+        "full-route",
+        "withhold-first-plate",
+        "withhold-final-b"
+      ],
+      "source_target": {
+        "attempt": 3,
+        "tick": 720,
+        "field": 2881,
+        "state": "terminal"
+      },
+      "consumer_dispatch": {
+        "clock": "paused-ui-state",
+        "attempt": 3,
+        "tick": 720,
+        "state": "terminal",
+        "dispatch_boundary": "completed-field-or-source-marker"
+      },
+      "consumed": {
+        "clock": "paused-ui-meta",
+        "attempt": 3,
+        "tick": 720,
+        "state": "terminal",
+        "completed_source_steps": 2880
+      },
+      "provenance": "Original source event supplies attempt/tick/state. GWRC events() gates these values after snapshot; meta-only field handling admits C while source steps are paused. Reference field is retained only in reference_request, not imposed on native startup/UI latency.",
+      "event_id": "input-event-11",
+      "original_event_index": 11,
+      "intent": "Set P1 C pressed at its declared source point",
+      "clock_kind": "paused-ui-state",
+      "source_locator": {
+        "path": "fixtures/phase5-b/input-program.json",
+        "revision": "459bf06",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "event_order": 11
+      },
+      "evidence_class": "independent-source-derivation",
+      "reference_request": {
+        "attempt": 3,
+        "tick": 720,
+        "field": 2881,
+        "state": "terminal"
+      },
+      "reference_consumption": {
+        "status": "unknown",
+        "reason": "D-118 sparse observations do not expose this event transition at source-step granularity"
+      },
+      "scheduled_client_point": {
+        "public-core": {
+          "clock": "paused-ui-state",
+          "attempt": 3,
+          "tick": 720,
+          "state": "terminal",
+          "dispatch_boundary": "completed-field-or-source-marker"
+        },
+        "sdl": {
+          "clock": "paused-ui-state",
+          "attempt": 3,
+          "tick": 720,
+          "state": "terminal",
+          "dispatch_boundary": "completed-field-or-source-marker"
+        }
+      },
+      "expected_guest_poll": {
+        "clock": "paused-ui-meta",
+        "attempt": 3,
+        "tick": 720,
+        "state": "terminal",
+        "completed_source_steps": 2880
+      },
+      "effective_mask": 32,
+      "hold_end": {
+        "next_event_id": "input-event-12"
+      },
+      "release_boundary": {
+        "at_next_declared_transition": true
+      },
+      "unknowns": [
+        "Exact independent reference C poll not retained; no native absolute field is predicted.",
+        "C release is evidenced by paused source count between terminal publication and next attempt, not by a fabricated gameplay poll."
+      ]
+    },
+    {
+      "order": 12,
+      "control": "P1 C",
+      "asserted": false,
+      "cases": [
+        "full-route",
+        "withhold-first-plate",
+        "withhold-final-b"
+      ],
+      "source_target": {
+        "attempt": 4,
+        "tick": 0,
+        "field": 2882,
+        "state": "active"
+      },
+      "consumer_dispatch": {
+        "clock": "paused-ui-state",
+        "attempt": 4,
+        "tick": 0,
+        "state": "active",
+        "dispatch_boundary": "completed-field-or-source-marker"
+      },
+      "consumed": {
+        "clock": "paused-ui-meta",
+        "attempt": 4,
+        "tick": 0,
+        "state": "active",
+        "completed_source_steps": 2880
+      },
+      "provenance": "Original source event supplies attempt/tick/state. GWRC events() gates these values after snapshot; meta-only field handling admits C while source steps are paused. Reference field is retained only in reference_request, not imposed on native startup/UI latency.",
+      "event_id": "input-event-12",
+      "original_event_index": 12,
+      "intent": "Set P1 C released at its declared source point",
+      "clock_kind": "paused-ui-state",
+      "source_locator": {
+        "path": "fixtures/phase5-b/input-program.json",
+        "revision": "459bf06",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "event_order": 12
+      },
+      "evidence_class": "independent-source-derivation",
+      "reference_request": {
+        "attempt": 4,
+        "tick": 0,
+        "field": 2882,
+        "state": "active"
+      },
+      "reference_consumption": {
+        "status": "unknown",
+        "reason": "D-118 sparse observations do not expose this event transition at source-step granularity"
+      },
+      "scheduled_client_point": {
+        "public-core": {
+          "clock": "paused-ui-state",
+          "attempt": 4,
+          "tick": 0,
+          "state": "active",
+          "dispatch_boundary": "completed-field-or-source-marker"
+        },
+        "sdl": {
+          "clock": "paused-ui-state",
+          "attempt": 4,
+          "tick": 0,
+          "state": "active",
+          "dispatch_boundary": "completed-field-or-source-marker"
+        }
+      },
+      "expected_guest_poll": {
+        "clock": "paused-ui-meta",
+        "attempt": 4,
+        "tick": 0,
+        "state": "active",
+        "completed_source_steps": 2880
+      },
+      "effective_mask": 0,
+      "hold_end": {
+        "next_event_id": "input-event-13"
+      },
+      "release_boundary": {
+        "at_next_declared_transition": true
+      },
+      "unknowns": [
+        "Exact independent reference C poll not retained; no native absolute field is predicted.",
+        "C release is evidenced by paused source count between terminal publication and next attempt, not by a fabricated gameplay poll."
+      ]
+    },
+    {
+      "order": 13,
+      "control": "P1 Up",
+      "asserted": true,
+      "cases": [
+        "full-route",
+        "withhold-first-plate",
+        "withhold-final-b"
+      ],
+      "source_target": {
+        "attempt": 4,
+        "tick": 0,
+        "field": 2883,
+        "state": "active"
+      },
+      "consumer_dispatch": {
+        "clock": "source-step",
+        "attempt": 4,
+        "tick": 0
+      },
+      "consumed": {
+        "attempt": 4,
+        "tick": 2
+      },
+      "provenance": "input-program order 13; active source poll after marker",
+      "event_id": "input-event-13",
+      "original_event_index": 13,
+      "intent": "Set P1 Up pressed at its declared source point",
+      "clock_kind": "gameplay-source-step",
+      "source_locator": {
+        "path": "fixtures/phase5-b/input-program.json",
+        "revision": "459bf06",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "event_order": 13
+      },
+      "evidence_class": "independent-source-derivation",
+      "reference_request": {
+        "attempt": 4,
+        "tick": 0,
+        "field": 2883,
+        "state": "active"
+      },
+      "reference_consumption": {
+        "status": "unknown",
+        "reason": "D-118 sparse observations do not expose this event transition at source-step granularity"
+      },
+      "scheduled_client_point": {
+        "public-core": {
+          "clock": "source-step",
+          "attempt": 4,
+          "tick": 0
+        },
+        "sdl": {
+          "clock": "source-step",
+          "attempt": 4,
+          "tick": 0
+        }
+      },
+      "expected_guest_poll": {
+        "attempt": 4,
+        "tick": 2
+      },
+      "effective_mask": 1,
+      "hold_end": {
+        "next_event_id": "input-event-14"
+      },
+      "release_boundary": {
+        "at_next_declared_transition": true
+      },
+      "unknowns": [
+        "Exact MAME-consumed transition not retained for this row"
+      ]
+    },
+    {
+      "order": 14,
+      "control": "P1 Up",
+      "asserted": false,
+      "cases": [
+        "full-route",
+        "withhold-first-plate",
+        "withhold-final-b"
+      ],
+      "source_target": {
+        "attempt": 4,
+        "tick": 4,
+        "field": 2887,
+        "state": "active"
+      },
+      "consumer_dispatch": {
+        "clock": "source-step",
+        "attempt": 4,
+        "tick": 4
+      },
+      "consumed": {
+        "attempt": 4,
+        "tick": 5
+      },
+      "provenance": "input-program order 14; active source poll after marker",
+      "event_id": "input-event-14",
+      "original_event_index": 14,
+      "intent": "Set P1 Up released at its declared source point",
+      "clock_kind": "gameplay-source-step",
+      "source_locator": {
+        "path": "fixtures/phase5-b/input-program.json",
+        "revision": "459bf06",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "event_order": 14
+      },
+      "evidence_class": "independent-source-derivation",
+      "reference_request": {
+        "attempt": 4,
+        "tick": 4,
+        "field": 2887,
+        "state": "active"
+      },
+      "reference_consumption": {
+        "status": "unknown",
+        "reason": "D-118 sparse observations do not expose this event transition at source-step granularity"
+      },
+      "scheduled_client_point": {
+        "public-core": {
+          "clock": "source-step",
+          "attempt": 4,
+          "tick": 4
+        },
+        "sdl": {
+          "clock": "source-step",
+          "attempt": 4,
+          "tick": 4
+        }
+      },
+      "expected_guest_poll": {
+        "attempt": 4,
+        "tick": 5
+      },
+      "effective_mask": 0,
+      "hold_end": {
+        "next_event_id": "input-event-15"
+      },
+      "release_boundary": {
+        "at_next_declared_transition": true
+      },
+      "unknowns": [
+        "Exact MAME-consumed transition not retained for this row"
+      ]
+    },
+    {
+      "order": 15,
+      "control": "P1 Right",
+      "asserted": true,
+      "cases": [
+        "full-route",
+        "withhold-first-plate",
+        "withhold-final-b"
+      ],
+      "source_target": {
+        "attempt": 4,
+        "tick": 500,
+        "field": 3383,
+        "state": "active"
+      },
+      "consumer_dispatch": {
+        "clock": "source-step",
+        "attempt": 4,
+        "tick": 500
+      },
+      "consumed": {
+        "attempt": 4,
+        "tick": 501
+      },
+      "provenance": "input-program order 15; active source poll after marker",
+      "event_id": "input-event-15",
+      "original_event_index": 15,
+      "intent": "Set P1 Right pressed at its declared source point",
+      "clock_kind": "gameplay-source-step",
+      "source_locator": {
+        "path": "fixtures/phase5-b/input-program.json",
+        "revision": "459bf06",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "event_order": 15
+      },
+      "evidence_class": "independent-source-derivation",
+      "reference_request": {
+        "attempt": 4,
+        "tick": 500,
+        "field": 3383,
+        "state": "active"
+      },
+      "reference_consumption": {
+        "status": "unknown",
+        "reason": "D-118 sparse observations do not expose this event transition at source-step granularity"
+      },
+      "scheduled_client_point": {
+        "public-core": {
+          "clock": "source-step",
+          "attempt": 4,
+          "tick": 500
+        },
+        "sdl": {
+          "clock": "source-step",
+          "attempt": 4,
+          "tick": 500
+        }
+      },
+      "expected_guest_poll": {
+        "attempt": 4,
+        "tick": 501
+      },
+      "effective_mask": 8,
+      "hold_end": {
+        "next_event_id": "input-event-16"
+      },
+      "release_boundary": {
+        "at_next_declared_transition": true
+      },
+      "unknowns": [
+        "Exact MAME-consumed transition not retained for this row"
+      ]
+    },
+    {
+      "order": 16,
+      "control": "P1 Right",
+      "asserted": false,
+      "cases": [
+        "full-route",
+        "withhold-first-plate",
+        "withhold-final-b"
+      ],
+      "source_target": {
+        "attempt": 4,
+        "tick": 671,
+        "field": 3554,
+        "state": "active"
+      },
+      "consumer_dispatch": {
+        "clock": "source-step",
+        "attempt": 4,
+        "tick": 671
+      },
+      "consumed": {
+        "attempt": 4,
+        "tick": 672
+      },
+      "provenance": "input-program order 16; active source poll after marker",
+      "event_id": "input-event-16",
+      "original_event_index": 16,
+      "intent": "Set P1 Right released at its declared source point",
+      "clock_kind": "gameplay-source-step",
+      "source_locator": {
+        "path": "fixtures/phase5-b/input-program.json",
+        "revision": "459bf06",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "event_order": 16
+      },
+      "evidence_class": "independent-source-derivation",
+      "reference_request": {
+        "attempt": 4,
+        "tick": 671,
+        "field": 3554,
+        "state": "active"
+      },
+      "reference_consumption": {
+        "status": "unknown",
+        "reason": "D-118 sparse observations do not expose this event transition at source-step granularity"
+      },
+      "scheduled_client_point": {
+        "public-core": {
+          "clock": "source-step",
+          "attempt": 4,
+          "tick": 671
+        },
+        "sdl": {
+          "clock": "source-step",
+          "attempt": 4,
+          "tick": 671
+        }
+      },
+      "expected_guest_poll": {
+        "attempt": 4,
+        "tick": 672
+      },
+      "effective_mask": 0,
+      "hold_end": {
+        "next_event_id": "input-event-17"
+      },
+      "release_boundary": {
+        "at_next_declared_transition": true
+      },
+      "unknowns": [
+        "Exact MAME-consumed transition not retained for this row"
+      ]
+    },
+    {
+      "order": 17,
+      "control": "P1 Down",
+      "asserted": true,
+      "cases": [
+        "full-route",
+        "withhold-first-plate",
+        "withhold-final-b"
+      ],
+      "source_target": {
+        "attempt": 4,
+        "tick": 671,
+        "field": 3555,
+        "state": "active"
+      },
+      "consumer_dispatch": {
+        "clock": "source-step",
+        "attempt": 4,
+        "tick": 671
+      },
+      "consumed": {
+        "attempt": 4,
+        "tick": 672
+      },
+      "provenance": "input-program order 17; simultaneous input state applied at same source clock as Right release",
+      "event_id": "input-event-17",
+      "original_event_index": 17,
+      "intent": "Set P1 Down pressed at its declared source point",
+      "clock_kind": "gameplay-source-step",
+      "source_locator": {
+        "path": "fixtures/phase5-b/input-program.json",
+        "revision": "459bf06",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "event_order": 17
+      },
+      "evidence_class": "independent-source-derivation",
+      "reference_request": {
+        "attempt": 4,
+        "tick": 671,
+        "field": 3555,
+        "state": "active"
+      },
+      "reference_consumption": {
+        "status": "unknown",
+        "reason": "D-118 sparse observations do not expose this event transition at source-step granularity"
+      },
+      "scheduled_client_point": {
+        "public-core": {
+          "clock": "source-step",
+          "attempt": 4,
+          "tick": 671
+        },
+        "sdl": {
+          "clock": "source-step",
+          "attempt": 4,
+          "tick": 671
+        }
+      },
+      "expected_guest_poll": {
+        "attempt": 4,
+        "tick": 672
+      },
+      "effective_mask": 2,
+      "hold_end": {
+        "next_event_id": "input-event-18"
+      },
+      "release_boundary": {
+        "at_next_declared_transition": true
+      },
+      "unknowns": [
+        "Exact MAME-consumed transition not retained for this row"
+      ]
+    },
+    {
+      "order": 18,
+      "control": "P1 Down",
+      "asserted": false,
+      "cases": [
+        "full-route",
+        "withhold-first-plate",
+        "withhold-final-b"
+      ],
+      "source_target": {
+        "attempt": 4,
+        "tick": 675,
+        "field": 3559,
+        "state": "active"
+      },
+      "consumer_dispatch": {
+        "clock": "source-step",
+        "attempt": 4,
+        "tick": 675
+      },
+      "consumed": {
+        "attempt": 4,
+        "tick": 676
+      },
+      "provenance": "input-program order 18; active source poll after marker",
+      "event_id": "input-event-18",
+      "original_event_index": 18,
+      "intent": "Set P1 Down released at its declared source point",
+      "clock_kind": "gameplay-source-step",
+      "source_locator": {
+        "path": "fixtures/phase5-b/input-program.json",
+        "revision": "459bf06",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "event_order": 18
+      },
+      "evidence_class": "independent-source-derivation",
+      "reference_request": {
+        "attempt": 4,
+        "tick": 675,
+        "field": 3559,
+        "state": "active"
+      },
+      "reference_consumption": {
+        "status": "unknown",
+        "reason": "D-118 sparse observations do not expose this event transition at source-step granularity"
+      },
+      "scheduled_client_point": {
+        "public-core": {
+          "clock": "source-step",
+          "attempt": 4,
+          "tick": 675
+        },
+        "sdl": {
+          "clock": "source-step",
+          "attempt": 4,
+          "tick": 675
+        }
+      },
+      "expected_guest_poll": {
+        "attempt": 4,
+        "tick": 676
+      },
+      "effective_mask": 0,
+      "hold_end": {
+        "next_event_id": "input-event-19"
+      },
+      "release_boundary": {
+        "at_next_declared_transition": true
+      },
+      "unknowns": [
+        "Exact MAME-consumed transition not retained for this row"
+      ]
+    },
+    {
+      "order": 19,
+      "control": "P1 B",
+      "asserted": true,
+      "cases": [
+        "full-route",
+        "withhold-first-plate"
+      ],
+      "source_target": {
+        "attempt": 4,
+        "tick": 695,
+        "field": 3577,
+        "state": "active"
+      },
+      "consumer_dispatch": {
+        "clock": "source-step",
+        "attempt": 4,
+        "tick": 696
+      },
+      "consumed": {
+        "attempt": 4,
+        "tick": 697
+      },
+      "provenance": "input-program order 19; retained MAME effective B begins at tick 697 and is held through 720; public-client dispatch after completed tick 696 makes following guest poll consume at 697",
+      "event_id": "input-event-19",
+      "original_event_index": 19,
+      "intent": "Set P1 B pressed at its declared source point",
+      "clock_kind": "gameplay-source-step",
+      "source_locator": {
+        "path": "fixtures/phase5-b/input-program.json",
+        "revision": "459bf06",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "event_order": 19
+      },
+      "evidence_class": "retained-observation",
+      "reference_request": {
+        "attempt": 4,
+        "tick": 695,
+        "field": 3577,
+        "state": "active"
+      },
+      "reference_consumption": {
+        "attempt": 4,
+        "ticks": [
+          697,
+          720
+        ],
+        "mask": 16,
+        "status": "retained-observation"
+      },
+      "scheduled_client_point": {
+        "public-core": {
+          "clock": "source-step",
+          "attempt": 4,
+          "tick": 696
+        },
+        "sdl": {
+          "clock": "source-step",
+          "attempt": 4,
+          "tick": 696
+        }
+      },
+      "expected_guest_poll": {
+        "attempt": 4,
+        "tick": 697
+      },
+      "effective_mask": 16,
+      "hold_end": {
+        "attempt": 4,
+        "tick": 720
+      },
+      "release_boundary": {
+        "cleanup": true
+      },
+      "unknowns": []
+    }
+  ],
+  "cleanup_release": {
+    "identity": "route-controller-cleanup-release",
+    "event_row": false,
+    "asserted": false,
+    "provenance": "Host controller cleanup after route completion; not one of the 19 declared source events.",
+    "event_id": "raw-cleanup-release",
+    "source_locator": "tools/session/route_controller.c:gw_route_controller_run cleanup",
+    "scheduled_client_point": "after controller completion",
+    "effective_mask": 0,
+    "evidence_class": "client-cleanup",
+    "unknowns": []
+  },
+  "limits": [
+    "Sparse D-118 observations are not represented as a complete transition trace.",
+    "No emulator hardware timing or MAME cache behavior is changed."
+  ],
+  "version": 1
+}
