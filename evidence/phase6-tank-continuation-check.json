@@ -1,0 +1,33 @@
+{
+  "schema": "phase6-tank-continuation-checked-v1",
+  "status": "blocked",
+  "independently_checked": false,
+  "receipt": "evidence/phase6-tank-continuation.json",
+  "receipt_sha256": "6cf716c12bab9c1e59bcbfd3508cb37d0c0510135c9f26d61590c1fa561f86d7",
+  "bridge_sha256": "6ff8254b4f072f7c29ee55e311f1703567291799636ddc60dc3b511c1762c0f7",
+  "review_check_sha256": "e4f70ecdf40f6eef0040867ba834d69148579a814a076ea0cff2cad367bdd025",
+  "checker": "tests/evidence/phase6_tank_continuation_contract.py",
+  "checker_sha256": "709f3b8afb0f569ad2e09e1b9f7b571470840838f388b670236368c56742958a",
+  "checker_command": "python3 -I tests/evidence/phase6_tank_continuation_contract.py --verify-receipt evidence/phase6-tank-continuation.json --acceptance-review .planning/phases/GW-06-shared-repairs-and-two-playable-routes/06-14-ACCEPTANCE-REVIEW.md --bridge evidence/phase6-tank-observer-bridge-d123-g02.json --proof-review .planning/phases/GW-06-shared-repairs-and-two-playable-routes/06-19-PROOF-REVIEW.md --build build/phase6 --output evidence/phase6-tank-continuation-check.json",
+  "checker_result": {
+    "exit_code": 1,
+    "status": "halted",
+    "reason": "FileNotFoundError: evidence/phase6-tank-observer-review-check.json",
+    "launches": 0
+  },
+  "target_attempts_before": 1,
+  "target_attempts_after": 1,
+  "target_attempts_remaining": 2,
+  "target_reservation": null,
+  "control_processes": 0,
+  "control_rows": 0,
+  "downstream_disposition": "Keep historical Plan11 halted and unsuccessful; 12/09/05/06/07 remain blocked. This receipt does not satisfy scheduling supersession or qualify either route.",
+  "review": {
+    "path": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/06-14-ACCEPTANCE-REVIEW.md",
+    "sha256": "d5d0b6df4100a22e9c5e2325cd41bdc30f69c2196b09af2cfde052b7fcfc5cb0",
+    "reviewer_role": "independent-reviewer",
+    "reviewer_identity": "gsd-code-reviewer:independent_14_halt_review",
+    "disposition": "halt-confirmed",
+    "status": "independently-reviewed-halt"
+  }
+}

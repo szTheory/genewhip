@@ -1,0 +1,17 @@
+{
+  "bridge_file_sha256": "dfc5b5745897697a5d28bfef408bbef8ec0d7ddd3c4a1785e793a287b0b2e0c8",
+  "bridge_path": "evidence/phase6-tank-observer-bridge-d125-g22-03.json",
+  "bridge_sha256": "a1708376b527e4a3da338bcfa5e5a448b99bc0b1724faf6bafaf7bce5cd27034",
+  "check_sha256": "82b89f5383535e3946f75bd1ad7b582861111c0827d58fc39051c99e912ca0e7",
+  "checker_sha256": "ac79ce93c55b2ea49de1dcc4533364f1a4db0efba14c24a91cffa951d5f79f1a",
+  "launches": 0,
+  "recovery_owner": "06-22",
+  "review_path": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/06-22-PROOF-REVIEW-G03.md",
+  "review_sha256": "5101b58b963ff6d20893c72507036e88676afdee61b4659513ba956f943a9108",
+  "reviewer_identity": "/root/execute_d125_owner22/component22_review",
+  "reviewer_role": "gsd-code-reviewer",
+  "schema": "phase6-d125-observer-review-check-v1",
+  "source_identity": "efdc0d268650f18edf6dab1d3748993ca3deb46288eea6029164ad219491d475",
+  "status": "accepted",
+  "trusted_handoff_sha256": "7c74b379078e3b6418f390624c91b592525840d97e4cb3388fa3e71bd8585084"
+}

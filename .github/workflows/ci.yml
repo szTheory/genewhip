@@ -7,8 +7,30 @@ on:
   schedule:
     - cron: '23 5 * * 1'
   workflow_dispatch:
+    inputs:
+      qualification_started_at:
+        description: Immutable UTC start from the delivery journal
+        required: true
+        type: string
+      qualification_base_sha:
+        description: Public main parent recorded by the delivery journal
+        required: true
+        type: string
+      qualification_nonce:
+        description: Unique coordinator dispatch identity
+        required: true
+        type: string
+run-name: ${{ github.event_name == 'workflow_dispatch' && format('Plan10 qualification {0}', inputs.qualification_nonce) || github.workflow }}
 permissions:
   contents: read
+  actions: read
+env:
+  # Hosted jobs own their child groups; imported/local tests must opt in.
+  GENEWHIP_PROCESS_CONTEXT: host-cleanup-v1
+  GENEWHIP_QUALIFICATION_STARTED_AT: ${{ inputs.qualification_started_at }}
+  GENEWHIP_QUALIFICATION_NONCE: ${{ inputs.qualification_nonce }}
+  GENEWHIP_QUALIFICATION_PHASE: preparation
+  GITHUB_BASE_SHA: ${{ inputs.qualification_base_sha || github.event.before || github.sha }}
 concurrency:
   group: preview-ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
@@ -20,12 +42,14 @@ jobs:
     outputs:
       source_sha: ${{ github.sha }}
       head_sha: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
-      base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || github.sha }}
+      base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || inputs.qualification_base_sha || github.event.before || github.sha }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
           fetch-depth: 0
+      - uses: ./.github/actions/qualification-clock
+        with: {phase: preparation}
       - name: Verify event integration checkout
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Prepare pinned evidence dependencies
@@ -49,12 +73,14 @@ jobs:
     outputs:
       source_sha: ${{ github.sha }}
       head_sha: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
-      base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || github.sha }}
+      base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || inputs.qualification_base_sha || github.event.before || github.sha }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
           fetch-depth: 0
+      - uses: ./.github/actions/qualification-clock
+        with: {phase: preparation}
       - name: Verify event integration checkout
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Build current public clients
@@ -73,6 +99,61 @@ jobs:
           --report build/gameplay/evidence/phase4-gameplay.json
       - name: Check report and named gameplay mutations
         run: python3 tests/evidence/phase4_report_contract.py
+  product-smoke:
+    if: github.event_name != 'schedule'
+    runs-on: macos-26
+    timeout-minutes: 45
+    outputs:
+      source_sha: ${{ github.sha }}
+      head_sha: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+      base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || inputs.qualification_base_sha || github.event.before || github.sha }}
+      run_id: ${{ github.run_id }}
+      run_attempt: ${{ github.run_attempt }}
+      event_name: ${{ github.event_name }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/qualification-clock
+        with: {phase: preparation}
+      - name: Verify event integration checkout
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Prepare pinned evidence dependencies
+        run: bash scripts/ci/prepare_evidence_dependencies.sh
+      - name: Build current public clients
+        run: |
+          cmake -S . -B build/v02/product-smoke -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=ON
+          cmake --build build/v02/product-smoke --parallel 2
+      - name: Run bounded current two-title core and software SDL smoke
+        run: >-
+          python3 -I scripts/evidence/v02_run.py --mode smoke
+          --build build/v02/product-smoke --scope evidence/v02-execution.json
+          --out build/v02/product-smoke/smoke.json
+      - name: Require actual title paths, cleanup and source identity
+        run: python3 -I tests/evidence/v02_execution_contract.py --contracts
+  phase7-fast:
+    if: github.event_name != 'schedule'
+    runs-on: macos-26
+    timeout-minutes: 30
+    outputs:
+      source_sha: ${{ github.sha }}
+      head_sha: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+      base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || inputs.qualification_base_sha || github.event.before || github.sha }}
+      run_id: ${{ github.run_id }}
+      run_attempt: ${{ github.run_attempt }}
+      event_name: ${{ github.event_name }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/qualification-clock
+        with: {phase: preparation}
+      - name: Verify event integration checkout
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Run v0.2 semantic, privacy, rights and delivery controls
+        run: bash scripts/ci/required-gate.sh --phase7-fast
   desktop:
     if: github.event_name != 'schedule'
     runs-on: macos-26
@@ -80,12 +161,14 @@ jobs:
     outputs:
       source_sha: ${{ github.sha }}
       head_sha: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
-      base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || github.sha }}
+      base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || inputs.qualification_base_sha || github.event.before || github.sha }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
           fetch-depth: 0
+      - uses: ./.github/actions/qualification-clock
+        with: {phase: preparation}
       - name: Verify event integration checkout
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Prepare pinned evidence dependencies
@@ -130,27 +213,38 @@ jobs:
     timeout-minutes: 120
     permissions:
       contents: read
+      actions: read
+    env:
+      GENEWHIP_QUALIFICATION_PHASE: package
     outputs:
       source_sha: ${{ github.sha }}
       head_sha: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
-      base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || github.sha }}
+      base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || inputs.qualification_base_sha || github.event.before || github.sha }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
           fetch-depth: 0
+      - uses: ./.github/actions/qualification-clock
+        with: {phase: package}
       - name: Verify event integration checkout
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-      - run: python3 scripts/package_sdk.py
-      - run: python3 scripts/package_desktop.py
-      - run: python3 tests/package/docs_commands.py --local-artifacts artifacts
+      - if: github.event_name != 'workflow_dispatch'
+        run: python3 scripts/package_sdk.py
+      - if: github.event_name != 'workflow_dispatch'
+        run: python3 scripts/package_desktop.py
+      - if: github.event_name != 'workflow_dispatch'
+        run: python3 tests/package/docs_commands.py --local-artifacts artifacts
       - name: Assemble exact qualified package inventory
+        if: github.event_name != 'workflow_dispatch'
         run: >-
           python3 scripts/release/promote.py prepare
           --input-dir artifacts --output-dir build/release-assets --source-sha "$GITHUB_SHA"
       - name: Bind package inputs to this workflow run
+        if: github.event_name != 'workflow_dispatch'
         run: python3 scripts/ci/verify_attestation_inputs.py write-identity --directory build/ci-identity
       - name: Export immutable run and attempt scoped package inputs
+        if: github.event_name != 'workflow_dispatch'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-input-${{ github.run_id }}-${{ github.run_attempt }}
@@ -164,31 +258,40 @@ jobs:
           compression-level: 0
           retention-days: 30
       - name: Export run identity separately from release files
+        if: github.event_name != 'workflow_dispatch'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-identity-${{ github.run_id }}-${{ github.run_attempt }}
           path: build/ci-identity/_ci-identity.json
           if-no-files-found: error
           retention-days: 30
+      - name: Use qualified v0.2 release inputs on dispatch
+        if: github.event_name == 'workflow_dispatch'
+        run: test -n "$GITHUB_SHA"
   attestation:
     name: attestation
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [package]
+    if: always() && ((github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.package.result == 'success') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.package.result == 'success' && needs.v02-release-qualification.result == 'success'))
+    needs: [package, v02-package, v02-release-qualification]
     runs-on: macos-26
     timeout-minutes: 15
     permissions:
       contents: read
+      actions: read
       attestations: write
       id-token: write
+    env:
+      GENEWHIP_QUALIFICATION_PHASE: package
     outputs:
       source_sha: ${{ github.sha }}
       head_sha: ${{ github.sha }}
-      base_sha: ${{ github.event.before || github.sha }}
+      base_sha: ${{ inputs.qualification_base_sha || github.event.before || github.sha }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
           fetch-depth: 0
+      - uses: ./.github/actions/qualification-clock
+        with: {phase: package}
       - name: Download immutable package data from this run attempt
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -214,12 +317,14 @@ jobs:
     outputs:
       source_sha: ${{ github.sha }}
       head_sha: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
-      base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || github.sha }}
+      base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || inputs.qualification_base_sha || github.event.before || github.sha }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
           fetch-depth: 0
+      - uses: ./.github/actions/qualification-clock
+        with: {phase: preparation}
       - name: Verify event integration checkout
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Build optimized benchmark with private accounting hooks
@@ -232,19 +337,271 @@ jobs:
         run: >-
           python3 tools/evidence/core_benchmark.py --build build/performance
           --out build/performance/ci-quick-report.json --quick
-  required-aggregate:
-    name: required-ci
-    if: always() && github.event_name != 'schedule'
-    needs: [safety, gameplay, desktop, package, performance, attestation]
+  v02-runtime:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-26
-    timeout-minutes: 5
-    permissions:
-      contents: read
+    timeout-minutes: 360
+    env:
+      GENEWHIP_QUALIFICATION_PHASE: runtime
+      GITHUB_BASE_SHA: ${{ inputs.qualification_base_sha }}
+    outputs:
+      source_sha: ${{ github.sha }}
+      head_sha: ${{ github.sha }}
+      base_sha: ${{ inputs.qualification_base_sha || github.event.before || github.sha }}
+      run_id: ${{ github.run_id }}
+      run_attempt: ${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
           fetch-depth: 0
+      - uses: ./.github/actions/qualification-clock
+        with: {phase: runtime}
+      - name: Verify exact source checkout
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Prepare pinned evidence dependencies
+        run: bash scripts/ci/prepare_evidence_dependencies.sh
+      - name: Build identified debug clients and safety roster
+        run: |
+          mkdir -p build/v02
+          cmake -S . -B build/v02/runtime-build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=ON -DGENEWHIP_TEST_HOOKS=ON
+          cmake --build build/v02/runtime-build --parallel 2
+      - name: Run complete current-source product safety and chunk roster
+        run: >-
+          python3 -I scripts/release/v02_qualification.py --mode runtime
+          --build build/v02/runtime-build --scope evidence/v02-execution.json
+          --out build/v02/runtime-observation.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v02-runtime-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/v02/runtime-transfer/payload/build/v02/**
+            build/v02/runtime-transfer/inventory.json
+          if-no-files-found: error
+          retention-days: 30
+  v02-benchmark-control:
+    # Explicit needs chain below keeps all three workload benchmarks serial (max-parallel: 1).
+    if: github.event_name == 'workflow_dispatch'
+    needs: [v02-runtime]
+    runs-on: macos-26
+    timeout-minutes: 240
+    env:
+      GENEWHIP_QUALIFICATION_PHASE: runtime
+      GITHUB_BASE_SHA: ${{ inputs.qualification_base_sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false, fetch-depth: 0}
+      - uses: ./.github/actions/qualification-clock
+        with: {phase: runtime}
+      - name: Verify exact benchmark source checkout
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - run: cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=ON -DGENEWHIP_TEST_HOOKS=ON
+      - run: cmake --build build/v02/benchmark --parallel 2
+      - run: python3 -I tools/evidence/core_benchmark.py --build build/v02/benchmark --workload control --scope evidence/v02-execution.json --out build/v02/benchmark-control.json
+      - name: Validate public benchmark transfer before upload
+        run: python3 -I scripts/release/v02_transfer.py benchmark --report build/v02/benchmark-control.json --workload control --scope evidence/v02-execution.json --source-sha "$GITHUB_SHA" --head-sha "$GITHUB_SHA" --base-sha "$GITHUB_BASE_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v02-benchmark-control-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/v02/benchmark-control.json
+          if-no-files-found: error
+          retention-days: 30
+  v02-benchmark-recursion94:
+    if: github.event_name == 'workflow_dispatch'
+    needs: [v02-benchmark-control]
+    runs-on: macos-26
+    timeout-minutes: 240
+    env:
+      GENEWHIP_QUALIFICATION_PHASE: runtime
+      GITHUB_BASE_SHA: ${{ inputs.qualification_base_sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false, fetch-depth: 0}
+      - uses: ./.github/actions/qualification-clock
+        with: {phase: runtime}
+      - name: Verify exact benchmark source checkout
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - run: cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=ON -DGENEWHIP_TEST_HOOKS=ON
+      - run: cmake --build build/v02/benchmark --parallel 2
+      - run: python3 -I tools/evidence/core_benchmark.py --build build/v02/benchmark --workload recursion94 --scope evidence/v02-execution.json --out build/v02/benchmark-recursion94.json
+      - name: Validate public benchmark transfer before upload
+        run: python3 -I scripts/release/v02_transfer.py benchmark --report build/v02/benchmark-recursion94.json --workload recursion94 --scope evidence/v02-execution.json --source-sha "$GITHUB_SHA" --head-sha "$GITHUB_SHA" --base-sha "$GITHUB_BASE_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v02-benchmark-recursion94-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/v02/benchmark-recursion94.json
+          if-no-files-found: error
+          retention-days: 30
+  v02-benchmark-tank-battle:
+    if: github.event_name == 'workflow_dispatch'
+    needs: [v02-benchmark-recursion94]
+    runs-on: macos-26
+    timeout-minutes: 240
+    env:
+      GENEWHIP_QUALIFICATION_PHASE: runtime
+      GITHUB_BASE_SHA: ${{ inputs.qualification_base_sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false, fetch-depth: 0}
+      - uses: ./.github/actions/qualification-clock
+        with: {phase: runtime}
+      - name: Verify exact benchmark source checkout
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - run: cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=ON -DGENEWHIP_TEST_HOOKS=ON
+      - run: cmake --build build/v02/benchmark --parallel 2
+      - run: python3 -I tools/evidence/core_benchmark.py --build build/v02/benchmark --workload tank-battle --scope evidence/v02-execution.json --out build/v02/benchmark-tank-battle.json
+      - name: Validate public benchmark transfer before upload
+        run: python3 -I scripts/release/v02_transfer.py benchmark --report build/v02/benchmark-tank-battle.json --workload tank-battle --scope evidence/v02-execution.json --source-sha "$GITHUB_SHA" --head-sha "$GITHUB_SHA" --base-sha "$GITHUB_BASE_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v02-benchmark-tank-battle-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/v02/benchmark-tank-battle.json
+          if-no-files-found: error
+          retention-days: 30
+  v02-package:
+    if: github.event_name == 'workflow_dispatch'
+    needs: [v02-runtime, v02-benchmark-control, v02-benchmark-recursion94, v02-benchmark-tank-battle]
+    runs-on: macos-26
+    timeout-minutes: 240
+    env:
+      GENEWHIP_QUALIFICATION_PHASE: package
+      GITHUB_BASE_SHA: ${{ inputs.qualification_base_sha }}
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false, fetch-depth: 0}
+      - uses: ./.github/actions/qualification-clock
+        with: {phase: package}
+      - name: Download exact runtime attempt
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: v02-runtime-${{ github.run_id }}-${{ github.run_attempt }}
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          path: build/v02/runtime-transfer
+      - name: Download exact control benchmark attempt
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: v02-benchmark-control-${{ github.run_id }}-${{ github.run_attempt }}
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          path: build/v02/collected/benchmark-control
+      - name: Download exact recursion94 benchmark attempt
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: v02-benchmark-recursion94-${{ github.run_id }}-${{ github.run_attempt }}
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          path: build/v02/collected/benchmark-recursion94
+      - name: Download exact tank-battle benchmark attempt
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: v02-benchmark-tank-battle-${{ github.run_id }}-${{ github.run_attempt }}
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          path: build/v02/collected/benchmark-tank-battle
+      - name: Verify and install the bounded runtime transfer
+        run: >-
+          python3 -I scripts/release/v02_transfer.py install
+          --payload build/v02/runtime-transfer/payload
+          --inventory build/v02/runtime-transfer/inventory.json --root .
+      - name: Require exact runtime projection before actual package builders
+        run: >-
+          test -f build/v02/public/manifest.json &&
+          python3 -I scripts/evidence/v02_matrix.py verify --public-closure
+          --root build/v02/public --independent-roster evidence/v02-roster.json
+          --current-execution-identity build/v02/runtime-identity.json
+      - name: Build and verify exact v0.2 archives and local documentation
+        run: >-
+          python3 -I scripts/release/v02_qualification.py --mode package
+          --public-evidence build/v02/public --out artifacts/v02
+      - name: Validate bounded package and dimension transfer before upload
+        run: python3 -I scripts/release/v02_transfer.py prepare-package --root . --out build/v02/package-transfer --source-sha "$GITHUB_SHA"
+      - name: Bind exact v0.2 release inputs to this workflow run
+        if: github.event_name == 'workflow_dispatch'
+        run: python3 scripts/ci/verify_attestation_inputs.py write-identity --directory build/ci-identity
+      - name: Export the tested v0.2 release-input bytes
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-input-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/v02/package-transfer/payload/artifacts/release-assets/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Export v0.2 run identity separately from release files
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-identity-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/ci-identity/_ci-identity.json
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v02-package-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/v02/package-transfer/payload/**
+            build/v02/package-transfer/inventory.json
+          if-no-files-found: error
+          retention-days: 30
+  v02-release-qualification:
+    if: github.event_name == 'workflow_dispatch'
+    needs: [v02-runtime, v02-benchmark-control, v02-benchmark-recursion94, v02-benchmark-tank-battle, v02-package]
+    runs-on: macos-26
+    timeout-minutes: 15
+    env:
+      GENEWHIP_QUALIFICATION_PHASE: package
+      GITHUB_BASE_SHA: ${{ inputs.qualification_base_sha }}
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      source_sha: ${{ github.sha }}
+      head_sha: ${{ github.sha }}
+      base_sha: ${{ inputs.qualification_base_sha || github.event.before || github.sha }}
+      run_id: ${{ github.run_id }}
+      run_attempt: ${{ github.run_attempt }}
+      event_name: ${{ github.event_name }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false, fetch-depth: 0}
+      - uses: ./.github/actions/qualification-clock
+        with: {phase: package}
+      - name: Download exact package and dimension attempt
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: v02-package-${{ github.run_id }}-${{ github.run_attempt }}
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          path: build/v02/package-transfer
+      - name: Verify and install bounded package transfer
+        run: python3 -I scripts/release/v02_transfer.py install-package --payload build/v02/package-transfer/payload --inventory build/v02/package-transfer/inventory.json --root . --source-sha "$GITHUB_SHA"
+      - name: Validate all exact-source dimension receipts
+        run: python3 -I scripts/release/v02_qualification.py --mode validate --evidence build/v02/qualification-dimensions.json --out build/v02/final-close.json
+  required-aggregate:
+    name: required-ci
+    if: always() && github.event_name != 'schedule'
+    needs: [safety, gameplay, desktop, package, performance, product-smoke, phase7-fast, v02-release-qualification, attestation]
+    runs-on: macos-26
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/qualification-clock
+        with: {phase: preparation}
       - name: Verify aggregate source checkout
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Reject incomplete or stale required lanes
@@ -254,10 +611,12 @@ jobs:
           EVENT_REF: ${{ github.ref }}
           EXPECTED_SOURCE_SHA: ${{ github.sha }}
           EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
-          EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || github.sha }}
+          EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || inputs.qualification_base_sha || github.event.before || github.sha }}
+          EXPECTED_RUN_ID: ${{ github.run_id }}
+          EXPECTED_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: python3 scripts/ci/aggregate.py
   extended:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'schedule'
     runs-on: macos-26
     timeout-minutes: 90
     steps:

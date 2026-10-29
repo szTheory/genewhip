@@ -1,0 +1,72 @@
+{
+  "client_binary_sha256": null,
+  "command": [
+    "build/phase6/tools/session/gw_headless",
+    "--route-plan",
+    "<compiled-full-route>",
+    "--route-report",
+    "<native-report>",
+    "fixtures/phase5-b/game.bin"
+  ],
+  "compiled_sha256": "9e5662277940f80abfd76a6e9c60292f4991f1b03f91480dd35c42acb7b5ebf7",
+  "identity_limit": "Binary digest was not captured before rebuild; production CPU source was unchanged from5536160. No later binary digest is substituted.",
+  "report": {
+    "active_ticks": 0,
+    "audio_complete": true,
+    "audio_frames": 0,
+    "audio_open": false,
+    "boundary_calls": 98739,
+    "fields": 9,
+    "final_tick": 8529990,
+    "first_stop_tick": 8529990,
+    "handler": "headless",
+    "inputs": [],
+    "instruction_address": 6178,
+    "opcode": 18663,
+    "plan_fnv1a64": "f608e502c4832003",
+    "predicates": [
+      {
+        "clock": 0,
+        "reached": false,
+        "value": 0
+      },
+      {
+        "clock": 0,
+        "reached": false,
+        "value": 0
+      },
+      {
+        "clock": 0,
+        "reached": false,
+        "value": 0
+      },
+      {
+        "clock": 0,
+        "reached": false,
+        "value": 0
+      }
+    ],
+    "queue_high_water": 0,
+    "render_requested": false,
+    "render_tick": 0,
+    "samples": [],
+    "schema": "genewhip-route-native-v1",
+    "status": 9,
+    "stop_reason": 2
+  },
+  "runs": [
+    {
+      "bound_violation": false,
+      "client": "headless",
+      "report_bytes": 572,
+      "report_schema": "genewhip-route-native-v1",
+      "report_status": 9,
+      "return_code": 1,
+      "stderr_bytes": 0,
+      "stdout_bytes": 46,
+      "wall_seconds": 0.025973000039812177
+    }
+  ],
+  "schema": "genewhip-phase6-movem-pre-v1",
+  "source_head": "5536160"
+}

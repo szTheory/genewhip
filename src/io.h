@@ -13,6 +13,7 @@ typedef struct gw_io {
     uint8_t data[GW_IO_PORTS];
     uint8_t ctrl[GW_IO_PORTS];
     uint8_t buttons[GW_IO_PORTS];
+    uint8_t ext_data, ext_ctrl; /* On-chip GPIO only; no third host peripheral. */
 } gw_io;
 
 /* Cold init clears latches and held buttons and takes devices from the config;

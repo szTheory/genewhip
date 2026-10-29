@@ -1,0 +1,185 @@
+{
+  "assessment": {
+    "acceptance_physical_fields_max": 7200,
+    "acceptance_source_steps_required": 3600,
+    "all_original_predicates_reached": true,
+    "cpu_or_bus_defect_indicated": false,
+    "current_cause": "The selected descriptor includes the .program_stable completed-write marker, which the controller counts. The final B event dispatches after attempt4/tick695; the following tick696 poll has source/engine/gameplay B input held, which remains held through terminal tick719 after 24 consumed steps. The frozen scenario predicts completion at tick720. The actual run therefore remains one observed source step short; no earlier event-to-poll mismatch or CPU/bus defect is indicated.",
+    "field_bound_met": true,
+    "historical_plan48_3599_cause": "unknown; this fresh Plan49 observation does not rewrite historical Plan48 evidence.",
+    "qualification": "rejected/partial; no six-run final qualification started",
+    "step_acceptance_met": false
+  },
+  "attempt_id": "rec-02-tracer-full-route",
+  "candidate_id": "d3a0ced5957413175f88",
+  "case_id": "full-route",
+  "causal_chain": {
+    "artifact": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/49-evidence/causal-06/causal.json",
+    "effective_masks_after_dispatch": [
+      8,
+      0,
+      0
+    ],
+    "events": 3,
+    "guest": "public-core poll -> latch -> completed marker -> event -> next poll",
+    "latch_words": [
+      127,
+      119,
+      127
+    ],
+    "process_started_exit_reaped": [
+      true,
+      0,
+      true
+    ],
+    "queue_high_water": 1,
+    "runtime_reconciliation": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/49-evidence/causal-06/runtime-reconciliation.json",
+    "status": "pass",
+    "unknown_call_and_field_reservations_retained": true
+  },
+  "descriptor_sha256": "75a881d36aaf64ec1b09d77404d8de1179e96b35bef7f5db1693d2f4cd94a27b",
+  "diagnostics": {
+    "audio_complete_flag": true,
+    "audio_frames": 0,
+    "media_comparison": "not performed; renderer pixels and PCM are not established by these flags",
+    "render_requested": true,
+    "render_tick": 3226754607
+  },
+  "final_b_correspondence": {
+    "artifact": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/49-evidence/rec02-final-b-correspondence.json",
+    "dispatch": {
+      "active_ticks": 3575,
+      "attempt": 4,
+      "desired_mask": 16,
+      "effective_mask": 16,
+      "input_row": 19,
+      "tick": 695
+    },
+    "next_poll": {
+      "engine_input_held": 32,
+      "gameplay_current_input": 32,
+      "source_input_held": 32,
+      "tick": 696
+    },
+    "observer_fix_indicated": false,
+    "scenario_expected_terminal_tick": 720,
+    "sha256": "6c993efdae37686dadc821a1657b408650f6b66ef0ba803b8ab429a959438e49",
+    "terminal": {
+      "active_ticks": 3599,
+      "held_b_steps": 24,
+      "state": "terminal",
+      "tick": 719
+    }
+  },
+  "fixture_sha256": {
+    "build/phase6-49/native/tools/session/gw_headless": "b90931ee8c32e5cdc494f8a814d7a0c9e8a004e993c7c3da627fc331e1f99d68",
+    "fixtures/phase5-b/game.bin": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff",
+    "fixtures/phase5-b/input-program.json": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+    "fixtures/phase5-b/oracle.json": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389",
+    "fixtures/phase5-b/scenario.json": "31e9c22129a6ce1b3ac2d1980c325e86bfbefb4e2fda85ae018c311e2cb40700",
+    "fixtures/phase5-b/source.tar": "d6302d23168fb7e20e643c97eed0c694ef702b23cea0b26897e0bb8152e3ad1b"
+  },
+  "historical_unknown_preserved": true,
+  "input_oracle_identity": {
+    "input_program_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+    "input_sha256": "67e81e5dbab490c621948b84cc8cc3bd6ef7ab98e7baeaa6a30febb621749bef",
+    "oracle_sha256": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389",
+    "rom_sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff",
+    "scenario_sha256": "31e9c22129a6ce1b3ac2d1980c325e86bfbefb4e2fda85ae018c311e2cb40700"
+  },
+  "observed": {
+    "boundary_calls": 61563024,
+    "completed_source_steps": 3599,
+    "dispatched_events": 20,
+    "final_source_state": {
+      "active_ticks": 3599,
+      "attempt": 4,
+      "field": 3630,
+      "state": 2,
+      "state_name": "terminal",
+      "tick": 719
+    },
+    "final_tick": 6451358040,
+    "first_stop_tick": null,
+    "instruction_address": 862,
+    "opcode": 20082,
+    "physical_fields": 7200,
+    "predicates": [
+      {
+        "clock": 17,
+        "reached": true,
+        "value": 1
+      },
+      {
+        "clock": 1441,
+        "reached": true,
+        "value": 2
+      },
+      {
+        "clock": 3530,
+        "reached": true,
+        "value": 1
+      },
+      {
+        "clock": 3599,
+        "reached": true,
+        "value": 1
+      }
+    ],
+    "queue_high_water": 2,
+    "stop_name": "GW_STOP_FIELD_COMPLETE",
+    "stop_reason": 5,
+    "termination": "error"
+  },
+  "pending": {
+    "affected_tank_assessment": true,
+    "conditional_control_refresh": true,
+    "full_phase_security_and_chunk_determinism": true,
+    "host_actual_display": true,
+    "phase6_requirements_complete": false,
+    "recursion_pcm_and_frame_comparison": true,
+    "six_final_rec_runs": 6
+  },
+  "plan": "06-49",
+  "process": {
+    "exit_code": 1,
+    "reaped": true,
+    "started": true,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout_sha256": "a01336f03bcd343a049b7a7ba6ad24e7d81ad8b30f6e9b461c46d2ef6b9c3d18",
+    "wall_seconds": 27.467567083076574
+  },
+  "schema": "genewhip-plan49-recursion94-partial-result-v1",
+  "selected_limits": {
+    "boundary_calls": 100000000,
+    "events": 64,
+    "physical_fields": 7200,
+    "source_steps": 3600,
+    "wall_seconds": 600
+  },
+  "source_sha256": {
+    "docs/core.md": "e719ffbefedbe3726a2c374c0cc857d008b1d40983f8fab0fc10f572e9657699",
+    "docs/cpu.md": "92d8699221891efecb9fb46a90616dea7d147918c2b1fadde51286c76e5e3cb8",
+    "include/genewhip/genewhip.h": "fae8cbfb3b0e5e3e7f41063eaabe3dae1ae9e71293a341b8d794532063da0f19",
+    "scripts/evidence/phase6_recursion49.py": "fcf9a55f3f377b7c4091854b5271156da80271c0bea9da8885a7c91460818be4",
+    "scripts/evidence/phase6_routes.py": "cae8b3b7707046deef9e366485deb1f805afb6e2c0841af6e27f420b17c48026",
+    "src/bus.c": "fdafc52414108d835560bb18af83182213484047962528967ae4c4fb2c74c592",
+    "src/core.c": "6c7af23879bc982cbbbfdcedb1c29ab76abc4bbb57eb8fa2c7791f9c28e8695b",
+    "src/cpu68000.c": "04dce007a276c0489e8da871cf58e2db8cdabb5ee408c632744e78ebeaf8fa0a",
+    "tests/evidence/phase6_recursion49_contract.py": "0d8b0687f4857e0e924ea4a54eac9af465ec465f3b89924698229ab340d3c74b",
+    "tests/session/phase6_route_contract.py": "11ba7c89e590a82c7602f2b9e6455c803e6e1ac23641d6984f55e27501c7aaf4",
+    "tools/headless/main.c": "c0c55a9b32d897e91d7bf7794ea0f4a2eeb1d047594f0743f9eea672fce38d75",
+    "tools/session/route_controller.c": "2bdc719ab6fbd18684ab3e21c63db25085fb7d758559fe5dac6c960a26fa9d9b",
+    "tools/session/session.c": "e1310ec60c323d9bb934c07fee2ce75b315734a9a17851bedb7d7945c0415fc9"
+  },
+  "status": "partial-incomplete",
+  "verification": {
+    "causal_guest": "pass; causal-06",
+    "current_guard_review": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/49-evidence/guard-review.json",
+    "native_named_tests": "10/10 pass",
+    "sanitizer_named_tests": "10/10 pass",
+    "scope_note": "No source/oracle/input modification; six final runs remain unstarted; no media or whole-phase credit.",
+    "semantic_mutations": "6/6 rejected; no child/process or project-module import",
+    "test_reconciliation": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/49-evidence/native-lane-reconciliation.json"
+  }
+}

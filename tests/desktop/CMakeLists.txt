@@ -47,6 +47,30 @@ if(GENEWHIP_BUILD_DESKTOP)
     --build ${PROJECT_BINARY_DIR} --out ${PROJECT_BINARY_DIR}/evidence/phase4-host-live.json)
   set_tests_properties(phase4_host_live PROPERTIES TIMEOUT 3600 SKIP_RETURN_CODE 77
     LABELS "live-display;live-audio")
+  add_test(NAME phase6_host_routes COMMAND ${Python3_EXECUTABLE} -I
+    ${CMAKE_CURRENT_SOURCE_DIR}/phase6_routes.py --mode software
+    --build ${PROJECT_BINARY_DIR} --core ${PROJECT_SOURCE_DIR}/evidence/phase6-core-routes.json
+    --candidate ${PROJECT_SOURCE_DIR}/evidence/phase6-candidate.json
+    --delivery-map ${PROJECT_SOURCE_DIR}/fixtures/phase6/recursion94-consumed-map-v1.json
+    --output ${PROJECT_SOURCE_DIR}/evidence/phase6-host-software-current.json)
+  add_test(NAME phase6_host_native COMMAND ${Python3_EXECUTABLE} -I
+    ${CMAKE_CURRENT_SOURCE_DIR}/phase6_routes.py --mode native
+    --build ${PROJECT_BINARY_DIR} --core ${PROJECT_SOURCE_DIR}/evidence/phase6-core-routes.json
+    --candidate ${PROJECT_SOURCE_DIR}/evidence/phase6-candidate.json
+    --delivery-map ${PROJECT_SOURCE_DIR}/fixtures/phase6/recursion94-consumed-map-v1.json
+    --output ${PROJECT_SOURCE_DIR}/evidence/phase6-host-native.json)
+  set_tests_properties(phase6_host_routes phase6_host_native PROPERTIES
+    RUN_SERIAL TRUE TIMEOUT 7800 LABELS "phase6-sustained")
+  set_tests_properties(phase6_host_native PROPERTIES SKIP_RETURN_CODE 77
+    LABELS "phase6-sustained;live-display;live-audio"
+    ENVIRONMENT "GENEWHIP_LIVE_DISPLAY=1;GENEWHIP_LIVE_AUDIO=1")
+  add_test(NAME phase6_host_contract COMMAND ${Python3_EXECUTABLE} -I
+    ${CMAKE_CURRENT_SOURCE_DIR}/phase6_routes.py --mode negative-controls
+    --build ${PROJECT_BINARY_DIR} --core ${PROJECT_SOURCE_DIR}/evidence/phase6-core-routes.json
+    --candidate ${PROJECT_SOURCE_DIR}/evidence/phase6-candidate.json
+    --delivery-map ${PROJECT_SOURCE_DIR}/fixtures/phase6/recursion94-consumed-map-v1.json
+    --output ${PROJECT_SOURCE_DIR}/evidence/phase6-host-check.json)
+  set_tests_properties(phase6_host_contract PROPERTIES TIMEOUT 60)
   add_test(NAME runner_audio_dump COMMAND ${Python3_EXECUTABLE} -I
     ${CMAKE_CURRENT_SOURCE_DIR}/runner_smoke.py runner_audio_dump
     $<TARGET_FILE:genewhip_desktop> ${PROJECT_SOURCE_DIR}/fixtures/raster-toy/toy.bin

@@ -106,6 +106,19 @@ uint64_t gw_test_state_digest(const gw_machine *m)
     hash = digest_u64(hash, m->video.next_line_tick);
     hash = gw_psg_digest(&m->psg, hash);
     hash = gw_ym2612_digest(&m->ym, hash);
-    return gw_z80_digest(&m->z80, hash);
+    hash = gw_z80_digest(&m->z80, hash);
+    /* Zero-default-compatible extension: old states have USP=0. A nonzero
+     * USP appends a tagged explicit LE scalar. This preserves the frozen
+     * zero-state control while distinguishing future USP read behavior. */
+    if (m->cpu.usp) {
+        hash = digest_byte(hash, 'U'); hash = digest_byte(hash, 'S');
+        hash = digest_byte(hash, 'P'); hash = digest_byte(hash, 1);
+        hash = digest_u32(hash, m->cpu.usp);
+    }
+    if (m->io.ext_data || m->io.ext_ctrl) {
+        hash=digest_byte(hash,'E');hash=digest_byte(hash,'X');hash=digest_byte(hash,'T');hash=digest_byte(hash,1);
+        hash=digest_byte(hash,m->io.ext_data);hash=digest_byte(hash,m->io.ext_ctrl);
+    }
+    return hash;
 }
 #endif

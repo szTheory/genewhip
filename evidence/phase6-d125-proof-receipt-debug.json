@@ -1,0 +1,20 @@
+{
+  "schema": "d125-proof-receipt-regression-v1",
+  "scope": "synthetic-only-no-current-tuple-acceptance",
+  "regression_sha256": "c5cd6d095a80696248e2fbedfe1792122f03a9f99f6bc736b9de5e50a7cbf1d1",
+  "baseline": false,
+  "tests": 15,
+  "failures": 0,
+  "errors": 0,
+  "process_api_counts": {
+    "denied": 1,
+    "permitted": 0
+  },
+  "guest_build_game_qualification_processes": 0,
+  "sources": {
+    "scripts/evidence/phase6_accounting.py": "68b27663a88736e49e3ea6f81517f5fef2dd2797f4cad07cbb489317ea201435",
+    "tests/evidence/phase6_tank_continuation_contract.py": "e1af7b745f41bed206dda71a498dbcc6fc62260b9b5f808ae0b8e4189024b479"
+  },
+  "failure_names": [],
+  "error_names": []
+}

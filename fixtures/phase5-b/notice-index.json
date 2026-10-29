@@ -1,0 +1,18 @@
+{
+  "notices": [
+    {
+      "covers": [
+        "Genewhip LICENSE",
+        "LICENSE",
+        "local-fixtures/phase5/recursion94/NOTICES.txt",
+        "phase5-inputs/Python-3.12.10.tgz#Python-3.12.10/LICENSE",
+        "phase5-inputs/sjasmplus-1.23.1-src.tar.xz#sjasmplus-1.23.1/LICENSE.md",
+        "phase5-inputs/vasm2_0f.tar.gz#vasm/doc/vasm.texi",
+        "phase5-inputs/zlib-1.3.1.tar.gz#zlib-1.3.1/LICENSE"
+      ],
+      "path": "fixtures/phase5-b/NOTICES.md",
+      "sha256": "13f44f15391b814c159d5b431e3057f2a43cfaaab2639a10d5a42866c4a3ee64"
+    }
+  ],
+  "schema": "genewhip-phase5-notice-index-v1"
+}

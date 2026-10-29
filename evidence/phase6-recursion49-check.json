@@ -1,0 +1,157 @@
+{
+  "schema": "genewhip-plan49-independent-review-v1",
+  "verdict": "PARTIAL-INCOMPLETE",
+  "accepted_final_cases": 0,
+  "observed_exploratory_runs": 1,
+  "attempts": {
+    "rec-01-tracer-full-route": {
+      "status": "prelaunch-guard-failure",
+      "candidate_id": "aa14fc103b37d7e68a17",
+      "process_creation_attempted": false,
+      "process_started": false,
+      "process_reaped": false,
+      "reason": "NameError while constructing manifest; slot spent, no descriptor or child"
+    },
+    "rec-02-tracer-full-route": {
+      "status": "process-reaped",
+      "candidate_id": "d3a0ced5957413175f88",
+      "process_started": true,
+      "process_exit_code": 1,
+      "process_reaped": true,
+      "report_and_descriptor_hashes_match_manifest": true,
+      "frozen_rom_input_oracle_scenario_source_hashes_match": true
+    }
+  },
+  "checks": {
+    "selected_caps": "pass",
+    "one_actual_child_and_receipt": "pass",
+    "all_four_predicates": "pass",
+    "terminal_state_observed_at_3599": "pass",
+    "3599_disposition_rejected": "pass",
+    "3600_step_acceptance": "fail",
+    "historical_plan48_cause_unknown": "pass",
+    "six_run_qualification": "not-started",
+    "terminal_step_marker": "included-in-3599",
+    "observer_fix": "not-justified; selected descriptor includes program_stable marker and controller counts any retired listed marker",
+    "expected_vs_actual_terminal_tick": "scenario prose predicts tick 720 after 24 B steps beginning at 696; retained terminal is tick 719",
+    "causal_06": "pass; public-core poll-marker-event-next-poll feedback, masks [8,0,0] and latches [127,119,127] matched",
+    "final_b_correspondence": "pass; retained rec02 correspondence SHA 6c993efdae37686dadc821a1657b408650f6b66ef0ba803b8ab429a959438e49 confirms event row19 tick695 -> next poll consumed B at tick696, then 24 held-B steps through terminal tick719",
+    "media_claim": "not-made",
+    "whole_phase_completion": "incomplete"
+  },
+  "observed": {
+    "boundary_calls": 61563024,
+    "selected_boundary_call_cap": 100000000,
+    "physical_fields": 7200,
+    "selected_field_cap": 7200,
+    "completed_source_steps": 3599,
+    "required_source_steps": 3600,
+    "dispatched_events": 20,
+    "event_cap": 64,
+    "queue_high_water": 2,
+    "final_state": "terminal",
+    "final_attempt": 4,
+    "final_tick": 719,
+    "native_and_sanitizer_named_tests": "10/10 each",
+    "retained_zero_facts": {
+      "rec01_os_child_starts": 0,
+      "preflight_failures_after_reconciliation": 0,
+      "rec02_source_steps_at_3600": 0
+    }
+  },
+  "final_rebind": {
+    "reviewed_source_sha256": {
+      "docs/core.md": "2e8968e7badc519491190b27deb8c1aa694e6b256bf7041e6a58f0daed1a966d",
+      "tests/evidence/phase6_recursion49_review.py": "041f70b8ff57080b5c1128b928a4fefdc3f2f1d37639b12aa56ce06491237aae",
+      "scripts/evidence/phase6_recursion49.py": "ccb24b071fd47a43d45c3300118e68a94da95db11962a73f858959197ccea3f3",
+      "tests/evidence/phase6_recursion49_contract.py": "d55a27d78772d8819f2dcb7d04bdd66778c1f89ec7ccd4a2fe9a6dd2f3abf21d",
+      "scripts/evidence/phase6_routes.py": "cae8b3b7707046deef9e366485deb1f805afb6e2c0841af6e27f420b17c48026",
+      "tools/session/route_controller.c": "2bdc719ab6fbd18684ab3e21c63db25085fb7d758559fe5dac6c960a26fa9d9b",
+      "evidence/phase6-recursion49.json": "5429788d5d76fd03b62e5ca2a51f0042214140b8570cf1fcfe69a5903ebe83d0"
+    },
+    "reviewed_artifacts": [
+      "docs/core.md",
+      "tests/evidence/phase6_recursion49_review.py",
+      "scripts/evidence/phase6_recursion49.py",
+      "tests/evidence/phase6_recursion49_contract.py",
+      "scripts/evidence/phase6_routes.py",
+      "tools/session/route_controller.c",
+      "evidence/phase6-recursion49.json",
+      ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/49-evidence/semantic-mutations.json",
+      ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/49-evidence/synthetic-06/synthetic.json",
+      ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/49-evidence/guard-review.json"
+    ],
+    "current_source_hashes": {
+      "docs/core.md": "2e8968e7badc519491190b27deb8c1aa694e6b256bf7041e6a58f0daed1a966d",
+      "tests/evidence/phase6_recursion49_review.py": "041f70b8ff57080b5c1128b928a4fefdc3f2f1d37639b12aa56ce06491237aae"
+    },
+    "run_bound_docs_core_sha256": "e719ffbefedbe3726a2c374c0cc857d008b1d40983f8fab0fc10f572e9657699",
+    "note": "The current core documentation is a post-run documentation update; current reviewer script was statically inspected and not executed. Runtime result remains bound to the retained candidate/source/fixture/report identities."
+  },
+  "retained_verification": {
+    "causal_06": "pass; public-core poll/marker/event/next-poll masks and guest latches matched",
+    "semantic_mutations": {"status": "pass", "rejected_mutants": 6, "children_started": 0, "project_modules_imported": false, "disposition": "superseded because prior check did not execute shared report validator"},
+    "semantic_mutations_parent_check": {"path": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/49-evidence/semantic-mutations-parent-check.json", "status": "pass", "validator": "validate_report_semantics used by review_retained49", "rejected_mutants": 9, "exact_reasons_matched": true, "children_started": 0, "project_modules_imported": false},
+    "retained_consumer_review_parent_check": {"path": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/49-evidence/final-independent-review-parent-check.json", "verdict": "PARTIAL-INCOMPLETE", "oracle_predicate_validation": "pass", "completed_source_steps": 3599, "required_source_steps": 3600},
+    "static_guard_review": {"verdict": "PASS", "contract_sha256": "d55a27d78772d8819f2dcb7d04bdd66778c1f89ec7ccd4a2fe9a6dd2f3abf21d"},
+    "synthetic_06": {"status": "pass", "contract_sha256": "d55a27d78772d8819f2dcb7d04bdd66778c1f89ec7ccd4a2fe9a6dd2f3abf21d", "os_children_started": 0, "project_modules_imported_before_denial": false, "rejected_mutants": 13},
+    "causal_proof_contract_binding": {"causal_06_sha256": "86d276b42efb9dc02f0cf5e792762e4ad9590332a1d0f2392d95b045a8a9b9df", "current_synthetic_contract_sha256": "d55a27d78772d8819f2dcb7d04bdd66778c1f89ec7ccd4a2fe9a6dd2f3abf21d", "distinction": "Causal-06 retains the prior causally executed contract identity; synthetic-06 and static guard review bind the later no-child cap-boundary contract."},
+    "affected_native_tests": "10/10 pass",
+    "affected_sanitizer_tests": "10/10 pass",
+    "full_phase_requirements_credited_complete": []
+  },
+  "stop_disposition": {
+    "status": "PARTIAL-INCOMPLETE",
+    "source_step_shortfall": "3599 observed including terminal / 3600 required",
+    "six_final_starts": 0,
+    "six_run_qualification_pending": true,
+    "frame_and_pcm_comparison_pending": true,
+    "host_actual_display_pending": true,
+    "phase6_complete": false,
+    "phase7_started": false
+  },
+  "cpu_or_bus_defect_indicated": false,
+  "historical_plan48_cause": "unknown",
+  "pending": [
+    "six final RECURSION runs across three original cases and two repetitions",
+    "conditional original control refresh",
+    "affected Tank assessment",
+    "RECURSION frame and PCM comparison",
+    "host actual display",
+    "full phase security and chunk determinism",
+    "whole Phase6 requirements"
+  ],
+  "source_semantics_adjudication": {
+    "question": "Does the terminal transition at source attempt 4 tick 719 itself complete a GameplayStep?",
+    "answer": "yes, by the original source control flow: the active path records input, simulates, calls CampaignCheckCompletion, increments ENGINE_TICK and GAMEPLAY_STEP_COUNT, then the PROGRAM_STABLE branch sets terminal state/result, builds the checkpoint projection, clears GAMEPLAY_PHASE, and returns GAMEPLAY_RESULT_PROGRAM_STABLE.",
+    "evidence": "local-fixtures/phase5/recursion94/clean-2/src/gameplay/gameplay_core.asm: GameplayStep active path and .program_stable branch; frozen scenario defines one count per completed GameplayStep at phase-idle write; oracle denominator is 3600.",
+    "marker_implementation": "phase6_routes.py compiles active_done PC 0x3CE2, program_stable PC 0x3D26, current_destroyed PC 0x3D5E, and timeout PC 0x3D9E as opcode 0x4279; rec-02 descriptor has exactly these four markers; route_controller.c increments on any retired listed marker.",
+    "retained_observation": "The report has exactly 3599 observed marker samples, including the terminal marker, ending in terminal state at reported attempt 4 tick 719; it has no 3600th completed marker sample.",
+    "acceptance_effect": "The terminal GameplayStep is included in the 3599 observed marker count. The frozen scenario predicts 24 B steps starting at consumed tick 696 and completion at tick 720, while rec-02 terminal is tick 719. Keep the denominator at 3600 and verdict incomplete; no observer fix is justified, and no CPU/bus defect is indicated."
+  },
+  "retained_final_b_correspondence": {
+    "path": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/49-evidence/rec02-final-b-correspondence.json",
+    "sha256": "6c993efdae37686dadc821a1657b408650f6b66ef0ba803b8ab429a959438e49",
+    "event_row_19": {"active_ticks": 3575, "attempt": 4, "tick": 695, "desired_mask": 16, "effective_mask": 16},
+    "following_poll": {"tick": 696, "source_input_held": 32, "engine_input_held": 32, "gameplay_current_input": 32, "source_step_count": 696},
+    "terminal": {"tick": 719, "active_ticks": 3599, "source_step_count": 719, "state": 2, "gameplay_result": 1, "held_b": 32},
+    "consumed_held_b_steps": 24,
+    "event_following_poll_matches_frozen_rule": true,
+    "scenario_prediction_tick": 720,
+    "actual_terminal_tick": 719,
+    "observer_fix_indicated": false,
+    "accepted_steps": 3599,
+    "required_steps": 3600
+  },
+  "causal_chain": {
+    "causal_06": {
+      "status": "pass",
+      "process_started_exit_reaped": [true, 0, true],
+      "expected_and_observed_effective_masks": [[8, 0, 0], [8, 0, 0]],
+      "expected_and_observed_guest_latch_values": [[127, 119, 127], [127, 119, 127]],
+      "events": 3,
+      "unknown_call_and_field_reservations_retained": true
+    }
+  },
+  "evidence_root": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/49-evidence"
+}

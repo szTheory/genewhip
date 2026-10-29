@@ -1,0 +1,146 @@
+{
+  "schema": "phase6-pea-parent-closeout-v1",
+  "status": "halted-no-retry",
+  "plan": "06-11",
+  "created_at": "2026-10-23T23:09:26.830269+00:00",
+  "source_head": "a44abb30d9a98faf39dc0a28fa4948f182db390d",
+  "source_identity": "ba1249bfc4997932352681858b5ea763f7b871207f0844c47ce4171f2361c6f6",
+  "findings": [
+    {
+      "id": "PEA-SWAP",
+      "finding": "Broad PEA dispatch shadowed existing SWAP; original test incorrectly labeled 0x4840 illegal PEA.",
+      "correction": "Exclude mode0 from PEA dispatch; test all eight SWAP registers.",
+      "red_assertion": "PEA dispatch preserves existing SWAP for every data register",
+      "red_commit": "1bb60a3",
+      "fix_commit": "2b350b7"
+    },
+    {
+      "id": "PEA-TIMING",
+      "finding": "Initial PEA clock assertions used MC68000UM section7 8-bit-bus timing, not the 16-bit MC68000 bus.",
+      "correction": "Section8.9 table8-10 p8-8: (An)12; displacement/abs.w/PC-displacement16; indexed/abs.l20.",
+      "authority": "https://www.nxp.com/docs/en/reference-manual/MC68000UM.pdf",
+      "fix_commit": "2b350b7"
+    },
+    {
+      "id": "CAPTURE-PREFIX",
+      "finding": "_capture_reserved lost parsed native report when boundary validation raised and temporary storage was deleted. Exact Tank stop cannot be reconstructed.",
+      "correction": "Carry failed native/process receipt into the interrupted authorization reservation before finalization.",
+      "red_assertion": "failed capture must retain native report before cleanup",
+      "red_commit": "686a540",
+      "fix_commit": "f083009"
+    },
+    {
+      "id": "TARGET-WALL",
+      "finding": "Process-only target time omitted active investigation.",
+      "correction": "Consume append-only target-investigation-time rows; exhaustion denies before launcher. Preserve original reservations and use conservative upper-bound charge for current/historical PEA investigation.",
+      "red_commit": "c92b55a",
+      "fix_commit": "a44abb3"
+    }
+  ],
+  "verification": {
+    "native_focused": {
+      "command": "ctest --test-dir build/phase6 --output-on-failure --no-tests=error -R '^phase6_repairs_contract$|^load_contract$|^movem_contract$|^gameplay_bus_contract$|gameplay_family_contract|^phase6_controller_contract$|^phase6_route_contract$|^phase6_report_contract$'",
+      "passed": 8,
+      "total": 8,
+      "seconds": 27.77
+    },
+    "sanitizer_focused": {
+      "build": "build/phase6-movem-sanitize",
+      "test": "phase6_repairs_contract",
+      "passed": 1,
+      "total": 1,
+      "seconds": 0.27
+    },
+    "hooks_off_focused": {
+      "build": "build/phase6-movem-hooks-off",
+      "test": "phase6_repairs_contract",
+      "passed": 1,
+      "total": 1,
+      "seconds": 0.02
+    },
+    "temporary_ledger": {
+      "command": "python3 -I tests/evidence/phase6_accounting_contract.py",
+      "passed": 28,
+      "total": 28,
+      "seconds": 3.117,
+      "guest_launches": 0
+    },
+    "parent_focused_ctest_invocations": [
+      {
+        "stage": "red",
+        "tests": 1,
+        "passed": 0
+      },
+      {
+        "stage": "initial-green",
+        "tests": 1,
+        "passed": 1
+      },
+      {
+        "stage": "native-slice",
+        "tests": 8,
+        "passed": 8
+      },
+      {
+        "stage": "sanitizer",
+        "tests": 1,
+        "passed": 1
+      },
+      {
+        "stage": "hooks-off",
+        "tests": 1,
+        "passed": 1
+      }
+    ]
+  },
+  "tested_source_sha256": {
+    "src/cpu68000.c": "2c4f9e0a8285ac036abb65b45036e3ee8cda0c1dd7c6caaa571ec581baa598e9",
+    "tests/api/phase6_repairs_contract.c": "d60f8daff3be6d1117d6654fafe74fa759d1f5fceb0a442e3e05209224a311be",
+    "tests/fixtures/phase6_repairs.py": "53c4b1b533054c7d279a18b157759ff9c82a81bafae66b9a611cb4584b6bf982",
+    "tests/evidence/phase6_accounting_contract.py": "21a2c5b440ebe9b97b6ea026b5fa127062bd6f881905f6a0ab2461ee225be54c",
+    "scripts/evidence/phase6_accounting.py": "259831b88e94ffb93efe4013555f8def2ea526323542581b7192c22ac76f2725"
+  },
+  "binary_sha256": {
+    "build/phase6/phase6_repairs_contract": "c9dcfdd9775a0f2f90a60228effa758b17a25f317ba0ef49195df38e68e26205",
+    "build/phase6-movem-sanitize/phase6_repairs_contract": "2cc3adbd46e283d540f5a30e472ba4965e11165ab062ee6610989fb793431664",
+    "build/phase6-movem-hooks-off/phase6_repairs_contract": "1321e4bad6ada913d0b6d5864b055bd503056e1ddd6c14d6cc72538ff1975e5d"
+  },
+  "historical_semantic_manifest": "evidence/phase6-pea-manifest.json",
+  "proof_disposition": "All ten original semantic rows stay spent and historical. Corrected CPU/test/coordinator inputs invalidate affected original GREEN/native receipts for future qualification; no current exact public-client matrix is claimed. A reviewed revalidation manifest is required before consumption. Original unsupported-PEA RED remains historical evidence.",
+  "full_tank_processes_this_plan": 1,
+  "parent_additional_full_tank_processes": 0,
+  "control_driver_processes": 0,
+  "rec_processes": 0,
+  "lost_original_tank_report": "unknown; cannot reconstruct the exact native stop or its relation to the dispatch regression",
+  "next_owner": "Phase6 debugger/recovery planner",
+  "next_exit_condition": "Use offline failure-prefix and overlap regressions, then declare a source-bound continuation/revalidation manifest against existing spent quotas before any further Tank launch. Do not rerun unchanged execute-phase.",
+  "blocked_by_06_11": [
+    "06-12",
+    "06-09",
+    "06-05",
+    "06-06",
+    "06-07"
+  ],
+  "phase7_started": false,
+  "accounting_closeout": {
+    "interval": {
+      "id": "GW-06-10-active-1f60a8484fe4",
+      "active": true,
+      "active_seconds": 796.648,
+      "basis": "persisted-parent-monotonic-anchor; parallel wall counted once",
+      "monotonic_started_at": 311507.088534291,
+      "monotonic_closed_at": 312303.736160375,
+      "boot_identity": "1792439667.541373",
+      "prior_cumulative_seconds": 8678.729,
+      "cumulative_seconds": 9475.377
+    },
+    "closed_cumulative_seconds": 9475.377,
+    "active_anchor": null,
+    "inactive_review": true,
+    "target_investigation_upper_bound_seconds": 3124.95,
+    "target_attempts_used": 1,
+    "target_attempts_remaining": 2,
+    "global_limit_seconds": 43200,
+    "target_limit_seconds": 5400
+  }
+}

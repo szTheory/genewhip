@@ -1,5 +1,13 @@
 # Fixture admission
 
+For the current v0.2 five-title screening roster, title-keyed budgets, resource
+caps and Phase 5 evidence-stage boundaries, see
+[`docs/phase5-evidence.md`](../docs/phase5-evidence.md) and
+[`candidate-screening.json`](candidate-screening.json). All five leads remain
+unattempted until exact material rights, build inputs and independent routes are
+reviewed; the existing control and diagnostic fixtures do not count as new
+games.
+
 The manifest keeps the original Genewhip diagnostic and two versioned independent
 game records. `genewhip-independent-game-v1` is retained as historical bounded MAME
 admission evidence; its exact old MAME executable is unavailable for a fresh probe,
@@ -17,6 +25,26 @@ compiler details belong to the configuration identity in each run report.
 the original diagnostic source/emitter/ROM bytes and provenance. The independent
 game has its own strict source/build/route/runtime validator and controlled
 admission/consumer tests; changing a manifest status alone cannot admit its bytes.
+
+## Phase 5 pair admission
+
+`genewhip-phase5-a` is Tank Battle from `monteslu/retro-homebrew-games` at
+`eb7dc3044f9d2f76047f3b3573971bf86575ca52`. `genewhip-phase5-b` is RECURSION 94
+from `baba20o/RECURSION94` at `ab73bc9c7d2bbc4fcd94b3e0e2b89756cb1dc0cd`.
+Their source, material, notice, build, ROM and frozen route identities are
+bound through production admission records in `evidence/phase5-admission-*.json`.
+Per-material rights are enumerated in each fixture's `materials.json`, with
+applicable notices retained in `NOTICES.md`. RECURSION 94's public source archive
+is an exact reviewed-source export with a member map back to its original archive.
+
+Both routes are independently qualified against D-118. That is reference-side
+evidence, not a claim that Genewhip plays either game. The baseline uses twelve
+cases (six unchanged control cases and three cases per new fixture), two fresh
+repetitions and five distinct stages. The retained headless client cannot
+dispatch RECURSION's source-step-conditioned controller program; its route
+interaction and sustained stages remain visibly unsupported. See
+[`docs/phase5-evidence.md`](../docs/phase5-evidence.md) for commands, results,
+and limits.
 
 ## Historical independent game v1
 
