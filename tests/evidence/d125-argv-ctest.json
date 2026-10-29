@@ -1,0 +1,15 @@
+{
+  "command": [
+    "ctest",
+    "--test-dir",
+    "build/phase6",
+    "--output-on-failure",
+    "--no-tests=error",
+    "-R",
+    "^phase6_capture_argv_contract$"
+  ],
+  "seconds": 0.142121082986705,
+  "exit_code": 0,
+  "stdout": "Test project [workspace]/build/phase6\n    Start 37: phase6_capture_argv_contract\n1/1 Test #37: phase6_capture_argv_contract .....   Passed    0.13 sec\n\n100% tests passed out of 1\n\nTotal Test time (real) =   0.13 sec\n",
+  "stderr": ""
+}

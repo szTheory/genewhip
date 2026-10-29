@@ -1,0 +1,303 @@
+{
+  "schema": "genewhip-phase5-route-v1",
+  "title_id": "tank-battle",
+  "profile": "VA3-NTSC-U",
+  "reset": "fresh-process; source-defined initial state; no RAM pokes",
+  "source_basis": {
+    "intended": "Select two human tanks, align each independently at y1, move P1 right to x4 and release, move P2 left to x31 and release, then hold only P1 B. Repeat after active_ticks>=2760.",
+    "source_materials": [
+      {
+        "path": "local-fixtures/phase5/tank-battle/clean-b/src/main.c",
+        "sha256": "a5c6c554372b0d23b8717326be9de8ca97bb69b92a85759115f7ca9a8398c9a9"
+      },
+      {
+        "path": "local-fixtures/phase5/tank-battle/clean-b/out/link.map",
+        "sha256": "c81bf48ef06ab62a6552f7fe4a295e4a9cc796c5adc2c130f6f33cc6b1574caf"
+      }
+    ],
+    "assumptions": "Source startRound spawns (3,12)/(32,12). Deterministic zero rnd gives clear columns3/32 and row1. updateTank applies movement before firing; fireBullet from stationary right-facing x4 starts at5, updateBullets adds2, so exact collision reaches31 after13 updates. Move P2 left exactly once to31 then release. Read-only state targets avoid assuming frameCount equals machine video fields. D115 observed11 Up steps in216 fields; conservative source-route working estimate is216 alignment +40 orientation +130 flight, within unchanged early500 bound. This estimate remains subject to the single actual qualification. Late starts>=2760 and uses the same geometry. Scores persist across source round transitions."
+  },
+  "budget": {
+    "boot_fields": 60,
+    "interaction_fields": 600,
+    "active_fields": 3600,
+    "total_fields": 4500,
+    "watchdog_seconds": 600,
+    "stdout_bytes": 1048576,
+    "stderr_bytes": 1048576,
+    "trace_bytes": 16777216,
+    "trace_rows": 100000,
+    "summary_bytes": 8388608,
+    "disk_bytes": 6442450944
+  },
+  "progress_clock": "active_ticks",
+  "stop_rule": {
+    "kind": "active-fields-or-total",
+    "active_fields": 3600,
+    "total_fields": 4500
+  },
+  "active_clock": {
+    "name": "active_ticks",
+    "kind": "state-count",
+    "state_address": "E0FF0059",
+    "active_value": 1
+  },
+  "controls": [
+    "P1 A",
+    "P1 Up",
+    "P1 Right",
+    "P1 B",
+    "P2 Up",
+    "P2 Left"
+  ],
+  "input_schedule": [],
+  "input_program": {
+    "kind": "read-only-guest-state-controller-v2",
+    "launch": {
+      "field": 60,
+      "press": "P1 A",
+      "release_after_fields": 1
+    },
+    "actions": [
+      {
+        "id": "align-early",
+        "max_fields": 600,
+        "when": {
+          "game_state": 1,
+          "active_ticks_gte": 1,
+          "active_ticks_lt": 600,
+          "p1_score": 0
+        },
+        "steps": [
+          {
+            "id": "align-row",
+            "targets": [
+              {
+                "control": "P1 Up",
+                "until": {
+                  "p1_y": 1
+                }
+              },
+              {
+                "control": "P2 Up",
+                "until": {
+                  "p2_y": 1
+                }
+              }
+            ]
+          },
+          {
+            "id": "orient-p1",
+            "targets": [
+              {
+                "control": "P1 Right",
+                "until": {
+                  "p1_x": 4
+                }
+              }
+            ]
+          },
+          {
+            "id": "position-p2",
+            "targets": [
+              {
+                "control": "P2 Left",
+                "until": {
+                  "p2_x": 31
+                }
+              }
+            ]
+          },
+          {
+            "id": "stationary-shot",
+            "targets": [
+              {
+                "control": "P1 B",
+                "until": {
+                  "p1_score": 1
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "align-late",
+        "max_fields": 800,
+        "when": {
+          "game_state": 1,
+          "active_ticks_gte": 2760,
+          "active_ticks_lt": 3600,
+          "p1_score": 1
+        },
+        "steps": [
+          {
+            "id": "align-row",
+            "targets": [
+              {
+                "control": "P1 Up",
+                "until": {
+                  "p1_y": 1
+                }
+              },
+              {
+                "control": "P2 Up",
+                "until": {
+                  "p2_y": 1
+                }
+              }
+            ]
+          },
+          {
+            "id": "orient-p1",
+            "targets": [
+              {
+                "control": "P1 Right",
+                "until": {
+                  "p1_x": 4
+                }
+              }
+            ]
+          },
+          {
+            "id": "position-p2",
+            "targets": [
+              {
+                "control": "P2 Left",
+                "until": {
+                  "p2_x": 31
+                }
+              }
+            ]
+          },
+          {
+            "id": "stationary-shot",
+            "targets": [
+              {
+                "control": "P1 B",
+                "until": {
+                  "p1_score": 2
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "cases": {
+      "full-route": [
+        "align-early",
+        "align-late"
+      ],
+      "withhold-early-hit": [],
+      "withhold-late-hit": [
+        "align-early"
+      ]
+    },
+    "limits": {
+      "max_guest_reads_per_field": 16,
+      "max_actions": 2,
+      "guest_writes": false,
+      "timeout_action": "release-all-controls-and-fail-capture",
+      "max_steps_per_action": 4
+    }
+  },
+  "cases": [
+    {
+      "id": "full-route",
+      "kind": "primary",
+      "render": true,
+      "audio": true
+    },
+    {
+      "id": "withhold-early-hit",
+      "kind": "causal-control",
+      "withheld_predicates": [
+        "p1_score_one",
+        "p1_score_two"
+      ]
+    },
+    {
+      "id": "withhold-late-hit",
+      "kind": "causal-control",
+      "withheld_predicates": [
+        "p1_score_two"
+      ]
+    }
+  ],
+  "render_field": 120,
+  "audio": {
+    "expectation": "P1 playShoot emits the source PSG tone when P1 fires; a successful P2 collision also emits the source explosion tone",
+    "require_non_silent": true
+  },
+  "addresses": [
+    {
+      "name": "game_state",
+      "address": "E0FF0059"
+    },
+    {
+      "name": "p1_x",
+      "address": "E0FF042C",
+      "width": 2,
+      "endian": "big"
+    },
+    {
+      "name": "p1_y",
+      "address": "E0FF042E",
+      "width": 2,
+      "endian": "big"
+    },
+    {
+      "name": "p1_score",
+      "address": "E0FF0433"
+    },
+    {
+      "name": "p2_x",
+      "address": "E0FF0438",
+      "width": 2,
+      "endian": "big"
+    },
+    {
+      "name": "p2_y",
+      "address": "E0FF043A",
+      "width": 2,
+      "endian": "big"
+    },
+    {
+      "name": "p2_score",
+      "address": "E0FF043F"
+    },
+    {
+      "name": "win_score",
+      "address": "E0FF0058"
+    }
+  ],
+  "identities": {
+    "source": "local-fixtures/phase5/tank-battle/clean-b/src/main.c",
+    "source_sha256": "a5c6c554372b0d23b8717326be9de8ca97bb69b92a85759115f7ca9a8398c9a9",
+    "source_materials": [
+      {
+        "path": "local-fixtures/phase5/tank-battle/clean-b/src/main.c",
+        "sha256": "a5c6c554372b0d23b8717326be9de8ca97bb69b92a85759115f7ca9a8398c9a9"
+      },
+      {
+        "path": "local-fixtures/phase5/tank-battle/clean-b/out/link.map",
+        "sha256": "c81bf48ef06ab62a6552f7fe4a295e4a9cc796c5adc2c130f6f33cc6b1574caf"
+      }
+    ],
+    "source_revision": "eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+    "source_archive_sha256": "0751013a99631e08b0309bfde06c8ff578abeda0113c3b208aaf81951a1e6753",
+    "build_summary_path": "evidence/phase5-tank-build-summary.json",
+    "build_sha256": "7377d5ef9021e9212060395b4a5dbde10296ca1fa02998a6cfa6c4af98d6d18a",
+    "build_receipt_path": "local-fixtures/phase5/tank-battle/receipts/tank-battle-7b2462ab40b2d942.json",
+    "build_receipt_sha256": "7b2462ab40b2d94236e8b2ebaebb9798b9001cbada922b214a80414cb4bf7835",
+    "rom_path": "local-fixtures/phase5/tank-battle/clean-b/out/rom.bin",
+    "rom_sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723",
+    "input_sha256": "43a1bfca71f01830bcd74fab3fce34013986f8272bc3e9c36efd8aae7280faf1",
+    "mame_script_sha256": "2423e10c35b0b353dd39cb0129edc4617785df3f04d521f0ba5bec9e1d6e8143",
+    "mame_build_sha256": "07e811e49b38a5e2378ccf070fad5b6b48008dcfe5bcc746c6941dd8fe06b5bb",
+    "mame_source_revision": "f34f02505e32c1993c6a782b6814232cbfc74e36",
+    "mame_source_sha256": "0929cc749afabcef892900e10dd90bd8b05f94a7dde8f367ac6a5d2082589f84",
+    "mame_patch_sha256": "323f00f433f730ea682a26aaf4c142430538072d7389dd6fe8292477d0b6ac73"
+  }
+}

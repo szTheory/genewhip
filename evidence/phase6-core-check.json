@@ -1,0 +1,177 @@
+{
+  "candidate_sha256": "88b4cc0bb53f89b2b07e7fd27b8d2894b18dce54073cc8028bed3439f1bc1139",
+  "negative_controls": [
+    {
+      "name": "missing-case",
+      "reason": "product-run-count",
+      "status": "pass"
+    },
+    {
+      "name": "duplicate-repetition",
+      "reason": "product-duplicate-run",
+      "status": "pass"
+    },
+    {
+      "name": "copied-title-repetition",
+      "reason": "product-repeat-execution",
+      "status": "pass"
+    },
+    {
+      "name": "copied-control-repetition",
+      "reason": "product-control-binding",
+      "status": "pass"
+    },
+    {
+      "name": "duplicate-control-report",
+      "reason": "product-control-repetitions",
+      "status": "pass"
+    },
+    {
+      "name": "wrong-fixture-identity",
+      "reason": "product-run-identity",
+      "status": "pass"
+    },
+    {
+      "name": "missing-stage",
+      "reason": "product-stage-count",
+      "status": "pass"
+    },
+    {
+      "name": "false-completion",
+      "reason": "product-invented-completion",
+      "status": "pass"
+    },
+    {
+      "name": "false-start-exit",
+      "reason": "product-process",
+      "status": "pass"
+    },
+    {
+      "name": "unconfirmed-reap",
+      "reason": "product-process",
+      "status": "pass"
+    },
+    {
+      "name": "wrong-compiled-controller",
+      "reason": "product-compiled",
+      "status": "pass"
+    },
+    {
+      "name": "wrong-field-stream-digest",
+      "reason": "product-field-stream-binding",
+      "status": "pass"
+    },
+    {
+      "name": "wrong-map-client",
+      "reason": "product-run-map-client",
+      "status": "pass"
+    },
+    {
+      "name": "wrong-causal-expectation",
+      "reason": "native-causal-control-unproven",
+      "status": "pass"
+    },
+    {
+      "name": "stale-reader-provenance",
+      "reason": "product-validation-identities",
+      "status": "pass"
+    },
+    {
+      "name": "stale-media-validation-identity",
+      "reason": "product-validation-identities",
+      "status": "pass"
+    },
+    {
+      "name": "recomputed-source_files",
+      "reason": "product-stale-source",
+      "status": "pass"
+    },
+    {
+      "name": "recomputed-client_identities",
+      "reason": "product-stale-client",
+      "status": "pass"
+    },
+    {
+      "name": "recomputed-build_identity",
+      "reason": "product-stale-build",
+      "status": "pass"
+    },
+    {
+      "name": "recomputed-delivery_map_identity",
+      "reason": "product-map",
+      "status": "pass"
+    },
+    {
+      "name": "recomputed-compiler_identity",
+      "reason": "product-compiler",
+      "status": "pass"
+    },
+    {
+      "name": "recomputed-configuration_identity",
+      "reason": "product-configuration",
+      "status": "pass"
+    },
+    {
+      "name": "3599-source-steps",
+      "reason": "native-incomplete-observation",
+      "status": "pass"
+    },
+    {
+      "name": "oversized-work",
+      "reason": "product-work-cap",
+      "status": "pass"
+    },
+    {
+      "name": "oversized-field-count",
+      "reason": "product-work-cap",
+      "status": "pass"
+    },
+    {
+      "name": "missing-media-row",
+      "reason": "media-roster",
+      "status": "pass"
+    },
+    {
+      "name": "stale-media-expectation",
+      "reason": "media-expectations-identity",
+      "status": "pass"
+    },
+    {
+      "name": "blank-rec-scene",
+      "reason": "media-rec-source-actor-mask",
+      "status": "pass"
+    },
+    {
+      "name": "filled-rec-scene",
+      "reason": "media-rec-source-actor-mask",
+      "status": "pass"
+    },
+    {
+      "name": "wrong-tank-tile",
+      "reason": "media-tank-source-tile",
+      "status": "pass"
+    },
+    {
+      "name": "truncated-pcm",
+      "reason": "product-pcm-length",
+      "status": "pass"
+    },
+    {
+      "name": "dc-only-pcm",
+      "reason": "media-audio-source-signal",
+      "status": "pass"
+    }
+  ],
+  "new_title_launches": 0,
+  "positive_media": {
+    "path": "evidence/phase6-media.json",
+    "sha256": "59d8380bd4b2a03d08478766906f6663d2f7343183e5f2f61f6c405a6b51842a"
+  },
+  "positive_report": {
+    "path": "evidence/phase6-core-routes.json",
+    "sha256": "50360b51351431e65689e7cba9a97b1a6e4687cf157f9031024a82a1554bdb1a"
+  },
+  "schema": "genewhip-phase6-core-check-v1",
+  "semantic_outer_digests_recomputed": true,
+  "status": "pass"
+}

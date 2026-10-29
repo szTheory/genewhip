@@ -1,6 +1,12 @@
 # Genewhip
 
-Genewhip is a portable C17 Sega Genesis / Mega Drive emulator core with a small SDL3 desktop runner. **Current evidence supports one narrow, source-derived game scenario on one exercised native macOS arm64 host. General game and hardware compatibility remain unproven.** The playable preview is unsigned and unnotarized; it was exercised on macOS 26.6.2. No older deployment target or other host has been runtime-qualified. Download the [0.1.0 preview release](https://github.com/szTheory/genewhip/releases/tag/v0.1.0).
+Genewhip is a portable C17 Sega Genesis / Mega Drive emulator core with a small SDL3 desktop runner. **v0.1.0 is the published preview; v0.2.0 remains in development-only qualification, with public-source, hosted, and download adoption proof pending.** The admitted roster is one control plus Tank Battle and RECURSION94; each result is limited to its named source-derived route and profile. General game and hardware compatibility remain unproven. The local v0.2.0 archives are not releases. The published [0.1.0 preview](https://github.com/szTheory/genewhip/releases/tag/v0.1.0) is unsigned and unnotarized; it was exercised on macOS 26.6.2 arm64. No older deployment target or other host has been runtime-qualified.
+
+Start with one of these task paths:
+
+- [Play](packaging/desktop/README.md#v02-play) from an exact qualified desktop archive.
+- [Build](packaging/README.md#v02-build-core) the SDL-free core offline or follow the optional desktop-tooling path.
+- [Embed](docs/core.md#v02-embed) the installed SDK from an external C or C++ consumer.
 
 ## Tested scope
 
@@ -11,11 +17,15 @@ Genewhip is a portable C17 Sega Genesis / Mega Drive emulator core with a small 
 | Video | Bounded progressive VDP subset, 256/320 by 224 fields; unsupported modes stop explicitly; no interlace or mid-line effects |
 | Input | Two configurable three-button ports; keyboard/gamepad and scripted replay in the desktop runner |
 | Sound | Connected Z80 sound path, PSG, discrete YM2612 FM/timers/status/DAC, deterministic PCM; exact VA3 FM reset wiring and broad game audio remain unknown |
-| Game evidence | Independent MIT game v2: 6 source-derived cases, 840 requested fields, plus a 720-field sustained case, through headless and desktop clients |
-| Desktop host | Native SDL3 video/input/audio exercised on macOS 26.6.2 arm64; renderer readback, physical scanout, achieved vsync, acoustic quality, and latency remain unknown |
-| Distribution | Published receipt-backed desktop and SDL-free SDK archives; unsigned/unnotarized |
+| Game evidence | v0.1 independent MIT game v2: 6 source-derived cases, 840 requested fields, plus a 720-field sustained case. v0.2 local development snapshot: Tank Battle and RECURSION94 bounded routes; complete compatibility and completion remain unknown |
+| Desktop host | Native SDL3 video/input/audio exercised on macOS 26.6.2 arm64; v0.2 desktop software/native smoke passed six bounded route cases. Renderer readback, physical scanout, achieved vsync, acoustic quality, and latency remain unknown |
+| Distribution | Published receipt-backed v0.1.0 desktop and SDL-free SDK archives; v0.2.0 local development-only archives are not published. Both are unsigned/unnotarized |
 
 The independent fixture has two separate histories: v1 is retained as a historical bounded MAME admission, while corrected v2 is the currently admitted source/reference fixture. Neither admission alone demonstrates Genewhip compatibility. Genewhip's separate v2 gameplay result is limited to the scenarios and denominators above. The original raster toy is a deterministic PSG/FM/DAC diagnostic, not game-audio evidence. FM comparator differences, the approved reset exception, and the unresolved BUSREQ source conflict are recorded in [audio evidence](docs/audio.md). Optional subjective listening remains unknown by the settled Phase 3 disposition; it is not a release gate.
+
+## v0.2 task paths
+
+These local v0.2.0 commands run only after selecting the current development-only archive and its adjacent qualification receipt. A future published download must first pass the trusted source/workflow/run/attempt provenance and subject-digest checks for that exact archive; only then may bundled verification tools run. A checksum proves byte identity, not publisher identity. Do not infer a public release from local package qualification.
 
 ## Build and embed from source
 

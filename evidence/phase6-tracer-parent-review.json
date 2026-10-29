@@ -1,0 +1,39 @@
+{
+  "consumed_ticks": [
+    697,
+    720
+  ],
+  "current_compiled_route_matches_retained_bytes": true,
+  "current_compiler_sha256": "474bf456de14a68bd6b6494e743ccbb605d5154938f3799629db61f22fbb6165",
+  "current_consumer_sha256": "620f4ffef5fb3f97f4ddafed97f6a6c183da552c9d954d71387d1807e1b63e14",
+  "hold_polls": 24,
+  "launch_candidate": {
+    "canonical_sha256": "6db23843aff4cde1e0612a6ec07594893192fd60c3308157272cb6c81f0e71a0",
+    "path": "evidence/phase6-tracer-launch-candidate.json",
+    "sha256": "9dd3dea1082bf5c77eb1909849df20db1f742375b412cd221b346ab54da6e395"
+  },
+  "limitations": [
+    "Developmental REC only; final repeated cases and media not qualified.",
+    "Current candidate has additional SDL dependencies; immutable launch candidate is bound separately.",
+    "Reader-only validation changes were checked by consuming retained exact raw output; no native client change or title rerun."
+  ],
+  "native_plan_fnv1a64": "a8c89ae1a2075c48",
+  "new_title_launches": 0,
+  "observed_fields": 3631,
+  "original_tracer_sha256": "b78f89490c41e57b66fbb05405dd783203c8367e9510423ddb06e5f75b29d2d5",
+  "raw_report_sha256": "392086df2cb47cc9f9c50d05812c5071d603a5f6c752c9084626b01e46389a63",
+  "relevant_source_and_executable_unchanged": [
+    "tools/session/route_controller.c",
+    "tools/session/session.c",
+    "tools/headless/main.c",
+    "fixtures/phase6/recursion94-consumed-map-v1.json",
+    "fixtures/phase5-b/game.bin",
+    "fixtures/phase5-b/input-program.json",
+    "fixtures/phase5-b/scenario.json",
+    "fixtures/phase5-b/oracle.json",
+    "evidence/phase5-reference-d118.json"
+  ],
+  "schema": "genewhip-phase6-tracer-parent-review-v1",
+  "source_steps": 3600,
+  "status": "pass"
+}

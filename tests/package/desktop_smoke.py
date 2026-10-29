@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: MIT
 """Validate an exact desktop archive before extracting or executing its payload."""
 import hashlib
+import argparse
 import importlib.util
 import io
 import json
 import os
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -28,6 +30,8 @@ EXPECTED_SHARE = {
 }
 MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
 MAX_MEMBERS = 64
+MAX_V02_ARCHIVE_BYTES = 512 * 1024 * 1024
+MAX_V02_EXPANDED_BYTES = 1024 * 1024 * 1024
 
 
 def validate_archive(archive, digest, revision):
@@ -38,6 +42,8 @@ def validate_archive(archive, digest, revision):
         raise ValueError("archive-size-limit")
     if hashlib.sha256(archive.read_bytes()).hexdigest() != digest:
         raise ValueError("archive-checksum")
+    _PACKAGE.package_archive.preflight_tar_gz(archive, max_members=MAX_MEMBERS,
+        max_expanded_bytes=MAX_ARCHIVE_BYTES)
     try:
         tar = tarfile.open(archive, "r:*")
     except (OSError, tarfile.TarError) as error:
@@ -170,6 +176,107 @@ def validate_archive(archive, digest, revision):
             if _PACKAGE.PERSONAL_PATH.search(data) or str(ROOT).encode() in data:
                 raise ValueError("package-private-path")
         return tar, files, expected_root
+
+
+def validate_v02_archive(archive, digest, revision, roster_path):
+    archive = pathlib.Path(archive)
+    if not archive.is_file() or not 0 < archive.stat().st_size <= MAX_V02_ARCHIVE_BYTES:
+        raise ValueError("archive-size-limit")
+    if hashlib.sha256(archive.read_bytes()).hexdigest() != digest:
+        raise ValueError("archive-checksum")
+    _PACKAGE.package_archive.preflight_tar_gz(archive, max_members=MAX_MEMBERS,
+        max_expanded_bytes=MAX_V02_EXPANDED_BYTES)
+    roster = json.loads(pathlib.Path(roster_path).read_text())
+    if roster.get("release_version") != "0.2.0":
+        raise ValueError("package-roster-version")
+    try:
+        tar = tarfile.open(archive, "r:*")
+    except (OSError, tarfile.TarError) as error:
+        raise ValueError("archive-malformed") from error
+    rows = tar.getmembers()
+    if not rows or len(rows) > MAX_MEMBERS:
+        tar.close()
+        raise ValueError("archive-member-count")
+    by_name, total = {}, 0
+    for row in rows:
+        path = pathlib.PurePosixPath(row.name)
+        if row.name in by_name:
+            tar.close()
+            raise ValueError("archive-duplicate-member")
+        if path.is_absolute() or ".." in path.parts or "\\" in row.name:
+            tar.close()
+            raise ValueError("archive-path")
+        if not row.isfile() or row.issym() or row.islnk() or row.isdev():
+            tar.close()
+            raise ValueError("archive-member-type")
+        total += row.size
+        if row.size < 0 or row.size > MAX_V02_EXPANDED_BYTES or total > MAX_V02_EXPANDED_BYTES:
+            tar.close()
+            raise ValueError("archive-expanded-size-limit")
+        by_name[row.name] = row
+    roots = {pathlib.PurePosixPath(name).parts[0] for name in by_name}
+    if len(roots) != 1:
+        tar.close()
+        raise ValueError("archive-root")
+    root = roots.pop()
+    prefix = root + "/"
+    files = {name[len(prefix):]: member for name, member in by_name.items() if name.startswith(prefix)}
+    if len(files) != len(by_name):
+        tar.close()
+        raise ValueError("archive-root")
+    expected = {row["path"] for row in roster["desktop"]["members"]}
+    if set(files) != expected:
+        tar.close()
+        raise ValueError("package-member-roster-mismatch")
+    def read(name):
+        stream = tar.extractfile(files[name])
+        if stream is None:
+            raise ValueError("archive-member-unreadable")
+        return stream.read()
+    try:
+        metadata = json.loads(read("metadata.json"))
+        inventory = json.loads(read("checksums.json"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        tar.close()
+        raise ValueError("archive-identity-invalid") from error
+    if metadata.get("release_version") != "0.2.0" or metadata.get("source_revision") != revision:
+        tar.close()
+        raise ValueError("package-revision")
+    if metadata.get("source_state") not in ("clean", "development-only"):
+        tar.close()
+        raise ValueError("package-source-state")
+    if metadata.get("api_version") != 4 or metadata.get("input_log_version") != 1:
+        tar.close()
+        raise ValueError("package-api-version")
+    actual = {name: hashlib.sha256(read(name)).hexdigest() for name in files if name != "checksums.json"}
+    if inventory != actual:
+        tar.close()
+        raise ValueError("archive-inventory-digest")
+    rights = {row["path"]: row["rights"] for row in roster["desktop"]["members"]
+              if row["path"] not in ("checksums.json", "metadata.json")}
+    required = sorted(name for name in actual if name not in ("metadata.json", "checksums.json"))
+    if metadata.get("member_rights") != rights or metadata.get("required_members") != required:
+        tar.close()
+        raise ValueError("package-rights-identity")
+    performance_name = "share/genewhip/evidence/performance.json"
+    if metadata.get("performance_evidence_digest") != hashlib.sha256(read(performance_name)).hexdigest():
+        tar.close()
+        raise ValueError("package-performance-evidence-identity")
+    for row in roster["desktop"]["members"]:
+        rights_record = roster["rights"][row["rights"]]
+        notice = rights_record.get("notice_members", {}).get("desktop", rights_record.get("notice_member"))
+        if notice not in expected:
+            tar.close()
+            raise ValueError("package-required-notice-missing")
+        notice_row = next((item for item in roster["desktop"]["members"] if item["path"] == notice), None)
+        if not notice_row or not notice_row.get("source"):
+            tar.close()
+            raise ValueError("package-notice-source-missing")
+        if read(notice) != (ROOT / notice_row["source"]).read_bytes():
+            tar.close()
+            raise ValueError("package-notice-content-identity")
+    tar.close()
+    return roster, files, root
 
 
 def extract_verified(archive, files, root, destination):
@@ -404,6 +511,150 @@ def live_package_smoke(prefix, share, scenario, temp):
     return {"outcome": "pass", "backend": "native SDL video/audio", "clients": rows}
 
 
+def run_v02_smoke(archive, digest, revision, roster_path, scratch):
+    roster, files, root = validate_v02_archive(archive, digest, revision, roster_path)
+    with tarfile.open(archive, "r:*") as tar:
+        prefix = scratch / root
+        prefix.mkdir()
+        for name, member in files.items():
+            destination = prefix / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(tar.extractfile(member).read())
+            destination.chmod(0o755 if member.mode & 0o111 else 0o644)
+    _PACKAGE.check_staged_inventory(prefix)
+    moved = scratch / "relocated"
+    prefix.rename(moved)
+    share = moved / "share/genewhip"
+    public_roster = json.loads((share / "evidence/roster.json").read_text())
+    expected_roster = json.loads((ROOT / "evidence/v02-roster.json").read_text())
+    if public_roster != expected_roster:
+        raise ValueError("package-independent-roster")
+    matrix_spec = importlib.util.spec_from_file_location("gw_trusted_v02_matrix_consumer", ROOT / "scripts/evidence/v02_matrix.py")
+    matrix_consumer = importlib.util.module_from_spec(matrix_spec)
+    matrix_spec.loader.exec_module(matrix_consumer)
+    closure = scratch / "public-closure"
+    closure.mkdir()
+    closure_names = ["compatibility-matrix.md", "manifest.json", "observations.json", "roster.json", "schema.json", "verifier.py"]
+    if (share / "evidence/execution-identity.json").is_file():
+        closure_names.append("execution-identity.json")
+    for name in closure_names:
+        (closure / name).write_bytes((share / "evidence" / name).read_bytes())
+    current_identity = None
+    if "execution-identity.json" in closure_names:
+        current_identity = json.loads((closure / "execution-identity.json").read_text())
+        if current_identity.get("git_head") != revision:
+            raise ValueError("package-current-execution-source-identity")
+    matrix_consumer.verify_public_closure(closure, ROOT / "evidence/v02-roster.json", current_identity)
+    manifest = json.loads((share / "manifest.json").read_text())
+    admitted = {row.get("id"): row for row in manifest.get("fixtures", []) if isinstance(row, dict)}
+    for fixture_id in ("genewhip-independent-game-v2", "genewhip-phase5-a", "genewhip-phase5-b"):
+        row = admitted.get(fixture_id)
+        if not row or row.get("status") != "admitted" or row.get("outcome") != "pass":
+            raise ValueError("package-fixture-admission")
+    titles = {row["title_id"]: row for row in expected_roster["matrix"]["titles"]}
+    for fixture, stem in (("genewhip-independent-game-v2", "independent-game-v2"),
+                          ("tank-battle", "tank-battle"), ("recursion94", "recursion94")):
+        if hashlib.sha256((share / (stem + ".bin")).read_bytes()).hexdigest() != titles[fixture]["rom_sha256"]:
+            raise ValueError("package-fixture-rom")
+    scope = json.loads((ROOT / "evidence/v02-execution.json").read_text())
+    limits = scope["per_child_limits"]
+    route_contract_spec = importlib.util.spec_from_file_location(
+        "gw_v02_shared_child_boundary", ROOT / "tests/session/phase6_route_contract.py")
+    route_contract = importlib.util.module_from_spec(route_contract_spec)
+    route_contract_spec.loader.exec_module(route_contract)
+    v02_run_spec = importlib.util.spec_from_file_location("gw_v02_run_preflight", ROOT / "scripts/evidence/v02_run.py")
+    v02_run = importlib.util.module_from_spec(v02_run_spec)
+    v02_run_spec.loader.exec_module(v02_run)
+    _phase7_boundary_negative(route_contract, scratch, limits)
+
+    spec = importlib.util.spec_from_file_location("gw_v02_phase6_route_compiler", ROOT / "scripts/evidence/phase6_routes.py")
+    compiler = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(compiler)
+    delivery_map = json.loads((share / "recursion94-consumed-map-v1.json").read_text())
+    route_roster = compiler.compile_routes(delivery_map, client="sdl")
+    selected = (("tank-battle", "full-route", "tank-battle.bin"),
+                ("recursion94", "full-route", "recursion94.bin"),
+                ("genewhip-independent-game-v2", "sustained-play", "independent-game-v2.bin"))
+    observations = []
+    for fixture, case_id, rom_name in selected:
+        route = next(row for row in route_roster["routes"] if row["fixture"] == fixture and row["case"]["id"] == case_id)
+        route_call_cap = 10_000_000 if fixture == "tank-battle" else 100_000_000
+        binary, _ = compiler.lower_route(route, boundary_call_limit=route_call_cap,
+                                         delivery_map=delivery_map if fixture == "recursion94" else None,
+                                         client="sdl")
+        plan, report = scratch / (fixture + ".gwrc"), scratch / (fixture + ".json")
+        plan.write_bytes(binary)
+        for backend in ("software", "native"):
+            report = scratch / (fixture + "-" + backend + ".json")
+            env = dict(os.environ, SDL_AUDIODRIVER="dummy")
+            if backend == "software":
+                env["SDL_VIDEODRIVER"] = "dummy"
+            else:
+                env.pop("SDL_VIDEODRIVER", None)
+            available = v02_run.available_memory_bytes()
+            v02_run.require_memory_reserve(available, limits["max_rss_bytes"])
+            if shutil.disk_usage(scratch).free < limits["max_scratch_bytes"]:
+                raise ValueError("package-objective-route-scratch-reserve")
+            processes = []
+            command = [str(moved / "bin/genewhip-desktop"), "--route-plan", str(plan),
+                       "--route-report", str(report), str(share / rom_name)]
+            result = route_contract._run_client(moved / "bin/genewhip-desktop", command, processes,
+                report=report, timeout=limits["wall_seconds"], cwd=scratch, env=env,
+                monitored_files=((report, limits["max_json_bytes"]),), limits=limits,
+                scratch_roots=(scratch,))
+            process = processes[-1] if processes else {}
+            if (result.returncode != 0 or not report.is_file() or process.get("status") != "completed" or
+                    process.get("bound_violation") is not False or process.get("process_group_cleanup") != "confirmed" or
+                    not isinstance(process.get("rss_bytes_peak"), int)):
+                raise ValueError("package-objective-route:" + fixture + ":" + backend + ":" + result.stderr[-800:])
+            facts = json.loads(report.read_text())
+            if facts.get("schema") != "genewhip-route-native-v1":
+                raise ValueError("package-objective-report:" + fixture + ":schema=" + str(facts.get("schema")) +
+                                 ":keys=" + ",".join(sorted(facts)))
+            evidence_root = ROOT / "build/v02/desktop-smoke"
+            evidence_root.mkdir(parents=True, exist_ok=True)
+            retained = evidence_root / (fixture + "-" + backend + ".json")
+            shutil.copyfile(report, retained)
+            receipt = {"compiled_sha256": hashlib.sha256(binary).hexdigest(),
+                       "native_report": {"path": retained.relative_to(ROOT).as_posix(),
+                                         "sha256": hashlib.sha256(retained.read_bytes()).hexdigest()},
+                       "predicate_results": {predicate["id"]: {
+                           "reached": observed.get("reached"), "value": observed.get("value"),
+                           "field": observed.get("clock")}
+                           for predicate, observed in zip(route["definitions"].get("predicates", []),
+                                                          facts.get("predicates", []))}}
+            compiler._validate_native_facts(route, "sustained", receipt,
+                delivery_map=delivery_map if fixture == "recursion94" else None,
+                boundary_call_limit=route_call_cap, client="sdl")
+            observations.append({"fixture": fixture, "case": case_id, "outcome": "pass",
+                                 "backend": "SDL software renderer" if backend == "software" else "native SDL window",
+                                 "objective_samples": len(facts["samples"]), "process": process})
+    evidence = json.loads((share / "evidence/manifest.json").read_text())
+    if not re.fullmatch(r"[0-9a-f]{64}", str(evidence.get("closure_id", ""))) or not (share / "evidence/compatibility-matrix.md").is_file():
+        raise ValueError("package-public-evidence-identity")
+    return {"schema": "genewhip-v02-desktop-package-smoke-v1", "outcome": "pass", "relocated": True,
+            "source_state": json.loads((moved / "metadata.json").read_text())["source_state"],
+            "objective_routes": observations, "public_matrix": "included; each outcome validated",
+            "native_window_exercised": True, "physical_display": "unobserved",
+            "archived_members": len(files)}
+
+
+def _phase7_boundary_negative(route_contract, scratch, selected_limits):
+    limits = dict(selected_limits)
+    limits["wall_seconds"] = 0.25
+    report = scratch / "phase7-boundary-negative.json"
+    processes = []
+    command = ["/bin/sleep", "10"]
+    result = route_contract._run_client(pathlib.Path("/bin/sleep"), command, processes,
+        report=report, timeout=600, cwd=scratch, env=dict(os.environ), limits=limits,
+        scratch_roots=(scratch,))
+    if (result.returncode == 0 or len(processes) != 1 or
+            processes[0].get("bound_violation") is not True or
+            processes[0].get("bound_violation_reason") != "phase7-wall-timeout" or
+            processes[0].get("process_group_cleanup") != "confirmed"):
+        raise ValueError("phase7-bounded-boundary-negative-failed")
+
+
 class DesktopArchiveContract(unittest.TestCase):
     def make_archive(self, members):
         tmp = tempfile.TemporaryDirectory(prefix="gw-archive-contract-")
@@ -432,10 +683,28 @@ class DesktopArchiveContract(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "^archive-checksum$"):
             validate_archive(archive, "0" * 64, "0" * 40)
 
+    def test_v02_rejects_recomputed_digest_with_missing_member(self):
+        archive = self.make_archive([("root/bin/genewhip-desktop", b"runtime")])
+        with self.assertRaisesRegex(ValueError, "^package-member-roster-mismatch$"):
+            validate_v02_archive(archive, hashlib.sha256(archive.read_bytes()).hexdigest(), "0" * 40,
+                                 ROOT / "packaging/v02-members.json")
+
 
 def main():
     if sys.argv[1:] == ["--contract"]:
         unittest.main(argv=[sys.argv[0]])
+        return
+    if sys.argv[1:2] == ["--v02"]:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--v02", action="store_true")
+        parser.add_argument("archive")
+        parser.add_argument("digest")
+        parser.add_argument("revision")
+        parser.add_argument("roster_path")
+        args = parser.parse_args()
+        with tempfile.TemporaryDirectory(prefix="gw-v02-desktop-smoke-") as tmp:
+            print(json.dumps(run_v02_smoke(args.archive, args.digest, args.revision, args.roster_path,
+                                           pathlib.Path(tmp)), sort_keys=True))
         return
     archive, digest, revision = sys.argv[1:]
     validated, files, root = validate_archive(archive, digest, revision)
@@ -509,4 +778,6 @@ def main():
 
 
 if __name__ == "__main__":
+    if "--contract" not in sys.argv:
+        os.environ["GENEWHIP_PROCESS_CONTEXT"] = "host-cleanup-v1"
     main()

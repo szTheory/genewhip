@@ -1,0 +1,65 @@
+{
+  "build_identity": {
+    "build_type": "Debug",
+    "cmake_cache_sha256": "9d4a5cee56990d0f85930860a7cdc0dadee4b29fc7b72c005b125327b1188c54",
+    "generator": "Ninja",
+    "headless_sha256": "3d28ad596ff841414b3a6136a5a8f66a91013d283dca9d7359e1a009d2515f4f",
+    "headless_size": 247800
+  },
+  "client_identities": {
+    "public-core": {
+      "path": "build/phase6/tools/session/gw_headless",
+      "sha256": "3d28ad596ff841414b3a6136a5a8f66a91013d283dca9d7359e1a009d2515f4f"
+    }
+  },
+  "compiler_identity": {
+    "path": "scripts/evidence/phase6_routes.py",
+    "sha256": "9dd78bad796641041c6ae395667a18b062e9babef80b5b80a5b2acea3e121f63"
+  },
+  "configuration_identity": {
+    "desktop": true,
+    "offline_pinned_sdl": true,
+    "test_hooks": true,
+    "tools": true
+  },
+  "delivery_map_identity": {
+    "client": "public-core",
+    "input_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+    "path": "fixtures/phase6/recursion94-consumed-map-v1.json",
+    "schema": "genewhip-consumed-input-map-v1",
+    "sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff"
+  },
+  "invalidations": {
+    "client": "all dependent executions",
+    "map": "REC and client observations"
+  },
+  "media_expectations_identity": null,
+  "proof_dependencies": {
+    "retained_execution": {
+      "basis": "Exact same encoded GWRC, native executable, fixture and core/session sources; corrected metadata and stricter reader validated offline. No new execution.",
+      "candidate_path": "evidence/phase6-tracer-launch-candidate.json",
+      "canonical_sha256": "6db23843aff4cde1e0612a6ec07594893192fd60c3308157272cb6c81f0e71a0",
+      "original_report_sha256": "b78f89490c41e57b66fbb05405dd783203c8367e9510423ddb06e5f75b29d2d5"
+    },
+    "tracer": [
+      "source_files",
+      "build_identity",
+      "client_identities",
+      "delivery_map_identity"
+    ]
+  },
+  "schema": "genewhip-phase6-candidate-v1",
+  "source_files": {
+    "evidence/phase5-reference-d118.json": "d1295806831a0d20586e83a75fd1f86ee52d543d27fe900cf6d79cf230e064bc",
+    "fixtures/phase5-b/game.bin": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff",
+    "fixtures/phase5-b/input-program.json": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+    "fixtures/phase5-b/oracle.json": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389",
+    "fixtures/phase5-b/scenario.json": "31e9c22129a6ce1b3ac2d1980c325e86bfbefb4e2fda85ae018c311e2cb40700",
+    "fixtures/phase6/recursion94-consumed-map-v1.json": "61768d626c34b04887955a7f0f71c081d21c2ae4779d49c14dbc4a09bd00d596",
+    "scripts/evidence/phase6_routes.py": "9dd78bad796641041c6ae395667a18b062e9babef80b5b80a5b2acea3e121f63",
+    "tests/fixtures/phase6_game.py": "4d43c1a21638e00b0f1a429b43ba85c36822035d42114f37957a8d5549f18cb1",
+    "tools/headless/main.c": "c0c55a9b32d897e91d7bf7794ea0f4a2eeb1d047594f0743f9eea672fce38d75",
+    "tools/session/route_controller.c": "2bdc719ab6fbd18684ab3e21c63db25085fb7d758559fe5dac6c960a26fa9d9b",
+    "tools/session/session.c": "e1310ec60c323d9bb934c07fee2ce75b315734a9a17851bedb7d7945c0415fc9"
+  }
+}

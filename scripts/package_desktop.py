@@ -7,6 +7,7 @@ The archive is smoked as exact bytes before it is copied to artifacts/. With
 are compared (no smoke, no copy); differing members are listed on a mismatch.
 """
 import gzip
+import argparse
 import hashlib
 import io
 import json
@@ -68,6 +69,192 @@ def sdl_route():
     if archive:
         return ["-DGENEWHIP_SDL3_ARCHIVE=" + archive], "local archive (SHA-256 pin still enforced)"
     return [], "pinned release URL (URL_HASH enforced)"
+
+
+def _v02_sdl_route():
+    archive = pathlib.Path(os.environ.get("GENEWHIP_SDL3_ARCHIVE", ""))
+    dependency = json.loads((ROOT / "packaging/dependencies/sdl3.json").read_text())
+    if not archive.is_file() or hashlib.sha256(archive.read_bytes()).hexdigest() != dependency.get("sha256"):
+        raise ValueError("pinned-sdl3-local-archive-unavailable-or-mismatched")
+    return ["-DGENEWHIP_SDL3_ARCHIVE=" + str(archive.resolve())], "verified local SHA-256 archive; offline"
+
+
+def _build_v02_archive(revision, scratch, name, development_only, public_evidence):
+    """Build the reviewed v0.2 desktop member set from a committed source snapshot."""
+    spec = __import__("importlib.util", fromlist=["spec_from_file_location"])
+    loader = spec.spec_from_file_location("gw_v02_sdk_roster", ROOT / "scripts/package_sdk.py")
+    package_sdk = spec.module_from_spec(loader)
+    loader.loader.exec_module(package_sdk)
+    roster = package_sdk._load_v02_roster()
+    source, build, stage = scratch / "source", scratch / "source/.package-build", scratch / name
+    source.mkdir()
+    source_archive = subprocess.check_output(["git", "archive", revision], cwd=ROOT)
+    with tarfile.open(fileobj=io.BytesIO(source_archive), mode="r:") as source_tar:
+        source_tar.extractall(source)
+    env = dict(os.environ, ZERO_AR_DATE="1")
+    sdl_args, route = _v02_sdl_route()
+    maps = " ".join("-ffile-prefix-map=%s=." % p for p in (build, source))
+    configure_build(source, build, ["-DBUILD_TESTING=OFF", "-DGENEWHIP_TEST_HOOKS=OFF",
+        "-DGENEWHIP_BUILD_DESKTOP=ON", "-DGENEWHIP_INSTALL_PACKAGE_VERSION=0.2.0",
+        "-DCMAKE_C_FLAGS=" + maps, *sdl_args], env)
+    if platform.system() != "Darwin" or platform.machine() != "arm64":
+        raise ValueError("unsupported-build-host: native macOS arm64 required")
+    (stage / "bin").mkdir(parents=True)
+    (stage / "share/genewhip").mkdir(parents=True)
+    shutil.copy2(build / "tools/desktop/genewhip-desktop", stage / "bin/genewhip-desktop")
+    shutil.copy2(build / "tools/session/gw_headless", stage / "bin/gw_headless")
+
+    module, closure = package_sdk._unknown_public_closure(public_evidence, scratch)
+    identity_path = pathlib.Path(public_evidence).resolve().parent / "runtime-identity.json"
+    current_identity = package_sdk._json(identity_path) if identity_path.is_file() else None
+    module.verify_public_closure(closure, source / "evidence/v02-roster.json", current_identity)
+    closure_map = {"share/genewhip/evidence/" + p: closure / p
+        for p in package_sdk._closure_members(closure)}
+    performance = pathlib.Path(public_evidence).resolve() / "performance.json"
+    if not performance.is_file():
+        raise ValueError("public-performance-evidence-missing")
+    performance_digest = package_sdk._validate_performance_evidence(performance, revision)
+    for row in roster["desktop"]["members"]:
+        target_name = row["path"]
+        source_name = row["source"]
+        if target_name in ("bin/genewhip-desktop", "bin/gw_headless", "metadata.json", "checksums.json"):
+            continue
+        if target_name in closure_map:
+            (stage / target_name).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(closure_map[target_name], stage / target_name)
+            continue
+        if target_name == "share/genewhip/evidence/performance.json":
+            shutil.copyfile(performance, stage / target_name)
+            continue
+        if target_name == "share/genewhip/v02-members.json":
+            shutil.copyfile(source / "packaging/v02-members.json", stage / target_name)
+            continue
+        if target_name == "share/genewhip/README.md":
+            readme = (source / "packaging/desktop/README.md").read_text()
+            readme = readme.replace("0.1.0", "0.2.0")
+            readme += ("\nThis exact local package was built from a development-only source snapshot. "
+                       "Its compatibility matrix records unknown outcomes unless matching public proof is present. "
+                       "Only the enumerated admitted examples and bounded routes are included.\n")
+            (stage / target_name).write_text(readme)
+            continue
+        if source_name.startswith("fixtures/") or source_name.startswith("docs/") or source_name.startswith("packaging/") or source_name == "LICENSE":
+            source_path = source / source_name
+            if not source_path.is_file() or source_path.is_symlink():
+                raise ValueError("package-source-member-unavailable: " + source_name)
+            (stage / target_name).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source_path, stage / target_name)
+            continue
+        raise ValueError("package-member-source-not-explicit: " + source_name)
+
+    api_version, input_version = package_sdk._api_and_input_versions()
+    dependency = json.loads((source / "packaging/dependencies/sdl3.json").read_text())
+    payload = sorted(p for p in stage.rglob("*") if p.is_file())
+    home_path = str(pathlib.Path.home().resolve()).encode()
+    for path in payload:
+        body = path.read_bytes()
+        if str(ROOT).encode() in body or str(scratch).encode() in body or home_path in body or PERSONAL_PATH.search(body):
+            raise ValueError("private-path-in-package: " + path.relative_to(stage).as_posix())
+    required = sorted(p.relative_to(stage).as_posix() for p in payload)
+    rights = {row["path"]: row["rights"] for row in roster["desktop"]["members"] if row["path"] not in ("checksums.json", "metadata.json")}
+    identity = hashlib.sha256("\n".join(f"{p}:{hashlib.sha256((stage/p).read_bytes()).hexdigest()}" for p in
+        ("bin/genewhip-desktop", "bin/gw_headless")).encode()).hexdigest()
+    matrix_digest = package_sdk._json(closure / "manifest.json")["closure_id"]
+    metadata = {"schema_version": 2, "version": "0.2.0", "release_version": "0.2.0",
+        "api_version": api_version, "input_log_version": input_version,
+        "kind": "curated SDL3 desktop archive", "source_revision": revision,
+        "source_state": "development-only" if development_only else "clean",
+        "system": platform.system(), "architecture": platform.machine(), "architectures": [platform.machine()],
+        "tested_os": platform.mac_ver()[0] or platform.release(),
+        "deployment_target": os.environ.get("MACOSX_DEPLOYMENT_TARGET", "toolchain default (not explicitly set)"),
+        "compiler": run(os.environ.get("CC", "cc"), "--version").splitlines()[0],
+        "cmake": run("cmake", "--version").splitlines()[0],
+        "build": "Release; C17; hooks off; SDL3 static from hash-verified local archive",
+        "sdl3_route": route, "sdl3_version": dependency["version"], "sdl3_sha256": dependency["sha256"],
+        "runtime_content_identity": identity, "public_evidence_digest": matrix_digest,
+        "performance_evidence_digest": performance_digest,
+        "required_members": required, "member_rights": rights,
+        "limitations": "Development-only local snapshot; unknown matrix outcomes retained; native macOS arm64; unsigned/unnotarized; no publication"}
+    (stage / "metadata.json").write_text(json.dumps(metadata, sort_keys=True, indent=2) + "\n")
+    checksums = {p.relative_to(stage).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in
+                 sorted(p for p in stage.rglob("*") if p.is_file())}
+    (stage / "checksums.json").write_text(json.dumps(checksums, sort_keys=True, indent=2) + "\n")
+    _validate_v02_desktop_members(stage, roster)
+    epoch = int(run("git", "show", "-s", "--format=%ct", revision))
+    pending = scratch / "desktop.tar.gz"
+    with pending.open("wb") as raw, gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as compressed:
+        with tarfile.open(fileobj=compressed, mode="w", format=tarfile.USTAR_FORMAT) as tar:
+            for path in sorted(p for p in stage.rglob("*") if p.is_file()):
+                data = path.read_bytes()
+                info = tarfile.TarInfo(name + "/" + path.relative_to(stage).as_posix())
+                info.size, info.mtime, info.mode = len(data), epoch, 0o755 if os.access(path, os.X_OK) else 0o644
+                tar.addfile(info, io.BytesIO(data))
+    return pending, hashlib.sha256(pending.read_bytes()).hexdigest()
+
+
+def _validate_v02_desktop_members(stage, roster):
+    expected = {row["path"] for row in roster["desktop"]["members"]}
+    actual = {p.relative_to(stage).as_posix() for p in stage.rglob("*") if p.is_file()} | {"checksums.json"}
+    if expected != actual:
+        raise ValueError("package-member-roster-mismatch missing=" + ",".join(sorted(expected - actual)) +
+                         " extra=" + ",".join(sorted(actual - expected)))
+
+
+def _v02_package(args):
+    if platform.system() != "Darwin" or platform.machine() != "arm64":
+        raise ValueError("unsupported-build-host: native macOS arm64 required")
+    if args.development_only:
+        status = subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"],
+                                         cwd=ROOT, text=True)
+        if status.strip():
+            raise ValueError("development-snapshot-not-clean")
+        revision = run("git", "rev-parse", "HEAD")
+        state = "development-only"
+    else:
+        if identity() != args.source_sha:
+            raise ValueError("source-sha-not-clean-head")
+        subprocess.run(["bash", "scripts/ci/public-hygiene.sh"], cwd=ROOT, check=True)
+        revision, state = args.source_sha, "clean"
+    if revision != args.source_sha:
+        raise ValueError("source-sha-mismatch")
+    output = args.output_dir.resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    name = "genewhip-0.2.0-playable-preview-macos-arm64-" + revision[:12]
+    with tempfile.TemporaryDirectory(prefix="gw-desktop-v02-") as tmp:
+        pending, digest = _build_v02_archive(revision, pathlib.Path(tmp), name, state == "development-only",
+                                             args.public_evidence)
+        with tempfile.TemporaryDirectory(prefix="gw-desktop-v02-repeat-") as repeat_tmp:
+            repeated, repeated_digest = _build_v02_archive(revision, pathlib.Path(repeat_tmp), name,
+                                                            state == "development-only", args.public_evidence)
+            if digest != repeated_digest or members(pending) != members(repeated):
+                raise ValueError("desktop-v02-archive-not-repeatable")
+        smoke = subprocess.run([sys.executable, str(ROOT / "tests/package/desktop_smoke.py"), "--v02",
+                                str(pending), digest, revision, str(ROOT / "packaging/v02-members.json")],
+                               cwd=ROOT, capture_output=True, text=True, timeout=1800)
+        if smoke.returncode:
+            sys.stderr.write(smoke.stdout + smoke.stderr)
+            raise ValueError("desktop-v02-package-smoke-failed")
+        smoke_result = json.loads(smoke.stdout.strip().splitlines()[-1])
+        archive = output / (name + ".tar.gz")
+        shutil.copyfile(pending, archive)
+        archive.with_suffix(archive.suffix + ".sha256").write_text(digest + "  " + archive.name + "\n")
+        with tarfile.open(pending, "r:*") as tar:
+            root_name = next(pathlib.PurePosixPath(row.name).parts[0] for row in tar.getmembers() if row.isfile())
+            inventory_digest = hashlib.sha256(tar.extractfile(root_name + "/checksums.json").read()).hexdigest()
+            metadata = json.loads(tar.extractfile(root_name + "/metadata.json").read())
+        receipt = {"schema": "genewhip-local-package-qualification", "version": 2,
+            "release_version": "0.2.0", "kind": "curated SDL3 desktop archive", "outcome": "pass",
+            "source_revision": revision, "source_state": state, "archive": archive.name,
+            "archive_sha256": digest, "inventory_sha256": inventory_digest,
+            "runtime_content_identity": metadata["runtime_content_identity"],
+            "public_evidence_digest": metadata["public_evidence_digest"],
+            "performance_evidence_digest": performance_digest, "api_version": metadata["api_version"],
+            "input_log_version": metadata["input_log_version"], "smoke": smoke_result,
+            "publication": "not published; external local exact-byte development qualification"}
+        receipt_path = archive.with_suffix(archive.suffix + ".qualification.json")
+        receipt_path.write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n")
+        print(json.dumps({"archive": str(archive), "sha256": digest, "receipt": str(receipt_path),
+            "source_revision": revision, "source_state": state,
+            "public_evidence_digest": metadata["public_evidence_digest"]}, sort_keys=True))
 
 
 def configure_build(src, build, extra, env):
@@ -263,7 +450,23 @@ def repeatability(revision, name):
 
 
 def main():
+    legacy_output = None
+    legacy_source_sha = None
+    if "--release-version" in sys.argv[1:]:
+        parser = argparse.ArgumentParser(description="Build explicitly versioned Genewhip desktop archives")
+        parser.add_argument("--release-version", required=True, choices=("0.1.0", "0.2.0"))
+        parser.add_argument("--source-sha", required=True)
+        parser.add_argument("--public-evidence", required=True, type=pathlib.Path)
+        parser.add_argument("--output-dir", required=True, type=pathlib.Path)
+        parser.add_argument("--development-only", action="store_true")
+        args = parser.parse_args()
+        if args.release_version == "0.2.0":
+            _v02_package(args)
+            return
+        legacy_output, legacy_source_sha = args.output_dir, args.source_sha
     revision = identity()
+    if legacy_source_sha is not None and revision != legacy_source_sha:
+        raise ValueError("source-sha-not-clean-head")
     if platform.system() != "Darwin" or platform.machine() != "arm64":
         raise ValueError("unsupported-build-host: native macOS arm64 required")
     subprocess.run(["bash", "scripts/ci/public-hygiene.sh"], cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
@@ -272,7 +475,7 @@ def main():
     if "--repeatability" in sys.argv[1:]:
         repeatability(revision, name)
         return
-    output = ROOT / "artifacts"
+    output = legacy_output.resolve() if legacy_output is not None else ROOT / "artifacts"
     output.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="gw-desktop-package-") as tmp:
         scratch = pathlib.Path(tmp)
