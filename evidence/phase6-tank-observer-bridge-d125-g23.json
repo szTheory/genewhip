@@ -1,0 +1,25 @@
+{
+  "schema": "phase6-qualification23-bridge-v1",
+  "engineering_owner": "06-23",
+  "generation": "23",
+  "status": "passed-affected-qualification-no-game-authority",
+  "game_admission": false,
+  "source_identity": "2c69134dda03c3fb334e82d742b811e3368d967614f75dc193a5d7ab4275f1db",
+  "manifest": {
+    "path": "evidence/phase6-stack-observation-manifest-d125-g23.json",
+    "sha256": "d28b8b5cbf9b687fe77221095a8d584b2f64163c69d4dc9e319714aa5f0c288a"
+  },
+  "qualification": {
+    "path": "build/phase6/d125-debug/plan23/qualification/qualification-rows.json",
+    "sha256": "1783f00446f649f80c3fe7a791921b405c4e9196bf2e1be34888b0a51d0f7a2c"
+  },
+  "component_review": {
+    "path": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/06-23-COMPONENT-REVIEW.json",
+    "sha256": "6f333798ab470bd658137a4ea624d73f10b06e8e6865c7ef1e61590f345b6caa"
+  },
+  "source_freeze": {
+    "path": "build/phase6/d125-debug/plan23/source-freeze.json",
+    "sha256": "db944449f47691dc43cd60d1c94c25dd718c9aef65ee19d64e7bf3ed15e701f2"
+  },
+  "bridge_sha256": "d3cb1807c2ef977cf82832b646bbdcb4f2be960f20c9903144498fdeb0a67039"
+}

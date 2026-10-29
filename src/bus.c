@@ -191,6 +191,15 @@ int gw_bus_read(gw_machine *m, uint32_t address, unsigned size, uint32_t *value)
     if (is_vdp(address)) return vdp_access(m, address, size, 0, value);
     if (is_psg(address)) return psg_access(m, address, size, 0, value);
     if (size == 1 && gw_io_decodes(address)) return io_access(m, address, 0, value);
+    /* Sega Software Manual p74 permits aligned I/O word reads, with only
+     * the lower byte meaningful. MacDonald hardware notes v0.8 section3
+     * report even/odd byte aliases. Duplicated upper data is an explicit
+     * coherent model inference, not manufacturer-defined unused bits. */
+    if (size == 2 && !(address & 1u) && gw_io_decodes(address + 1u)) {
+        if (!io_access(m, address + 1u, 0, value)) return 0;
+        *value |= *value << 8;
+        return 1;
+    }
     if (!access_ok(m, address, size, 0)) return 0;
     /* Ordered four-CPU-cycle transfers, before sampling/committing data.
      * ROM/RAM have no advancing devices or waits in this subset. */
@@ -219,6 +228,13 @@ int gw_bus_write(gw_machine *m, uint32_t address, unsigned size, uint32_t value)
     if (is_vdp(address)) return vdp_access(m, address, size, 1, &value);
     if (is_psg(address)) return psg_access(m, address, size, 1, &value);
     if (size == 1 && gw_io_decodes(address)) return io_access(m, address, 1, &value);
+    /* The cartridge-disable register is write-only for the selected linear
+     * no-SRAM profile. Preserve the modeled byte transfer without mutating ROM. */
+    if (address == UINT32_C(0x00a130f1) && size == 1 && value == 0) {
+        m->tick += 4 * GW_CPU_DIVIDER;
+        gw_z80_sync(m, m->tick);
+        return 1;
+    }
     if (!access_ok(m, address, size, 1)) return 0;
     m->tick += 4 * GW_CPU_DIVIDER;
 #ifdef GW_TEST_HOOKS

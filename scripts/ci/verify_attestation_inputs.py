@@ -9,15 +9,30 @@ import re
 import sys
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+from scripts.release import promote
+
 WORKFLOW = ".github/workflows/ci.yml"
 PACKAGE_TARGETS = ("sdk-diagnostic-darwin-arm64", "playable-preview-macos-arm64")
 SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
-def identity(repository, source_sha, run_id, run_attempt, event, ref, workflow):
-    return {"repository": repository, "source_sha": source_sha, "run_id": str(run_id),
+def identity(repository, source_sha, run_id, run_attempt, event, ref, workflow,
+             qualification_started_at=None, qualification_nonce=None, base_sha=None):
+    result = {"repository": repository, "source_sha": source_sha, "run_id": str(run_id),
             "run_attempt": str(run_attempt), "event": event, "ref": ref, "workflow": workflow,
             "workflow_file": WORKFLOW}
+    if event == "workflow_dispatch":
+        if (not isinstance(qualification_started_at, str)
+                or not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d)", qualification_started_at)
+                or not isinstance(qualification_nonce, str)
+                or not re.fullmatch(r"[0-9a-f]{32}", qualification_nonce)
+                or not isinstance(base_sha, str) or not SHA.fullmatch(base_sha)):
+            raise ValueError("attestation-input-qualification-identity-invalid")
+        result.update({"qualification_started_at": qualification_started_at,
+            "qualification_nonce": qualification_nonce, "base_sha": base_sha})
+    return result
 
 
 def validate_inputs(directory, expected, identity_directory=None):
@@ -31,15 +46,30 @@ def validate_inputs(directory, expected, identity_directory=None):
         return ["attestation-input-identity-or-inventory-invalid"]
     if actual_identity != expected:
         return ["attestation-input-run-identity-mismatch"]
-    if (expected.get("event") != "push" or expected.get("ref") != "refs/heads/main"
+    if (expected.get("event") not in {"push", "workflow_dispatch"}
+            or expected.get("ref") != "refs/heads/main"
             or expected.get("workflow_file") != WORKFLOW or expected.get("workflow") != "Required preview checks"
             or not SHA.fullmatch(str(expected.get("source_sha", "")))
             or not str(expected.get("run_id", "")).isdigit()
             or not str(expected.get("run_attempt", "")).isdigit()):
-        return ["attestation-input-not-trusted-main-push"]
-    if (not isinstance(inventory, dict) or inventory.get("schema") != "genewhip.release-inventory.v1"
-            or inventory.get("version") != "0.1.0"
-            or inventory.get("source_revision") != expected["source_sha"]):
+        return ["attestation-input-not-trusted-main-event"]
+    if expected.get("event") == "workflow_dispatch" and (
+            not isinstance(expected.get("qualification_started_at"), str)
+            or not re.fullmatch(r"[0-9a-f]{32}", str(expected.get("qualification_nonce", "")))
+            or not SHA.fullmatch(str(expected.get("base_sha", "")))):
+        return ["attestation-input-qualification-identity-invalid"]
+    if not isinstance(inventory, dict) or inventory.get("source_revision") != expected["source_sha"]:
+        return ["attestation-input-inventory-source-mismatch"]
+    if inventory.get("version") == "0.2.0":
+        if inventory.get("schema") != "genewhip.release-inventory.v2":
+            return ["attestation-input-inventory-source-mismatch"]
+        _, blockers = promote.validate_release_inventory(directory, inventory)
+        if blockers:
+            return ["attestation-input-inventory-invalid"]
+        blockers = promote.validate_v02_inventory(directory, inventory, expected["source_sha"])
+        return ["attestation-input-v02-" + blockers[0]] if blockers else []
+    if (inventory.get("schema") != "genewhip.release-inventory.v1"
+            or inventory.get("version") != "0.1.0"):
         return ["attestation-input-inventory-source-mismatch"]
     assets = inventory.get("assets")
     if not isinstance(assets, dict):
@@ -86,7 +116,10 @@ def main(argv=None):
         value = identity(os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_SHA"],
                          os.environ["GITHUB_RUN_ID"], os.environ["GITHUB_RUN_ATTEMPT"],
                          os.environ["GITHUB_EVENT_NAME"], os.environ["GITHUB_REF"],
-                         os.environ["GITHUB_WORKFLOW"])
+                         os.environ["GITHUB_WORKFLOW"],
+                         qualification_started_at=os.environ.get("GENEWHIP_QUALIFICATION_STARTED_AT"),
+                         qualification_nonce=os.environ.get("GENEWHIP_QUALIFICATION_NONCE"),
+                         base_sha=os.environ.get("GITHUB_BASE_SHA"))
         args.directory.mkdir(parents=True, exist_ok=True)
         (args.directory / "_ci-identity.json").write_text(
             json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
@@ -94,7 +127,10 @@ def main(argv=None):
     expected = identity(os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_SHA"],
                         os.environ["GITHUB_RUN_ID"], os.environ["GITHUB_RUN_ATTEMPT"],
                         os.environ["GITHUB_EVENT_NAME"], os.environ["GITHUB_REF"],
-                        os.environ["GITHUB_WORKFLOW"])
+                        os.environ["GITHUB_WORKFLOW"],
+                        qualification_started_at=os.environ.get("GENEWHIP_QUALIFICATION_STARTED_AT"),
+                        qualification_nonce=os.environ.get("GENEWHIP_QUALIFICATION_NONCE"),
+                        base_sha=os.environ.get("GITHUB_BASE_SHA"))
     blockers = validate_inputs(args.directory, expected, args.identity_directory)
     if blockers:
         for blocker in blockers:
