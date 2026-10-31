@@ -14,6 +14,7 @@ the bus and the public API are in [core.md](core.md); video is in [video.md](vid
 | TRAP | Vectors 32–47, six-byte SR/PC supervisor stack frame |
 | RTE | Six-byte frame, supervisor non-trace return only |
 | STOP | Supervisor non-trace state; console reset or an accepted interrupt above the SR mask resumes (see STOP wake) |
+| PEA | Long effective address to the active stack; 68000 control addressing modes |
 
 Other encodings, including legal instructions outside the tables on this page, return
 `GW_STOP_UNSUPPORTED_INSTRUCTION` with the opcode and instruction address.
@@ -42,16 +43,26 @@ returns `GW_STOP_UNSUPPORTED_INSTRUCTION`.
 | CLR | b/w/l | data-alterable destination | N=0, Z=1, V=0, C=0; X kept |
 | TST | b/w/l | data-alterable operand | N,Z set; V,C clear; X kept |
 | ADD, SUB | b/w/l | `<ea>,Dn` (An source for w/l) and `Dn,<ea>` (memory-alterable) | X,N,Z,V,C |
+| ADDX | b/w/l | `Dy,Dx` only; old X is an additional carry input; byte/word preserve upper destination bits | X,N,V,C; Z stays set only while every result is zero |
 | ADDA, SUBA | w/l | any source; word sources sign-extend; full address register | none |
 | ADDI, SUBI | b/w/l | immediate to data-alterable destination | X,N,Z,V,C |
 | ADDQ, SUBQ | b/w/l | data 0 encodes 8; data-alterable or An (w/l, full register, no flags) | X,N,Z,V,C (none for An) |
 | CMP, CMPI | b/w/l | `<ea>,Dn`; immediate to data-alterable operand | N,Z,V,C; X kept |
 | CMPA | w/l | any source; compares the full 32-bit register | N,Z,V,C; X kept |
 
-ADDX/SUBX, CMPM, MOVE from USP/to USP, MOVEM, MOVEP, MULU/DIVU and every other
+Memory ADDX, SUBX, CMPM, MOVEP and every other
 encoding still stop as unsupported instructions with the opcode and address. The
 `ADD` and `SUB` encodings with modes 0-1 on the `Dn,<ea>` side belong to ADDX/SUBX
-and are therefore unsupported.
+and retain that distinction; memory ADDX and all SUBX forms are unsupported.
+
+Register ADDX follows [M68000PRM pp4-13–4-14](https://www.nxp.com/docs/en/reference-manual/M68000PRM.pdf):
+both operands and X are sampled before writing, so a self-alias such as
+`ADDX.B D3,D3` doubles the old low byte and adds old X. X follows carry;
+N/V/C describe the result, and a zero result preserves old Z. Its original
+MC68000 register totals are four clocks byte/word and eight long, including
+opcode fetch ([MC68000UM §8.10, table8-11](https://www.nxp.com/docs/en/reference-manual/MC68000UM.pdf)).
+Memory predecrement ADDX remains unsupported. Size11 in the neighboring encoding
+belongs to ADDA.L and retains its existing behavior.
 
 ## Families added in GW-02-06
 
@@ -64,8 +75,10 @@ the BRA precedent; shifts add `2n` ticks) and unchecked.
 | Bcc, BRA | 8-bit and 16-bit displacement | all sixteen condition codes (`condition_true`); BRA is condition 0 | none |
 | BSR | 8-bit and 16-bit displacement | pushes the return address (`push32`) | none |
 | DBcc | word | counter decrement in the low word of Dn; branch while the condition is false and the counter is not -1 | none |
+| Scc | byte | Dn only; all sixteen conditions write `0xff` or `0x00` to the low byte, preserving its upper24 bits | none |
 | JMP, JSR | none | control modes: (An), d16(An), d8(An,Xn), abs.w, abs.l, d16(PC), d8(PC,Xn) | none |
 | RTS | none | pops the return address (`pop32`) | none |
+| LINK, UNLK | LINK word displacement; long frame save/restore | A0–A6; active supervisor stack | none |
 | BTST, BSET, BCLR, BCHG | byte (memory, bit mod 8), long (Dn, bit mod 32) | bit number in Dn or an immediate word; BTST also allows PC-relative and immediate (register form) sources | Z = tested bit clear; others kept |
 | AND, OR | b/w/l | `<ea>,Dn` (data modes) and `Dn,<ea>` (memory-alterable) | N,Z set; V,C clear; X kept |
 | EOR | b/w/l | `Dn,<ea>` (data-alterable) | N,Z set; V,C clear; X kept |
@@ -81,6 +94,36 @@ the BRA precedent; shifts add `2n` ticks) and unchecked.
 | ANDI, ORI, EORI to SR | w | immediate; result masked to `0xA71F` | all |
 | ANDI, ORI, EORI to CCR | b | immediate (carried in a word); low five bits | X,N,Z,V,C |
 
+## PEA
+
+PEA resolves a control effective address and pushes that 32-bit address in
+big-endian order. It does not read the operand stored at that address, and it
+does not change condition codes. Supported modes are `(An)`, `d16(An)`,
+`d8(An,Xn)`, absolute word and long, `d16(PC)`, and `d8(PC,Xn)`. Address-register,
+postincrement, predecrement, and immediate forms stop as unsupported
+instructions before consuming extension words or changing the stack.
+The data-register encodings `0x4840`–`0x4847` execute the existing SWAP
+instruction; the PEA dispatch excludes them.
+
+The instruction contract follows NXP's [M68000 Family Programmer's Reference
+Manual, PEA, p. 4-159](https://www.nxp.com/docs/en/reference-manual/M68000PRM.pdf):
+`SP - 4 -> SP`, `<ea> -> (SP)`, long size, unchanged condition codes, and the
+control-mode restriction. The successful clock totals follow [MC68000 User's
+Manual, §8.9, Table 8-10, p. 8-8](https://www.nxp.com/docs/en/reference-manual/MC68000UM.pdf):
+12 clocks for `(An)`, 16 for displacement/absolute-word/PC-displacement forms,
+and 20 for indexed/absolute-long forms. Section 8 describes the MC68000's
+16-bit bus; section 7's 8-bit-bus totals do not apply. Tests compare these totals in
+the current integer-tick model. The model fills internal clocks but does not
+claim the manual's physical bus-cycle sequence.
+
+Stack writes use the current 24-bit bus mapping while A7 retains its full
+32-bit value. A failed stack write leaves the decremented A7 visible and stops
+with the current unsupported-address result. This partial fault state is the
+core's explicit model behavior; address-error/bus-error frames and physical
+68000 exception ordering remain unimplemented. The original guest and public
+headless-client regressions cover effective-address calculation, stack byte
+order, flags, illegal modes, high A7 bits, bus wrapping, and stack faults.
+
 Notes: a branch, jump, JSR or RTS to an odd target stops with
 `GW_STOP_UNSUPPORTED_ADDRESS` (the address-error frame is not modeled). `sr_write`
 masks to the implemented SR bits and then applies the same check as exception
@@ -88,11 +131,169 @@ return: a write that clears S (user mode) or sets T (trace) stops with
 `GW_STOP_UNSUPPORTED_STATE` and leaves SR unchanged, so a guest never silently
 switches stacks. All of this is supervisor-only, as is the rest of the subset.
 
-Still unsupported, stopping with `GW_STOP_UNSUPPORTED_INSTRUCTION`: ROXL/ROXR, MULU/MULS,
-DIVU/DIVS, MOVEM, ABCD/SBCD/NBCD, NEGX, CHK, TAS, Scc, EXG, LINK/UNLK, PEA, RTR, RTE
+Scc Dn follows [M68000PRM pp4-172–4-173](https://www.nxp.com/docs/en/reference-manual/M68000PRM.pdf)
+and [MC68000UM section8, table8-6](https://www.nxp.com/docs/en/reference-manual/MC68000UM.pdf):
+four clocks for false, six for true, including opcode fetch. Its flags are
+unchanged. Memory Scc forms remain unsupported; their read-before-write bus
+cycle is not approximated by a write-only operation. The adjacent mode001
+encodings remain DBcc. The authored regression covers the entire register
+condition truth table, byte preservation, timing, reset and split execution.
+
+LINK.W saves the old full32 An at SP−4, copies that stack address into An,
+then adds the sign-extended16 displacement to SP. UNLK copies An to SP,
+reads the saved longword, advances SP by four, and restores An. Both preserve
+all condition codes. The supported registers are A0–A6; A7 alias forms stop
+as unsupported before consuming a displacement or changing registers because
+their alias ordering has no independently established oracle here. LINK.L,
+introduced after the original68000, remains unsupported. The contract follows
+[M68000PRM LINK4-111 and UNLK4-194](https://www.nxp.com/docs/en/reference-manual/M68000PRM.pdf);
+successful totals are16/12 CPU clocks respectively, including opcode fetch
+([MC68000UM section8, table8-12](https://www.nxp.com/docs/en/reference-manual/MC68000UM.pdf)).
+The existing bus transfers supply those totals without extra idle clocks.
+
+Frame addresses retain full32 arithmetic while bus accesses mask to24 bits.
+In this diagnostic model, a LINK stack fault leaves SP decremented but An
+unchanged; an UNLK read fault leaves SP equal to the frame address and An
+unchanged. A completed first word transfer remains visible if the second
+fails. These are explicit partial-state policies, not physical68000 exception
+ordering claims; exception frames and prefetch remain unmodeled. The original
+regression covers signed displacement boundaries, saved bytes, flags, timing,
+unsupported aliases/encodings, fault states, reset and split execution.
+
+Still unsupported, stopping with `GW_STOP_UNSUPPORTED_INSTRUCTION`: ROXL/ROXR, MULS.L,
+DIVS, ABCD/SBCD/NBCD, NEGX, CHK, TAS, memory Scc, EXG, LINK/UNLK A7, LINK.L, RTR, RTE
 variants beyond the six-byte frame, and the bitfield-style shift encodings. The AND/OR
 encodings with modes 0-1 on the `Dn,<ea>` side belong to ABCD/SBCD/EXG and stay
 unsupported.
+
+## MOVEM (GW-06-03)
+
+Word and long transfers implement six register-to-memory modes: `(An)`,
+`-(An)`, `d16(An)`, brief `d8(An,Xn)`, absolute word and absolute long.
+Memory-to-register implements eight: `(An)`, `(An)+`, `d16(An)`, brief
+`d8(An,Xn)`, absolute word/long and the two PC-relative control modes.
+The denominator is **28 direction/size/EA forms**, exercised by
+`tests/api/movem_contract.c`. Register-direct encodings retain EXT where
+applicable; illegal MOVEM directions/modes reject before fetching the mask or
+applying an EA side effect. Later-CPU full extensions and byte MOVEM are not
+advertised.
+
+The independent semantics authority is [NXP M68000PRM](https://www.nxp.com/docs/en/reference-manual/M68000PRM.pdf),
+PDF pages231–233 (4-128–130). Normal masks transfer D0 through A7; predecrement
+reverses both the mask correspondence and register order. An included base
+register stores its **original MC68000 value**. Word loads sign-extend both
+register types; a postincrement base in the list retains the final EA. Empty
+lists transfer nothing and leave the base unchanged. Flags remain unchanged.
+PC-relative extensions use the PC after the register mask.
+
+Successful instruction totals follow [NXP MC68000UM](https://www.nxp.com/docs/en/reference-manual/MC68000UM.pdf),
+section8.9/table8-10: stores `8+4n` word or `8+8n` long clocks, loads
+`12+4n` or `12+8n`, plus EA additions0 for indirect/update,4 for displacement
+or absolute word,6 for brief index,8 for absolute long. One CPU clock is seven
+master ticks. Fetches and successful bus words charge four clocks each; loads
+add four idle clocks and indexed forms another two before transfers.
+
+The tested **current model** performs ascending high-word/low-word bus accesses
+within each long, including predecrement MOVEM. Register transfer order and total
+clocks have manufacturer authority; these word-access timestamps and partial
+fault effects are explicit model contracts, **not independently established
+physical MC68000 micro-order or bus-error exception state**. Prefetch/dummy reads,
+wait states and exception frames remain unmodeled. Completed words and registers
+survive a sticky address fault; a failing predecrement remains visible, while
+postincrement advances only after a whole operand completes. A failed long load
+leaves that destination register unchanged. Tests inspect these boundaries via
+public load/run/peek and existing private state/write observations; no new API.
+
+The bounded production GWRC probe passes RECURSION's original0x1822/0x48e7
+stop and records its next unsupported instruction0xc0fc at0x2528,
+tick12993862, after14 completed video fields and0 active route ticks.
+This is an instruction-repair result; interaction, sustained play, PCM and
+performance remain unqualified. The pre-repair observer directly recorded
+tick8529990 and9 completed fields; the older Phase5 receipt remains unchanged
+and originally established only its final tick. See `evidence/phase6-repairs.json`.
+
+## Observed instruction repairs (GW-06-04)
+
+Supervisor `MOVE An,USP` and `MOVE USP,An` transfer all32 bits, preserving CCR
+and unrelated registers. All eight address registers work in both directions;
+explicit A7 still denotes the supervisor stack. Total execution is four CPU
+clocks. The independent authority is [NXP M68000PRM](https://www.nxp.com/docs/en/reference-manual/M68000PRM.pdf),
+PDF p474 (6-21), and [MC68000UM](https://www.nxp.com/docs/en/reference-manual/MC68000UM.pdf),
+table8-12. User/trace state and privilege exception frames remain unsupported.
+No user-mode stack bank switching is implied.
+
+USP is instance-owned future-affecting CPU state. Load, cold initialization and
+console reset set it to zero under the deterministic emulator policy; this does
+not claim physical reset initializes USP. Guest RESET leaves it unchanged.
+The private state digest appends the tagged little-endian `USP,version1,value`
+extension only for nonzero USP. Zero retains the previous digest domain and
+frozen control values; nonzero USP must discriminate future read behavior.
+Original guests test zero and every individual bit with normalized visible
+registers. No fixture oracle or historical digest was changed.
+
+`MULU.W <ea>,Dn` accepts all11 data source addressing forms, multiplies the
+unsigned low16 bits of each operand and replaces the complete destination with
+the32-bit product. X remains unchanged; N/Z reflect that product; V/C clear.
+NXP M68000PRM PDF pp241-242 (4-138–139) defines the semantics;
+MC68000UM section8.3/table8-4 specifies `38+2*popcount(source)` CPU clocks
+plus word EA time. Bus transfers already charge their clocks; predecrement
+and indexed EA forms add two idle clocks. Illegal modes reject before extensions;
+operand address faults preserve destination and flags. Full prefetch and
+physical fault micro-order remain outside the model.
+
+`MULS.W <ea>,Dn` accepts the same11 data source forms and multiplies signed
+low16 operands to replace the full32 destination. X is preserved; N/Z describe
+the product; V/C clear. An-direct sources and later-CPU long multiply encodings
+remain unsupported. Signed semantics and allowed modes follow
+[M68000PRM4-135–136](https://www.nxp.com/docs/en/reference-manual/M68000PRM.pdf).
+The original68000 timing is38+2n CPU clocks plus word EA time, where n counts
+adjacent01/10 patterns in the17-bit source formed by appending a zero LSB
+([MC68000UM8.3/table8-4](https://www.nxp.com/docs/en/reference-manual/MC68000UM.pdf)).
+This differs from unsigned multiply's source popcount. Original regressions
+cover signed boundaries, alternating source bits, upper-word exclusion, every
+destination register, source/destination aliasing, both X states, data EAs,
+unsupported encodings, operand faults, instance isolation, reset and split runs.
+Operand-read failure retains the existing EA side effects and fetched-word time
+without changing the result register or flags; physical exception sequencing
+remains unmodeled.
+
+`tests/api/phase6_repairs_contract.c` exercises these forms through original
+public load/run guests, supplemented by private state observations. Truncated
+USP and truncated-product mutants fail the named value assertions; removing
+each dispatch restores its original unsupported symptom. Exact production
+receipts in `evidence/phase6-repairs.json` show Tank passing0x0204/0x4e67 to
+the I/O address stop0x021a/0x4ab9 at tick616, and RECURSION passing
+0x2528/0xc0fc to0x7f3c/0x80fc at tick20824748 after23 completed fields.
+Both routes remain blocked; these are bounded instruction results.
+
+`DIVU.W <ea>,Dn` now supports the observed nonzero-divisor word operation
+through the same11 data-source EA forms. It divides the full unsigned32-bit
+dividend by the unsigned16-bit source, packs remainder in the upper word and
+quotient in the lower word. X is kept; N/Z describe the16-bit quotient; V/C
+clear. A quotient larger than65535 sets V and clears C without changing the
+destination; undefined N/Z are preserved as model policy. Division by zero
+stops with `GW_STOP_UNSUPPORTED_STATE`; the hardware's divide-zero exception
+frame is not implemented. The authority is NXP M68000PRM PDF pp199-200
+(4-96–97); its p200 signed-overflow note conflicts with the unsigned operation
+description, so the unsigned16-bit range is used and boundary-tested.
+
+DIVU timing is explicitly **approximate**: MC68000UM section8.3/table8-4
+gives140 as a maximum basic clock count with operand-dependent variation.
+The model charges that maximum plus word EA time; it does not claim an exact
+operand-dependent microalgorithm. No primary source for that microalgorithm
+was established. The opcode/value correction does not establish cycle accuracy.
+Swapped quotient/remainder, truncated dividend and removed-dispatch controls
+fail independent assertions. Source-route progress uses completed source writes,
+not elapsed-cycle estimates.
+
+The current bounded closeout leaves Tank at unsupported PEA0x4879/PC0xEC32,
+tick8718556 after9 completed fields. RECURSION reaches all four source
+predicates but becomes terminal after3599 completed steps, short of3600,
+and reaches the frozen7200-field cap. The old native status0 report remains
+historical rejected evidence; the tool now fails an incomplete field cap.
+The [binding halt disposition](../.planning/phases/GW-06-shared-repairs-and-two-playable-routes/06-04-HALT-DISPOSITION.md)
+records the reference-host delivery dependency and required replanning. No
+input retiming, synthesized step or PEA correction was applied after that halt.
 
 ## Interrupts
 

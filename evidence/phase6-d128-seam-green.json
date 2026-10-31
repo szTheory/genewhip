@@ -1,0 +1,42 @@
+{
+  "variant": "green",
+  "admission": {
+    "charge_seconds": 1018.6780844999594,
+    "remaining_forecast_seconds": 1500.0,
+    "purpose_remaining_seconds": 2581.3219155000406,
+    "global_remaining_seconds": 12257.678557083083,
+    "batch_exposure_seconds": 55.0,
+    "pin_path": ".planning/debug/d128-parent-source-pin-g04.json",
+    "pin_sha256": "44a52e6fcce6da549fa197755d360c0355e44bf4dc05f940119617773d554488",
+    "authority_sha256": "6c97cf19162ad2e4f99b7e00df8154a8223dcce9078ef6b2c835b7c22d779829",
+    "variant": "green"
+  },
+  "tests_run": 10,
+  "failures": 0,
+  "errors": 0,
+  "failure_messages": [],
+  "error_messages": [],
+  "process_denial_probes": 9,
+  "unexpected_process_requests": 0,
+  "elapsed_seconds": 0.15155179100111127,
+  "retained_synthetic_roots": [
+    "$SYNTHETIC_ROOT_1",
+    "$SYNTHETIC_ROOT_2",
+    "$SYNTHETIC_ROOT_3",
+    "$SYNTHETIC_ROOT_4",
+    "$SYNTHETIC_ROOT_5",
+    "$SYNTHETIC_ROOT_6",
+    "$SYNTHETIC_ROOT_7",
+    "$SYNTHETIC_ROOT_8",
+    "$SYNTHETIC_ROOT_9",
+    "$SYNTHETIC_ROOT_10",
+    "$SYNTHETIC_ROOT_11",
+    "$SYNTHETIC_ROOT_12",
+    "$SYNTHETIC_ROOT_13",
+    "$SYNTHETIC_ROOT_14",
+    "$SYNTHETIC_ROOT_15",
+    "$SYNTHETIC_ROOT_16"
+  ],
+  "raw_evidence_sha256": "84230d0cfb6253eecc7b5ef7929f918b9fede330f5b88c13b195919a2532df04",
+  "redactions": "Project home path and ephemeral synthetic root paths only; raw bytes retained in ignored build/phase6/d128-seam/"
+}

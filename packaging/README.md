@@ -1,10 +1,35 @@
-# SDL-free API 4 SDK archive
+# SDL-free v0.2.0 SDK archive
 
-The local SDK package is built from a committed source snapshot and qualified against its exact archive bytes. Read its adjacent `.qualification.json` receipt for the filename, source revision, checksum, inventory identity, and measured consumer results. Old snapshots may remain for historical evidence; only the current receipt-backed identity should be recommended for adoption.
+The current v0.2.0 SDK is a local development-only qualification artifact. Public-source qualification, hosted promotion, and download adoption remain pending; the published v0.1.0 archive remains available separately. Package version 0.2.0, public API version 4, and input-log format version 1 are distinct.
 
-It includes the original diagnostic and API 4 core, not the playable game ROM. API 4 is the public source/structure version; 0.1.0 is the package version. Recompile consumers when the pre-1.0 API changes. Input-log format version 1 is independent of both. The package is native macOS arm64, unsigned and unnotarized. It was exercised on macOS 26.6.2; no older deployment target or other OS/architecture is claimed. Checksum identity does not authenticate a publisher.
+<a id="v02-build-core"></a>
 
-Download the complete 0.1.0 release inventory, then select the SDK archive by its inventory entry. The same commands are exercised against the published bytes during release verification:
+## Build with the SDL-free SDK
+
+The SDK archive has no SDL dependency. This command verifies and extracts the selected local development archive, then builds its external C/C++ consumer using only the relocated package bytes. Prerequisites: a trusted checkout, the exact SDK archive/receipt/sidecar, CMake 3.27 or newer, Ninja, and C17/C++11 compilers. No network or developer cache is used.
+
+```sh
+python3 -I "$CHECKOUT/tests/package/docs_commands.py" --verify-local \
+  --local-artifacts "$ARTIFACT_DIR" --archive "$SDK_ARCHIVE" --role sdk --version 0.2.0
+cd "$ARTIFACT_DIR"
+shasum -a 256 -c "$ARTIFACT_DIR/$SDK_ARCHIVE.sha256"
+mkdir -p "$EXTRACT_DIR"
+tar -xzf "$ARTIFACT_DIR/$SDK_ARCHIVE" -C "$EXTRACT_DIR"
+SDK_DIR="$EXTRACT_DIR/${SDK_ARCHIVE%.tar.gz}"
+cmake -S "$SDK_DIR/share/genewhip/consumer" -B "$BUILD_DIR" -G Ninja \
+  -DCMAKE_PREFIX_PATH="$SDK_DIR" \
+  -DGW_ROM="$SDK_DIR/share/genewhip/diagnostic.bin"
+cmake --build "$BUILD_DIR"
+ctest --test-dir "$BUILD_DIR" --output-on-failure --no-tests=error
+```
+
+The optional desktop runner is a separate path. It needs the reviewed pinned SDL3 3.4.18 archive (SHA-256 `9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3`) or network access to fetch those exact bytes. Evidence tools additionally need Python 3.11 and the declared CMake tool targets. The core-only commands above do not use that toolchain or network. For a packaged SDK consumer, the archive's external C/C++ project is under `share/genewhip/consumer`; the embed guide builds it against the exact extracted install prefix.
+
+The local SDK package is built from a clean development-only source snapshot and qualified against its exact archive bytes. Read its adjacent `.qualification.json` receipt for the filename, source revision, checksum, inventory identity, and measured consumer results. Old snapshots may remain for historical evidence; only the current receipt-backed identity should be recommended for adoption. This receipt is not signed provenance and does not authenticate a downloaded publisher.
+
+It includes the original diagnostic and API 4 core, not the admitted game ROMs. API 4 is the public source/structure version; 0.2.0 is this local package version. Recompile consumers when the pre-1.0 API changes. Input-log format version 1 is independent of both. The package is native macOS arm64, unsigned and unnotarized. It was exercised on macOS 26.6.2; no older deployment target or other OS/architecture is claimed. Checksum identity does not authenticate a publisher.
+
+The following is the preserved published v0.1.0 SDK path. Download that complete release inventory and select the SDK archive by its inventory entry:
 
 ```sh
 gh release download v0.1.0 --repo szTheory/genewhip --dir "$ARTIFACT_DIR"

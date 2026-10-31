@@ -1,0 +1,183 @@
+{
+  "candidate_sha256": "88b4cc0bb53f89b2b07e7fd27b8d2894b18dce54073cc8028bed3439f1bc1139",
+  "reader_refresh": {
+    "archive": "build/phase6/evidence/phase6-core-reader-archive-plan53-15",
+    "candidate_sha256": "88b4cc0bb53f89b2b07e7fd27b8d2894b18dce54073cc8028bed3439f1bc1139",
+    "core_report": {
+      "path": "evidence/phase6-core-routes.json",
+      "sha256": "0bf87e56f8ce003598235ba180abd1f0460c3ba7898ceba115905bfcc387fbfd"
+    },
+    "host_reports": [
+      "evidence/phase6-host-software-current.json",
+      "evidence/phase6-host-native.json"
+    ],
+    "media_report": {
+      "path": "evidence/phase6-media.json",
+      "sha256": "16f97d3986025c9b9a208159d65ea7c9c8939a4d1575d210b76de4a6247294b0"
+    }
+  },
+  "routes": [
+    {
+      "boundary_diagnostic_fnv1a64": "c5345e5c610bbfc3",
+      "boundary_ram_fnv1a64": "11dde45a22dd1ebf",
+      "case": "full-route",
+      "chunk_report": {
+        "path": "build/phase6/evidence/phase6-chunk-recursion94-ge2s49t7/chunk.json",
+        "sha256": "b27f5492c143345a200c3270fc7e182325c5c096b6f1c871e1e3336317abee9b"
+      },
+      "common_boundaries": 3631,
+      "fixture": "recursion94",
+      "limits": {
+        "boundary_calls": 100000000,
+        "wall_seconds": 600
+      },
+      "pcm_fnv1a64_matches_retained_full_pcm": true,
+      "pcm_frames": 2908428,
+      "process": {
+        "bound_violation": false,
+        "client": "headless",
+        "pgid": 13294,
+        "pid": 13294,
+        "process_group_cleanup": "confirmed",
+        "report_bytes": 770,
+        "report_schema": "genewhip-phase6-title-chunk-v1",
+        "report_status": "pass",
+        "return_code": 0,
+        "status": "completed",
+        "stderr_bytes": 0,
+        "stdout_bytes": 770,
+        "wall_seconds": 42.03607341693714
+      },
+      "selected_media_fnv1a64_matches_retained_frame": true,
+      "source_run": {
+        "active_ticks": 3600,
+        "candidate_sha256": "88b4cc0bb53f89b2b07e7fd27b8d2894b18dce54073cc8028bed3439f1bc1139",
+        "fields": 3631,
+        "full_pcm": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-full-route-1/audio.pcm",
+          "sha256": "5453830f84ab326e068d1e39a698afd37979274d1236f72218941b44070ba644"
+        },
+        "inputs": 20,
+        "native_report": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-full-route-1/native.json",
+          "sha256": "9a689d834778e5dfc0a0e484fdf67c80643d58c7772880fe91c2580d0b5df292"
+        },
+        "selected_media": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-full-route-1/fields/field-3601.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        }
+      },
+      "status": "pass",
+      "streams": {
+        "stderr": {
+          "observed_bytes": 0,
+          "retained_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "text": "",
+          "truncated": false
+        },
+        "stdout": {
+          "observed_bytes": 770,
+          "retained_bytes": 770,
+          "sha256": "b27f5492c143345a200c3270fc7e182325c5c096b6f1c871e1e3336317abee9b",
+          "text": "{\"schema\":\"genewhip-phase6-title-chunk-v1\",\"status\":\"pass\",\"fields\":3631,\"events\":20,\"baseline_calls\":32252639,\"variable_calls\":5428314,\"baseline_mode\":\"one-instruction-stop308\",\"pair_comparison\":\"pass\",\"common_boundary_comparisons\":{\"ram\":3631,\"cpu_state\":3631,\"video\":3631,\"pcm\":3631},\"input_order_events_compared\":20,\"trace_segments\":782271,\"compared_instruction_events\":28127873,\"instruction_events_dropped\":0,\"terminal_tick_target\":3253892729,\"terminal_tick_actual\":3253892757,\"terminal_boundary_comparison\":\"pass\",\"pcm_frames\":2908428,\"pcm_fnv1a64\":\"94d43573aecd27c5\",\"media_sequence\":3601,\"media_fnv1a64\":\"ebef3b40ee176b3a\",\"boundary_ram_fnv1a64\":\"11dde45a22dd1ebf\",\"boundary_diagnostic_fnv1a64\":\"c5345e5c610bbfc3\",\"final_instructions\":28127873,\"final_pc\":15662}\n",
+          "truncated": false
+        }
+      },
+      "variable_calls": 5428314
+    },
+    {
+      "boundary_diagnostic_fnv1a64": "096f96289768387f",
+      "boundary_ram_fnv1a64": "ce3b5e540faf56e5",
+      "case": "full-route",
+      "chunk_report": {
+        "path": "build/phase6/evidence/phase6-chunk-tank-battle-ckjhsxl4/chunk.json",
+        "sha256": "84d23bd60cd8177c45d75ca3606c3f3b37f90e92e4056068ca63795b9770fcb2"
+      },
+      "common_boundaries": 4196,
+      "fixture": "tank-battle",
+      "limits": {
+        "boundary_calls": 10000000,
+        "wall_seconds": 300
+      },
+      "pcm_fnv1a64_matches_retained_full_pcm": true,
+      "pcm_frames": 3361011,
+      "process": {
+        "bound_violation": false,
+        "client": "headless",
+        "pgid": 17197,
+        "pid": 17197,
+        "process_group_cleanup": "confirmed",
+        "report_bytes": 761,
+        "report_schema": "genewhip-phase6-title-chunk-v1",
+        "report_status": "pass",
+        "return_code": 0,
+        "status": "completed",
+        "stderr_bytes": 0,
+        "stdout_bytes": 761,
+        "wall_seconds": 39.739349792012945
+      },
+      "selected_media_fnv1a64_matches_retained_frame": true,
+      "source_run": {
+        "active_ticks": 3600,
+        "candidate_sha256": "88b4cc0bb53f89b2b07e7fd27b8d2894b18dce54073cc8028bed3439f1bc1139",
+        "fields": 4196,
+        "full_pcm": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/tank-battle-full-route-1/audio.pcm",
+          "sha256": "756185bde82ee09a83377db2b7964d1576ba8281e9787f4afb901f684f5173e8"
+        },
+        "inputs": 22,
+        "native_report": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/tank-battle-full-route-1/native.json",
+          "sha256": "ef692e554237671c5a9204dbef08ea81fe3949d6123a0645b6726ee8902fc8be"
+        },
+        "selected_media": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/tank-battle-full-route-1/fields/field-119.bin",
+          "sha256": "2287e53d2bf3bf35b42e55deb9e49dcf870a6f85bb51ee3cda3396dd496afedd"
+        }
+      },
+      "status": "pass",
+      "streams": {
+        "stderr": {
+          "observed_bytes": 0,
+          "retained_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "text": "",
+          "truncated": false
+        },
+        "stdout": {
+          "observed_bytes": 761,
+          "retained_bytes": 761,
+          "sha256": "84d23bd60cd8177c45d75ca3606c3f3b37f90e92e4056068ca63795b9770fcb2",
+          "text": "{\"schema\":\"genewhip-phase6-title-chunk-v1\",\"status\":\"pass\",\"fields\":4196,\"events\":22,\"baseline_calls\":909250,\"variable_calls\":2472731,\"baseline_mode\":\"coarse-4096-stop308\",\"pair_comparison\":\"pass\",\"common_boundary_comparisons\":{\"ram\":4196,\"cpu_state\":4196,\"video\":4196,\"pcm\":4196},\"input_order_events_compared\":22,\"trace_segments\":909250,\"compared_instruction_events\":48964930,\"instruction_events_dropped\":0,\"terminal_tick_target\":3759653938,\"terminal_tick_actual\":3759654246,\"terminal_boundary_comparison\":\"pass\",\"pcm_frames\":3361011,\"pcm_fnv1a64\":\"08652e9b17d6b1cd\",\"media_sequence\":119,\"media_fnv1a64\":\"b093bd1508d3e725\",\"boundary_ram_fnv1a64\":\"ce3b5e540faf56e5\",\"boundary_diagnostic_fnv1a64\":\"096f96289768387f\",\"final_instructions\":48964930,\"final_pc\":620}\n",
+          "truncated": false
+        }
+      },
+      "variable_calls": 2472731
+    }
+  ],
+  "schema": "genewhip-phase6-chunk-v1",
+  "status": "pass",
+  "synthetic_contract": {
+    "command": [
+      "ctest",
+      "--test-dir",
+      "build/phase6",
+      "--no-tests=error",
+      "--output-on-failure",
+      "-R",
+      "^phase6_chunk_contract$"
+    ],
+    "ctest_json_sha256": "750dc33210397a078d8dad12c73f7ea9927ec712d20bf07cae111db11d8f2d13",
+    "status": "pass",
+    "test": "phase6_chunk_contract"
+  },
+  "test_executable": {
+    "path": "build/phase6/tools/session/phase6_chunk_contract",
+    "sha256": "16f7e4229d1220d846a44fec9e3482db67d993a30171025c318a11d799378920"
+  },
+  "test_source": {
+    "path": "tests/session/phase6_chunk_contract.c",
+    "sha256": "816383d7b7e70a339ea2949d5ad4c5b061b53cbd26a9e6a5ee8671313f108ed9"
+  }
+}
