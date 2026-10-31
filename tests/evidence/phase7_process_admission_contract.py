@@ -61,6 +61,9 @@ class ProcessAdmissionContract(unittest.TestCase):
         self.environment.start()
         self.addCleanup(self.environment.stop)
         os.environ.pop(MARKER, None)
+        for key in tuple(os.environ):
+            if key.startswith(("GENEWHIP_QUALIFICATION_", "GENEWHIP_FRESH_BATCH_")):
+                os.environ.pop(key, None)
 
     def run_boundary(self, *, owned=False):
         runs = []
@@ -68,6 +71,18 @@ class ProcessAdmissionContract(unittest.TestCase):
         result = function(self.client, [str(self.client)], runs,
             report=self.root / "report.json", cwd=self.root, timeout=1)
         return result, runs
+
+    def assert_cleanup_call_uses_bounded_status_budget(self, cleanup, boundary, child,
+                                                       last_reason="cleanup-unclassified"):
+        if sys.platform == "darwin":
+            cleanup.assert_called_once_with(child, status_budget={
+                "remaining": boundary._DARWIN_CLEANUP_MAX_STATUS_QUERIES,
+                "attempted": 0,
+                "last_reason": last_reason,
+                "status_reason": "not-observed",
+            })
+        else:
+            cleanup.assert_called_once_with(child)
 
     def test_missing_and_invalid_admission_reject_before_popen_and_signal_change(self):
         original = signal.getsignal(signal.SIGTERM)
@@ -463,7 +478,9 @@ class ProcessAdmissionContract(unittest.TestCase):
                     self.assertIs(failed.exception.process_receipt, runs[0])
                     self.assertEqual(runs[0]["process_group_cleanup"], "unconfirmed")
                 creation.assert_called_once()
-                terminate.assert_called_once_with(child)
+                self.assert_cleanup_call_uses_bounded_status_budget(terminate, boundary, child,
+                    last_reason="cleanup-permission-denied" if isinstance(cleanup, PermissionError)
+                    else "cleanup-unclassified")
             self.assertEqual((runs[0]["pid"], runs[0]["pgid"]), (987654, 987654))
             self.assertTrue(child.stdout.closed and child.stderr.closed)
             selector.close.assert_called_once()
@@ -518,13 +535,55 @@ class ProcessAdmissionContract(unittest.TestCase):
                  mock.patch.object(boundary, "_terminate_process_group", return_value=True) as cleanup:
                 with self.assertRaises(KeyboardInterrupt if stage == "cancel" else OSError) as failed:
                     helper.run([str(self.client)], cwd=self.root, runs=runs)
-                cleanup.assert_called_once_with(child)
+                self.assert_cleanup_call_uses_bounded_status_budget(cleanup, boundary, child)
             self.assertIs(failed.exception.process_receipt, runs[0])
             self.assertEqual((runs[0]["pid"], runs[0]["pgid"]), (987654, 987654))
             self.assertEqual(runs[0]["process_group_cleanup"], "confirmed")
             self.assertTrue(child.stdout.closed and child.stderr.closed)
             self.assertIs(signal.getsignal(signal.SIGTERM), prior)
         self.assertEqual(len(DENIED), self.denials_before)
+
+    def _run_forced_non_darwin_fake_cleanup(self, *, cancel):
+        helper = load("scripts/evidence/phase5_process.py", "gw_admission_non_darwin_cleanup")
+        boundary = helper.process_boundary()
+        os.environ[MARKER] = HOST
+        prior = signal.getsignal(signal.SIGTERM)
+        child = mock.Mock(pid=987654, returncode=0)
+        child.stdout, child.stderr = io.BytesIO(), io.BytesIO()
+        selector = mock.Mock()
+        selector.get_map.return_value = {}
+        runs = []
+
+        def spawn(*args, **kwargs):
+            if cancel:
+                signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+            return child
+
+        with mock.patch.object(helper.selectors, "DefaultSelector", return_value=selector), \
+             mock.patch.object(subprocess, "Popen", side_effect=spawn) as creation, \
+             mock.patch.object(boundary, "_terminate_process_group", return_value=True) as cleanup, \
+             mock.patch.object(helper.sys, "platform", "linux"):
+            if cancel:
+                with self.assertRaises(KeyboardInterrupt) as failed:
+                    helper.run([str(self.client)], cwd=self.root, runs=runs)
+                self.assertIs(failed.exception.process_receipt, runs[0])
+            else:
+                result = helper.run([str(self.client)], cwd=self.root, runs=runs)
+                self.assertEqual(result.returncode, 0)
+            creation.assert_called_once()
+            self.assert_cleanup_call_uses_bounded_status_budget(cleanup, boundary, child)
+        self.assertEqual((runs[0]["pid"], runs[0]["pgid"]), (987654, 987654))
+        self.assertEqual(runs[0]["process_group_cleanup"], "confirmed")
+        self.assertTrue(child.stdout.closed and child.stderr.closed)
+        selector.close.assert_called_once()
+        self.assertIs(signal.getsignal(signal.SIGTERM), prior)
+        self.assertEqual(len(DENIED), self.denials_before)
+
+    def test_forced_non_darwin_normal_cleanup_keeps_child_only_call_shape(self):
+        self._run_forced_non_darwin_fake_cleanup(cancel=False)
+
+    def test_forced_non_darwin_cancel_cleanup_keeps_child_only_call_shape(self):
+        self._run_forced_non_darwin_fake_cleanup(cancel=True)
 
     def test_baseline_receipt_sink_rejects_links_and_tracer_validates_before_launch(self):
         helper = load("scripts/evidence/phase5_process.py", "gw_admission_baseline_receipt")
