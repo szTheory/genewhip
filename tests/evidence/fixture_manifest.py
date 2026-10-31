@@ -392,4 +392,10 @@ if len(sys.argv) == 4:
     assert observations == (original["runs"], original["outcome_counts"],
                             original["outcome_denominator"]), (
         "preserve observations, six outcomes, and denominator")
+    source_contract_spec = importlib.util.spec_from_file_location(
+        "phase5_public_source_identity_contract",
+        root / "tests/evidence/phase5_public_source_identity_contract.py")
+    source_contract = importlib.util.module_from_spec(source_contract_spec)
+    source_contract_spec.loader.exec_module(source_contract)
+    source_contract.self_test(root)
 print("PASS: fixture_manifest admission, byte identity, provenance and denominator controls")

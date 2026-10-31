@@ -1,0 +1,195 @@
+{
+  "schema": "genewhip-phase6-recovery-source-order-v1",
+  "phase": "GW-06",
+  "plan": "06-08",
+  "status": "blocked",
+  "gate": "independent-source-order",
+  "authority": {
+    "decision": "D119R conditional reference-host adapter; no change to GWRC v1 or frozen acceptance",
+    "mame_revision": "f34f02505e32c1993c6a782b6814232cbfc74e36",
+    "recursion_source_revision": "ab73bc9c7d2bbc4fcd94b3e0e2b89756cb1dc0cd",
+    "recursion_source_archive": "fixtures/phase5-b/source.tar",
+    "recursion_source_archive_sha256": "d6302d23168fb7e20e643c97eed0c694ef702b23cea0b26897e0bb8152e3ad1b"
+  },
+  "ordered_source_facts": [
+    {
+      "order": 1,
+      "source": "build/tool-cache/mame0289/source/src/emu/screen.cpp:1674-1687",
+      "sha256": "7ba7d2f673d56b704dd0ca46083071e06bc77a70149bb5ed504c9fb2bdb1f3a9",
+      "fact": "screen_device::vblank_begin calls video_manager::frame_update before screen-specific callbacks and screen_vblank(1)."
+    },
+    {
+      "order": 2,
+      "source": "build/tool-cache/mame0289/source/src/emu/video.cpp:214-258",
+      "sha256": "7e85fbf366ff7767854fb33157504043bb6701e3d884c11b7c28ebf7e4ba799a",
+      "fact": "video_manager::frame_update performs OSD input/UI/render work, then calls MACHINE_NOTIFY_FRAME."
+    },
+    {
+      "order": 3,
+      "source": "build/tool-cache/mame0289/source/src/emu/ioport.cpp:1801-1805,2146-2150,2159-2186,1581-1588",
+      "sha256": "bec08afc2a40a0bedb2c91a15adaaf89da602f061fa83b7653a0093e4456e17d",
+      "fact": "The input manager registers a frame notifier; its callback rebuilds port digital cache from fields, while port reads return that cached value."
+    },
+    {
+      "order": 4,
+      "source": "build/tool-cache/mame0289/source/src/mame/sega/megadriv.cpp:759-777,981-995",
+      "sha256": "3623ae57192fdd68c12d8cd09f93612c7c6a9b7d74cb4b7a043809ad76c9b48a",
+      "fact": "The Mega Drive screen uses zero configured vblank duration and a screen_vblank callback; its rising edge starts VDP EOF/scanline-timer work after the frame-update call. The VDP VINT callback asserts 68K IRQ level 6."
+    },
+    {
+      "order": 5,
+      "source": "build/tool-cache/mame0289/source/src/devices/video/315_5313.cpp: vdp_handle_scanline_callback",
+      "sha256": "f4cea04815039294552711f87fde88e933b6502c24d527dd6632fb0f726d65c1",
+      "fact": "VDP scanline work raises its VINT path at the configured IRQ6 scanline and schedules the interrupt assertion."
+    },
+    {
+      "order": 6,
+      "source": "fixtures/phase5-b/source.tar:reviewed-export/src/hardware/interrupts.asm: VBlankInterrupt",
+      "sha256": "4ea7fd946cea57285c2246647ad6553adc5d231fefd800375d99c51957486a00",
+      "fact": "The guest level-6 handler calls ControllerPoll before incrementing DEBUG_FRAME_TOKEN."
+    },
+    {
+      "order": 7,
+      "source": "fixtures/phase5-b/source.tar:reviewed-export/src/hardware/controllers.asm:ControllerPoll; reviewed-export/src/boot/startup.asm:MainLoop",
+      "sha256": "8ef2c1781b65c4817f976f77f94bd7e4fe697f2769afa705cc22363530fea479",
+      "fact": "ControllerPoll stores sampled input; mainline later consumes the frame token and passes INPUT_HELD into GameplayStep."
+    },
+    {
+      "order": 8,
+      "source": "tools/session/session.c:307-320,493-522",
+      "fact": "Genewhip's route field callback runs after a newly published emulated field is observed and PCM is drained."
+    }
+  ],
+  "mapping": {
+    "status": "ambiguous",
+    "reason": "The source establishes MAME's notifier-before-screen-vblank-callback ordering and the guest's VDP-interrupt ControllerPoll-before-token ordering, but it does not establish that Genewhip's post-publication field callback is the same sampling event or has the same phase relative to the guest's next ControllerPoll. The retained D-118 695-to-697 observation cannot supply that missing source correspondence without circular calibration.",
+    "source_supported": [
+      "MAME frame notifier invokes its registered input cache refresh before the Mega Drive screen-vblank callback starts VDP scanline work.",
+      "The guest polls controllers in its VDP level-6 handler before publishing the token consumed by GameplayStep.",
+      "Genewhip invokes its candidate callback after observing a newly published field."
+    ],
+    "unknown": [
+      "A source-proven equivalence between MAME's frame-notifier sampling boundary and Genewhip's field-publication callback.",
+      "The exact phase relationship that would guarantee first guest-visible input at the prescribed source step without using D-118 to tune an offset.",
+      "Relative phase of the source-step write-tap request, reference cache sampling, and the native callback for this route; separately identifying callbacks does not prove this phase."
+    ]
+  },
+  "execution": {
+    "adapter_implementation_started": false,
+    "synthetic_processes_reserved": 0,
+    "synthetic_processes_launched": 0,
+    "acceptance_route_reserved": 0,
+    "acceptance_route_processes_launched": 0,
+    "control_processes_reserved": 0,
+    "control_processes_launched": 0,
+    "full_rom_or_mame_executed": false,
+    "dependency_installed": false
+  },
+  "budget_snapshot": {
+    "prior_cumulative_repair_seconds": 5095.179,
+    "recovery_active_seconds": 732.199,
+    "cumulative_repair_seconds": 5827.378,
+    "cumulative_limit_seconds": 43200,
+    "distinct_stop_signatures_used": 9,
+    "distinct_stop_signature_limit": 12,
+    "historical_acceptance_gate_attempts_spent": 1,
+    "additional_08_acceptance_processes_used": 0,
+    "additional_08_acceptance_process_limit": 1,
+    "work_anchor": "2026-10-23T21:31:24.938Z",
+    "work_closed_at": "2026-10-23T21:43:37.124032Z",
+    "inactive_user_review_interval": "closed without charging to active_seconds; prior halt accounting through 2026-10-23T20:44:52.425570Z remains unchanged",
+    "closed_sessions": [
+      {
+        "id": "GW-06-08-executor-source-order",
+        "started_at": "2026-10-23T21:31:24.938Z",
+        "closed_at": "2026-10-23T21:39:27Z",
+        "active_seconds": 482.062,
+        "basis": "Retained executor UTC elapsed accounting; monotonic anchor was not retained, so exact monotonic measurement is unknown. Conservative charge only, not launch authority.",
+        "process_launches": 0,
+        "case_executions": 0,
+        "new_target_attempts": 0
+      },
+      {
+        "id": "GW-06-08-parent-closeout",
+        "started_at": "2026-10-23T21:39:27Z",
+        "closed_at": "2026-10-23T21:43:37.124032Z",
+        "active_seconds": 250.137,
+        "utc_only_prefix_seconds": 102.698,
+        "monotonic_started_at": 306843.211831791,
+        "monotonic_closed_at": 306990.65113075,
+        "monotonic_delta_seconds": 147.439,
+        "basis": "Continuous active closeout; UTC-only prefix conservatively charged, followed by persisted local monotonic anchor. No inactive review interval introduced.",
+        "process_launches": 0,
+        "case_executions": 0,
+        "new_target_attempts": 0
+      }
+    ],
+    "workload_counter_scope": "Synthetic proof, acceptance and control processes/cases; metadata/source-inspection command processes are not emulator workload executions."
+  },
+  "next_action": "Do not execute 06-09 or descendants. Establish a separately reviewed, source-grounded mapping or revise the plan under an explicit reviewed disposition; do not add a calibrated delay or change frozen acceptance.",
+  "source_fact_order_scope": "Locally ordered edges within separate MAME, guest, and native chains; the numbered facts do not assert a total order or equivalence across emulators.",
+  "parent_source_audit": [
+    {
+      "path": "build/tool-cache/mame0289/source/src/emu/machine.cpp",
+      "functions": "running_machine::add_notifier / call_notifiers",
+      "lines": "175,273,820-836,933-937",
+      "sha256": "b55b0e1047cd8b3471f0575241c877bb31703025cf5e684e38423c046ccef1f6",
+      "fact": "Frame callbacks normally execute in registration order; input ports initialize before create_custom. This alone does not order every Lua callback relative to cache refresh."
+    },
+    {
+      "path": "fixtures/phase5-b/mame.lua",
+      "functions": "GW_PHASE_TAP / apply_due_inputs / GW_FRAME_SUBSCRIPTION",
+      "lines": "58-81,111-168",
+      "sha256": "af58935f7993de92ce659381f367ab7578ecf1b57426b2e200a2c24efe1414f3",
+      "fact": "The B request comes from the completed-source-step write tap; the frame notifier handles only meta C transitions. No B delay may be inferred from the frame-notifier counter."
+    },
+    {
+      "path": "build/tool-cache/mame0289/source/src/devices/video/315_5313.cpp",
+      "functions": "vdp_handle_eof / vdp_handle_scanline_callback / megadriv_scanline_timer_callback",
+      "lines": "2249-2269,2325-2356,2378-2387",
+      "sha256": "f4cea04815039294552711f87fde88e933b6502c24d527dd6632fb0f726d65c1",
+      "fact": "For the default timing path, EOF resets the VDP scanline counter to -1, the first scanline callback increments it to 0, and IRQ6 is scheduled at its configured scanline. This is a distinct stage from the native publication callback."
+    },
+    {
+      "path": "src/vdp.c",
+      "functions": "gw_vdp_advance / vint_due",
+      "lines": "80-87,219-238",
+      "sha256": "5839e3125b2ea5f3be44f53c0f5b35963fc14ac3f2e3964d3ca4d73b837f74ae",
+      "fact": "The native model publishes at active-line end and schedules VINT at that line plus the modeled offset; the session callback follows publication after a run boundary, rather than defining a corresponding MAME notifier phase."
+    },
+    {
+      "path": "tools/session/session.c",
+      "functions": "gw_session_route_boundary",
+      "lines": "493-522",
+      "sha256": "e1310ec60c323d9bb934c07fee2ce75b315734a9a17851bedb7d7945c0415fc9",
+      "fact": "The candidate callback is called after run_until and PCM capture when a new published field is observed; it is not an independently specified pre-IRQ input-sampling event."
+    }
+  ],
+  "guest_source_files": [
+    {
+      "archive": "fixtures/phase5-b/source.tar",
+      "member": "reviewed-export/src/hardware/interrupts.asm",
+      "sha256": "4ea7fd946cea57285c2246647ad6553adc5d231fefd800375d99c51957486a00"
+    },
+    {
+      "archive": "fixtures/phase5-b/source.tar",
+      "member": "reviewed-export/src/hardware/controllers.asm",
+      "sha256": "8ef2c1781b65c4817f976f77f94bd7e4fe697f2769afa705cc22363530fea479"
+    },
+    {
+      "archive": "fixtures/phase5-b/source.tar",
+      "member": "reviewed-export/src/boot/startup.asm",
+      "sha256": "141a561bebd89133b716c7f4753b68dc269758ecea1f9a9e471cdfa3b13966ef"
+    }
+  ],
+  "native_source_files": [
+    {
+      "path": "src/vdp.c",
+      "sha256": "5839e3125b2ea5f3be44f53c0f5b35963fc14ac3f2e3964d3ca4d73b837f74ae"
+    },
+    {
+      "path": "tools/session/session.c",
+      "sha256": "e1310ec60c323d9bb934c07fee2ce75b315734a9a17851bedb7d7945c0415fc9"
+    }
+  ]
+}

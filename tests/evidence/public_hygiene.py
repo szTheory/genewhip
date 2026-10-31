@@ -23,27 +23,73 @@ with tempfile.TemporaryDirectory(prefix="gw-public-hygiene-") as temporary:
     shutil.copy(ROOT / "LICENSE", root / "LICENSE")
     shutil.copytree(ROOT / "tests/vectors", root / "tests/vectors")
     shutil.copytree(ROOT / "fixtures/independent-game", root / "fixtures/independent-game")
+    shutil.copytree(ROOT / "fixtures/phase5-a", root / "fixtures/phase5-a",
+                    ignore=shutil.ignore_patterns("raw-build-*.bin"))
+    shutil.copytree(ROOT / "fixtures/phase5-b", root / "fixtures/phase5-b",
+                    ignore=shutil.ignore_patterns("raw-build-*.bin"))
     shutil.copy(ROOT / "fixtures/manifest.json", root / "fixtures/manifest.json")
     shutil.copytree(ROOT / "fixtures/independent-game-v2", root / "fixtures/independent-game-v2")
+    shutil.copytree(ROOT / "evidence", root / "evidence")
     (root / "tools").mkdir()
     shutil.copytree(ROOT / "tools/evidence", root / "tools/evidence")
     for relative in (
         "tests/fixtures/game_successor_reference.py",
         "tests/evidence/game_successor_admission.py",
-        "evidence/independent-game-v2.json",
         "scripts/fixtures/source_provenance.py",
+        "scripts/fixtures/public_admission.py",
     ):
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(ROOT / relative, target)
-    (root / "evidence").mkdir(exist_ok=True)
-    shutil.copy(ROOT / "evidence/independent-game.json", root / "evidence/independent-game.json")
-
     candidate = "fixtures/independent-game/game.bin"
     assert hygiene.inspect(root, [candidate]) == [], (
         "the exact admitted versioned ROM with current rights/evidence identity must be public"
     )
     print("PASS: admitted versioned ROM with current evidence identity is public")
+
+    admitted_phase5 = ("fixtures/phase5-a/game.bin", "fixtures/phase5-b/game.bin")
+    for relative in admitted_phase5:
+        assert hygiene.inspect(ROOT, [relative]) == [], (
+            "the canonical Phase 5 ROM must pass its local admission, source, notice, and rights chain"
+        )
+    admission_spec = importlib.util.spec_from_file_location(
+        "gw_public_admission_test", ROOT / "scripts/fixtures/public_admission.py")
+    admission_module = importlib.util.module_from_spec(admission_spec)
+    admission_spec.loader.exec_module(admission_module)
+    public_projection = ROOT / "evidence/phase5-public-admissions.json"
+    if public_projection.is_file():
+        public_records = json.loads(public_projection.read_text())["admissions"]
+    else:
+        public_records = []
+        for suffix in ("a", "b"):
+            private_record = json.loads((ROOT / f"evidence/phase5-admission-{suffix}.json").read_text())
+            public_records.append(admission_module.project_private_record(private_record))
+    for projected in public_records:
+        assert admission_module.validate_projection(projected, ROOT.resolve(), projected["fixture_id"]) == "ok"
+    projection_bytes = (json.dumps({"schema": "genewhip-phase5-public-admission-set-v1",
+        "admissions": public_records}, sort_keys=True, indent=2) + "\n").encode()
+    projection_path = root / "evidence/phase5-public-admissions.json"
+    projection_path.write_bytes(projection_bytes)
+    manifest = json.loads((root / "fixtures/manifest.json").read_text())
+    for row in manifest["fixtures"]:
+        if row.get("kind") == "phase5-independent-game-v1":
+            row["admission"] = {"path": "evidence/phase5-public-admissions.json",
+                                "sha256": hashlib.sha256(projection_bytes).hexdigest()}
+    (root / "fixtures/manifest.json").write_text(json.dumps(manifest))
+    assert hygiene.inspect(root, list(admitted_phase5)) == [], (
+        "the public projection must independently qualify both canonical Phase 5 fixtures without .planning"
+    )
+    for relative in admitted_phase5:
+        raw = relative.rsplit("/", 1)[0] + "/raw-build-1.bin"
+        assert not (root / raw).exists(), "sanitized snapshots must omit raw Phase 5 build products"
+        (root / raw).write_bytes(b"synthetic prohibited intermediate bytes")
+        assert hygiene.inspect(root, [raw]) == [(raw, "private-fixture-or-config")], (
+            "the production scanner must reject bytes at a prohibited raw-build path"
+        )
+        (root / raw).unlink()
+    print("PASS: only the exact admitted Phase 5 ROMs are public; raw build products remain private")
+
+    print("PASS: public Phase 5 rights projection validates in a checkout without .planning")
 
     successor = "fixtures/independent-game-v2/game.bin"
     manifest_path = root / "fixtures/manifest.json"
@@ -196,4 +242,4 @@ with tempfile.TemporaryDirectory(prefix="gw-public-hygiene-") as temporary:
     )
     print("PASS: personal-path privacy control remains active")
 
-print("public hygiene regressions: 10/10 passed")
+print("public hygiene regressions: 11/11 passed")

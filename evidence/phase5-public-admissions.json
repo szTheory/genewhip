@@ -1,0 +1,167 @@
+{
+  "admissions": [
+    {
+      "assets": [],
+      "evidence_basis": "This public projection independently rechecks retained public byte, rights, route, and notice identities. It does not reproduce omitted private selection or run history.",
+      "fixture_id": "genewhip-phase5-a",
+      "identities": {
+        "canonical_rom": {
+          "path": "fixtures/phase5-a/game.bin",
+          "sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723"
+        },
+        "content_inventory": {
+          "path": "fixtures/phase5-a/source-inventory.json",
+          "sha256": "5608495469fda40769ef547cd44eda811924316b732dfed7550345e744e484a5"
+        },
+        "input_program": {
+          "path": "fixtures/phase5-a/input-program.json",
+          "sha256": "e3478d34dcd98a71265b97f33c56b9f5f0f858628a516a9034cc3dbe0b5c8ed2"
+        },
+        "input_schedule": {
+          "path": "fixtures/phase5-a/input-schedule.json",
+          "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+        },
+        "material_terms": {
+          "path": "fixtures/phase5-a/materials.json",
+          "sha256": "4001838aed0967953916dbe4c1067cc8d3f72b48e3c70f92cde5aa9bc6407483"
+        },
+        "notices": [
+          {
+            "covers": [
+              "local-fixtures/phase5/tank-battle/NOTICES.txt"
+            ],
+            "path": "fixtures/phase5-a/NOTICES.md",
+            "sha256": "bda225ef2d04d904dbcc6d44a5bef719553ac432a37394546281fa81584ce29d"
+          }
+        ],
+        "oracle": {
+          "path": "fixtures/phase5-a/oracle.json",
+          "sha256": "2bf285d507c3e7c917329f3c4601c48d17fcdc14f4c01c8665fb98bbfe94fc3e"
+        },
+        "reference_build": {
+          "path": "fixtures/phase5-a/reference-build-record.json",
+          "sha256": "464855118ecaddbb16224c545bcb65740cf0aee417400926e92f2d12d7f8ec18"
+        },
+        "reference_executable": {
+          "path": "fixtures/phase5-a/reference-executable-pin.json",
+          "sha256": "f07106d1eb6cd959df1e17f5c418e64923c5eeb29bc759c5229b93c98868a6a1"
+        },
+        "reference_script": {
+          "path": "fixtures/phase5-a/mame.lua",
+          "sha256": "2423e10c35b0b353dd39cb0129edc4617785df3f04d521f0ba5bec9e1d6e8143"
+        },
+        "scenario": {
+          "path": "fixtures/phase5-a/scenario.json",
+          "sha256": "0df6c9a42d9ba90a96f681e8f4ab7396c1f8c56d47dc887f64cab5a766792bb1"
+        },
+        "source_archive": {
+          "path": "fixtures/phase5-a/source.tar",
+          "sha256": "0751013a99631e08b0309bfde06c8ff578abeda0113c3b208aaf81951a1e6753"
+        },
+        "tool_lock": {
+          "path": "fixtures/phase5-a/toolchain-lock-record.json",
+          "sha256": "6faae09cbe3a5ff5122ee7af21f111b64961b50de6ad506ae736fd3ef83988a6"
+        }
+      },
+      "license": "See per-material terms; mixed components",
+      "outcome": "pass",
+      "project": "monteslu/retro-homebrew-games",
+      "role": "independent-game-fixture",
+      "route": {
+        "frozen_route_sha256": "6c1367575f81d452df8a352c7bab0e173949952ebb485c1e9bb24f916d5f7279",
+        "oracle_sha256": "2bf285d507c3e7c917329f3c4601c48d17fcdc14f4c01c8665fb98bbfe94fc3e",
+        "reference_script_sha256": "2423e10c35b0b353dd39cb0129edc4617785df3f04d521f0ba5bec9e1d6e8143",
+        "scenario_sha256": "0df6c9a42d9ba90a96f681e8f4ab7396c1f8c56d47dc887f64cab5a766792bb1"
+      },
+      "schema": "genewhip-phase5-public-admission-v1",
+      "source_revision": "eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+      "status": "admitted",
+      "title_id": "tank-battle"
+    },
+    {
+      "assets": [],
+      "evidence_basis": "This public projection independently rechecks retained public byte, rights, route, and notice identities. It does not reproduce omitted private selection or run history.",
+      "fixture_id": "genewhip-phase5-b",
+      "identities": {
+        "canonical_rom": {
+          "path": "fixtures/phase5-b/game.bin",
+          "sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff"
+        },
+        "content_inventory": {
+          "path": "fixtures/phase5-b/source-inventory.json",
+          "sha256": "074be9d8508e86a9427fa48d9e1237f8228f256168c8158d3142fc37caebecfb"
+        },
+        "input_program": {
+          "path": "fixtures/phase5-b/input-program.json",
+          "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89"
+        },
+        "input_schedule": {
+          "path": "fixtures/phase5-b/input-schedule.json",
+          "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+        },
+        "material_terms": {
+          "path": "fixtures/phase5-b/materials.json",
+          "sha256": "13efe0139b75ee1c66898614547a3143d944f5dba0d07f17855efa01e87fbd49"
+        },
+        "notices": [
+          {
+            "covers": [
+              "Genewhip LICENSE",
+              "LICENSE",
+              "local-fixtures/phase5/recursion94/NOTICES.txt",
+              "phase5-inputs/Python-3.12.10.tgz#Python-3.12.10/LICENSE",
+              "phase5-inputs/sjasmplus-1.23.1-src.tar.xz#sjasmplus-1.23.1/LICENSE.md",
+              "phase5-inputs/vasm2_0f.tar.gz#vasm/doc/vasm.texi",
+              "phase5-inputs/zlib-1.3.1.tar.gz#zlib-1.3.1/LICENSE"
+            ],
+            "path": "fixtures/phase5-b/NOTICES.md",
+            "sha256": "13f44f15391b814c159d5b431e3057f2a43cfaaab2639a10d5a42866c4a3ee64"
+          }
+        ],
+        "oracle": {
+          "path": "fixtures/phase5-b/oracle.json",
+          "sha256": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389"
+        },
+        "reference_build": {
+          "path": "fixtures/phase5-b/reference-build-record.json",
+          "sha256": "38494c9cc46fa92e2d1e7c727d41265229dc20f2aa752c8ed6558bed3b0df48c"
+        },
+        "reference_executable": {
+          "path": "fixtures/phase5-b/reference-executable-pin.json",
+          "sha256": "f07106d1eb6cd959df1e17f5c418e64923c5eeb29bc759c5229b93c98868a6a1"
+        },
+        "reference_script": {
+          "path": "fixtures/phase5-b/mame.lua",
+          "sha256": "af58935f7993de92ce659381f367ab7578ecf1b57426b2e200a2c24efe1414f3"
+        },
+        "scenario": {
+          "path": "fixtures/phase5-b/scenario.json",
+          "sha256": "31e9c22129a6ce1b3ac2d1980c325e86bfbefb4e2fda85ae018c311e2cb40700"
+        },
+        "source_archive": {
+          "path": "fixtures/phase5-b/source.tar",
+          "sha256": "d6302d23168fb7e20e643c97eed0c694ef702b23cea0b26897e0bb8152e3ad1b"
+        },
+        "tool_lock": {
+          "path": "fixtures/phase5-b/toolchain-lock-record.json",
+          "sha256": "784cddd1d8c80cc61145a1dc2464ad3c69a3e5b1ed06592cc5aacfcbd13e6923"
+        }
+      },
+      "license": "See per-material terms; mixed components",
+      "outcome": "pass",
+      "project": "baba20o/RECURSION94",
+      "role": "independent-game-fixture",
+      "route": {
+        "frozen_route_sha256": "9927d37815aefe995b210f904d660d66f75fa53f5c11f00287db80d61a2fa362",
+        "oracle_sha256": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389",
+        "reference_script_sha256": "af58935f7993de92ce659381f367ab7578ecf1b57426b2e200a2c24efe1414f3",
+        "scenario_sha256": "31e9c22129a6ce1b3ac2d1980c325e86bfbefb4e2fda85ae018c311e2cb40700"
+      },
+      "schema": "genewhip-phase5-public-admission-v1",
+      "source_revision": "ab73bc9c7d2bbc4fcd94b3e0e2b89756cb1dc0cd",
+      "status": "admitted",
+      "title_id": "recursion94"
+    }
+  ],
+  "schema": "genewhip-phase5-public-admission-set-v1"
+}

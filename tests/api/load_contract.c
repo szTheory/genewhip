@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: MIT */
 #include "contract.h"
+#ifdef GW_TEST_HOOKS
+#include "internal.h"
+#endif
 
 static void rejected(gw_machine *m, const void *rom, size_t size, gw_status expected)
 {
@@ -7,7 +10,9 @@ static void rejected(gw_machine *m, const void *rom, size_t size, gw_status expe
     uint8_t memory[GW_RAM_SIZE], copy[GW_RAM_SIZE], old_rom[1024], new_rom[1024];
     CHECK(gw_peek_memory(m, 0xff0000, memory, sizeof(memory)) == GW_OK, "prior RAM");
     CHECK(gw_peek_memory(m, 0, old_rom, sizeof(old_rom)) == GW_OK, "prior ROM");
-    CHECK(gw_load_rom(m, rom, size) == expected, "stable load error");
+    { gw_status actual = gw_load_rom(m, rom, size);
+      if (actual != expected) fprintf(stderr, "load status mismatch: got %d expected %d size %zu\n", actual, expected, size);
+      CHECK(actual == expected, "stable load error"); }
     after = snapshot(m);
     CHECK(memcmp(&before, &after, sizeof(before)) == 0, "rejected load preserves CPU/time/counters");
     CHECK(gw_peek_memory(m, 0xff0000, copy, sizeof(copy)) == GW_OK, "retained RAM");
@@ -118,6 +123,47 @@ int main(void)
     memset(large, 0, 1024); free(large);
     CHECK(snapshot(m).profile == GW_PROFILE_VA3_NTSC_U, "profile never inferred");
     CHECK(run(m, 113).stop_reason == GW_STOP_TARGET, "ROM copy independent of caller lifetime");
+#ifdef GW_TEST_HOOKS
+    CHECK(gw_load_rom(m, rom, sizeof(rom)) == GW_OK && gw_load_rom(peer, rom, sizeof(rom)) == GW_OK,
+          "reload matched allocation-failure controls");
+    (void)run(m, 300); (void)run(peer, 300);
+    gw_test_fail_next_rom_allocation(m);
+    rejected(m, rom, sizeof(rom), GW_ERROR_MEMORY);
+    compare_future_observations(m, peer);
+#endif
+    {
+      FILE *fixture = fopen(GW_FIXTURE_TANK, "rb");
+      uint8_t *tank = malloc(524288);
+      CHECK(fixture != NULL && tank != NULL, "open admitted Tank fixture");
+      CHECK(fread(tank, 1, 524288, fixture) == 524288 && fgetc(fixture) == EOF,
+            "read exact admitted Tank bytes");
+      fclose(fixture);
+      CHECK((((uint32_t)tank[0] << 24) | ((uint32_t)tank[1] << 16) |
+             ((uint32_t)tank[2] << 8) | tank[3]) == UINT32_C(0xe1000000) &&
+            (((uint32_t)tank[4] << 24) | ((uint32_t)tank[5] << 16) |
+             ((uint32_t)tank[6] << 8) | tank[7]) == 0x200,
+            "Tank reset vector baseline");
+      CHECK(gw_load_rom(m, tank, 524288) == GW_OK, "load exact admitted Tank ROM");
+#ifdef GW_TEST_HOOKS
+      CHECK(m->initial_ssp == UINT32_C(0xe1000000) && m->cpu.a[7] == UINT32_C(0xe1000000),
+            "preserve full 32-bit reset stack register");
+#endif
+      {
+        const uint32_t accepted[] = {0x00e00006, 0x00fffffc, 0x00fffffe, 0x01000000,
+                                     0xe0000000, 0xe1000000};
+        const uint32_t rejected_sps[] = {0, 0x00e00004, 0x00e00005,
+                                         0x00ffffff, 0x01000002, 0xe1000002, UINT32_MAX};
+        for (size_t i = 0; i < sizeof(accepted)/sizeof(accepted[0]); ++i) {
+          memcpy(bad, rom, sizeof(bad)); put32(bad, accepted[i]); put32(bad + 4, 512);
+          CHECK(gw_load_rom(m, bad, sizeof(bad)) == GW_OK, "mapped six-byte reset stack frame");
+        }
+        for (size_t i = 0; i < sizeof(rejected_sps)/sizeof(rejected_sps[0]); ++i) {
+          memcpy(bad, rom, sizeof(bad)); put32(bad, rejected_sps[i]);
+          rejected(m, bad, sizeof(bad), GW_ERROR_ROM);
+        }
+      }
+      free(tank);
+    }
     gw_destroy(m); gw_destroy(peer); gw_destroy(NULL);
     puts("load_contract: PASS"); return 0;
 }

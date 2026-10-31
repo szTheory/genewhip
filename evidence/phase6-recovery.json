@@ -1,0 +1,122 @@
+{
+  "schema": "genewhip-phase6-recovery-v1",
+  "phase": "GW-06",
+  "plan": "06-08",
+  "status": "blocked",
+  "decision": "D119R conditional reference-host adapter; no change to GWRC v1, core I/O, fixture, or D-118 authority",
+  "old_halt": {
+    "disposition": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/06-04-HALT-DISPOSITION.md",
+    "ledger_record_id": "GW-06-04-recursion94:cpu:007f3c:80fc:2-ATTEMPT-002",
+    "observed_steps": 3599,
+    "required_steps": 3600,
+    "disposition_sha256": "79dd4818999c78ecf614555d9632660f1905757755f6e18ebdf0fbdbb09364ff"
+  },
+  "source_order_receipt": {
+    "path": "evidence/phase6-recovery-source-order.json",
+    "status": "blocked",
+    "mapping_status": "ambiguous",
+    "sha256": "d316037faa7757f06e9e5ac5cee6c6c27313a1b0eefd8326d9a92869eba135ec"
+  },
+  "frozen_authority": {
+    "reference": "evidence/phase5-current-reference.json -> evidence/phase5-reference-d118.json",
+    "reference_sha256": "d1295806831a0d20586e83a75fd1f86ee52d543d27fe900cf6d79cf230e064bc",
+    "d118_outcome_sha256": "d6aa6d2d4e571314920eff22ef6ed29dd4e16fcd113e0128f0a1272af01215b3",
+    "rom_sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff",
+    "scenario_sha256": "31e9c22129a6ce1b3ac2d1980c325e86bfbefb4e2fda85ae018c311e2cb40700",
+    "input_schedule_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "oracle_sha256": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073073a6e1cee55566e389"
+  },
+  "attempts": {
+    "synthetic_processes_expected": 8,
+    "synthetic_processes_reserved": 0,
+    "synthetic_processes_launched": 0,
+    "acceptance_route_processes_allowed": 1,
+    "acceptance_route_processes_reserved": 0,
+    "acceptance_route_processes_launched": 0,
+    "control_processes_allowed": 2,
+    "control_processes_reserved": 0,
+    "control_processes_launched": 0,
+    "control_case_rows_expected": 12,
+    "control_case_rows_observed": 0
+  },
+  "accounting": {
+    "prior_cumulative_seconds": 5095.179,
+    "recovery_active_seconds": 732.199,
+    "cumulative_seconds": 5827.378,
+    "limit_seconds": 43200,
+    "distinct_signatures_used": 9,
+    "distinct_signature_limit": 12,
+    "prior_acceptance_gate_attempts_spent": 1,
+    "08_additional_acceptance_processes_used": 0,
+    "08_additional_acceptance_process_limit": 1,
+    "closed_user_review_interval": {
+      "from": "2026-10-23T20:44:52.425570Z",
+      "to": "2026-10-23T21:31:24.938Z",
+      "classification": "inactive scheduling/user-review interval; not charged to active recovery work"
+    },
+    "closed_sessions": [
+      {
+        "id": "GW-06-08-executor-source-order",
+        "started_at": "2026-10-23T21:31:24.938Z",
+        "closed_at": "2026-10-23T21:39:27Z",
+        "active_seconds": 482.062,
+        "basis": "Retained executor UTC elapsed accounting; monotonic anchor was not retained, so exact monotonic measurement is unknown. Conservative charge only, not launch authority.",
+        "process_launches": 0,
+        "case_executions": 0,
+        "new_target_attempts": 0
+      },
+      {
+        "id": "GW-06-08-parent-closeout",
+        "started_at": "2026-10-23T21:39:27Z",
+        "closed_at": "2026-10-23T21:43:37.124032Z",
+        "active_seconds": 250.137,
+        "utc_only_prefix_seconds": 102.698,
+        "monotonic_started_at": 306843.211831791,
+        "monotonic_closed_at": 306990.65113075,
+        "monotonic_delta_seconds": 147.439,
+        "basis": "Continuous active closeout; UTC-only prefix conservatively charged, followed by persisted local monotonic anchor. No inactive review interval introduced.",
+        "process_launches": 0,
+        "case_executions": 0,
+        "new_target_attempts": 0
+      }
+    ],
+    "exact_executor_monotonic_elapsed": "unknown",
+    "launch_authority": false,
+    "workload_counter_scope": "Synthetic proof, acceptance and control processes/cases; metadata/source-inspection command processes are not emulator workload executions."
+  },
+  "route_validation": {
+    "status": "not-run",
+    "reason": "Independent source-order mapping did not establish the selected candidate seam.",
+    "observed_steps": null,
+    "required_steps": 3600,
+    "required_chain": "request 695 -> source-backed sample -> first guest-visible 697 -> held through 720"
+  },
+  "historical_controls": {
+    "status": "not-run",
+    "reason": "Task 1 source-order gate failed before any process reservation."
+  },
+  "halt_reason": "Source order does not prove Genewhip's published-field callback is the same frame-cache sampling boundary as MAME's frame notifier. Synthetic consistency or D-118 output cannot fill this independent source-evidence gap.",
+  "descendants_blocked": [
+    "06-09",
+    "06-05",
+    "06-06",
+    "06-07"
+  ],
+  "phase7_started": false,
+  "fixtures_and_d118_unchanged": true,
+  "repair_ledger_unchanged": false,
+  "metadata_commit": {
+    "status": "prepared-for-parent-commit",
+    "executor_staging_failure": "Git index.lock creation denied by workspace sandbox; parent will use the permitted escalation path.",
+    "commit_message": "docs(GW-06-08): record blocked recovery source-order gate"
+  },
+  "historical_repair_ledger_objects_unchanged": true,
+  "ledger_append": {
+    "path": "evidence/phase6-repairs.json",
+    "prior_sha256": "4927d2371a96a0f0a60fb9332cd369a0001a070707e9c6ab740f418caab52ebc",
+    "sha256": "27475a8d72e0ea7408506e24a8e598b49e6f08a6b11915d21771b0f86e8d24dc",
+    "key": "recovery_accounting",
+    "historical_objects_unchanged": true
+  },
+  "verification_scope": "JSON/cross-hash/source-hash and historical preservation checks only; no emulator test, synthetic matrix, route or compatibility pass."
+}

@@ -1,0 +1,34 @@
+{
+  "schema": "genewhip-v02-proof-dependencies-v1",
+  "all_proofs": ["core", "host", "safety", "determinism", "measurements", "public-matrix", "package", "docs", "publisher", "download-adoption", "final-close"],
+  "source_dependencies": {
+    "src/**": ["core", "host", "safety", "determinism", "measurements", "package"],
+    "include/**": ["core", "host", "safety", "determinism", "measurements", "package"],
+    "tools/session/**": ["core", "host", "determinism", "measurements", "package"],
+    "tools/headless/**": ["core", "safety", "determinism", "measurements", "package"],
+    "tools/desktop/**": ["host", "package"],
+    "fixtures/**": ["core", "host", "safety", "determinism", "measurements", "public-matrix", "package"],
+    "tests/fixtures/**": ["core", "host", "safety", "determinism", "measurements", "public-matrix"],
+    "tests/session/**": ["core", "host", "safety", "determinism", "measurements", "public-matrix"],
+    "tests/evidence/**": ["safety", "determinism", "measurements", "public-matrix", "package"],
+    "scripts/evidence/v02_*.py": ["public-matrix", "package"],
+    "evidence/v02-*.json": ["public-matrix", "safety", "measurements", "package"],
+    "CMakeLists.txt": ["core", "host", "safety", "determinism", "measurements", "package"],
+    "cmake/**": ["core", "host", "safety", "determinism", "measurements", "package"],
+    "docs/**": ["docs", "package"],
+    "README.md": ["docs", "package"],
+    "packaging/**": ["docs", "package"],
+    "scripts/package_*.py": ["package", "docs"],
+    "scripts/release/**": ["publisher", "download-adoption", "package"],
+    ".github/workflows/**": ["publisher", "download-adoption", "core", "host", "safety", "determinism", "measurements", "package"]
+  },
+  "proof_dependencies": {
+    "public-matrix": ["core", "host", "safety", "determinism"],
+    "package": ["public-matrix", "docs"],
+    "publisher": ["package"],
+    "download-adoption": ["publisher", "package"],
+    "final-close": ["public-matrix", "measurements", "package", "download-adoption"]
+  },
+  "unknown_overlap": "invalidate-all-proofs",
+  "generated_proof_excluded_from_source_identity": ["build/v02/**", "artifacts/v02/**"]
+}

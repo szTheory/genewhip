@@ -1,0 +1,19 @@
+name: Validate shared qualification clock
+description: Validate journal time against Actions queue evidence without resetting the cutoff
+inputs:
+  phase:
+    description: Qualification partition enforced by this job
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Check immutable journal start and run creation time
+      if: ${{ github.event_name == 'workflow_dispatch' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        QUALIFICATION_PHASE: ${{ inputs.phase }}
+      run: |
+        created_at="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .created_at)"
+        test -n "$created_at"
+        QUALIFICATION_RUN_CREATED_AT="$created_at" python3 -I -c 'import os,sys;sys.path.insert(0,os.getcwd()); from scripts.release.v02_qualification import _validate_workflow_clock; _validate_workflow_clock(os.environ["GENEWHIP_QUALIFICATION_STARTED_AT"], os.environ["QUALIFICATION_RUN_CREATED_AT"], os.environ["GENEWHIP_QUALIFICATION_NONCE"], os.environ["GITHUB_BASE_SHA"], phase=os.environ["QUALIFICATION_PHASE"])'

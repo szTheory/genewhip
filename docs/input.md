@@ -1,5 +1,11 @@
 # Input contract (API 4)
 
+The runner accepts input-log format `genewhip-input-log 1`. Package version 0.2.0
+and C API version 4 are separate contracts; this release does not change either
+format. A missing, malformed, or unsupported log header is rejected as
+`REJECT: input-log <reason>` before SDL starts. Dropped cartridge replacement
+is separate: a rejected ROM reports `REJECT:` and preserves the active session.
+
 This page is the contract for controller input as of plan GW-02-07: two
 three-button pad ports, timestamped pad events and the I/O register protocol a
 guest reads. Six-button pads and other peripherals are not covered; the TH seam
@@ -155,3 +161,25 @@ not a measurement from a console.
 - Timing is event-ordered on the master tick; there is no controller settling
   delay. Real-hardware read timing was not measured.
 - The session layer and desktop runner that feed these events are described in `docs/desktop.md`.
+
+## Desktop SDL mapping
+
+The desktop runner owns two independent three-button ports. The Phase 6 SDL
+route harness maps each port through a virtual joystick and SDL gamepad mapping,
+pumps ordinary SDL events, then samples each port through the same `sample_port`
+path used by the runner. It records requested, raw joystick and effective
+sampled masks per port. Route proofs compare the effective sampled masks with
+the declared client input map and the guest's observed input state; assigning a
+script mask directly to the guest is not accepted as SDL input evidence.
+
+The headless chunk replay uses the same ordered event schedule and compares
+results at common emulated boundaries while varying bounded run targets. The
+retained [Phase 6 chunk report](../evidence/phase6-chunk.json) records 20 events
+across 3,631 boundaries for RECURSION94 and 22 events across 4,196 boundaries
+for Tank Battle. The full PCM FNV-1a64 fingerprint and one selected complete
+320×224 frame fingerprint matched each title's retained full-route capture.
+Boundary RAM and diagnostic fingerprints are recorded as aggregate observations;
+they are not independently checked against a reference. The report records
+hash matches rather than byte-by-byte comparisons, and does not establish broad
+hardware or input compatibility. The exact candidate, limits, frame sequences,
+and retained run receipts are in the report.

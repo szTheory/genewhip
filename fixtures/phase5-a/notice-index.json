@@ -1,0 +1,12 @@
+{
+  "notices": [
+    {
+      "covers": [
+        "local-fixtures/phase5/tank-battle/NOTICES.txt"
+      ],
+      "path": "fixtures/phase5-a/NOTICES.md",
+      "sha256": "bda225ef2d04d904dbcc6d44a5bef719553ac432a37394546281fa81584ce29d"
+    }
+  ],
+  "schema": "genewhip-phase5-notice-index-v1"
+}
