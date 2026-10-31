@@ -165,6 +165,7 @@ def _prepare_original_snapshot() -> None:
             "tests/evidence/phase7_continuation_contract.py",
             "tests/evidence/phase7_return_consumer_contract.py",
             "tests/evidence/phase7_creation_receipts_contract.py",
+            "tests/evidence/phase5_baseline_contract.py",
             str(PHASE / "07-17-CONTEXT.md"), str(PHASE / "07-17-PLAN.md"),
             str(PHASE / "07-10-PLAN.md"), str(PHASE / "07-11-PLAN.md"),
             ".planning/debug/targeted-process-cleanup-source.md",
@@ -1118,6 +1119,375 @@ class ContinuationContracts(unittest.TestCase):
                 coordinator._required_preview_success(
                     {"statusCheckRollup": bad_checks}, run, expected)
 
+    def test_r13_failed_hosted_predecessor_requires_exact_terminal_run_roster(self):
+        expected = {
+            "source_head": "d1944cc3a494a20f0c98b6aec5d77ceb86184ffc",
+            "public_source_sha": "9027bb0579bf559f56b26a91d5d3b44ce194c3a4",
+            "public_base_sha": "ac7c5bdc8e4e87e3a6423de7a64524f5f0ca498b",
+            "public_tree_sha": "2ae5c5ebf0fcc539152d73069a84a1e0818513c2",
+            "pull_request": "22", "preview_run_id": "41174611288",
+            "merge_preview_run_id": "41175438525", "qualification_run_id": "41175511179",
+            "qualification_attempt": 1, "qualification_nonce": "68aa65ee32be4422a0da0beddd197560",
+            "qualification_created_at": "2026-10-31T06:10:38Z"}
+        module = SimpleNamespace(R13_FAILED_HOSTED_PREDECESSOR=expected)
+        predecessor_root = Path("/private/r13-candidate")
+        branch = "v0.2-source-" + expected["source_head"][:12]
+        preview = {"id": int(expected["preview_run_id"]), "head_sha": expected["source_head"],
+            "event": "pull_request", "status": "completed", "conclusion": "success",
+            "path": ".github/workflows/ci.yml", "head_branch": branch,
+            "display_title": "Required preview checks"}
+        merge_preview = {"id": int(expected["merge_preview_run_id"]),
+            "head_sha": expected["public_source_sha"], "event": "push", "status": "completed",
+            "conclusion": "success", "path": ".github/workflows/ci.yml", "head_branch": "main",
+            "display_title": "Required preview checks"}
+        failed = {"id": int(expected["qualification_run_id"]),
+            "head_sha": expected["public_source_sha"], "event": "workflow_dispatch",
+            "status": "completed", "conclusion": "failure", "path": ".github/workflows/ci.yml",
+            "head_branch": "main", "display_title": "Plan10 qualification " + expected["qualification_nonce"],
+            "run_attempt": 1, "created_at": expected["qualification_created_at"]}
+        statuses = {"phase7-fast": "success", "gameplay": "success", "safety": "success",
+            "product-smoke": "success", "desktop": "success", "performance": "success",
+            "package": "success", "v02-runtime": "failure", "extended": "skipped",
+            "required-ci": "failure", "v02-benchmark-control": "skipped",
+            "v02-benchmark-tank-battle": "skipped", "v02-benchmark-recursion94": "skipped",
+            "v02-package": "skipped", "v02-release-qualification": "skipped", "attestation": "skipped"}
+        jobs = [{"name": name, "status": "completed", "conclusion": result, "steps": []}
+            for name, result in statuses.items()]
+        jobs_by_name = {row["name"]: row for row in jobs}
+        jobs_by_name["v02-runtime"]["steps"] = [{"name":
+            "Run complete current-source product safety and chunk roster", "conclusion": "failure"}]
+        jobs_by_name["required-ci"]["steps"] = [{"name":
+            "Reject incomplete or stale required lanes", "conclusion": "failure"}]
+        artifacts = {"total_count": 2, "artifacts": [
+            {"id": 13033436450, "name": "phase4-host-evidence-41175511179-1",
+                "size_in_bytes": 10665,
+                "digest": "sha256:5dbb368097e8d070357185219ee00093f5c746b3e7b5a25251bd8832977bbc82"},
+            {"id": 13032787671, "name": "safety-evidence-41175511179-1",
+                "size_in_bytes": 12640,
+                "digest": "sha256:cc4857f8aa3e1c8a00e5f88ff329c9feb08fa9e5d4a721180050b8dac5a081d3"}]}
+        source_roster = {"total_count": 1, "workflow_runs": [preview]}
+        merged_roster = {"total_count": 2, "workflow_runs": [merge_preview, failed]}
+        commit_metadata = {"sha": expected["public_source_sha"],
+            "tree": {"sha": expected["public_tree_sha"]},
+            "parents": [{"sha": expected["public_base_sha"]}]}
+        pull = {"number": 22, "html_url": "https://github.com/szTheory/genewhip/pull/22",
+            "state": "closed", "merged": True,
+            "head": {"sha": expected["source_head"], "ref": branch},
+            "base": {"ref": "main", "sha": expected["public_base_sha"]},
+            "merge_commit_sha": expected["public_source_sha"]}
+        def remote(_repository, endpoint, **_kwargs):
+            if endpoint == "pulls/22":
+                return pull
+            if endpoint == "actions/runs/41174611288": return preview
+            if endpoint == "actions/runs/41175438525": return merge_preview
+            if endpoint == "actions/runs/41175511179": return failed
+            if endpoint.endswith("/attempts/1/jobs?per_page=100"):
+                return {"total_count": len(jobs), "jobs": jobs}
+            if endpoint.endswith("/artifacts?per_page=100"): return artifacts
+            if "head_sha=" + expected["source_head"] in endpoint: return source_roster
+            if "head_sha=" + expected["public_source_sha"] in endpoint: return merged_roster
+            raise AssertionError("unexpected read-only GitHub endpoint")
+        def gh_json(_repository, endpoint, **_kwargs):
+            if endpoint == "git/commits/" + expected["public_source_sha"]:
+                return commit_metadata
+            if endpoint == "git/ref/heads/main":
+                return {"object": {"sha": expected["public_source_sha"]}}
+            raise AssertionError("unexpected GitHub metadata endpoint")
+        with mock.patch.object(coordinator, "_r13_failed_hosted_predecessor",
+                return_value=(module, {"journal": {}, "candidate_root": predecessor_root})), \
+             mock.patch.object(coordinator, "_r13_remote_json", side_effect=remote), \
+             mock.patch.object(coordinator, "_git", return_value=expected["public_tree_sha"]), \
+             mock.patch.object(coordinator, "_gh_json", side_effect=gh_json):
+            _, facts = coordinator._verify_r13_failed_hosted_predecessor(
+                "szTheory/genewhip", b"fixed predecessor", phase="preparation")
+        self.assertEqual(facts["runtime_artifact"], "absent")
+        self.assertEqual(facts["runtime_child_cleanup"], "UNKNOWN")
+        for key_path, wrong in (("head.ref", "other-branch"),
+                ("base.sha", "e" * 40)):
+            target = pull
+            parent, leaf = key_path.split(".")
+            original = target[parent][leaf]
+            target[parent][leaf] = wrong
+            with mock.patch.object(coordinator, "_r13_failed_hosted_predecessor",
+                    return_value=(module, {"journal": {}, "candidate_root": predecessor_root})), \
+                 mock.patch.object(coordinator, "_r13_remote_json", side_effect=remote), \
+                 mock.patch.object(coordinator, "_verified_merge_receipt") as verify, \
+                 self.assertRaisesRegex(ValueError, "source-successor-r13-merged-pr-identity-invalid"):
+                coordinator._verify_r13_failed_hosted_predecessor(
+                    "szTheory/genewhip", b"fixed predecessor", phase="preparation")
+            verify.assert_not_called()
+            target[parent][leaf] = original
+        for key, value in (("tree", {"sha": "f" * 40}),
+                ("parents", [{"sha": "e" * 40}])):
+            original = commit_metadata[key]
+            commit_metadata[key] = value
+            with mock.patch.object(coordinator, "_r13_failed_hosted_predecessor",
+                    return_value=(module, {"journal": {}, "candidate_root": predecessor_root})), \
+                 mock.patch.object(coordinator, "_r13_remote_json", side_effect=remote), \
+                 mock.patch.object(coordinator, "_git", return_value=expected["public_tree_sha"]), \
+                 mock.patch.object(coordinator, "_gh_json", side_effect=gh_json), \
+                 self.assertRaisesRegex(ValueError, "protected-merge-parents-or-tree-mismatch"):
+                coordinator._verify_r13_failed_hosted_predecessor(
+                    "szTheory/genewhip", b"fixed predecessor", phase="preparation")
+            commit_metadata[key] = original
+        mutations = (
+            ("v02-runtime", "success"),
+            ("required-ci", "success"),
+            ("phase7-fast", "in_progress"),
+            ("attestation", "success"),
+        )
+        for name, conclusion in mutations:
+            with self.subTest(name=name, conclusion=conclusion):
+                old = jobs_by_name[name]["conclusion"]
+                jobs_by_name[name]["conclusion"] = conclusion
+                with mock.patch.object(coordinator, "_r13_failed_hosted_predecessor",
+                        return_value=(module, {"journal": {}, "candidate_root": predecessor_root})), \
+                     mock.patch.object(coordinator, "_r13_remote_json", side_effect=remote), \
+                     mock.patch.object(coordinator, "_git", return_value=expected["public_tree_sha"]), \
+                     mock.patch.object(coordinator, "_gh_json", side_effect=gh_json), \
+                     self.assertRaisesRegex(ValueError, "source-successor-r13-job-result-changed"):
+                    coordinator._verify_r13_failed_hosted_predecessor(
+                        "szTheory/genewhip", b"fixed predecessor", phase="preparation")
+                jobs_by_name[name]["conclusion"] = old
+        with mock.patch.object(coordinator, "_r13_failed_hosted_predecessor",
+                return_value=(module, {"journal": {}, "candidate_root": predecessor_root})), \
+             mock.patch.object(coordinator, "_r13_remote_json", side_effect=remote), \
+             mock.patch.object(coordinator, "_git", return_value=expected["public_tree_sha"]), \
+             mock.patch.object(coordinator, "_gh_json", side_effect=lambda _repo, endpoint, **_kw:
+                 {"sha": expected["public_source_sha"], "tree": {"sha": expected["public_tree_sha"]},
+                  "parents": [{"sha": expected["public_base_sha"]}]} if endpoint.startswith("git/commits/")
+                 else {"object": {"sha": "e" * 40}}), \
+             self.assertRaisesRegex(ValueError, "source-successor-r13-public-main-moved"):
+            coordinator._verify_r13_failed_hosted_predecessor(
+                "szTheory/genewhip", b"fixed predecessor", phase="preparation")
+
+    def test_failed_hosted_successor_cli_routes_only_selection17_return(self):
+        with tempfile.TemporaryDirectory(prefix="gw-r13-successor-route-") as temp:
+            root = Path(temp)
+            continuation_path = root / PHASE / "07-10-CURRENT-SOURCE-RETURN.json"
+            continuation_path.parent.mkdir(parents=True)
+            continuation_path.write_text("{}\n", encoding="utf-8")
+            out = root / "build/v02/campaign15/original10/transition.json"
+            out.parent.mkdir(parents=True)
+            result = {"source_head": "a" * 40, "public_base_sha": "b" * 40,
+                "repository": "szTheory/genewhip", "started_at": "2026-10-30T16:50:39.837827+00:00",
+                "push_performed": False}
+            argv = ["--mode", "failed-hosted-successor-source", "--out", str(out),
+                "--scope", str(root / "evidence/v02-execution.json"),
+                "--preflight", str(root / "build/v02/campaign15/preflight.json"),
+                "--publication-copy", str(root / "build/v02/campaign15/publication"),
+                "--journal", str(root / "build/v02/campaign15/hosted-delivery-journal.json"),
+                "--campaign", str(root / "build/v02/campaign15/campaign.json"),
+                "--campaign-sha256", "f" * 64, "--recovery-selection", "17",
+                "--continuation", str(continuation_path),
+                "--continuation-purpose", "current-native-return"]
+            with mock.patch.object(coordinator, "ROOT", root), \
+                 mock.patch.object(coordinator, "_require_campaign_layout"), \
+                 mock.patch.object(coordinator, "_campaign_projection") as projection, \
+                 mock.patch.object(coordinator, "_reject_output_collisions"), \
+                 mock.patch.object(coordinator, "failed_hosted_successor_sanitized_source",
+                    return_value=result) as transition:
+                self.assertEqual(coordinator.main(argv), 0)
+            projection.assert_called_once()
+            transition.assert_called_once()
+            self.assertEqual(transition.call_args.kwargs["campaign_path"], root / "build/v02/campaign15/campaign.json")
+            self.assertEqual(transition.call_args.kwargs["continuation_path"], continuation_path)
+            self.assertEqual(json.loads(out.read_text())["source_head"], "a" * 40)
+            bad = [*argv]
+            bad[bad.index("17")] = "16"
+            with mock.patch.object(coordinator, "ROOT", root), \
+                 mock.patch.object(coordinator, "_require_campaign_layout"), \
+                 mock.patch.object(coordinator, "_campaign_projection") as blocked_projection, \
+                 mock.patch.object(coordinator, "_reject_output_collisions"), \
+                 mock.patch.object(coordinator, "failed_hosted_successor_sanitized_source") as blocked:
+                self.assertEqual(coordinator.main(bad), 1)
+            blocked_projection.assert_not_called()
+            blocked.assert_not_called()
+
+    def test_failed_hosted_successor_direct_api_checks_current_return_before_packet(self):
+        with tempfile.TemporaryDirectory(prefix="gw-r13-direct-gate-") as temp:
+            root = Path(temp)
+            journal = root / "build/v02/campaign15/hosted-delivery-journal.json"
+            journal.parent.mkdir(parents=True)
+            journal.write_text("{}\n", encoding="utf-8")
+            continuation = root / "continuation.json"
+            continuation.write_text("{}\n", encoding="utf-8")
+            with mock.patch.object(coordinator, "ROOT", root), \
+                 mock.patch.object(coordinator, "_valid_packet_for_delivery") as packet:
+                with self.assertRaisesRegex(ValueError, "recovery-campaign-required-for-selected-journal"):
+                    coordinator.failed_hosted_successor_sanitized_source(
+                        root / "preflight.json", root / "publication", journal,
+                        scope_path=root / "scope.json", campaign_path=None,
+                        campaign_sha256=None, continuation_path=continuation,
+                        recovery_selection="17", continuation_purpose="current-native-return")
+                with self.assertRaisesRegex(ValueError, "current-return-purpose-requires-protected-return-mode"):
+                    coordinator.failed_hosted_successor_sanitized_source(
+                        root / "preflight.json", root / "publication", journal,
+                        scope_path=root / "scope.json", campaign_path=root / "campaign.json",
+                        campaign_sha256="f" * 64, continuation_path=continuation,
+                        recovery_selection="16", continuation_purpose="current-native-return")
+                packet.assert_not_called()
+            with mock.patch.object(coordinator, "ROOT", root), \
+                 mock.patch.object(coordinator, "_campaign_projection",
+                    side_effect=ValueError("current-return-stale")), \
+                 mock.patch.object(coordinator, "_valid_packet_for_delivery") as packet:
+                with self.assertRaisesRegex(ValueError, "current-return-stale"):
+                    coordinator.failed_hosted_successor_sanitized_source(
+                        root / "preflight.json", root / "publication", journal,
+                        scope_path=root / "scope.json", campaign_path=root / "campaign.json",
+                        campaign_sha256="f" * 64, continuation_path=continuation,
+                        recovery_selection="17", continuation_purpose="current-native-return")
+            packet.assert_not_called()
+
+    def test_r13_failed_hosted_successor_archives_resumes_and_rejects_mutations(self):
+        start = "2026-10-30T16:50:39.837827+00:00"
+        old_journal = (json.dumps({"synthetic": "exact failed hosted predecessor"},
+            sort_keys=True) + "\n").encode()
+        old_sha = sha(old_journal)
+        expected = {"journal_sha256": old_sha, "started_at": start,
+            "source_head": "d1944cc3a494a20f0c98b6aec5d77ceb86184ffc",
+            "private_source_head": "1c6ff6e1c6572162731d72a5f97c7775b8e51212",
+            "public_base_sha": "ac7c5bdc8e4e87e3a6423de7a64524f5f0ca498b",
+            "public_source_sha": "9027bb0579bf559f56b26a91d5d3b44ce194c3a4",
+            "public_tree_sha": "2ae5c5ebf0fcc539152d73069a84a1e0818513c2",
+            "pull_request": "22", "qualification_run_id": "41175511179",
+            "qualification_attempt": 1, "qualification_nonce": "68aa65ee32be4422a0da0beddd197560"}
+        facts = {"runtime_job_conclusion": "failure", "required_ci_conclusion": "failure",
+            "runtime_failure_step": "Run complete current-source product safety and chunk roster",
+            "runtime_artifact": "absent", "runtime_child_cleanup": "UNKNOWN",
+            "qualification_run_id": expected["qualification_run_id"],
+            "qualification_attempt": expected["qualification_attempt"]}
+        module = SimpleNamespace(R13_FAILED_HOSTED_PREDECESSOR=expected)
+        prior_lineage = {"schema": "genewhip.v02-source-successor.v1",
+            "prior_merge_commit_sha": "ac7c5bdc8e4e87e3a6423de7a64524f5f0ca498b"}
+        predecessor = {"journal": {"source_successor": prior_lineage}}
+        packet = {"repository": "szTheory/genewhip", "public_identity": {
+            "head_sha": "f" * 40, "base_sha": expected["public_source_sha"]}}
+        policy = {"repository": "szTheory/genewhip", "repository_observations": {"observations": {
+            "expected_identity": {"observed_default_branch_sha": expected["public_source_sha"]}}}}
+        with tempfile.TemporaryDirectory(prefix="gw-r13-failed-successor-") as temporary:
+            root = Path(temporary).resolve()
+            campaign = root / "build/v02/campaign15"
+            campaign.mkdir(parents=True)
+            journal = campaign / "hosted-delivery-journal.json"
+            original = {"schema": "genewhip.v02-delivery-journal.v1", "started_at": start,
+                "repository": "szTheory/genewhip", "source_head": expected["source_head"],
+                "public_base_sha": expected["public_base_sha"],
+                "public_source_sha": expected["public_source_sha"],
+                "tree_sha": expected["public_tree_sha"], "candidate_sha": expected["source_head"],
+                "pull_request": "22", "branch": "v0.2-source-" + expected["source_head"][:12],
+                "push_performed": True, "qualification_started_at": start,
+                "qualification_dispatch_nonce": expected["qualification_nonce"],
+                "qualification_dispatch_requested": True, "qualification_dispatch_submitted": True,
+                "selected_run_created_at": "2026-10-31T06:10:38Z", "source_successor": prior_lineage}
+            journal.write_bytes(old_journal)
+            scope = root / "evidence/v02-execution.json"
+            scope.parent.mkdir(parents=True)
+            scope.write_text("{}\n", encoding="utf-8")
+            continuation_path = root / PHASE / "07-10-CURRENT-SOURCE-RETURN.json"
+            continuation_path.parent.mkdir(parents=True)
+            continuation_path.write_text("{}\n", encoding="utf-8")
+            archive_relative = "build/v02/failures/failed-hosted-predecessor-r13-" + old_sha + ".json"
+            def validate_transition(active):
+                coordinator._validate_r13_failed_hosted_successor(active)
+
+            def r13_predecessor(_raw):
+                return module, predecessor
+
+            call_args = {"scope_path": scope, "campaign_path": campaign / "campaign.json",
+                "campaign_sha256": "f" * 64, "continuation_path": continuation_path,
+                "recovery_selection": "17", "continuation_purpose": "current-native-return"}
+
+            def install_patches(*, write_failure=False, verify_side_effect=None):
+                stack = contextlib.ExitStack()
+                stack.enter_context(mock.patch.object(coordinator, "ROOT", root))
+                stack.enter_context(mock.patch.object(coordinator, "_require_campaign_for_journal"))
+                stack.enter_context(mock.patch.object(coordinator, "_valid_packet_for_delivery",
+                    return_value=packet))
+                stack.enter_context(mock.patch.object(coordinator, "_r13_failed_hosted_predecessor",
+                    side_effect=r13_predecessor))
+                stack.enter_context(mock.patch.object(coordinator, "_verify_r13_failed_hosted_predecessor",
+                    side_effect=verify_side_effect or (lambda *_a, **_k: (expected, facts))))
+                stack.enter_context(mock.patch.object(coordinator, "_fresh_public_policy",
+                    return_value=policy))
+                stack.enter_context(mock.patch.object(coordinator, "_require_hosted_budget"))
+                stack.enter_context(mock.patch.object(coordinator, "_validate_source_successor_history",
+                    side_effect=validate_transition))
+                return stack
+
+            with install_patches():
+                result = coordinator.failed_hosted_successor_sanitized_source(
+                    Path("preflight.json"), root / "publication", journal, **call_args)
+            active_bytes = journal.read_bytes()
+            active = json.loads(active_bytes)
+            archive = root / archive_relative
+            self.assertEqual(archive.read_bytes(), old_journal)
+            self.assertEqual(result["predecessor_journal_sha256"], old_sha)
+            self.assertEqual(active["started_at"], start)
+            self.assertFalse(active["push_performed"])
+            self.assertEqual(active["public_base_sha"], expected["public_source_sha"])
+            self.assertEqual(active["source_successor"]["failed_hosted"]["prior_failure_facts"], facts)
+
+            archived = archive.read_bytes()
+            archive.write_bytes(b"mutated history")
+            with self.assertRaisesRegex(ValueError, "hosted-delivery-journal-r13-successor-archive-invalid"):
+                coordinator._validate_r13_failed_hosted_successor(active)
+            archive.write_bytes(archived)
+
+            output = campaign / "transition.json"
+            argv = ["--mode", "failed-hosted-successor-source", "--out", str(output),
+                "--scope", str(scope), "--preflight", str(campaign / "preflight.json"),
+                "--publication-copy", str(root / "publication"), "--journal", str(journal),
+                "--campaign", str(campaign / "campaign.json"), "--campaign-sha256", "f" * 64,
+                "--recovery-selection", "17", "--continuation", str(continuation_path),
+                "--continuation-purpose", "current-native-return"]
+            write_calls = 0
+            real_write = coordinator._write_json
+            def fail_first_output(path, value):
+                nonlocal write_calls
+                write_calls += 1
+                if write_calls == 1:
+                    raise OSError("synthetic output failure")
+                return real_write(path, value)
+            with install_patches(), \
+                 mock.patch.object(coordinator, "_require_campaign_layout"), \
+                 mock.patch.object(coordinator, "_campaign_projection"), \
+                 mock.patch.object(coordinator, "_reject_output_collisions"), \
+                 mock.patch.object(coordinator, "_r13_remote_json", side_effect=lambda _repo, endpoint, **_kw:
+                    [] if endpoint.startswith("pulls?") else
+                    {"total_count": 0, "workflow_runs": []}), \
+                 mock.patch.object(coordinator, "_gh_json", return_value=[]), \
+                 mock.patch.object(coordinator, "_write_json", side_effect=fail_first_output), \
+                 contextlib.redirect_stderr(io.StringIO()) as errors:
+                self.assertEqual(coordinator.main(argv), 1)
+            self.assertIn("synthetic output failure", errors.getvalue())
+            self.assertFalse(output.exists())
+            self.assertEqual(journal.read_bytes(), active_bytes)
+            with install_patches(), \
+                 mock.patch.object(coordinator, "_require_campaign_layout"), \
+                 mock.patch.object(coordinator, "_campaign_projection"), \
+                 mock.patch.object(coordinator, "_reject_output_collisions"), \
+                 mock.patch.object(coordinator, "_r13_remote_json", side_effect=lambda _repo, endpoint, **_kw:
+                    [] if endpoint.startswith("pulls?") else
+                    {"total_count": 0, "workflow_runs": []}), \
+                 mock.patch.object(coordinator, "_gh_json", return_value=[]), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(coordinator.main(argv), 0)
+            self.assertTrue(output.is_file())
+            self.assertEqual(json.loads(output.read_bytes())["source_head"], packet["public_identity"]["head_sha"])
+            self.assertEqual(journal.read_bytes(), active_bytes)
+
+            journal.write_bytes(old_journal)
+            concurrent = b"concurrent update\n"
+            def change_during_remote(*_args, **_kwargs):
+                journal.write_bytes(concurrent)
+                return expected, facts
+            with install_patches(verify_side_effect=change_during_remote), \
+                 self.assertRaisesRegex(ValueError, "delivery-journal-transition-source-changed"):
+                coordinator.failed_hosted_successor_sanitized_source(
+                    Path("preflight.json"), root / "publication", journal, **call_args)
+            self.assertEqual(journal.read_bytes(), concurrent)
+
     def test_r10_predecessor_accepts_only_its_exact_successful_preview_runs(self):
         repository = "szTheory/genewhip"
         old_head, base, merge_sha = "a" * 40, "b" * 40, "c" * 40
@@ -1357,7 +1727,7 @@ class ContinuationContracts(unittest.TestCase):
 
     def test_current_native_continuation_reopens_exact_r8_and_historical_inputs(self):
         self.assertEqual(continuation.CURRENT_RETURN_CANDIDATE_ROOT.as_posix(),
-            "build/v02/campaign15/original10/current-source-candidate-final-r13")
+            "build/v02/campaign15/original10/current-source-candidate-final-r15")
         with tempfile.TemporaryDirectory(prefix="gw10-current-native-record-") as temporary:
             root = Path(temporary).resolve()
             required = set(continuation.R8_NATIVE_SOURCE_PATHS)
@@ -1365,6 +1735,7 @@ class ContinuationContracts(unittest.TestCase):
                 "tests/evidence/phase7_continuation_contract.py",
                 "tests/evidence/phase7_sticky_denial.py",
                 "tests/evidence/phase7_return_consumer_contract.py",
+                continuation.R8_PHASE5_DIAGNOSTIC_TEST_PATH,
                 continuation.R8_PACKET.as_posix(), continuation.R8_RESULT.as_posix(),
                 continuation.R8_ATTEMPT.as_posix(), continuation.R8_NESTED.as_posix(),
                 continuation.R8_RESULT_REVIEW.as_posix(), continuation.R8_ADMISSION_REVIEW.as_posix(),
@@ -1400,6 +1771,14 @@ class ContinuationContracts(unittest.TestCase):
                     in continuation.R8_DIAGNOSTIC_REPORT_FUNCTION_SHAS.items()},
                 "module_assignment_ast_sha256": continuation.R8_DIAGNOSTIC_REPORT_ASSIGNMENT_SHAS,
                 "diagnostic_only": True, "native_runtime_changed": False})
+            self.assertEqual(payload["current_source_delta_from_r8"][
+                "additional_diagnostic_test_source"], {
+                    "path": continuation.R8_PHASE5_DIAGNOSTIC_TEST_PATH,
+                    "sha256": continuation.R8_PHASE5_DIAGNOSTIC_TEST_SHA,
+                    "diagnostic_only": True, "native_runtime_changed": False,
+                    "r8_native_execution_credit": False})
+            self.assertEqual(payload["current_tests"][continuation.R8_PHASE5_DIAGNOSTIC_TEST_PATH],
+                continuation.R8_PHASE5_DIAGNOSTIC_TEST_SHA)
             self.assertIs(safety_delta["prelaunch_only_review_boundary"], False)
             fixture_delta = payload["current_source_delta_from_r8"][
                 continuation.R8_SAFETY_REPORT_TEST_PATH]["test_fixture_deltas"]
@@ -1452,8 +1831,12 @@ class ContinuationContracts(unittest.TestCase):
                         'raise ValueError("source-successor-resume-state-invalid")',
                         'raise ValueError("source-successor-resume-state-mutant")',
                         "current-native-added-function-unreviewed:_resume_source_successor"),
+                    ("scripts/release/v02_qualification.py",
+                        'source-successor-r13-run-identity-invalid',
+                        'source-successor-r13-run-identity-mutant',
+                        "current-native-added-function-unreviewed:_verify_r13_failed_hosted_predecessor"),
                     ("scripts/release/v02_continuation.py",
-                        "current-source-candidate-final-r13", "current-source-candidate-final-r9",
+                        "current-source-candidate-final-r15", "current-source-candidate-final-r9",
                         "current-native-candidate-root-delta-invalid"),
                     ("scripts/release/v02_continuation.py",
                         '"candidate_root": "build/v02/campaign15/original10/current-source-candidate-final-r10"',
@@ -1494,7 +1877,11 @@ class ContinuationContracts(unittest.TestCase):
                         "current-native-route-diagnostic-helper-unreviewed"),
                     ("tests/evidence/phase4_report_contract.py",
                         "test_injected_private_command", "test_injected_unknown_command",
-                        "current-native-report-diagnostic-test-unreviewed:test_sanitized_ctest_failure_summary_identifies_only_allowlisted_methods")):
+                        "current-native-report-diagnostic-test-unreviewed:test_sanitized_ctest_failure_summary_identifies_only_allowlisted_methods"),
+                    ("tests/evidence/phase5_baseline_contract.py",
+                        'if method in SAFE_FAILURE_DIAGNOSTIC_METHODS:',
+                        'if method in SAFE_FAILURE_DIAGNOSTIC_METHODS and False:',
+                        "current-native-phase5-diagnostic-test-unreviewed")):
                 source = root / relative
                 original = (ROOT / relative).read_bytes()
                 self.assertIn(old.encode(), original)
@@ -1511,6 +1898,7 @@ class ContinuationContracts(unittest.TestCase):
                 "tests/evidence/phase7_continuation_contract.py",
                 "tests/evidence/phase7_sticky_denial.py",
                 "tests/evidence/phase7_return_consumer_contract.py",
+                continuation.R8_PHASE5_DIAGNOSTIC_TEST_PATH,
                 continuation.R8_PACKET.as_posix(), continuation.R8_RESULT.as_posix(),
                 continuation.R8_ATTEMPT.as_posix(), continuation.R8_NESTED.as_posix(),
                 continuation.R8_RESULT_REVIEW.as_posix(), continuation.R8_ADMISSION_REVIEW.as_posix(),
@@ -1558,6 +1946,7 @@ class ContinuationContracts(unittest.TestCase):
                 "tests/evidence/phase7_continuation_contract.py",
                 "tests/evidence/phase7_sticky_denial.py",
                 "tests/evidence/phase7_return_consumer_contract.py",
+                continuation.R8_PHASE5_DIAGNOSTIC_TEST_PATH,
                 continuation.R8_PACKET.as_posix(), continuation.R8_RESULT.as_posix(),
                 continuation.R8_ATTEMPT.as_posix(), continuation.R8_NESTED.as_posix(),
                 continuation.R8_RESULT_REVIEW.as_posix(), continuation.R8_ADMISSION_REVIEW.as_posix(),

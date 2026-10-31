@@ -1526,9 +1526,11 @@ def _require_campaign_layout(args: argparse.Namespace) -> None:
         raise ValueError("recovery-campaign-journal-layout-invalid")
     if not under_root(args.out):
         raise ValueError("recovery-campaign-output-layout-invalid")
-    if args.mode in {"hosted", "retry-source", "successor-source"} and not under_root(args.preflight):
+    if args.mode in {"hosted", "retry-source", "successor-source",
+            "failed-hosted-successor-source"} and not under_root(args.preflight):
         raise ValueError("recovery-campaign-preflight-layout-invalid")
-    if args.mode in {"hosted", "retry-source", "stage-public", "successor-source"} \
+    if args.mode in {"hosted", "retry-source", "stage-public", "successor-source",
+            "failed-hosted-successor-source"} \
             and args.publication_copy is not None:
         if not under_root(args.publication_copy):
             raise ValueError("recovery-campaign-publication-layout-invalid")
@@ -1564,6 +1566,8 @@ def _reject_output_collisions(args: argparse.Namespace) -> None:
             "continuation"),
         "successor-source": ("preflight", "publication_copy", "scope", "campaign", "journal",
             "continuation"),
+        "failed-hosted-successor-source": ("preflight", "publication_copy", "scope", "campaign",
+            "journal", "continuation"),
         "hosted": ("preflight", "publication_copy", "scope", "campaign", "journal",
             "continuation")}
     names = list(mode_inputs.get(args.mode, ()))
@@ -2049,7 +2053,8 @@ def _validate_source_successor_history(journal: dict[str, Any]) -> None:
         "prior_public_base_sha", "prior_merge_commit_sha", "prior_merge_tree_sha",
         "prior_pull_request", "prior_preview_run_id", "active_source_head", "active_base_sha",
         "active_repository", "required_check"}
-    if (not isinstance(successor, dict) or set(successor) != required_keys
+    if (not isinstance(successor, dict) or set(successor) not in
+            (required_keys, required_keys | {"failed_hosted"})
             or successor.get("schema") != "genewhip.v02-source-successor.v1"
             or not isinstance(successor.get("archive"), str)
             or not re.fullmatch(r"[0-9a-f]{64}", str(successor.get("archive_sha256", "")))
@@ -2081,6 +2086,8 @@ def _validate_source_successor_history(journal: dict[str, Any]) -> None:
         raise ValueError("hosted-delivery-journal-source-successor-archive-conflicts")
     _validate_source_retry_history(json.loads(raw))
     _validate_r10_predecessor_artifacts(raw)
+    if "failed_hosted" in successor:
+        _validate_r13_failed_hosted_successor(journal)
 
 
 def _write_journal_atomically(path: pathlib.Path, value: dict[str, Any], *,
@@ -2528,6 +2535,321 @@ def source_successor_sanitized_source(packet_path: pathlib.Path, publication_cop
         "repository": repository, "started_at": start, "push_performed": False,
         "predecessor_archive": archive_relative, "predecessor_journal_sha256": old_sha,
         "predecessor_merge": merge}
+
+
+def _r13_failed_hosted_predecessor(journal_bytes: bytes) -> tuple[Any, dict[str, Any]]:
+    spec = importlib.util.spec_from_file_location("gw_v02_r13_predecessor",
+        ROOT / "scripts/release/v02_continuation.py")
+    if spec is None or spec.loader is None:
+        raise ValueError("source-successor-predecessor-validator-unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        result = module.validate_r13_failed_hosted_predecessor(ROOT, journal_bytes=journal_bytes)
+    except ValueError:
+        raise ValueError("source-successor-r13-predecessor-invalid") from None
+    return module, result
+
+
+def _r13_remote_json(repository: str, endpoint: str, *, phase: str) -> Any:
+    encoded = urllib.parse.quote(repository, safe="/")
+    response = _external(["gh", "api", f"repos/{encoded}/{endpoint}"],
+        timeout=45, phase=phase)
+    try:
+        return json.loads(response.stdout)
+    except json.JSONDecodeError:
+        raise ValueError("source-successor-r13-remote-response-invalid") from None
+
+
+def _verify_r13_failed_hosted_predecessor(repository: str, journal_bytes: bytes,
+        *, phase: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Reopen PR22, its successful previews, and the exact failed full run."""
+    module, _predecessor = _r13_failed_hosted_predecessor(journal_bytes)
+    expected = module.R13_FAILED_HOSTED_PREDECESSOR
+    if repository != "szTheory/genewhip":
+        raise ValueError("source-successor-r13-repository-mismatch")
+    branch = "v0.2-source-" + expected["source_head"][:12]
+    pr = _r13_remote_json(repository, f"pulls/{expected['pull_request']}", phase=phase)
+    if (not isinstance(pr, dict) or pr.get("state") != "closed" or pr.get("merged") is not True
+            or not isinstance(pr.get("head"), dict) or pr["head"].get("sha") != expected["source_head"]
+            or pr["head"].get("ref") != branch
+            or not isinstance(pr.get("base"), dict) or pr["base"].get("ref") != "main"
+            or pr["base"].get("sha") != expected["public_base_sha"]
+            or pr.get("merge_commit_sha") != expected["public_source_sha"]):
+        raise ValueError("source-successor-r13-merged-pr-identity-invalid")
+    predecessor = _predecessor
+    merge_receipt = _verified_merge_receipt({
+        "number": pr.get("number", expected["pull_request"]),
+        "url": pr.get("html_url"), "state": "MERGED",
+        "headRefOid": pr["head"]["sha"], "baseRefName": pr["base"]["ref"],
+        "mergeCommit": {"oid": pr["merge_commit_sha"]}}, repository,
+        predecessor["candidate_root"] / "publication", expected["source_head"],
+        expected["public_base_sha"], branch, phase=phase)
+    if (merge_receipt["public_source_sha"] != expected["public_source_sha"]
+            or merge_receipt["tree_sha"] != expected["public_tree_sha"]
+            or merge_receipt["public_base_sha"] != expected["public_base_sha"]):
+        raise ValueError("source-successor-r13-merge-receipt-changed")
+    run_specs = (
+        (expected["preview_run_id"], {"head_sha": expected["source_head"], "event": "pull_request",
+            "status": "completed", "conclusion": "success", "path": ".github/workflows/ci.yml",
+            "head_branch": branch, "display_title": "Required preview checks"}),
+        (expected["merge_preview_run_id"], {"head_sha": expected["public_source_sha"], "event": "push",
+            "status": "completed", "conclusion": "success", "path": ".github/workflows/ci.yml",
+            "head_branch": "main", "display_title": "Required preview checks"}),
+        (expected["qualification_run_id"], {"head_sha": expected["public_source_sha"],
+            "event": "workflow_dispatch", "status": "completed", "conclusion": "failure",
+            "path": ".github/workflows/ci.yml", "head_branch": "main",
+            "display_title": "Plan10 qualification " + expected["qualification_nonce"],
+            "run_attempt": expected["qualification_attempt"],
+            "created_at": expected["qualification_created_at"]}))
+    for run_id, fields in run_specs:
+        run = _r13_remote_json(repository, f"actions/runs/{run_id}", phase=phase)
+        if (not isinstance(run, dict) or run.get("id") != int(run_id)
+                or any(run.get(key) != value for key, value in fields.items())):
+            raise ValueError("source-successor-r13-run-identity-invalid")
+    run_rosters = (
+        (expected["source_head"], {int(expected["preview_run_id"])}),
+        (expected["public_source_sha"], {
+            int(expected["merge_preview_run_id"]), int(expected["qualification_run_id"])}))
+    for head, expected_ids in run_rosters:
+        roster = _r13_remote_json(repository,
+            f"actions/runs?head_sha={head}&per_page=100", phase=phase)
+        rows = roster.get("workflow_runs") if isinstance(roster, dict) else None
+        if (not isinstance(rows, list) or roster.get("total_count") != len(rows) or len(rows) >= 100
+                or {row.get("id") for row in rows if isinstance(row, dict)} != expected_ids
+                or any(not isinstance(row, dict) or row.get("status") != "completed"
+                    or row.get("event") == "workflow_dispatch"
+                        and row.get("id") != int(expected["qualification_run_id"])
+                    for row in rows)):
+            raise ValueError("source-successor-r13-workflow-roster-changed")
+    jobs_value = _r13_remote_json(repository,
+        f"actions/runs/{expected['qualification_run_id']}/attempts/{expected['qualification_attempt']}/jobs?per_page=100",
+        phase=phase)
+    jobs = jobs_value.get("jobs") if isinstance(jobs_value, dict) else None
+    if not isinstance(jobs, list) or jobs_value.get("total_count") != len(jobs) or len(jobs) >= 100:
+        raise ValueError("source-successor-r13-job-roster-invalid")
+    job_statuses = {
+        "phase7-fast": "success", "gameplay": "success", "safety": "success",
+        "product-smoke": "success", "desktop": "success", "performance": "success",
+        "package": "success", "v02-runtime": "failure", "extended": "skipped",
+        "required-ci": "failure", "v02-benchmark-control": "skipped",
+        "v02-benchmark-tank-battle": "skipped", "v02-benchmark-recursion94": "skipped",
+        "v02-package": "skipped", "v02-release-qualification": "skipped", "attestation": "skipped"}
+    if (len(jobs) != len(job_statuses) or {row.get("name") for row in jobs if isinstance(row, dict)}
+            != set(job_statuses)):
+        raise ValueError("source-successor-r13-job-roster-invalid")
+    by_name = {row["name"]: row for row in jobs}
+    for name, conclusion in job_statuses.items():
+        row = by_name[name]
+        if row.get("status") != "completed" or row.get("conclusion") != conclusion:
+            raise ValueError("source-successor-r13-job-result-changed")
+    runtime_steps = by_name["v02-runtime"].get("steps")
+    required_steps = by_name["required-ci"].get("steps")
+    if (not isinstance(runtime_steps, list) or not isinstance(required_steps, list)
+            or not any(row.get("name") == "Run complete current-source product safety and chunk roster"
+                and row.get("conclusion") == "failure" for row in runtime_steps)
+            or not any(row.get("name") == "Reject incomplete or stale required lanes"
+                and row.get("conclusion") == "failure" for row in required_steps)):
+        raise ValueError("source-successor-r13-failure-step-changed")
+    artifacts_value = _r13_remote_json(repository,
+        f"actions/runs/{expected['qualification_run_id']}/artifacts?per_page=100", phase=phase)
+    artifacts = artifacts_value.get("artifacts") if isinstance(artifacts_value, dict) else None
+    expected_artifacts = {
+        (13033436450, "phase4-host-evidence-41175511179-1", 10665,
+            "sha256:5dbb368097e8d070357185219ee00093f5c746b3e7b5a25251bd8832977bbc82"),
+        (13032787671, "safety-evidence-41175511179-1", 12640,
+            "sha256:cc4857f8aa3e1c8a00e5f88ff329c9feb08fa9e5d4a721180050b8dac5a081d3")}
+    observed_artifacts = {(row.get("id"), row.get("name"), row.get("size_in_bytes"), row.get("digest"))
+        for row in artifacts if isinstance(row, dict)} if isinstance(artifacts, list) else set()
+    if observed_artifacts != expected_artifacts or artifacts_value.get("total_count") != len(expected_artifacts):
+        raise ValueError("source-successor-r13-hosted-output-roster-changed")
+    main = _gh_json(repository, "git/ref/heads/main", phase=phase)
+    if main.get("object", {}).get("sha") != expected["public_source_sha"]:
+        raise ValueError("source-successor-r13-public-main-moved")
+    return expected, {"runtime_job_conclusion": "failure", "required_ci_conclusion": "failure",
+        "runtime_failure_step": "Run complete current-source product safety and chunk roster",
+        "runtime_artifact": "absent", "runtime_child_cleanup": "UNKNOWN",
+        "qualification_run_id": expected["qualification_run_id"],
+        "qualification_attempt": expected["qualification_attempt"]}
+
+
+def _validate_r13_failed_hosted_successor(journal: dict[str, Any]) -> None:
+    successor = journal.get("source_successor") if isinstance(journal, dict) else None
+    failed = successor.get("failed_hosted") if isinstance(successor, dict) else None
+    if failed is None:
+        return
+    required = {"schema", "archive", "archive_sha256", "started_at", "prior_source_head",
+        "prior_public_source_sha", "prior_public_tree_sha", "prior_pull_request",
+        "prior_qualification_run_id", "prior_qualification_attempt", "prior_qualification_nonce",
+        "prior_failure_facts", "active_source_head", "active_base_sha", "active_repository"}
+    if (not isinstance(failed, dict) or set(failed) != required
+            or failed.get("schema") != "genewhip.v02-source-successor-r13-failed-hosted.v1"
+            or failed.get("started_at") != journal.get("started_at")
+            or failed.get("active_source_head") != journal.get("source_head")
+            or failed.get("active_base_sha") != journal.get("public_base_sha")
+            or failed.get("active_repository") != journal.get("repository")):
+        raise ValueError("hosted-delivery-journal-r13-successor-identity-invalid")
+    archive_input = ROOT / failed["archive"]
+    if archive_input.is_symlink():
+        raise ValueError("hosted-delivery-journal-r13-successor-archive-invalid")
+    try:
+        archive = archive_input.resolve(strict=True)
+        raw = archive.read_bytes()
+    except OSError:
+        raise ValueError("hosted-delivery-journal-r13-successor-archive-invalid") from None
+    if (not archive.is_relative_to((ROOT / "build/v02/failures").resolve())
+            or len(raw) > 64 * 1024
+            or hashlib.sha256(raw).hexdigest() != failed.get("archive_sha256")):
+        raise ValueError("hosted-delivery-journal-r13-successor-archive-invalid")
+    module, _ = _r13_failed_hosted_predecessor(raw)
+    expected = module.R13_FAILED_HOSTED_PREDECESSOR
+    expected_facts = {"runtime_job_conclusion": "failure", "required_ci_conclusion": "failure",
+        "runtime_failure_step": "Run complete current-source product safety and chunk roster",
+        "runtime_artifact": "absent", "runtime_child_cleanup": "UNKNOWN",
+        "qualification_run_id": expected["qualification_run_id"],
+        "qualification_attempt": expected["qualification_attempt"]}
+    if (failed.get("archive_sha256") != expected["journal_sha256"]
+            or failed.get("prior_source_head") != expected["source_head"]
+            or failed.get("prior_public_source_sha") != expected["public_source_sha"]
+            or failed.get("prior_public_tree_sha") != expected["public_tree_sha"]
+            or failed.get("prior_pull_request") != expected["pull_request"]
+            or failed.get("prior_qualification_run_id") != expected["qualification_run_id"]
+            or failed.get("prior_qualification_attempt") != expected["qualification_attempt"]
+            or failed.get("prior_qualification_nonce") != expected["qualification_nonce"]
+            or failed.get("prior_failure_facts") != expected_facts
+            or successor.get("prior_merge_commit_sha") != "ac7c5bdc8e4e87e3a6423de7a64524f5f0ca498b"):
+        raise ValueError("hosted-delivery-journal-r13-successor-lineage-invalid")
+
+
+def _resume_r13_failed_hosted_successor(packet: dict[str, Any], journal_path: pathlib.Path,
+        journal_bytes: bytes, journal: dict[str, Any], scope_path: pathlib.Path) -> dict[str, Any]:
+    _validate_source_successor_history(journal)
+    transition = journal["source_successor"]["failed_hosted"]
+    original_bytes = (ROOT / transition["archive"]).read_bytes()
+    expected, failure_facts = _verify_r13_failed_hosted_predecessor(
+        packet["repository"], original_bytes, phase="preparation")
+    if (packet["public_identity"].get("base_sha") != expected["public_source_sha"]
+            or packet["public_identity"].get("head_sha") != journal["source_head"]):
+        raise ValueError("source-successor-r13-resume-candidate-mismatch")
+    scope = json.loads(scope_path.read_text(encoding="utf-8"))
+    _require_hosted_budget(journal["started_at"], datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        scope, phase="preparation")
+    repository, branch = packet["repository"], journal["branch"]
+    prs = _r13_remote_json(repository,
+        f"pulls?head={urllib.parse.quote('szTheory:' + branch, safe='')}&state=all&per_page=100",
+        phase="preparation")
+    if not isinstance(prs, list) or prs:
+        raise ValueError("source-successor-r13-resume-already-published")
+    refs = _gh_json(repository, "git/matching-refs/heads/" + urllib.parse.quote(branch, safe=""),
+        phase="preparation")
+    if not isinstance(refs, list) or refs:
+        raise ValueError("source-successor-r13-resume-already-published")
+    runs = _r13_remote_json(repository,
+        f"actions/runs?head_sha={packet['public_identity']['head_sha']}&per_page=100",
+        phase="preparation")
+    if not isinstance(runs, dict) or runs.get("total_count") != 0 or runs.get("workflow_runs") != []:
+        raise ValueError("source-successor-r13-resume-already-published")
+    if journal_path.read_bytes() != journal_bytes:
+        raise ValueError("source-successor-r13-resume-journal-changed")
+    _require_hosted_budget(journal["started_at"], datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        scope, phase="preparation")
+    return {"source_head": journal["source_head"], "public_base_sha": journal["public_base_sha"],
+        "repository": repository, "started_at": journal["started_at"], "push_performed": False,
+        "predecessor_archive": transition["archive"],
+        "predecessor_journal_sha256": transition["archive_sha256"],
+        "predecessor_merge": {"public_source_sha": expected["public_source_sha"],
+            "tree_sha": expected["public_tree_sha"], "pull_request": expected["pull_request"],
+            "qualification_failure": failure_facts}}
+
+
+def failed_hosted_successor_sanitized_source(packet_path: pathlib.Path,
+        publication_copy: pathlib.Path, journal_path: pathlib.Path, *, scope_path: pathlib.Path,
+        campaign_path: pathlib.Path, campaign_sha256: str,
+        continuation_path: pathlib.Path, recovery_selection: str,
+        continuation_purpose: str) -> dict[str, Any]:
+    """Prepare one fixed replacement after the exact R13 hosted qualification failure."""
+    _require_campaign_for_journal(journal_path, scope_path, campaign_path, campaign_sha256,
+        phase="preparation", recovery_selection=recovery_selection,
+        continuation_path=continuation_path, continuation_purpose=continuation_purpose)
+    if recovery_selection != "17" or continuation_purpose != "current-native-return":
+        raise ValueError("source-successor-current-return-required")
+    packet = _valid_packet_for_delivery(packet_path, publication_copy)
+    journal_path = journal_path.resolve(strict=True)
+    expected_path = (ROOT / "build/v02/campaign15/hosted-delivery-journal.json").resolve(strict=True)
+    if journal_path != expected_path:
+        raise ValueError("source-successor-journal-path-invalid")
+    original_bytes = journal_path.read_bytes()
+    try:
+        previous = json.loads(original_bytes)
+    except json.JSONDecodeError:
+        raise ValueError("source-successor-r13-journal-invalid") from None
+    if (isinstance(previous, dict) and isinstance(previous.get("source_successor"), dict)
+            and "failed_hosted" in previous["source_successor"]):
+        return _resume_r13_failed_hosted_successor(
+            packet, journal_path, original_bytes, previous, scope_path)
+    module, predecessor = _r13_failed_hosted_predecessor(original_bytes)
+    expected = module.R13_FAILED_HOSTED_PREDECESSOR
+    if (packet["repository"] != "szTheory/genewhip"
+            or packet["public_identity"].get("base_sha") != expected["public_source_sha"]
+            or packet["public_identity"].get("head_sha") == expected["source_head"]):
+        raise ValueError("source-successor-r13-candidate-not-based-on-exact-merged-source")
+    if os.environ.get("GENEWHIP_QUALIFICATION_STARTED_AT", expected["started_at"]) != expected["started_at"]:
+        raise ValueError("source-successor-campaign-start-mismatch")
+    scope = json.loads(scope_path.read_text(encoding="utf-8"))
+    _require_hosted_budget(expected["started_at"], datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        scope, phase="preparation")
+    policy = _fresh_public_policy(packet, publication_copy)
+    observations = policy.get("repository_observations", {}).get("observations", {})
+    if (policy.get("repository") != packet["repository"]
+            or observations.get("expected_identity", {}).get("observed_default_branch_sha")
+                != expected["public_source_sha"]):
+        raise ValueError("source-successor-r13-live-public-base-mismatch")
+    verified, failure_facts = _verify_r13_failed_hosted_predecessor(
+        packet["repository"], original_bytes, phase="preparation")
+    new_head, new_base = packet["public_identity"]["head_sha"], packet["public_identity"]["base_sha"]
+    old_sha = hashlib.sha256(original_bytes).hexdigest()
+    archive_root = ROOT / "build/v02/failures"
+    if archive_root.is_symlink():
+        raise ValueError("source-successor-r13-archive-path-invalid")
+    archive_root.mkdir(parents=True, exist_ok=True)
+    if not archive_root.resolve(strict=True).is_relative_to((ROOT / "build/v02").resolve(strict=True)):
+        raise ValueError("source-successor-r13-archive-path-invalid")
+    archive = archive_root / f"failed-hosted-predecessor-r13-{old_sha}.json"
+    try:
+        with archive.open("xb") as stream:
+            stream.write(original_bytes)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except FileExistsError:
+        if archive.read_bytes() != original_bytes:
+            raise ValueError("source-successor-r13-archive-conflict") from None
+    archive_relative = archive.resolve(strict=True).relative_to(ROOT.resolve(strict=True)).as_posix()
+    failed = {"schema": "genewhip.v02-source-successor-r13-failed-hosted.v1",
+        "archive": archive_relative, "archive_sha256": old_sha, "started_at": expected["started_at"],
+        "prior_source_head": expected["source_head"], "prior_public_source_sha": expected["public_source_sha"],
+        "prior_public_tree_sha": expected["public_tree_sha"], "prior_pull_request": expected["pull_request"],
+        "prior_qualification_run_id": expected["qualification_run_id"],
+        "prior_qualification_attempt": expected["qualification_attempt"],
+        "prior_qualification_nonce": expected["qualification_nonce"],
+        "prior_failure_facts": failure_facts, "active_source_head": new_head,
+        "active_base_sha": new_base, "active_repository": packet["repository"]}
+    lineage = dict(predecessor["journal"]["source_successor"])
+    lineage.update({"active_source_head": new_head, "active_base_sha": new_base,
+        "active_repository": packet["repository"], "failed_hosted": failed})
+    active = {"schema": "genewhip.v02-delivery-journal.v1", "started_at": expected["started_at"],
+        "repository": packet["repository"], "source_head": new_head, "public_base_sha": new_base,
+        "branch": "v0.2-source-" + new_head[:12], "push_performed": False, "source_successor": lineage}
+    _validate_source_successor_history(active)
+    _require_hosted_budget(expected["started_at"], datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        scope, phase="preparation")
+    _write_journal_atomically(journal_path, active, expected_current_bytes=original_bytes)
+    return {"source_head": new_head, "public_base_sha": new_base,
+        "repository": packet["repository"], "started_at": expected["started_at"],
+        "push_performed": False, "predecessor_archive": archive_relative,
+        "predecessor_journal_sha256": old_sha,
+        "predecessor_merge": {"public_source_sha": verified["public_source_sha"],
+            "tree_sha": verified["public_tree_sha"], "pull_request": verified["pull_request"],
+            "qualification_failure": failure_facts}}
 
 
 def _adopt_incomplete_merged_source(packet: dict[str, Any], candidate: pathlib.Path,
@@ -4718,7 +5040,7 @@ def _semantic_mutant_receipt_error(expected: dict[str, Any]) -> str | None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", required=True, choices=("plan", "runtime", "package", "validate", "semantic-mutants", "semantic-mutants-worker", "stage-public", "retry-source", "successor-source", "hosted", "close"))
+    parser.add_argument("--mode", required=True, choices=("plan", "runtime", "package", "validate", "semantic-mutants", "semantic-mutants-worker", "stage-public", "retry-source", "successor-source", "failed-hosted-successor-source", "hosted", "close"))
     parser.add_argument("--build", type=pathlib.Path, default=ROOT / "build/phase6")
     parser.add_argument("--scope", type=pathlib.Path, default=ROOT / "evidence/v02-execution.json")
     parser.add_argument("--out", type=pathlib.Path, required=True)
@@ -4768,7 +5090,8 @@ def main(argv: list[str] | None = None) -> int:
                 and args.recovery_selection == "17" and args.continuation is not None):
             raise ValueError("current-native-purpose-requires-stage-public-prepare-only")
         if args.continuation_purpose == "current-native-return" and not (
-                args.mode in ("stage-public", "retry-source", "successor-source", "hosted") and not args.prepare_only
+                args.mode in ("stage-public", "retry-source", "successor-source",
+                    "failed-hosted-successor-source", "hosted") and not args.prepare_only
                 and args.recovery_selection == "17" and args.continuation is not None):
             raise ValueError("current-return-purpose-requires-protected-return-mode")
         if args.continuation_purpose in ("current-native-preparation", "current-native-return"):
@@ -4781,6 +5104,10 @@ def main(argv: list[str] | None = None) -> int:
                     os.path.abspath(expected_current_continuation)):
                 raise ValueError("current-native-continuation-path-invalid")
         if args.mode == "successor-source" and (
+                args.recovery_selection != "17"
+                or args.continuation_purpose != "current-native-return"):
+            raise ValueError("source-successor-current-return-required")
+        if args.mode == "failed-hosted-successor-source" and (
                 args.recovery_selection != "17"
                 or args.continuation_purpose != "current-native-return"):
             raise ValueError("source-successor-current-return-required")
@@ -4933,6 +5260,18 @@ def main(argv: list[str] | None = None) -> int:
             value = source_successor_sanitized_source(args.preflight, args.publication_copy,
                 args.journal, campaign_path=args.campaign, campaign_sha256=args.campaign_sha256,
                 scope_path=args.scope, recovery_selection=args.recovery_selection,
+                continuation_path=args.continuation,
+                continuation_purpose=args.continuation_purpose)
+            _write_json(args.out, {"schema": "genewhip.v02-source-successor-transition.v1",
+                "status": "prepared", **value})
+            print("public-source-successor: prepared; source=" + value["source_head"] +
+                  "; original_started_at=" + value["started_at"] + "; push_performed=false")
+        elif args.mode == "failed-hosted-successor-source":
+            if args.publication_copy is None or args.campaign is None or args.continuation is None:
+                raise ValueError("source-successor-current-return-required")
+            value = failed_hosted_successor_sanitized_source(args.preflight, args.publication_copy,
+                args.journal, scope_path=args.scope, recovery_selection=args.recovery_selection,
+                campaign_path=args.campaign, campaign_sha256=args.campaign_sha256,
                 continuation_path=args.continuation,
                 continuation_purpose=args.continuation_purpose)
             _write_json(args.out, {"schema": "genewhip.v02-source-successor-transition.v1",

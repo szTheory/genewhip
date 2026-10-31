@@ -16,6 +16,7 @@ import os
 import shutil
 import struct
 import subprocess
+import stat
 import resource
 import re
 import uuid
@@ -601,21 +602,80 @@ def freeze_candidate(build, map_path, output):
 
 def freeze_build_provenance(candidate, build):
     """Retain the exact CMake bytes bound by a candidate before any route launch."""
-    destination = (ROOT/"build/v02/runtime/build-provenance") if _EXECUTION_SCOPE is not None else build / "evidence/build-provenance"
+    repository_root = ROOT.resolve(strict=True)
+    build_root = pathlib.Path(build).resolve(strict=True)
+    if not build_root.is_relative_to(repository_root):
+        raise compiler.Invalid("candidate-cmake-build-root-invalid")
+    if _EXECUTION_SCOPE is not None:
+        owned_roots = _EXECUTION_SCOPE.get("owned_roots")
+        if not isinstance(owned_roots, list) or not owned_roots:
+            raise compiler.Invalid("candidate-cmake-build-root-unowned")
+        resolved_roots = []
+        for relative in owned_roots:
+            path = pathlib.PurePosixPath(relative)
+            if path.is_absolute() or ".." in path.parts:
+                raise compiler.Invalid("candidate-cmake-build-root-unowned")
+            resolved = (repository_root / pathlib.Path(*path.parts)).resolve()
+            if not resolved.is_relative_to(repository_root):
+                raise compiler.Invalid("candidate-cmake-build-root-unowned")
+            resolved_roots.append(resolved)
+        if not any(build_root.is_relative_to(owned) for owned in resolved_roots):
+            raise compiler.Invalid("candidate-cmake-build-root-unowned")
+    destination = build_root / "evidence/build-provenance"
+    for directory in (build_root / "evidence", destination):
+        if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
+            raise compiler.Invalid("candidate-cmake-provenance-path-invalid")
+        if directory.exists() and not directory.resolve(strict=True).is_relative_to(build_root):
+            raise compiler.Invalid("candidate-cmake-provenance-path-invalid")
     destination.mkdir(parents=True, exist_ok=True)
     for relative, expected in candidate.get("source_files", {}).items():
         if pathlib.PurePosixPath(relative).name != "CMakeLists.txt":
             continue
         retained = destination / f"{expected}.cmake"
         if retained.exists():
-            if retained.is_symlink() or not retained.is_file() or sha(retained) != expected:
+            retained_info = retained.lstat()
+            if (retained.is_symlink() or not retained.is_file()
+                    or retained_info.st_size > 131072 or retained_info.st_nlink != 1
+                    or sha(retained) != expected):
                 raise compiler.Invalid("candidate-cmake-provenance-collision")
         else:
-            source = (ROOT / relative).resolve(strict=True)
-            if not source.is_relative_to(ROOT) or source.is_symlink() or sha(source) != expected:
+            source_input = repository_root / relative
+            current = repository_root
+            for part in pathlib.Path(relative).parts:
+                current = current / part
+                if current.is_symlink():
+                    raise compiler.Invalid("candidate-cmake-provenance-mismatch")
+            if source_input.is_symlink():
+                raise compiler.Invalid("candidate-cmake-provenance-mismatch")
+            try:
+                source_info = source_input.stat()
+                if not source_input.is_file() or source_info.st_size > 131072:
+                    raise compiler.Invalid("candidate-cmake-provenance-size")
+                source = source_input.resolve(strict=True)
+                if not source.is_relative_to(repository_root):
+                    raise compiler.Invalid("candidate-cmake-provenance-mismatch")
+                descriptor = os.open(source_input, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+                with os.fdopen(descriptor, "rb") as stream:
+                    opened_info = os.fstat(stream.fileno())
+                    if (opened_info.st_size > 131072 or not stat.S_ISREG(opened_info.st_mode)
+                            or opened_info.st_ino != source_info.st_ino
+                            or opened_info.st_dev != source_info.st_dev):
+                        raise compiler.Invalid("candidate-cmake-provenance-size")
+                    source_bytes = stream.read(131073)
+            except OSError as error:
+                raise compiler.Invalid("candidate-cmake-provenance-mismatch") from error
+            if len(source_bytes) > 131072:
+                raise compiler.Invalid("candidate-cmake-provenance-size")
+            if hashlib.sha256(source_bytes).hexdigest() != expected:
                 raise compiler.Invalid("candidate-cmake-provenance-mismatch")
             temporary = destination / f".{expected}.cmake.tmp"
-            temporary.write_bytes(source.read_bytes())
+            try:
+                with temporary.open("xb") as stream:
+                    stream.write(source_bytes)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+            except FileExistsError as error:
+                raise compiler.Invalid("candidate-cmake-provenance-temp-collision") from error
             if sha(temporary) != expected:
                 temporary.unlink(missing_ok=True)
                 raise compiler.Invalid("candidate-cmake-provenance-copy")
