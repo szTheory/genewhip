@@ -2563,7 +2563,7 @@ def _r13_remote_json(repository: str, endpoint: str, *, phase: str) -> Any:
 
 def _verify_r13_failed_hosted_predecessor(repository: str, journal_bytes: bytes,
         *, phase: str) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Reopen PR22, its successful previews, and the exact failed full run."""
+    """Reopen R15's PR preview, failed push preview, and failed full run."""
     module, _predecessor = _r13_failed_hosted_predecessor(journal_bytes)
     expected = module.R13_FAILED_HOSTED_PREDECESSOR
     if repository != "szTheory/genewhip":
@@ -2594,7 +2594,7 @@ def _verify_r13_failed_hosted_predecessor(repository: str, journal_bytes: bytes,
             "status": "completed", "conclusion": "success", "path": ".github/workflows/ci.yml",
             "head_branch": branch, "display_title": "Required preview checks"}),
         (expected["merge_preview_run_id"], {"head_sha": expected["public_source_sha"], "event": "push",
-            "status": "completed", "conclusion": "success", "path": ".github/workflows/ci.yml",
+            "status": "completed", "conclusion": "failure", "path": ".github/workflows/ci.yml",
             "head_branch": "main", "display_title": "Required preview checks"}),
         (expected["qualification_run_id"], {"head_sha": expected["public_source_sha"],
             "event": "workflow_dispatch", "status": "completed", "conclusion": "failure",
@@ -2622,6 +2622,37 @@ def _verify_r13_failed_hosted_predecessor(repository: str, journal_bytes: bytes,
                         and row.get("id") != int(expected["qualification_run_id"])
                     for row in rows)):
             raise ValueError("source-successor-r13-workflow-roster-changed")
+    push_jobs_value = _r13_remote_json(repository,
+        f"actions/runs/{expected['merge_preview_run_id']}/jobs?per_page=100", phase=phase)
+    push_jobs = push_jobs_value.get("jobs") if isinstance(push_jobs_value, dict) else None
+    push_statuses = {
+        "product-smoke": "success", "phase7-fast": "success", "desktop": "success",
+        "safety": "failure", "package": "success", "performance": "success",
+        "gameplay": "success", "extended": "skipped", "v02-benchmark-recursion94": "skipped",
+        "v02-runtime": "skipped", "v02-benchmark-control": "skipped",
+        "v02-benchmark-tank-battle": "skipped", "v02-package": "skipped",
+        "v02-release-qualification": "skipped", "attestation": "success",
+        "required-ci": "failure"}
+    if (not isinstance(push_jobs, list) or push_jobs_value.get("total_count") != len(push_jobs)
+            or len(push_jobs) >= 100 or len(push_jobs) != len(push_statuses)
+            or {row.get("name") for row in push_jobs if isinstance(row, dict)} != set(push_statuses)):
+        raise ValueError("source-successor-r13-push-preview-job-roster-invalid")
+    push_by_name = {row["name"]: row for row in push_jobs}
+    for name, conclusion in push_statuses.items():
+        row = push_by_name[name]
+        if row.get("status") != "completed" or row.get("conclusion") != conclusion:
+            raise ValueError("source-successor-r13-push-preview-job-result-changed")
+    if (push_by_name["safety"].get("id") != int(expected["merge_preview_safety_job_id"])
+            or push_by_name["required-ci"].get("id") != int(expected["merge_preview_required_ci_job_id"])):
+        raise ValueError("source-successor-r13-push-preview-job-identity-changed")
+    safety_steps = push_by_name["safety"].get("steps")
+    push_required_steps = push_by_name["required-ci"].get("steps")
+    if (not isinstance(safety_steps, list) or not isinstance(push_required_steps, list)
+            or not any(row.get("name") == "Run bash scripts/ci/required-gate.sh"
+                and row.get("conclusion") == "failure" for row in safety_steps)
+            or not any(row.get("name") == "Reject incomplete or stale required lanes"
+                and row.get("conclusion") == "failure" for row in push_required_steps)):
+        raise ValueError("source-successor-r13-push-preview-failure-step-changed")
     jobs_value = _r13_remote_json(repository,
         f"actions/runs/{expected['qualification_run_id']}/attempts/{expected['qualification_attempt']}/jobs?per_page=100",
         phase=phase)
@@ -2643,6 +2674,9 @@ def _verify_r13_failed_hosted_predecessor(repository: str, journal_bytes: bytes,
         row = by_name[name]
         if row.get("status") != "completed" or row.get("conclusion") != conclusion:
             raise ValueError("source-successor-r13-job-result-changed")
+    if (by_name["v02-runtime"].get("id") != int(expected["runtime_job_id"])
+            or by_name["required-ci"].get("id") != int(expected["required_ci_job_id"])):
+        raise ValueError("source-successor-r13-job-identity-changed")
     runtime_steps = by_name["v02-runtime"].get("steps")
     required_steps = by_name["required-ci"].get("steps")
     if (not isinstance(runtime_steps, list) or not isinstance(required_steps, list)
@@ -2655,10 +2689,10 @@ def _verify_r13_failed_hosted_predecessor(repository: str, journal_bytes: bytes,
         f"actions/runs/{expected['qualification_run_id']}/artifacts?per_page=100", phase=phase)
     artifacts = artifacts_value.get("artifacts") if isinstance(artifacts_value, dict) else None
     expected_artifacts = {
-        (13033436450, "phase4-host-evidence-41175511179-1", 10665,
-            "sha256:5dbb368097e8d070357185219ee00093f5c746b3e7b5a25251bd8832977bbc82"),
-        (13032787671, "safety-evidence-41175511179-1", 12640,
-            "sha256:cc4857f8aa3e1c8a00e5f88ff329c9feb08fa9e5d4a721180050b8dac5a081d3")}
+        (13036610344, "phase4-host-evidence-41182437107-1", 10644,
+            "sha256:f1ed56d6ed25e005f2d70888a5b85b824de2cdb7cbf4d9da5b4b0dd1150faa18"),
+        (13035314966, "safety-evidence-41182437107-1", 12640,
+            "sha256:224115d7acf0430e312acc2368a40b3be4fce33b052487ca059a24b17fb23746")}
     observed_artifacts = {(row.get("id"), row.get("name"), row.get("size_in_bytes"), row.get("digest"))
         for row in artifacts if isinstance(row, dict)} if isinstance(artifacts, list) else set()
     if observed_artifacts != expected_artifacts or artifacts_value.get("total_count") != len(expected_artifacts):
@@ -2669,6 +2703,10 @@ def _verify_r13_failed_hosted_predecessor(repository: str, journal_bytes: bytes,
     return expected, {"runtime_job_conclusion": "failure", "required_ci_conclusion": "failure",
         "runtime_failure_step": "Run complete current-source product safety and chunk roster",
         "runtime_artifact": "absent", "runtime_child_cleanup": "UNKNOWN",
+        "push_preview_safety_conclusion": "failure",
+        "push_preview_required_ci_conclusion": "failure",
+        "push_preview_failure_step": "Run bash scripts/ci/required-gate.sh",
+        "push_preview_sanitized_failure": "phase5_baseline_contract method UNKNOWN",
         "qualification_run_id": expected["qualification_run_id"],
         "qualification_attempt": expected["qualification_attempt"]}
 
@@ -2706,6 +2744,10 @@ def _validate_r13_failed_hosted_successor(journal: dict[str, Any]) -> None:
     expected_facts = {"runtime_job_conclusion": "failure", "required_ci_conclusion": "failure",
         "runtime_failure_step": "Run complete current-source product safety and chunk roster",
         "runtime_artifact": "absent", "runtime_child_cleanup": "UNKNOWN",
+        "push_preview_safety_conclusion": "failure",
+        "push_preview_required_ci_conclusion": "failure",
+        "push_preview_failure_step": "Run bash scripts/ci/required-gate.sh",
+        "push_preview_sanitized_failure": "phase5_baseline_contract method UNKNOWN",
         "qualification_run_id": expected["qualification_run_id"],
         "qualification_attempt": expected["qualification_attempt"]}
     if (failed.get("archive_sha256") != expected["journal_sha256"]
@@ -2833,7 +2875,7 @@ def failed_hosted_successor_sanitized_source(packet_path: pathlib.Path,
         "prior_qualification_nonce": expected["qualification_nonce"],
         "prior_failure_facts": failure_facts, "active_source_head": new_head,
         "active_base_sha": new_base, "active_repository": packet["repository"]}
-    lineage = dict(predecessor["journal"]["source_successor"])
+    lineage = dict(predecessor["source_successor_lineage"])
     lineage.update({"active_source_head": new_head, "active_base_sha": new_base,
         "active_repository": packet["repository"], "failed_hosted": failed})
     active = {"schema": "genewhip.v02-delivery-journal.v1", "started_at": expected["started_at"],

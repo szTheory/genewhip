@@ -59,37 +59,48 @@ CURRENT_RETURN_CANDIDATE_CODE_REVIEW = PHASE / "07-10-CANDIDATE-R12-REVIEW.md"
 CURRENT_RETURN_CANDIDATE_SECURITY_REVIEW = PHASE / "07-10-CANDIDATE-R12-SECURITY.md"
 CURRENT_RETURN_PURPOSE = "current-native-return"
 CURRENT_RETURN_CANDIDATE_ROOT = Path(
+    "build/v02/campaign15/original10/current-source-candidate-final-r18")
+R15_FIXTURE_CANDIDATE_ROOT = Path(
     "build/v02/campaign15/original10/current-source-candidate-final-r15")
+R15_FIXTURE_PATH = "tests/fixtures/phase6_game.py"
+R15_FIXTURE_BASELINE_FILE_SHA = "bbaa7ea293e2d43b55e6845557908880fc17fb4abf2e27dd6484d4c0dedbb6b0"
+R15_FIXTURE_CORE_BASELINE_AST_SHA = "989ad6911a980c2b0896be97a56d53d42557aa2abf8e1c986eaff5cb0c920f8f"
+R15_FIXTURE_CORE_CURRENT_AST_SHA = "166aef6f80ddf75d6addd748d385ca334da7e6d09a9aa4bcdb71dd4b1632bc04"
 R13_FAILED_HOSTED_PREDECESSOR = {
-    "journal_sha256": "03ce5756c177d33006fd3ce7f005905321a07ec84c3eccabdd54c49b8de49073",
+    "journal_sha256": "6f51e120cf406189db950f6ebecac9600527a7382527618dd63cd083ae0b78f9",
     "started_at": "2026-10-30T16:50:39.837827+00:00",
-    "source_head": "d1944cc3a494a20f0c98b6aec5d77ceb86184ffc",
-    "private_source_head": "1c6ff6e1c6572162731d72a5f97c7775b8e51212",
-    "public_base_sha": "ac7c5bdc8e4e87e3a6423de7a64524f5f0ca498b",
-    "public_source_sha": "9027bb0579bf559f56b26a91d5d3b44ce194c3a4",
-    "public_tree_sha": "2ae5c5ebf0fcc539152d73069a84a1e0818513c2",
-    "pull_request": "22",
-    "preview_run_id": "41174611288",
-    "merge_preview_run_id": "41175438525",
-    "qualification_run_id": "41175511179",
+    "source_head": "9c7b164785d27e8a0495a93ebb75b3169cbc7af2",
+    "private_source_head": "34b1e4e657ad680884ee7356a15d05444419727c",
+    "public_base_sha": "9027bb0579bf559f56b26a91d5d3b44ce194c3a4",
+    "public_source_sha": "be835a78626d9d2b25f0d2556ff7aa88c8cf5888",
+    "public_tree_sha": "0ec47fc559521858bb360c54ebfdcf68843f378a",
+    "pull_request": "24",
+    "preview_run_id": "41181549270",
+    "merge_preview_run_id": "41182366078",
+    "merge_preview_safety_job_id": "124482202980",
+    "merge_preview_required_ci_job_id": "124484611213",
+    "qualification_run_id": "41182437107",
     "qualification_attempt": 1,
-    "qualification_nonce": "68aa65ee32be4422a0da0beddd197560",
-    "qualification_created_at": "2026-10-31T06:10:38Z",
-    "runtime_job_id": "124462120481",
-    "required_ci_job_id": "124466207840",
-    "preparation_archive_manifest": "history/07-10-current-preparation-r13-hosted-failure/manifest.json",
-    "preparation_archive_manifest_sha256": "c2d7825ed2f902158913351d87fb033eb7a425504f2a2cab6ba30a01e36cba55",
-    "preparation_record_sha256": "4de926486e7f36ca86fd4fbbb8aac6d04901a7dc5dffc01cd929f5f0ad5f93f6",
-    "return_archive_manifest": "history/07-10-current-return-c8d/manifest.json",
-    "return_archive_manifest_sha256": "e727f4df4aefcb7d856c08ee4e8af865b2f796cc5e4a2bac3696905b630f9470",
-    "return_record_sha256": "2f8dfbb8bdabbbd1316f925da602afc4f2b9b758df896e51b5634c0e0deb2d4a",
-    "return_payload_sha256": "c8db16080a704d04f7ec4a38ced082f5241ddb5e370c946e9c12da82c94366de",
-    "return_review_sha256": "1db969b4b05e22a34b2281ae80513d29eca6f53df43654d83d36a99f42db6076",
-    "return_report_sha256": "fc47994daa089aa0f2b63271e24be0f6ccf80472ee7a29ad9059be11da02879c",
-    "candidate_root": "build/v02/campaign15/original10/current-source-candidate-final-r13",
-    "candidate_preparation_sha256": "75f3dabaa8172e96024ef9656b5397f29dba4716815fc8af17390557b33d8f6a",
-    "candidate_policy_sha256": "7d41a6f5bea563e23e9e90a4467a133aad3c9c620cbf99adfa4583dc210098f0",
-    "candidate_manifest_sha256": "83b6d43be488303403d3da0244e552caadbbddd706e50be84c584925482d94e0",
+    "qualification_nonce": "6db36e4cf66a4c19b3875ad5e9915c23",
+    "qualification_created_at": "2026-10-31T07:54:29Z",
+    "runtime_job_id": "124482413297",
+    "required_ci_job_id": "124486666363",
+    "preparation_archive_manifest": "history/07-10-current-preparation-r15-media-failure/manifest.json",
+    "preparation_archive_manifest_sha256": "bdc1d42ed7e063acc2dd736f8c3bbf0b8a036efc0502ffed4dba04ff1d7c9bc1",
+    "preparation_record_sha256": "6aa2149e7d0e2d28995d68c736227af5b9d7b8bb783d112a596dec81e9658285",
+    "preparation_payload_sha256": "f366613a24397c15832c8d2aad5397990c12fdf201b4025b963f09b345047110",
+    "preparation_review_sha256": "a183b3575b76284c850cf100d8519e58e2239d197075a181dabdb811de839bbe",
+    "preparation_security_sha256": "e9304c73393d7df9fdef36f1c003dcde6ae6cab6b13b93ed4a737cc9453712a2",
+    "return_archive_manifest": "history/07-10-current-return-27c/manifest.json",
+    "return_archive_manifest_sha256": "5bc31b12baab1c0350486b9e3536ab4fc8da708cea143979fe9e7296e7ce6e94",
+    "return_record_sha256": "bdde5be1067d162bf4104d75f8df0fd6890e2b66c75027d7d96b7bb344aae7e3",
+    "return_payload_sha256": "27c58dc41418ae35ae37ce09f1ade0e05cdd87af22178f8d4ed0464df67eeec3",
+    "return_review_sha256": "cc8607c4f1de299b550f1de0c1d6f4a547ec53caeaef75e5f7d3ccd5fe98a4bb",
+    "return_report_sha256": "b6f0b0570729d0dd7f06914bb87dc063a2d85e9f49db7792a21825617d78e008",
+    "candidate_root": "build/v02/campaign15/original10/current-source-candidate-final-r15",
+    "candidate_preparation_sha256": "ee4fd792975ddbe95842ddf351e00b53db35d35017b62cd40055d9ae571d8401",
+    "candidate_policy_sha256": "6c94e0d6a79b78fb9af2c63979ec09c6a1e3de7ad9b4d21fca8abea83ed88c40",
+    "candidate_manifest_sha256": "d68d343a3f1cdaf729e61db17bfcf7309f623f4fab76a47e2b8086a49d099ab7",
 }
 R10_SUCCESSOR_PREDECESSOR = {
     "preparation_archive_manifest": "history/07-10-current-preparation-r10-postmerge/manifest.json",
@@ -118,10 +129,10 @@ R10_SUCCESSOR_PREDECESSOR = {
     "merge_tree_sha": "fb1234d6e95a2eaa3a08f7b1f9404b268a2cd6d0",
 }
 R10_SUCCESSOR_PREDECESSOR_AST_SHA = "c2aebb05b1ff7cc498b8f9ea322f7c1178d7d5323d251dd00cd520e969193362"
-R13_FAILED_HOSTED_PREDECESSOR_AST_SHA = "6605f23cf2e291699e4041523197bfde2768182c6e80cc685eb425d5712dca6c"
+R13_FAILED_HOSTED_PREDECESSOR_AST_SHA = "869f80ab3d91663f427f4d5fef75f2c8562caaa140468d9bcfb96ec1cef9131f"
 R8_CONTINUATION_ADDED_FUNCTION_SHAS = {
     "validate_r13_failed_hosted_predecessor":
-        "7d7aad6cba6503c8900e3a08c27b3b5d2b4c995bd9946f772f8c7c1ad103cd8d"}
+        "4f93cf5e2b2cf9b540d5fc3c6fae995dfe31468a337d5aa3cdd4b86807c6c696"}
 R3_PREPARATION_RAW_SHA = "acf381a106bbe3daf170ba8ae7d4ac5986d1023bf6673253fa9fad9f8269ef94"
 R3_PREPARATION_PAYLOAD_SHA = "2f3f492d497a2d624ddeadb583e403fad0a5e6d163e31964dce5028722457fbd"
 R8_PACKET = Path("build/v02/campaign15/original10/native-source-revalidation-r8/review-packet.json")
@@ -222,10 +233,10 @@ R8_COORDINATOR_ADDED_FUNCTION_SHAS = {
     "_validate_source_successor_history": "77f7f973ef6dbadd02606d8bc4029dd34678cd19905a2a1933a81e01efaeaf7b",
     "_r13_failed_hosted_predecessor": "af7ec09c3380e10e9c2d643a30d4ea3c0725551af1033303c1d4f7ce6baf8205",
     "_r13_remote_json": "fa4c0dd622dca1a4f3ed8b4a0db7a5ea7fec7320bc2428ff29baf34f6b96eed9",
-    "_verify_r13_failed_hosted_predecessor": "2e9010cfd27e1c593b002025eda73b9fa9078e70004d8fffe33dca01048ccd88",
-    "_validate_r13_failed_hosted_successor": "01d5dff51e355de9efd13a06011fe8b71f67519e0b7dccffe275a6fb119e11e4",
+    "_verify_r13_failed_hosted_predecessor": "590240f46f6cc49ba1d09629a4bd3f008040c74e159a476caf647de80e5451e2",
+    "_validate_r13_failed_hosted_successor": "99a8d81a548839f683b06da40cdb81f58911891c050c6f9adbccab3767460437",
     "_resume_r13_failed_hosted_successor": "277c1e8c1a7e7485df14bcbad2d91f3584e50a9e8efa9679ed9c178413d53b0e",
-    "failed_hosted_successor_sanitized_source": "683c2a8004aca884f7c9f92473c640d8bd51fb9e9fd5b1893f2a365184b6178b",
+    "failed_hosted_successor_sanitized_source": "0fb0eac7ea95a82b4051587704f0dcc1fe03d918921dfb0efba240522c0e6584",
     "_verify_r10_merged_source": "f5aaf3fd6ac885d3f5c6107bfbf83e8e3aae370cacc309284f83a3477b6d91fb",
     "_write_journal_atomically": "5c9569b3f555a00015a66fde111f74e2a744846fd9de894c63a6fa41e3d1942a",
     "source_successor_sanitized_source": "d58a973456d0619de2feb85a2a16047dea6018b9af0ed9b7be128ea0b29fe70e"}
@@ -270,6 +281,8 @@ R8_CONTINUATION_DELTA_ASSIGNMENTS = (
     "R8_RESULT_REVIEW_SHA", "R8_ADMISSION_REVIEW", "R8_ADMISSION_REVIEW_SHA",
     "R8_SOURCE_SNAPSHOT", "R8_NATIVE_SOURCE_PATHS", "R8_NATIVE_RUNS",
     "R13_FAILED_HOSTED_PREDECESSOR", "R13_FAILED_HOSTED_PREDECESSOR_AST_SHA",
+    "R15_FIXTURE_CANDIDATE_ROOT", "R15_FIXTURE_PATH", "R15_FIXTURE_BASELINE_FILE_SHA",
+    "R15_FIXTURE_CORE_BASELINE_AST_SHA", "R15_FIXTURE_CORE_CURRENT_AST_SHA",
     "R8_COORDINATOR_DELTA_FUNCTIONS", "R8_COORDINATOR_ADDED_FUNCTIONS",
     "R8_COORDINATOR_ADDED_FUNCTION_SHAS", "R8_COORDINATOR_SPECIAL_FUNCTION_SHAS",
     "R8_CONTINUATION_ADDED_FUNCTION_SHAS",
@@ -675,6 +688,7 @@ def _validate_r8_current_source_delta(root: Path, native_source_pins: dict[str, 
         current_source_pins: dict[str, str]) -> dict[str, Any]:
     """Prove current source differs from R8 only in reviewed prelaunch gates."""
     import ast
+    import copy
     unchanged: list[str] = []
     changed: list[str] = []
     baseline_bytes: dict[str, bytes] = {}
@@ -842,7 +856,7 @@ def _validate_r8_current_source_delta(root: Path, native_source_pins: dict[str, 
                 and candidate_root_name in _top_level_assignment_names(node)]
             expected_candidate_root = ast.parse(
                 'CURRENT_RETURN_CANDIDATE_ROOT = Path("build/v02/campaign15/original10/'
-                'current-source-candidate-final-r15")').body[0]
+                'current-source-candidate-final-r18")').body[0]
             if (old_candidate_root or len(new_candidate_root) != 1
                     or ast.dump(new_candidate_root[0], include_attributes=False)
                     != ast.dump(expected_candidate_root, include_attributes=False)):
@@ -1185,6 +1199,41 @@ def _validate_r8_current_source_delta(root: Path, native_source_pins: dict[str, 
             "prelaunch_only_review_boundary": relative not in {
                 R8_SAFETY_REPORT_PATH, R8_SAFETY_REPORT_TEST_PATH, R8_DARWIN_TEST_PATH,
                 "scripts/release/v02_qualification.py"}}
+    baseline_fixture_path = root / R15_FIXTURE_CANDIDATE_ROOT / "publication" / R15_FIXTURE_PATH
+    baseline_fixture = _regular(baseline_fixture_path, cap=2 * 1024 * 1024)
+    current_fixture = _regular(root / R15_FIXTURE_PATH, cap=2 * 1024 * 1024)
+    if sha_bytes(baseline_fixture) != R15_FIXTURE_BASELINE_FILE_SHA:
+        raise ValueError("current-native-r15-fixture-baseline-stale")
+
+    def fixture_core(data: bytes) -> Any:
+        tree = ast.parse(data.decode("utf-8"))
+        matches = [node for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == "core"]
+        if len(matches) != 1:
+            raise ValueError("current-native-r15-fixture-core-invalid")
+        return tree, matches[0]
+
+    old_fixture_tree, old_core = fixture_core(baseline_fixture)
+    _new_fixture_tree, new_core = fixture_core(current_fixture)
+    old_core_sha = sha_bytes(ast.dump(old_core, include_attributes=False).encode("utf-8"))
+    new_core_sha = sha_bytes(ast.dump(new_core, include_attributes=False).encode("utf-8"))
+    if old_core_sha != R15_FIXTURE_CORE_BASELINE_AST_SHA:
+        raise ValueError("current-native-r15-fixture-baseline-core-stale")
+    if new_core_sha != R15_FIXTURE_CORE_CURRENT_AST_SHA:
+        raise ValueError("current-native-r15-fixture-core-unreviewed")
+    normalized_tree, normalized_core = fixture_core(current_fixture)
+    normalized_tree.body[normalized_tree.body.index(normalized_core)] = copy.deepcopy(old_core)
+    if ast.dump(normalized_tree, include_attributes=False) != ast.dump(old_fixture_tree, include_attributes=False):
+        raise ValueError("current-native-r15-fixture-changed-outside-core")
+    delta["r15_fixture_core_delta"] = {
+        "path": R15_FIXTURE_PATH,
+        "r15_public_source_file_sha256": R15_FIXTURE_BASELINE_FILE_SHA,
+        "r15_core_ast_sha256": old_core_sha,
+        "current_core_ast_sha256": new_core_sha,
+        "only_changed_function": "core",
+        "changes_core_media_receipt_source_to_current_report_output": True,
+        "r8_native_execution_credit": False}
+
     phase5_test_sha = sha_bytes(_regular(root / R8_PHASE5_DIAGNOSTIC_TEST_PATH, cap=2 * 1024 * 1024))
     if phase5_test_sha != R8_PHASE5_DIAGNOSTIC_TEST_SHA:
         raise ValueError("current-native-phase5-diagnostic-test-unreviewed")
@@ -1706,23 +1755,23 @@ def validate_r10_merged_predecessor(root: Path, *, journal_bytes: bytes | None =
 
 def validate_r13_failed_hosted_predecessor(root: Path,
         *, journal_bytes: bytes | None = None) -> dict[str, Any]:
-    """Validate the one exact R13 source plus failed full-hosted lineage."""
+    """Validate the one exact R15 source plus failed full-hosted lineage."""
     expected = R13_FAILED_HOSTED_PREDECESSOR
     phase = PHASE
     manifest_specs = (
         (expected["preparation_archive_manifest"], expected["preparation_archive_manifest_sha256"], {
-            "history/07-10-current-preparation-r13-hosted-failure/07-10-CURRENT-SOURCE-CONTINUATION.json":
+            "history/07-10-current-preparation-r15-media-failure/07-10-CURRENT-SOURCE-CONTINUATION.json":
                 expected["preparation_record_sha256"],
-            "history/07-10-current-preparation-r13-hosted-failure/07-10-CURRENT-SOURCE-CODE-REVIEW.md":
-                "bb8afc998a2bfeb149ea26695cbdac05fb712d1afc21bf53b0f86bd541d56204",
-            "history/07-10-current-preparation-r13-hosted-failure/07-10-CURRENT-SOURCE-SECURITY-REVIEW.md":
-                "d55df6841db2708c882a7213ab5ff8a0bb508f6959d1198e120d7e25765cb3aa"}),
+            "history/07-10-current-preparation-r15-media-failure/07-10-CURRENT-SOURCE-CODE-REVIEW.md":
+                "a183b3575b76284c850cf100d8519e58e2239d197075a181dabdb811de839bbe",
+            "history/07-10-current-preparation-r15-media-failure/07-10-CURRENT-SOURCE-SECURITY-REVIEW.md":
+                "e9304c73393d7df9fdef36f1c003dcde6ae6cab6b13b93ed4a737cc9453712a2"}),
         (expected["return_archive_manifest"], expected["return_archive_manifest_sha256"], {
-            "history/07-10-current-return-c8d/07-10-CURRENT-SOURCE-RETURN.json":
+            "history/07-10-current-return-27c/07-10-CURRENT-SOURCE-RETURN.json":
                 expected["return_record_sha256"],
-            "history/07-10-current-return-c8d/07-10-RETURN-REVIEW.md":
+            "history/07-10-current-return-27c/07-10-RETURN-REVIEW.md":
                 expected["return_review_sha256"],
-            "history/07-10-current-return-c8d/07-10-RETURN.md":
+            "history/07-10-current-return-27c/07-10-RETURN.md":
                 expected["return_report_sha256"]}))
     for manifest_relative, digest, members in manifest_specs:
         manifest_path = _candidate_path(root, (phase / manifest_relative).as_posix())
@@ -1750,7 +1799,7 @@ def validate_r13_failed_hosted_predecessor(root: Path,
             raise ValueError("r13-failed-hosted-archive-member-stale")
 
     return_path = _candidate_path(root, (phase /
-        "history/07-10-current-return-c8d/07-10-CURRENT-SOURCE-RETURN.json").as_posix())
+        "history/07-10-current-return-27c/07-10-CURRENT-SOURCE-RETURN.json").as_posix())
     return_raw = _regular(return_path, cap=256 * 1024)
     record = _json_object(return_raw, "r13-failed-hosted-return-invalid")
     payload_sha = sha_bytes(json.dumps(record, sort_keys=True, separators=(",", ":")).encode())
@@ -1810,11 +1859,39 @@ def validate_r13_failed_hosted_predecessor(root: Path,
             or journal.get("qualification_dispatch_requested") is not True
             or journal.get("qualification_dispatch_submitted") is not True
             or journal.get("selected_run_created_at") != expected["qualification_created_at"]
-            or journal.get("source_successor") is None
             or any(key in journal for key in ("inventory", "inventory_sha256", "package_sha256",
                 "publisher", "release", "accepted_at", "requirements_qualified"))):
         raise ValueError("r13-failed-hosted-journal-stale")
-    lineage = journal.get("source_successor")
+    # The actual R15 journal was created by retry-source from PR23. Its direct
+    # predecessor is therefore recorded in source_retry; the R13/R10
+    # source_successor chain lives in that retry's immutable failed-attempt
+    # archive. Never synthesize source_successor into the live journal.
+    retry = journal.get("source_retry")
+    if (not isinstance(retry, dict)
+            or retry != {
+                "schema": "genewhip.v02-source-retry.v1",
+                "started_at": expected["started_at"],
+                "prior_source_head": "d3abd4b4ffda9179203be2a2969d948529d1ec6f",
+                "active_source_head": expected["source_head"],
+                "active_base_sha": expected["public_base_sha"],
+                "active_repository": "szTheory/genewhip",
+                "failed_pull_request": "23",
+                "failed_required_check": {"name": "required-ci", "status": "COMPLETED",
+                    "conclusion": "FAILURE"},
+                "archive": "build/v02/failures/source-attempt-d3abd4b4ffda9179203be2a2969d948529d1ec6f-"
+                    "cfd6c9e77706c0ae1990638c67d45e4a18e797e1ae474ffc65c9b972e6662242.json",
+                "archive_sha256": "cfd6c9e77706c0ae1990638c67d45e4a18e797e1ae474ffc65c9b972e6662242"}):
+        raise ValueError("r13-failed-hosted-source-retry-stale")
+    retry_path = _candidate_path(root, retry["archive"])
+    retry_raw = _regular(retry_path, cap=64 * 1024)
+    if sha_bytes(retry_raw) != retry["archive_sha256"]:
+        raise ValueError("r13-failed-hosted-source-retry-archive-stale")
+    retry_journal = _json_object(retry_raw, "r13-failed-hosted-source-retry-archive-invalid")
+    if (retry_journal.get("source_head") != retry["prior_source_head"]
+            or retry_journal.get("public_base_sha") != expected["public_base_sha"]
+            or retry_journal.get("started_at") != expected["started_at"]):
+        raise ValueError("r13-failed-hosted-source-retry-archive-stale")
+    lineage = retry_journal.get("source_successor")
     if (not isinstance(lineage, dict)
             or lineage.get("schema") != "genewhip.v02-source-successor.v1"
             or lineage.get("archive") !=
@@ -1828,13 +1905,52 @@ def validate_r13_failed_hosted_predecessor(root: Path,
             or lineage.get("prior_merge_tree_sha") != "fb1234d6e95a2eaa3a08f7b1f9404b268a2cd6d0"
             or lineage.get("prior_pull_request") != "21"
             or lineage.get("prior_preview_run_id") != "41163927669"
-            or lineage.get("active_source_head") != expected["source_head"]
+            or lineage.get("active_source_head") != retry["prior_source_head"]
             or lineage.get("active_base_sha") != expected["public_base_sha"]
             or lineage.get("active_repository") != "szTheory/genewhip"
             or lineage.get("required_check") != {
                 "name": "required-ci", "status": "COMPLETED", "conclusion": "SUCCESS"}
-            or "failed_hosted" in lineage):
+            or "failed_hosted" not in lineage):
         raise ValueError("r13-failed-hosted-r10-lineage-stale")
+    failed = lineage["failed_hosted"]
+    r13_archive_path = _candidate_path(root, failed["archive"])
+    r13_raw = _regular(r13_archive_path, cap=64 * 1024)
+    if (sha_bytes(r13_raw) != failed.get("archive_sha256")
+            or failed.get("archive_sha256") !=
+                "03ce5756c177d33006fd3ce7f005905321a07ec84c3eccabdd54c49b8de49073"
+            or failed.get("schema") != "genewhip.v02-source-successor-r13-failed-hosted.v1"
+            or failed.get("prior_source_head") != "d1944cc3a494a20f0c98b6aec5d77ceb86184ffc"
+            or failed.get("prior_public_source_sha") != "9027bb0579bf559f56b26a91d5d3b44ce194c3a4"
+            or failed.get("prior_public_tree_sha") != "2ae5c5ebf0fcc539152d73069a84a1e0818513c2"
+            or failed.get("prior_pull_request") != "22"
+            or failed.get("prior_qualification_run_id") != "41175511179"
+            or failed.get("prior_qualification_attempt") != 1
+            or failed.get("prior_qualification_nonce") != "68aa65ee32be4422a0da0beddd197560"
+            or failed.get("active_source_head") != retry["prior_source_head"]
+            or failed.get("active_base_sha") != expected["public_base_sha"]
+            or failed.get("active_repository") != "szTheory/genewhip"):
+        raise ValueError("r13-failed-hosted-previous-failure-lineage-stale")
+    r13_journal = _json_object(r13_raw, "r13-failed-hosted-r13-archive-invalid")
+    r13_lineage = r13_journal.get("source_successor")
+    if (r13_journal.get("source_head") != failed["prior_source_head"]
+            or r13_journal.get("public_source_sha") != failed["prior_public_source_sha"]
+            or not isinstance(r13_lineage, dict)
+            or any(r13_lineage.get(key) != lineage.get(key) for key in (
+                "schema", "archive", "archive_sha256", "started_at", "prior_source_head",
+                "prior_public_base_sha", "prior_merge_commit_sha", "prior_merge_tree_sha",
+                "prior_pull_request", "prior_preview_run_id"))):
+        raise ValueError("r13-failed-hosted-r13-archive-stale")
+    r10_lineage = r13_lineage
+    if (not isinstance(r10_lineage, dict)
+            or r10_lineage.get("archive_sha256") !=
+                "89232a2d8899937a3e797435c05228306817b3d10e479d7e30849e13cd4bd08c"
+            or r10_lineage.get("prior_merge_commit_sha") !=
+                "ac7c5bdc8e4e87e3a6423de7a64524f5f0ca498b"):
+        raise ValueError("r13-failed-hosted-r10-lineage-stale")
+    r10_raw = _regular(_candidate_path(root, r10_lineage["archive"]), cap=64 * 1024)
+    if sha_bytes(r10_raw) != r10_lineage["archive_sha256"]:
+        raise ValueError("r13-failed-hosted-r10-archive-stale")
+    validate_r10_merged_predecessor(root, journal_bytes=r10_raw)
     campaign_raw = _regular(root / "build/v02/campaign15/campaign.json", cap=64 * 1024)
     campaign = _json_object(campaign_raw, "r13-failed-hosted-campaign-invalid")
     if (sha_bytes(campaign_raw) != "f309198a4f25fee9ffb017570e0900de70c199732d9880a4f375d70bc847aad1"
@@ -1842,6 +1958,7 @@ def validate_r13_failed_hosted_predecessor(root: Path,
             or campaign.get("runtime_cutoff") != "2026-10-31T10:50:39.837827+00:00"):
         raise ValueError("r13-failed-hosted-campaign-stale")
     return {**expected, "journal": journal, "journal_bytes": journal_bytes,
+        "source_successor_lineage": lineage,
         "return_record": record, "candidate_root": candidate_root}
 
 
