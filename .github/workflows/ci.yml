@@ -58,6 +58,17 @@ jobs:
       - name: Stage validated, sanitized safety evidence
         run: python3 scripts/evidence/phase4_report.py safety-export --build build --out build/safety-export
       - run: cmake -DPROJECT_SOURCE_DIR="$PWD" -P tests/package/package_smoke.cmake
+      - name: Stage sanitized safety failure diagnostics
+        if: failure()
+        run: python3 scripts/evidence/phase4_report.py safety-export --failure-only --build build --out build/safety-failure-export
+      - name: Retain safety failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: safety-failure-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/safety-failure-export/
+          if-no-files-found: warn
+          retention-days: 30
       - name: Export exact-source safety evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

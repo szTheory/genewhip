@@ -11,6 +11,7 @@ import selectors
 import signal
 import stat
 import subprocess
+import sys
 import time
 import threading
 from functools import lru_cache
@@ -105,6 +106,12 @@ def run(command: list[str], *, cwd, timeout: float = 30, cap: int = 1048576,
     # A bad sink must fail before Popen or a signal-handler change.
     persist_receipt()
     process = None
+    cleanup_status_budget = {
+        "remaining": boundary._DARWIN_CLEANUP_MAX_STATUS_QUERIES,
+        "attempted": 0,
+        "last_reason": "cleanup-unclassified",
+        "status_reason": "not-observed",
+    }
     output = {"stdout": bytearray(), "stderr": bytearray()}
     selector = selectors.DefaultSelector()
     cancelled = False
@@ -183,10 +190,17 @@ def run(command: list[str], *, cwd, timeout: float = 30, cap: int = 1048576,
         try:
             if process is not None:
                 try:
-                    confirmed = boundary._terminate_process_group(process)
+                    if sys.platform == "darwin":
+                        confirmed = boundary._terminate_process_group(
+                            process, status_budget=cleanup_status_budget)
+                    else:
+                        confirmed = boundary._terminate_process_group(process)
                 except OSError as error:
                     confirmed = False
                     receipt["cleanup_error"] = type(error).__name__
+                    cleanup_status_budget["last_reason"] = (
+                        "cleanup-permission-denied" if isinstance(error, PermissionError)
+                        else "group-cleanup-os-error")
                     # Only the just-owned direct child can be cleaned here.
                     try:
                         process.kill()
@@ -196,6 +210,23 @@ def run(command: list[str], *, cwd, timeout: float = 30, cap: int = 1048576,
                 receipt["process_group_cleanup"] = "confirmed" if confirmed else "unconfirmed"
                 if not confirmed:
                     receipt["status"] = "failed"
+                    safe_reasons = boundary.SAFE_CLEANUP_REASONS
+                    reason = cleanup_status_budget.get("last_reason")
+                    status_observation = cleanup_status_budget.get("status_reason")
+                    receipt["cleanup_reason"] = (
+                        reason if reason in safe_reasons else "cleanup-unclassified")
+                    receipt["cleanup_status_observation"] = (
+                        status_observation if status_observation in safe_reasons else "cleanup-unclassified")
+                    receipt["cleanup_observation_attempts"] = min(
+                        boundary._DARWIN_CLEANUP_MAX_STATUS_QUERIES,
+                        max(0, int(cleanup_status_budget.get("attempted", 0))))
+                    for key, allowed in (
+                            ("observer_failure_stage", boundary.SAFE_DARWIN_OBSERVER_STAGES),
+                            ("observer_return_category", boundary.SAFE_DARWIN_OBSERVER_RETURNS),
+                            ("observer_error_category", boundary.SAFE_DARWIN_OBSERVER_ERRORS),
+                            ("cleanup_signal_phase", boundary.SAFE_CLEANUP_SIGNAL_PHASES)):
+                        value = cleanup_status_budget.get(key)
+                        receipt[key] = value if value in allowed else "missing"
                     raise ProcessCaptureError("bounded process cleanup unconfirmed: non-qualifying", receipt)
         finally:
             selector.close()

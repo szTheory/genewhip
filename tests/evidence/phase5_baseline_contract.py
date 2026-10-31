@@ -34,6 +34,87 @@ REPORT_SPEC.loader.exec_module(report)
 SAFE_FAILURE_DIAGNOSTIC_METHODS = frozenset(
     method for method in report.SAFE_CTEST_DIAGNOSTIC_METHODS
     if method.startswith("BaselineRecordContract."))
+SAFE_PROCESS_SUBCASES = frozenset({"success", "stdout-cap", "timeout-direct",
+    "timeout-descendant", "exact-1023", "exact-1024", "stderr-cap"})
+SAFE_PROCESS_STATES = frozenset({"not-launched", "started", "completed", "failed", "missing"})
+SAFE_PROCESS_CLEANUP = frozenset({"not-launched", "pending", "confirmed", "unconfirmed", "missing"})
+SAFE_PROCESS_RETURNS = frozenset({"zero", "nonzero", "signaled", "missing"})
+SAFE_PROCESS_ERRORS = frozenset({"AssertionError", "PermissionError", "FileNotFoundError",
+    "TimeoutExpired", "OSError", "RuntimeError", "ValueError", "TypeError", "KeyError",
+    "IndexError", "other", "missing"})
+SAFE_PROCESS_FAILURES = frozenset({"output-byte-cap", "timeout", "cleanup-unconfirmed", "other", "none"})
+SAFE_PROCESS_CLEANUP_REASONS = frozenset({"group-inactive", "group-observer-cleanup-unconfirmed",
+    "group-status-budget-exhausted", "group-cleanup-os-error", "cleanup-permission-denied",
+    "group-leader-reap-unconfirmed", "group-leader-wait-unconfirmed", "group-reported-active",
+    "group-signal-permission-denied", "group-signal-visible", "group-status-unavailable",
+    "cleanup-unclassified", "not-observed", "missing", "other"})
+SAFE_PROCESS_CLEANUP_ATTEMPTS = frozenset(str(value) for value in range(17)) | frozenset({"other"})
+SAFE_OBSERVER_FAILURE_STAGES = frozenset({
+    "spawn", "pipe", "setup", "selector", "select", "read", "deadline",
+    "byte-limit", "wait", "nonzero-exit", "parse", "observer-cleanup",
+    "none", "missing", "other",
+})
+SAFE_CLEANUP_SIGNAL_PHASES = frozenset({
+    "sigterm", "sigkill", "status-probe", "other", "none", "missing",
+})
+SAFE_OBSERVER_RETURN_CATEGORIES = frozenset({"zero", "nonzero", "signaled", "missing", "other"})
+SAFE_OBSERVER_ERROR_CATEGORIES = frozenset({
+    "permission", "not-found", "interrupted", "timeout", "io", "other", "none", "missing",
+})
+
+
+def safe_process_diagnostic(subcase, runs, start, error):
+    """Project one newly-created bounded process receipt to fixed public enums."""
+    subcase = subcase if subcase in SAFE_PROCESS_SUBCASES else "other"
+    row = runs[-1] if isinstance(runs, list) and len(runs) > start else {}
+    if not isinstance(row, dict):
+        row = {}
+    raw_error = str(error) if error is not None else ""
+    failure = ("output-byte-cap" if raw_error == "bounded process output byte cap" else
+        "timeout" if raw_error == "bounded process timeout" else
+        "cleanup-unconfirmed" if raw_error == "bounded process cleanup unconfirmed: non-qualifying" else
+        "other" if raw_error else "none")
+    exc_name = type(error).__name__ if error is not None else "missing"
+    if exc_name == "ProcessCaptureError":
+        exc_name = "ValueError"
+    returncode = row.get("returncode")
+    return_category = ("missing" if type(returncode) is not int else
+        "zero" if returncode == 0 else "signaled" if returncode < 0 else "nonzero")
+    cleanup_reason = row.get("cleanup_reason")
+    cleanup_reason = cleanup_reason if cleanup_reason in SAFE_PROCESS_CLEANUP_REASONS else (
+        "other" if cleanup_reason else "missing")
+    status_observation = row.get("cleanup_status_observation")
+    status_observation = status_observation if status_observation in SAFE_PROCESS_CLEANUP_REASONS else (
+        "other" if status_observation else "missing")
+    cleanup_attempts = row.get("cleanup_observation_attempts", 0)
+    cleanup_attempts = (str(cleanup_attempts) if type(cleanup_attempts) is int and
+        0 <= cleanup_attempts <= 16 else "other")
+    observer_stage = row.get("observer_failure_stage")
+    observer_stage = (observer_stage if observer_stage in SAFE_OBSERVER_FAILURE_STAGES else
+                      ("other" if observer_stage else "missing"))
+    signal_phase = row.get("cleanup_signal_phase")
+    signal_phase = (signal_phase if signal_phase in SAFE_CLEANUP_SIGNAL_PHASES else
+                    ("other" if signal_phase else "missing"))
+    observer_return = row.get("observer_return_category")
+    observer_return = (observer_return if observer_return in SAFE_OBSERVER_RETURN_CATEGORIES else
+                       ("other" if observer_return else "missing"))
+    observer_error = row.get("observer_error_category")
+    observer_error = (observer_error if observer_error in SAFE_OBSERVER_ERROR_CATEGORIES else
+                      ("other" if observer_error else "missing"))
+    return {"subcase": subcase,
+        "exception": exc_name if exc_name in SAFE_PROCESS_ERRORS else "other",
+        "status": row.get("status") if row.get("status") in SAFE_PROCESS_STATES else "missing",
+        "cleanup": row.get("process_group_cleanup") if row.get("process_group_cleanup") in SAFE_PROCESS_CLEANUP else "missing",
+        "cleanup_error": row.get("cleanup_error") if row.get("cleanup_error") in SAFE_PROCESS_ERRORS else "missing",
+        "return_category": return_category,
+        "failure_category": failure,
+        "cleanup_reason": cleanup_reason,
+        "status_observation": status_observation,
+        "cleanup_attempts": cleanup_attempts,
+        "observer_failure_stage": observer_stage,
+        "cleanup_signal_phase": signal_phase,
+        "observer_return_category": observer_return,
+        "observer_error_category": observer_error}
 
 
 def row(**changes):
@@ -65,22 +146,33 @@ def row(**changes):
     return value
 
 
-def run_retained(process, command, *, label, **kwargs):
+def run_retained(process, command, *, label, diagnostic_case=None,
+                 diagnostic_subcase=None, **kwargs):
     import time
-    process.process_boundary().require_host_process_context()
     runs = []
+    start = len(runs)
     destination = Path(f"build/v02/baseline-process-controls/control-{time.monotonic_ns()}.json")
-    with process.receipt_file(ROOT, destination) as stream:
-        try:
-            return process.run(command, runs=runs, **kwargs)
-        finally:
-            stream.write(json.dumps({"test": label, "processes": runs},
-                                    sort_keys=True, indent=2) + "\n")
+    if diagnostic_case is not None:
+        diagnostic_case._phase5_process_diagnostic = safe_process_diagnostic(
+            diagnostic_subcase, runs, start, None)
+    try:
+        process.process_boundary().require_host_process_context()
+        with process.receipt_file(ROOT, destination) as stream:
+            try:
+                return process.run(command, runs=runs, **kwargs)
+            finally:
+                stream.write(json.dumps({"test": label, "processes": runs},
+                                        sort_keys=True, indent=2) + "\n")
+    finally:
+        if diagnostic_case is not None:
+            diagnostic_case._phase5_process_diagnostic = safe_process_diagnostic(
+                diagnostic_subcase, runs, start, sys.exc_info()[1])
 
 
 class BaselineRecordContract(unittest.TestCase):
-    def run_control(self, process, command, **kwargs):
-        return run_retained(process, command, label=self.id().split(".")[-1], **kwargs)
+    def run_control(self, process, command, *, diagnostic_subcase=None, **kwargs):
+        return run_retained(process, command, label=self.id().split(".")[-1],
+            diagnostic_case=self, diagnostic_subcase=diagnostic_subcase, **kwargs)
 
     def test_tracer_diagnostic_rom_rejects_outside_symlink(self):
         with tempfile.TemporaryDirectory(prefix="gw-phase5-build-input-") as temp:
@@ -408,20 +500,26 @@ class BaselineRecordContract(unittest.TestCase):
     def test_real_process_output_cap_timeout_and_status(self):
         process = baseline.process_tools()
         process.process_boundary().require_host_process_context()
-        result = self.run_control(process, [sys.executable, "-c", "print(42)"], cwd=ROOT)
+        result = self.run_control(process, [sys.executable, "-c", "print(42)"],
+                                  diagnostic_subcase="success", cwd=ROOT)
         self.assertEqual((result.returncode, result.stdout.strip()), (0, "42"))
-        for script, kwargs, message in (
-            ("import os; os.write(1,b'x'*8192)", {"cap": 1024}, "output byte cap"),
-            ("import time; time.sleep(5)", {"timeout": .1}, "timeout"),
-            ("import subprocess,sys; subprocess.Popen([sys.executable,'-c','import time; time.sleep(5)'])",
+        for subcase, script, kwargs, message in (
+            ("stdout-cap", "import os; os.write(1,b'x'*8192)", {"cap": 1024}, "output byte cap"),
+            ("timeout-direct", "import time; time.sleep(5)", {"timeout": .1}, "timeout"),
+            ("timeout-descendant", "import subprocess,sys; subprocess.Popen([sys.executable,'-c','import time; time.sleep(5)'])",
              {"timeout": .1}, "timeout")):
             with self.assertRaisesRegex(ValueError, message):
-                self.run_control(process, [sys.executable, "-c", script], cwd=ROOT, **kwargs)
+                self.run_control(process, [sys.executable, "-c", script],
+                                 diagnostic_subcase=subcase, cwd=ROOT, **kwargs)
         for count in (1023, 1024):
-            result = self.run_control(process, [sys.executable, "-c", f"import os; os.write(1,b'x'*{count})"], cwd=ROOT, cap=1024)
+            subcase = f"exact-{count}"
+            result = self.run_control(process,
+                [sys.executable, "-c", f"import os; os.write(1,b'x'*{count})"],
+                diagnostic_subcase=subcase, cwd=ROOT, cap=1024)
             self.assertEqual(len(result.stdout), count)
         with self.assertRaisesRegex(ValueError, "output byte cap"):
-            self.run_control(process, [sys.executable, "-c", "import os; os.write(2,b'x'*1025)"], cwd=ROOT, cap=1024)
+            self.run_control(process, [sys.executable, "-c", "import os; os.write(2,b'x'*1025)"],
+                diagnostic_subcase="stderr-cap", cwd=ROOT, cap=1024)
 
     def test_dependent_process_terminated_even_after_parent_exits(self):
         import time
@@ -472,9 +570,30 @@ class BaselineRecordContract(unittest.TestCase):
 
 def emit_safe_failure_diagnostics(result):
     for kind, rows in (("failure", result.failures), ("error", result.errors)):
-        for test, _ in rows:
+        for test, error in rows:
             method = f"{test.__class__.__name__}.{test._testMethodName}"
             if method in SAFE_FAILURE_DIAGNOSTIC_METHODS:
+                if method == "BaselineRecordContract.test_real_process_output_cap_timeout_and_status":
+                    details = getattr(test, "_phase5_process_diagnostic", None)
+                    if isinstance(details, dict):
+                        fields = (details.get("subcase"), details.get("exception"),
+                            details.get("status"), details.get("cleanup"),
+                            details.get("cleanup_error"), details.get("return_category"),
+                            details.get("failure_category"), details.get("cleanup_reason"),
+                            details.get("status_observation"), details.get("cleanup_attempts"),
+                            details.get("observer_failure_stage"), details.get("cleanup_signal_phase"),
+                            details.get("observer_return_category"), details.get("observer_error_category"))
+                        allowed = (SAFE_PROCESS_SUBCASES, SAFE_PROCESS_ERRORS,
+                            SAFE_PROCESS_STATES, SAFE_PROCESS_CLEANUP,
+                            SAFE_PROCESS_ERRORS, SAFE_PROCESS_RETURNS, SAFE_PROCESS_FAILURES,
+                            SAFE_PROCESS_CLEANUP_REASONS, SAFE_PROCESS_CLEANUP_REASONS,
+                            SAFE_PROCESS_CLEANUP_ATTEMPTS, SAFE_OBSERVER_FAILURE_STAGES,
+                            SAFE_CLEANUP_SIGNAL_PHASES, SAFE_OBSERVER_RETURN_CATEGORIES,
+                            SAFE_OBSERVER_ERROR_CATEGORIES)
+                        if all(value in choices for value, choices in zip(fields, allowed)):
+                            print(f"GENEWHIP_TEST_RESULT:{method}:{kind}:process:" +
+                                  ":".join(fields), file=sys.stderr)
+                            continue
                 print(f"GENEWHIP_TEST_RESULT:{method}:{kind}", file=sys.stderr)
 
 
