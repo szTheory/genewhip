@@ -16,6 +16,7 @@ import sys
 import tempfile
 import time
 import datetime
+import functools
 import urllib.parse
 import uuid
 import shutil
@@ -23,6 +24,8 @@ import stat
 from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
+FRESH_BATCH_ROOT = pathlib.Path("build/v02/batch-20261031T124319Z-retry1")
+PREVIOUS_BATCH_ROOT = pathlib.Path("build/v02/batch-20261031T124319Z")
 DIMENSIONS = ("core", "host", "host-native", "media", "safety", "determinism", "measurements",
               "public-matrix", "package", "docs", "privacy", "rights")
 REQUIRED_DIMENSIONS = DIMENSIONS
@@ -87,12 +90,107 @@ def _git(root: pathlib.Path, *args: str, check: bool = True) -> str:
     return result.stdout.strip()
 
 
+def _fresh_batch_guard(*, batch_authorization: pathlib.Path | None,
+                       batch_authorization_sha256: str | None,
+                       batch_admission: pathlib.Path | None,
+                       batch_admission_sha256: str | None,
+                       stage: str, scope_path: pathlib.Path,
+                       journal_path: pathlib.Path, publication_copy: pathlib.Path,
+                       preflight_path: pathlib.Path, output_path: pathlib.Path) -> dict[str, Any] | None:
+    os.environ["GENEWHIP_FRESH_BATCH_ADMITTED"] = "0"
+    os.environ["GENEWHIP_FRESH_BATCH_RUNTIME"] = "0"
+    os.environ["GENEWHIP_FRESH_BATCH_STAGE"] = "unadmitted"
+    supplied = (batch_authorization, batch_authorization_sha256,
+                batch_admission, batch_admission_sha256)
+    journal_resolved = (journal_path if journal_path.is_absolute() else ROOT / journal_path).resolve(strict=False)
+    protected_batch_roots = (ROOT / PREVIOUS_BATCH_ROOT, ROOT / FRESH_BATCH_ROOT)
+    resolved_batch_roots = tuple(path.resolve(strict=False) for path in protected_batch_roots)
+    mutable_inputs = (journal_path, publication_copy, preflight_path, output_path)
+    uses_fresh_root = any(
+        any((value if value.is_absolute() else ROOT / value).resolve(strict=False) == batch_root
+            or batch_root in (value if value.is_absolute() else ROOT / value).resolve(strict=False).parents
+            for batch_root in resolved_batch_roots)
+        for value in mutable_inputs)
+    if not any(item is not None for item in supplied):
+        if (journal_resolved in {batch_root / "hosted-delivery-journal.json"
+                for batch_root in resolved_batch_roots} or uses_fresh_root):
+            raise ValueError("fresh-batch-authorization-required")
+        return None
+    if any(item is None for item in supplied):
+        raise ValueError("fresh-batch-authorization-and-admission-required")
+    spec = importlib.util.spec_from_file_location("gw_v02_fresh_batch", ROOT / "scripts/release/v02_batch.py")
+    if spec is None or spec.loader is None:
+        raise ValueError("fresh-batch-validator-unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    source_head = _git(ROOT, "rev-parse", "HEAD")
+
+    def source_is_ancestor(ancestor: str, descendant: str) -> bool:
+        result = _external(["git", "merge-base", "--is-ancestor", ancestor, descendant],
+                           cwd=ROOT, timeout=30, check=False, phase="runtime",
+                           fresh_batch_scratch=ROOT / FRESH_BATCH_ROOT / "coordinator-external-attempts")
+        return result.returncode == 0
+
+    def rooted(value: pathlib.Path) -> pathlib.Path:
+        return value if value.is_absolute() else ROOT / value
+
+    result = module.validate_batch(ROOT, rooted(batch_authorization), batch_authorization_sha256,
+        rooted(batch_admission), batch_admission_sha256, stage=stage, source_head=source_head,
+        now=datetime.datetime.now(datetime.timezone.utc), scope_path=scope_path,
+        journal_path=rooted(journal_path), publication_copy=rooted(publication_copy),
+        preflight_path=rooted(preflight_path), output_path=rooted(output_path),
+        source_is_ancestor=source_is_ancestor,
+        expected_source_paths=set(_bounded_publication_paths(ROOT)))
+    os.environ["GENEWHIP_QUALIFICATION_PHASE"] = "runtime"
+    os.environ["GENEWHIP_FRESH_BATCH_RUNTIME"] = "1"
+    os.environ["GENEWHIP_FRESH_BATCH_ADMITTED"] = "1"
+    os.environ["GENEWHIP_FRESH_BATCH_STAGE"] = stage
+    return result
+
+
+def _write_fresh_batch_failure(*, stage: str, reason: str) -> None:
+    spec = importlib.util.spec_from_file_location("gw_v02_fresh_batch_failure", ROOT / "scripts/release/v02_batch.py")
+    if spec is None or spec.loader is None:
+        raise ValueError("fresh-batch-validator-unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.write_failure_sentinel(ROOT, stage=stage, reason=reason,
+        observed_at=datetime.datetime.now(datetime.timezone.utc).isoformat())
+
+
+def _fresh_batch_failure_latch(default_stage: str):
+    """Persist a fail-closed stop after failures from an admitted batch route."""
+    def decorate(function):
+        @functools.wraps(function)
+        def wrapped(*args, **kwargs):
+            try:
+                return function(*args, **kwargs)
+            except Exception:
+                if (kwargs.get("batch_authorization") is not None
+                        and os.environ.get("GENEWHIP_FRESH_BATCH_ADMITTED") == "1"):
+                    phase = os.environ.get("GENEWHIP_QUALIFICATION_PHASE")
+                    route_stage = os.environ.get("GENEWHIP_FRESH_BATCH_STAGE")
+                    stage = ("package" if phase == "package" else
+                             route_stage if route_stage in ("preview-ci", "publication")
+                             else default_stage)
+                    sentinel = ROOT / FRESH_BATCH_ROOT / "failure.json"
+                    if not sentinel.exists() and not sentinel.is_symlink():
+                        reason = ("fresh-batch-package-failed" if stage == "package" else
+                            "fresh-batch-publication-failed" if stage == "publication" else
+                            "fresh-batch-qualification-failed")
+                        _write_fresh_batch_failure(stage=stage, reason=reason)
+                raise
+        return wrapped
+    return decorate
+
+
 def _external(argv: list[str], *, cwd: pathlib.Path = ROOT, timeout: int = 120,
               check: bool = True, env: dict[str, str] | None = None,
               phase: str | None = None,
               owned_roots: tuple[pathlib.Path, ...] = (),
               scratch_limit_bytes: int | None = None,
-              stdout_limit_bytes: int | None = None) -> subprocess.CompletedProcess[str]:
+              stdout_limit_bytes: int | None = None,
+              fresh_batch_scratch: pathlib.Path | None = None) -> subprocess.CompletedProcess[str]:
     """Run delivery commands under the established monitored PGID boundary."""
     scope = json.loads((ROOT / "evidence/v02-execution.json").read_text(encoding="utf-8"))
     child_env = os.environ.copy()
@@ -100,6 +198,8 @@ def _external(argv: list[str], *, cwd: pathlib.Path = ROOT, timeout: int = 120,
         child_env.update(env)
     started_at = child_env.get("GENEWHIP_QUALIFICATION_STARTED_AT")
     phase = phase or child_env.get("GENEWHIP_QUALIFICATION_PHASE") or "preparation"
+    if phase == "preparation" and child_env.get("GENEWHIP_FRESH_BATCH_RUNTIME") == "1":
+        phase = "runtime"
     if phase == "preparation" and child_env.get("GENEWHIP_RECOVERY_CAMPAIGN_SHA256"):
         phase = "runtime"
     if started_at:
@@ -121,7 +221,12 @@ def _external(argv: list[str], *, cwd: pathlib.Path = ROOT, timeout: int = 120,
         for key in ("max_stdout_stderr_bytes", "max_capture_bytes", "max_retained_bytes"):
             limits[key] = min(limits[key], stdout_limit_bytes)
     limits["wall_seconds"] = timeout
-    scratch = ROOT / "build/v02/coordinator-external-attempts"
+    if fresh_batch_scratch is not None:
+        scratch = fresh_batch_scratch
+    elif child_env.get("GENEWHIP_FRESH_BATCH_RUNTIME") == "1":
+        scratch = ROOT / FRESH_BATCH_ROOT / "coordinator-external-attempts"
+    else:
+        scratch = ROOT / "build/v02/coordinator-external-attempts"
     label = f"external-{os.getpid()}-{time.monotonic_ns()}"
     temporary_root = scratch / (label + ".tmp")
     temporary_root.mkdir(parents=True, exist_ok=False)
@@ -1888,32 +1993,44 @@ def _validate_r10_predecessor_artifacts(journal_bytes: bytes) -> dict[str, Any]:
         raise ValueError("source-successor-predecessor-artifacts-invalid") from None
 
 
-def _required_preview_success(pr: dict[str, Any], run: dict[str, Any],
-                              expected: dict[str, Any]) -> None:
-    checks = pr.get("statusCheckRollup")
+def _validate_preview_rollup(checks: Any, *, error: str,
+                             event: str = "pull_request") -> dict[str, dict[str, Any]]:
     preview_lanes = {"safety", "gameplay", "desktop", "package", "performance",
         "product-smoke", "phase7-fast"}
     conditional_skips = {"v02-runtime", "extended", "v02-benchmark-control",
         "v02-benchmark-recursion94", "v02-benchmark-tank-battle", "v02-package",
         "v02-release-qualification", "attestation"}
+    successful_lanes = preview_lanes | {"required-ci"}
+    if event == "push":
+        conditional_skips.remove("attestation")
+        successful_lanes.add("attestation")
+    elif event != "pull_request":
+        raise ValueError(error)
     if not isinstance(checks, list):
-        raise ValueError("source-successor-prior-required-check-not-success")
+        raise ValueError(error)
     by_name: dict[str, dict[str, Any]] = {}
     for row in checks:
         if (not isinstance(row, dict) or not isinstance(row.get("name"), str)
                 or not row["name"] or row["name"] in by_name):
-            raise ValueError("source-successor-prior-required-check-not-success")
+            raise ValueError(error)
         by_name[row["name"]] = row
-    expected_names = preview_lanes | conditional_skips | {"required-ci"}
+    expected_names = successful_lanes | conditional_skips
     if set(by_name) != expected_names:
-        raise ValueError("source-successor-prior-required-check-not-success")
+        raise ValueError(error)
     if any(by_name[name].get("status") != "COMPLETED"
             or by_name[name].get("conclusion") != "SUCCESS"
-            for name in preview_lanes | {"required-ci"}):
-        raise ValueError("source-successor-prior-required-check-not-success")
+            for name in successful_lanes):
+        raise ValueError(error)
     if any(by_name[name].get("status") != "COMPLETED"
             or by_name[name].get("conclusion") != "SKIPPED" for name in conditional_skips):
-        raise ValueError("source-successor-prior-required-check-not-success")
+        raise ValueError(error)
+    return by_name
+
+
+def _required_preview_success(pr: dict[str, Any], run: dict[str, Any],
+                              expected: dict[str, Any]) -> None:
+    _validate_preview_rollup(pr.get("statusCheckRollup"),
+        error="source-successor-prior-required-check-not-success")
     if (run.get("id") != int(expected["preview_run_id"])
             or run.get("head_sha") != expected["source_head"]
             or run.get("event") != "pull_request"
@@ -2951,14 +3068,39 @@ def _adopt_incomplete_merged_source(packet: dict[str, Any], candidate: pathlib.P
     return receipt
 
 
+@_fresh_batch_failure_latch("publication")
 def publish_sanitized_source(packet_path: pathlib.Path, publication_copy: pathlib.Path,
                              journal_path: pathlib.Path, *, campaign_path: pathlib.Path | None = None,
                              campaign_sha256: str | None = None,
                              scope_path: pathlib.Path | None = None,
                              recovery_selection: str = "15",
                              continuation_path: pathlib.Path | None = None,
-                             continuation_purpose: str = "original17") -> dict[str, Any]:
+                             continuation_purpose: str = "original17",
+                             batch_authorization: pathlib.Path | None = None,
+                             batch_authorization_sha256: str | None = None,
+                             batch_admission: pathlib.Path | None = None,
+                             batch_admission_sha256: str | None = None,
+                             batch_output_path: pathlib.Path | None = None) -> dict[str, Any]:
     """Push only the reviewed sanitized candidate, merge through required protection."""
+    scope_path = scope_path or ROOT / "evidence/v02-execution.json"
+    if batch_authorization is None:
+        protected_roots = tuple((ROOT / relative).resolve(strict=False)
+                                for relative in (PREVIOUS_BATCH_ROOT, FRESH_BATCH_ROOT))
+        direct_paths = (packet_path, publication_copy, journal_path,
+                        batch_output_path or (journal_path.parent / "source-delivery.json"))
+        if any(any((value if value.is_absolute() else ROOT / value).resolve(strict=False) == root
+                   or root in (value if value.is_absolute() else ROOT / value).resolve(strict=False).parents
+                   for root in protected_roots)
+               for value in direct_paths):
+            raise ValueError("fresh-batch-authorization-required")
+    _fresh_batch_guard(batch_authorization=batch_authorization,
+        batch_authorization_sha256=batch_authorization_sha256,
+        batch_admission=batch_admission, batch_admission_sha256=batch_admission_sha256,
+        stage="public-effects", scope_path=scope_path, journal_path=journal_path,
+        publication_copy=publication_copy, preflight_path=packet_path,
+        output_path=batch_output_path or (journal_path.parent / "source-delivery.json"))
+    if batch_authorization is not None:
+        os.environ["GENEWHIP_FRESH_BATCH_STAGE"] = "publication"
     _require_campaign_for_journal(journal_path, scope_path or ROOT / "evidence/v02-execution.json",
         campaign_path, campaign_sha256, phase="runtime", recovery_selection=recovery_selection,
         continuation_path=continuation_path, continuation_purpose=continuation_purpose)
@@ -2981,7 +3123,8 @@ def publish_sanitized_source(packet_path: pathlib.Path, publication_copy: pathli
             raise ValueError("hosted-delivery-journal-clock-conflicts-with-workflow")
         _require_hosted_budget(previous["started_at"],
             datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            json.loads((ROOT / "evidence/v02-execution.json").read_text()))
+            json.loads((ROOT / "evidence/v02-execution.json").read_text()),
+            phase="runtime" if batch_authorization is not None else None)
         os.environ["GENEWHIP_QUALIFICATION_STARTED_AT"] = previous["started_at"]
         if previous.get("public_source_sha"):
             # A local journal is a resume hint only. Reopen the actual PR and
@@ -3083,7 +3226,15 @@ def publish_sanitized_source(packet_path: pathlib.Path, publication_copy: pathli
             if isinstance(checks, list) else []
         if (len(required) != 1 or required[0].get("status") != "COMPLETED"
                 or required[0].get("conclusion") != "SUCCESS"):
+            if batch_authorization is not None:
+                _write_fresh_batch_failure(stage="preview-ci", reason="merged-pr-required-ci-failed")
             raise ValueError("hosted-delivery-merged-pr-required-check-not-success")
+        if batch_authorization is not None:
+            try:
+                _validate_preview_rollup(checks, error="fresh-batch-pr-preview-roster-not-success")
+            except ValueError:
+                _write_fresh_batch_failure(stage="preview-ci", reason="pull-request-preview-roster-failed")
+                raise
         receipt = _verified_merge_receipt(prs[0], repository, candidate, head, base, branch)
         journal.update(receipt)
         _write_json(journal_path, journal)
@@ -3095,7 +3246,8 @@ def publish_sanitized_source(packet_path: pathlib.Path, publication_copy: pathli
         raise ValueError("conflicting-public-source-pull-request-exists")
     while True:
         _require_hosted_budget(started_at, datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                               json.loads((ROOT / "evidence/v02-execution.json").read_text()))
+                               json.loads((ROOT / "evidence/v02-execution.json").read_text()),
+                               phase="runtime" if batch_authorization is not None else None)
         pr_data = _external(["gh", "pr", "view", pr_number, "--repo", repository,
             "--json", "number,state,headRefOid,baseRefOid,mergeStateStatus,statusCheckRollup,url"], timeout=45)
         try:
@@ -3107,10 +3259,20 @@ def publish_sanitized_source(packet_path: pathlib.Path, publication_copy: pathli
             raise ValueError("public-source-pull-request-identity-or-base-changed")
         checks = current.get("statusCheckRollup")
         required = [item for item in checks or [] if item.get("name") == "required-ci"]
-        if any(item.get("conclusion") in {"FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED"}
-               for item in required):
+        failed_checks = [item for item in checks or [] if isinstance(item, dict)
+            and item.get("status") == "COMPLETED"
+            and item.get("conclusion") in {"FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED"}]
+        if failed_checks:
+            if batch_authorization is not None:
+                _write_fresh_batch_failure(stage="preview-ci", reason="pull-request-required-ci-failed")
             raise ValueError("required-public-pull-request-check-failed")
         if len(required) == 1 and required[0].get("conclusion") == "SUCCESS":
+            if batch_authorization is not None:
+                try:
+                    _validate_preview_rollup(checks, error="fresh-batch-pr-preview-roster-not-success")
+                except ValueError:
+                    _write_fresh_batch_failure(stage="preview-ci", reason="pull-request-preview-roster-failed")
+                    raise
             break
         time.sleep(30)
     # The PR can wait for checks for hours. Re-open effective protection and
@@ -3124,7 +3286,8 @@ def publish_sanitized_source(packet_path: pathlib.Path, publication_copy: pathli
                "--" + strategy], timeout=300)
     while True:
         _require_hosted_budget(started_at, datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                               json.loads((ROOT / "evidence/v02-execution.json").read_text()))
+                               json.loads((ROOT / "evidence/v02-execution.json").read_text()),
+                               phase="runtime" if batch_authorization is not None else None)
         merged = _external(["gh", "pr", "view", pr_number, "--repo", repository,
             "--json", "state,mergedAt,mergeCommit,headRefOid,baseRefOid"], timeout=45)
         current = json.loads(merged.stdout)
@@ -3141,10 +3304,8 @@ def publish_sanitized_source(packet_path: pathlib.Path, publication_copy: pathli
         time.sleep(30)
 
 
-def _publication_paths(root: pathlib.Path) -> list[str]:
-    """Return the tracked product tree, excluding local planning/runtime material."""
-    raw = subprocess.check_output(["git", "ls-files", "-z"], cwd=root)
-    names = [item.decode("utf-8") for item in raw.split(b"\0") if item]
+def _publication_paths_from_names(root: pathlib.Path, names: list[str]) -> list[str]:
+    """Filter a complete Git path roster using the established publication rules."""
     excluded = {".planning", "build", "artifacts", "node_modules", "target", "dist",
                 "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
     result = []
@@ -3170,6 +3331,29 @@ def _publication_paths(root: pathlib.Path) -> list[str]:
     if not result:
         raise ValueError("public-snapshot-source-empty")
     return sorted(result)
+
+
+def _publication_paths(root: pathlib.Path) -> list[str]:
+    """Return the tracked product tree, excluding local planning/runtime material."""
+    raw = subprocess.check_output(["git", "ls-files", "-z"], cwd=root)
+    names = [item.decode("utf-8") for item in raw.split(b"\0") if item]
+    return _publication_paths_from_names(root, names)
+
+
+def _bounded_publication_paths(root: pathlib.Path) -> list[str]:
+    """Read the full source roster through the existing bounded Git runner."""
+    batch_scratch = root / FRESH_BATCH_ROOT / "coordinator-external-attempts"
+    result = _external(["git", "ls-files", "-z"], cwd=root, timeout=30,
+        phase="runtime", stdout_limit_bytes=8 * 1024 * 1024,
+        fresh_batch_scratch=batch_scratch)
+    raw = result.stdout.encode("utf-8")
+    if not raw or not raw.endswith(b"\0"):
+        raise ValueError("fresh-batch-source-roster-incomplete")
+    try:
+        names = [item.decode("utf-8") for item in raw.split(b"\0") if item]
+    except UnicodeDecodeError:
+        raise ValueError("fresh-batch-source-roster-invalid") from None
+    return _publication_paths_from_names(root, names)
 
 
 def _projection_crosswalk(root: pathlib.Path, included: list[str]) -> dict[str, Any]:
@@ -3617,6 +3801,96 @@ def _workflow_runs(repository: str, source_sha: str) -> list[dict[str, Any]]:
     return [row for row in runs if isinstance(row, dict) and row.get("head_sha") == source_sha]
 
 
+def _wait_for_fresh_batch_push_ci(repository: str, source_sha: str, started_at: str,
+                                 scope: dict[str, Any]) -> dict[str, Any]:
+    """Require exact merged-main preview roster success before full dispatch.
+
+    Discovery is bounded separately. Once an exact active run is found, it may
+    finish until the immutable runtime cutoff rather than an arbitrary short wait.
+    """
+    start = _parse_utc(started_at)
+    discovery_deadline = time.monotonic() + 300
+    selected_id: str | None = None
+    selected_created: str | None = None
+    while True:
+        remaining = _require_hosted_budget(started_at,
+            datetime.datetime.now(datetime.timezone.utc).isoformat(), scope, phase="runtime")
+        matching = []
+        for row in _workflow_runs(repository, source_sha):
+            if (row.get("event") != "push" or row.get("head_branch") != "main"
+                    or row.get("path", "").split("@", 1)[0] != ".github/workflows/ci.yml"):
+                continue
+            try:
+                created = _parse_utc(row.get("created_at"))
+            except ValueError:
+                _write_fresh_batch_failure(stage="preview-ci", reason="post-merge-push-preview-invalid")
+                raise ValueError("fresh-batch-push-ci-created-at-invalid") from None
+            if created < start:
+                continue
+            matching.append(row)
+        if selected_id is not None and not matching:
+            _write_fresh_batch_failure(stage="preview-ci", reason="post-merge-push-preview-disappeared")
+            raise ValueError("fresh-batch-push-ci-disappeared")
+        if len(matching) > 1:
+            _write_fresh_batch_failure(stage="preview-ci", reason="post-merge-push-preview-ambiguous")
+            raise ValueError("fresh-batch-push-ci-ambiguous")
+        if matching:
+            run = matching[0]
+            try:
+                identity = _validate_hosted_run(run, repository, source_sha,
+                    allow_active=True, expected_event="push")
+            except ValueError:
+                _write_fresh_batch_failure(stage="preview-ci", reason="post-merge-push-preview-invalid")
+                raise
+            if _parse_utc(identity["created_at"]) < start:
+                _write_fresh_batch_failure(stage="preview-ci", reason="post-merge-push-preview-stale")
+                raise ValueError("fresh-batch-push-ci-predates-authorization")
+            if selected_id is None:
+                selected_id, selected_created = identity["run_id"], identity["created_at"]
+            elif identity["run_id"] != selected_id or identity["created_at"] != selected_created:
+                _write_fresh_batch_failure(stage="preview-ci", reason="post-merge-push-preview-changed")
+                raise ValueError("fresh-batch-push-ci-identity-changed")
+            if run.get("status") == "completed":
+                owner, name = repository.split("/", 1)
+                jobs_result = _external(["gh", "api",
+                    f"repos/{owner}/{name}/actions/runs/{identity['run_id']}/jobs?per_page=100",
+                    "--jq", "{total_count,jobs:[.jobs[]|{name,status,conclusion}]}"],
+                    timeout=45, phase="runtime")
+                try:
+                    jobs_value = json.loads(jobs_result.stdout)
+                except json.JSONDecodeError:
+                    _write_fresh_batch_failure(stage="preview-ci", reason="post-merge-push-jobs-invalid")
+                    raise ValueError("fresh-batch-push-ci-jobs-invalid") from None
+                jobs = jobs_value.get("jobs") if isinstance(jobs_value, dict) else None
+                if not isinstance(jobs, list) or jobs_value.get("total_count") != len(jobs) or len(jobs) >= 100:
+                    _write_fresh_batch_failure(stage="preview-ci", reason="post-merge-push-jobs-incomplete")
+                    raise ValueError("fresh-batch-push-ci-jobs-incomplete")
+                normalized = []
+                for job in jobs:
+                    if not isinstance(job, dict) or not isinstance(job.get("name"), str):
+                        _write_fresh_batch_failure(stage="preview-ci", reason="post-merge-push-jobs-invalid")
+                        raise ValueError("fresh-batch-push-ci-jobs-invalid")
+                    status = job.get("status")
+                    conclusion = job.get("conclusion")
+                    normalized.append({"name": job["name"],
+                        "status": status.upper() if isinstance(status, str) else status,
+                        "conclusion": conclusion.upper() if isinstance(conclusion, str) else conclusion})
+                try:
+                    _validate_preview_rollup(normalized,
+                        error="fresh-batch-post-merge-preview-roster-failed", event="push")
+                except ValueError:
+                    _write_fresh_batch_failure(stage="preview-ci", reason="post-merge-preview-roster-failed")
+                    raise
+                if run.get("conclusion") != "success":
+                    _write_fresh_batch_failure(stage="preview-ci", reason="post-merge-push-preview-failed")
+                    raise ValueError("fresh-batch-push-ci-conclusion-failed")
+                return run
+        if selected_id is None and time.monotonic() >= discovery_deadline:
+            _write_fresh_batch_failure(stage="preview-ci", reason="post-merge-push-preview-not-found")
+            raise ValueError("fresh-batch-push-ci-not-found")
+        time.sleep(min(30, max(1, remaining - scope["qualification_batch"]["close_wall_seconds"])))
+
+
 def _dispatch_qualification_run(repository: str, source_sha: str, base_sha: str,
                                 journal_path: pathlib.Path, journal: dict[str, Any],
                                 scope: dict[str, Any]) -> str:
@@ -3762,6 +4036,7 @@ def _verify_attestation(subject: pathlib.Path, repository: str, source_sha: str,
             "signer_workflow": verified["workflow"], "oidc_issuer": "https://token.actions.githubusercontent.com"}
 
 
+@_fresh_batch_failure_latch("qualification")
 def run_hosted_qualification(packet_path: pathlib.Path, publication_copy: pathlib.Path,
                              scope_path: pathlib.Path, out: pathlib.Path,
                              journal_path: pathlib.Path | None = None,
@@ -3769,14 +4044,28 @@ def run_hosted_qualification(packet_path: pathlib.Path, publication_copy: pathli
                              campaign_sha256: str | None = None,
                              recovery_selection: str = "15",
                              continuation_path: pathlib.Path | None = None,
-                             *, continuation_purpose: str = "original17") -> dict[str, Any]:
+                             *, continuation_purpose: str = "original17",
+                             batch_authorization: pathlib.Path | None = None,
+                             batch_authorization_sha256: str | None = None,
+                             batch_admission: pathlib.Path | None = None,
+                             batch_admission_sha256: str | None = None) -> dict[str, Any]:
     """Merge sanitized source through protection, consume its exact CI artifacts, and freeze them."""
-    scope = json.loads(scope_path.read_text(encoding="utf-8"))
     journal_path = journal_path or ROOT / "build/v02/hosted-delivery-journal.json"
+    batch = _fresh_batch_guard(batch_authorization=batch_authorization,
+        batch_authorization_sha256=batch_authorization_sha256,
+        batch_admission=batch_admission, batch_admission_sha256=batch_admission_sha256,
+        stage="public-effects", scope_path=scope_path, journal_path=journal_path,
+        publication_copy=publication_copy, preflight_path=packet_path, output_path=out)
+    scope = json.loads(scope_path.read_text(encoding="utf-8"))
     source_receipt = publish_sanitized_source(packet_path, publication_copy, journal_path,
         campaign_path=campaign_path, campaign_sha256=campaign_sha256, scope_path=scope_path,
         recovery_selection=recovery_selection, continuation_path=continuation_path,
-        continuation_purpose=continuation_purpose)
+        continuation_purpose=continuation_purpose,
+        batch_authorization=batch_authorization,
+        batch_authorization_sha256=batch_authorization_sha256,
+        batch_admission=batch_admission,
+        batch_admission_sha256=batch_admission_sha256,
+        batch_output_path=out)
     existing = json.loads(journal_path.read_text(encoding="utf-8"))
     started_at = existing["started_at"]
     repository = existing["repository"]
@@ -3784,6 +4073,10 @@ def run_hosted_qualification(packet_path: pathlib.Path, publication_copy: pathli
     main_ref = _gh_json(repository, "git/ref/heads/main", phase="preparation")
     if main_ref.get("object", {}).get("sha") != source_sha:
         raise ValueError("public-main-moved-before-hosted-qualification")
+    if batch is not None:
+        os.environ["GENEWHIP_FRESH_BATCH_STAGE"] = "preview-ci"
+        _wait_for_fresh_batch_push_ci(repository, source_sha, batch["started_at"], scope)
+        os.environ["GENEWHIP_FRESH_BATCH_STAGE"] = "qualification"
     nonce = _dispatch_qualification_run(repository, source_sha,
         source_receipt["public_base_sha"], journal_path, existing, scope)
     base_sha = source_receipt["public_base_sha"]
@@ -3797,8 +4090,13 @@ def run_hosted_qualification(packet_path: pathlib.Path, publication_copy: pathli
     os.environ["GENEWHIP_QUALIFICATION_STARTED_AT"] = started_at
     os.environ["GENEWHIP_QUALIFICATION_PHASE"] = "runtime"
     os.environ["GENEWHIP_QUALIFICATION_NONCE"] = nonce
-    run = _wait_for_selected_run_completion(repository, source_sha, run, started_at, scope,
-        nonce=nonce, base_sha=base_sha)
+    try:
+        run = _wait_for_selected_run_completion(repository, source_sha, run, started_at, scope,
+            nonce=nonce, base_sha=base_sha)
+    except ValueError as error:
+        if batch is not None and str(error) == "exact-source-hosted-qualification-failed":
+            _write_fresh_batch_failure(stage="qualification", reason="exact-hosted-qualification-failed")
+        raise
     run_identity = _validate_hosted_run(run, repository, source_sha,
         expected_event="workflow_dispatch", expected_nonce=nonce)
     run_id, run_attempt = run_identity["run_id"], run_identity["run_attempt"]
@@ -3806,9 +4104,11 @@ def run_hosted_qualification(packet_path: pathlib.Path, publication_copy: pathli
             datetime.datetime.now(datetime.timezone.utc).isoformat(), scope, phase="runtime") <= 0:
         raise ValueError("qualification-common-cutoff-exhausted")
     os.environ["GENEWHIP_QUALIFICATION_PHASE"] = "package"
+    if batch is not None:
+        os.environ["GENEWHIP_FRESH_BATCH_STAGE"] = "package"
 
-    campaign_root = (journal_path.parent if campaign_path is not None
-                     else ROOT / "build/v02")
+    campaign_root = (batch["batch_root"] if batch is not None else
+                     journal_path.parent if campaign_path is not None else ROOT / "build/v02")
     download_root = campaign_root / "hosted-downloads" / f"{run_id}-{run_attempt}"
     package_download = download_root / "v02-package"
     release_download = download_root / "release-input"
@@ -5110,6 +5410,14 @@ def main(argv: list[str] | None = None) -> int:
                         help="scope a current-native preparation or return record")
     parser.add_argument("--authorization", type=pathlib.Path,
                         help="previously authorized public destination packet")
+    parser.add_argument("--batch-authorization", type=pathlib.Path,
+                        help="immutable Phase 7 fresh-batch user authorization")
+    parser.add_argument("--batch-authorization-sha256",
+                        help="expected digest of the immutable fresh-batch authorization")
+    parser.add_argument("--batch-admission", type=pathlib.Path,
+                        help="review-bound source-preparation or public-effects admission record")
+    parser.add_argument("--batch-admission-sha256",
+                        help="expected digest of the fresh-batch admission record")
     parser.add_argument("--contracts-only", action="store_true")
     parser.add_argument("--source-sha")
     parser.add_argument("--head-sha")
@@ -5117,9 +5425,43 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--run-id")
     parser.add_argument("--run-attempt")
     args = parser.parse_args(argv)
+    batch_failure_stage: str | None = None
     try:
         if args.prepare_only and args.mode != "stage-public":
             raise ValueError("prepare-only-is-only-valid-for-stage-public")
+        batch_fields = (args.batch_authorization, args.batch_authorization_sha256,
+                        args.batch_admission, args.batch_admission_sha256)
+        batch_requested = any(item is not None for item in batch_fields)
+        if batch_requested:
+            if (args.mode not in ("stage-public", "hosted")
+                    or args.campaign is not None or args.campaign_sha256 is not None
+                    or args.continuation is not None or args.recovery_selection != "15"):
+                raise ValueError("fresh-batch-route-conflicts-with-legacy-recovery")
+            if args.publication_copy is None:
+                raise ValueError("stage-public-publication-copy-required")
+            if any(item is None for item in batch_fields):
+                raise ValueError("fresh-batch-authorization-and-admission-required")
+            _fresh_batch_guard(batch_authorization=args.batch_authorization,
+                batch_authorization_sha256=args.batch_authorization_sha256,
+                batch_admission=args.batch_admission,
+                batch_admission_sha256=args.batch_admission_sha256,
+                stage="source-preparation" if args.prepare_only else "public-effects",
+                scope_path=args.scope, journal_path=args.journal,
+                publication_copy=args.publication_copy,
+                preflight_path=args.out if args.prepare_only else args.preflight,
+                output_path=args.out)
+            batch_failure_stage = ("preparation" if args.prepare_only else
+                                   "qualification" if args.mode == "hosted" else "publication")
+        else:
+            protected_roots = tuple((ROOT / relative).resolve(strict=False)
+                                    for relative in (PREVIOUS_BATCH_ROOT, FRESH_BATCH_ROOT))
+            routed_paths = (args.journal, args.preflight, args.publication_copy, args.out)
+            if any(value is not None and any(
+                    (value if value.is_absolute() else ROOT / value).resolve(strict=False) == root
+                    or root in (value if value.is_absolute() else ROOT / value).resolve(strict=False).parents
+                    for root in protected_roots)
+                   for value in routed_paths):
+                raise ValueError("fresh-batch-authorization-required")
         selected_campaign_journal = pathlib.Path(os.path.abspath(
             args.journal if args.journal.is_absolute() else ROOT / args.journal)) == pathlib.Path(
                 os.path.abspath(ROOT / "build/v02/campaign15/hosted-delivery-journal.json"))
@@ -5246,7 +5588,11 @@ def main(argv: list[str] | None = None) -> int:
                                              args.scope, args.out, args.journal,
                                              args.campaign, args.campaign_sha256,
                                              args.recovery_selection, args.continuation,
-                                             continuation_purpose=args.continuation_purpose)
+                                             continuation_purpose=args.continuation_purpose,
+                                             batch_authorization=args.batch_authorization,
+                                             batch_authorization_sha256=args.batch_authorization_sha256,
+                                             batch_admission=args.batch_admission,
+                                             batch_admission_sha256=args.batch_admission_sha256)
             print("qualification-hosted: " + value["status"] +
                   "; source=" + value["source_sha"] + "; run=" + value["run_id"] +
                   "; attempt=" + value["run_attempt"] + "; final_qualified=false")
@@ -5272,13 +5618,20 @@ def main(argv: list[str] | None = None) -> int:
                       "; public_head=" + value["public_identity"]["head_sha"] +
                       "; base=" + value["public_identity"]["base_sha"])
                 if value["status"] != "prepared":
+                    if batch_requested:
+                        _write_fresh_batch_failure(stage="preparation", reason="candidate-preparation-failed")
                     return 1
             else:
                 value = publish_sanitized_source(args.preflight, args.publication_copy, args.journal,
                     campaign_path=args.campaign, campaign_sha256=args.campaign_sha256,
                     scope_path=args.scope, recovery_selection=args.recovery_selection,
                     continuation_path=args.continuation,
-                    continuation_purpose=args.continuation_purpose)
+                    continuation_purpose=args.continuation_purpose,
+                    batch_authorization=args.batch_authorization,
+                    batch_authorization_sha256=args.batch_authorization_sha256,
+                    batch_admission=args.batch_admission,
+                    batch_admission_sha256=args.batch_admission_sha256,
+                    batch_output_path=args.out)
                 _write_json(args.out, {"schema": "genewhip.v02-public-source-delivery.v1",
                     "status": "merged", **value})
                 print("public-source-delivery: merged; public_source_sha=" + value["public_source_sha"])
@@ -5323,6 +5676,20 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError,
             subprocess.SubprocessError, RuntimeError) as exc:
+        if batch_failure_stage is not None:
+            sentinel = ROOT / FRESH_BATCH_ROOT / "failure.json"
+            if not sentinel.exists() and not sentinel.is_symlink():
+                stage = batch_failure_stage
+                if args.mode == "hosted" and os.environ.get("GENEWHIP_QUALIFICATION_PHASE") == "package":
+                    stage = "package"
+                reason = {"preparation": "candidate-preparation-failed",
+                    "publication": "source-publication-failed",
+                    "qualification": "hosted-qualification-failed" if stage != "package"
+                        else "hosted-package-failed"}.get(stage, "fresh-batch-route-failed")
+                try:
+                    _write_fresh_batch_failure(stage=stage, reason=reason)
+                except (OSError, ValueError, RuntimeError):
+                    pass
         print("REJECT: " + str(exc), file=sys.stderr)
         return 1
 
