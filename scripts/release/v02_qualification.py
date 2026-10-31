@@ -5005,6 +5005,63 @@ def _public_argv(command: list[str]) -> list[str]:
     return result
 
 
+def _coordinator_failure_diagnostic(attempt: Any, rejection: str) -> str:
+    """Project the outer receipt separately from any nested child's stderr."""
+    def enum(value: Any, choices: set[str]) -> str:
+        return value if type(value) is str and value in choices else (
+            "missing" if value is None else "other")
+
+    record = attempt if isinstance(attempt, dict) else {}
+    rows = record.get("processes")
+    row = rows[0] if isinstance(rows, list) and len(rows) == 1 and isinstance(rows[0], dict) else {}
+    count = ("none" if len(rows) == 0 else "one" if len(rows) == 1 else "multiple") \
+        if isinstance(rows, list) else "invalid"
+    code = record.get("returncode")
+    code_category = ("missing" if code is None else "other" if type(code) is not int else
+                     "zero" if code == 0 else "signal" if code < 0 else "nonzero")
+    bound = row.get("bound_violation")
+    cleanup_reasons = {"group-inactive", "group-observer-cleanup-unconfirmed",
+        "group-status-budget-exhausted", "cleanup-permission-denied", "group-cleanup-os-error",
+        "group-leader-reap-unconfirmed", "group-leader-wait-unconfirmed", "group-reported-active",
+        "group-signal-permission-denied", "group-signal-visible", "group-status-unavailable",
+        "cleanup-unclassified", "not-observed"}
+    queries = row.get("cleanup_observation_attempts")
+    diagnostic = {
+        "rejection": enum(rejection, {"launch-error", "receipt-shape", "cleanup-unconfirmed",
+                                       "bound-violation", "nonzero-exit"}),
+        "receipt_count": count,
+        "cleanup": enum(row.get("process_group_cleanup"), {"confirmed", "unconfirmed", "not-launched"}),
+        "status": enum(row.get("status"), {"completed", "failed", "timeout", "not-launched"}),
+        "bound": "true" if bound is True else "false" if bound is False else "missing" if bound is None else "other",
+        "bound_reason": enum(row.get("bound_violation_reason"), {
+            "phase7-wall-timeout", "phase7-stdout-stderr-byte-limit", "phase7-rss-observation-unavailable",
+            "phase7-rss-byte-limit", "phase7-scratch-tree-unsafe", "phase7-scratch-byte-limit",
+            "phase7-json-byte-limit", "phase7-capture-byte-limit", "phase7-retained-byte-limit",
+            "phase7-binary-file-byte-limit"}),
+        "return": code_category,
+        "cleanup_reason": enum(row.get("cleanup_reason"), cleanup_reasons),
+        "status_observation": enum(row.get("cleanup_status_observation"), cleanup_reasons),
+        "cleanup_queries": str(queries) if type(queries) is int and 0 <= queries <= 16 else "unavailable",
+        "observer_stage": enum(row.get("observer_failure_stage"), {"spawn", "pipe", "setup", "selector",
+            "select", "read", "deadline", "byte-limit", "wait", "nonzero-exit", "parse", "observer-cleanup", "none"}),
+        "observer_return": enum(row.get("observer_return_category"), {"zero", "nonzero", "signaled"}),
+        "observer_error": enum(row.get("observer_error_category"), {
+            "permission", "not-found", "interrupted", "timeout", "io", "none"}),
+        "cleanup_phase": enum(row.get("cleanup_signal_phase"), {"sigterm", "sigkill", "status-probe", "none"}),
+    }
+    text = "GENEWHIP_COORDINATOR_FAILURE:" + json.dumps(diagnostic, sort_keys=True, separators=(",", ":"))
+    return text if len(text.encode("utf-8")) <= 1024 else "GENEWHIP_COORDINATOR_FAILURE:diagnostic-unavailable"
+
+
+def _emit_coordinator_failure(attempt: Any, rejection: str) -> None:
+    try:
+        print(_coordinator_failure_diagnostic(attempt, rejection), file=sys.stderr)
+    except (OSError, ValueError):
+        # The private attempt is already durable; a closed log must not mask
+        # the original boundary failure.
+        pass
+
+
 def _bounded_command(command: list[str], *, limits: dict[str, Any], scratch: pathlib.Path,
                      timeout: int, label: str, env: dict[str, str] | None = None,
                      cwd: pathlib.Path = ROOT, check: bool = True,
@@ -5071,11 +5128,16 @@ def _bounded_command(command: list[str], *, limits: dict[str, Any], scratch: pat
             raise persistence_error from launch_exception
         raise
     if launch_error is not None:
+        _emit_coordinator_failure(attempt, "launch-error")
         raise RuntimeError("qualification-child-boundary-error:"+label+":"+launch_error) from launch_exception
     if (len(receipt) != 1 or
             receipt[0].get("process_group_cleanup") != "confirmed" or receipt[0].get("bound_violation")):
+        rejection = ("receipt-shape" if len(receipt) != 1 else "cleanup-unconfirmed"
+            if receipt[0].get("process_group_cleanup") != "confirmed" else "bound-violation")
+        _emit_coordinator_failure(attempt, rejection)
         raise RuntimeError(f"qualification-child-failed:{label}:{returncode}:{stderr[-2048:]}")
     if check and returncode != 0:
+        _emit_coordinator_failure(attempt, "nonzero-exit")
         raise RuntimeError(f"qualification-child-failed:{label}:{returncode}:{stderr[-2048:]}")
     return attempt
 

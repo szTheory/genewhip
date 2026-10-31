@@ -74,11 +74,32 @@ FIRST_PARTY_CLEANUP_CONTROL_SOURCE_PATHS = {
     ".github/workflows/ci.yml",
     "tests/evidence/phase7_process_admission_contract.py",
 }
+NATIVE_HOST_RUNTIME_CASE = "runtime/native/recursion94/withhold-first-plate"
+NATIVE_HOST_RUNTIME_PROFILE = "native-host-runtime"
+NATIVE_HOST_RUNTIME_SOURCE_PATHS = {
+    "scripts/release/v02_qualification.py",
+    "tests/evidence/v02_qualification_contract.py",
+    "scripts/evidence/v02_run.py",
+    "tests/desktop/phase6_routes.py",
+    "tests/evidence/phase7_host_failure_diagnostic_contract.py",
+    "scripts/release/v02_batch.py",
+    "tests/evidence/phase7_fresh_batch_contract.py",
+}
 PREVIEW_REQUIRED_LANES = {"safety", "gameplay", "desktop", "package", "performance",
     "product-smoke", "phase7-fast", "required-ci"}
 PREVIEW_CONDITIONAL_SKIPS = {"v02-runtime", "extended", "v02-benchmark-control",
     "v02-benchmark-recursion94", "v02-benchmark-tank-battle", "v02-package",
     "v02-release-qualification", "attestation"}
+NATIVE_HOST_RUNTIME_JOBS = (PREVIEW_REQUIRED_LANES | PREVIEW_CONDITIONAL_SKIPS)
+NATIVE_HOST_RUNTIME_OUTCOMES = {
+    "phase7-fast": "success", "gameplay": "success", "performance": "success",
+    "package": "success", "safety": "success", "desktop": "success",
+    "product-smoke": "success", "v02-runtime": "failure", "required-ci": "failure",
+    "extended": "skipped", "v02-benchmark-recursion94": "skipped",
+    "v02-benchmark-control": "skipped", "v02-benchmark-tank-battle": "skipped",
+    "v02-package": "skipped", "v02-release-qualification": "skipped",
+    "attestation": "skipped",
+}
 
 
 def _canonical(value: Any) -> bytes:
@@ -391,6 +412,246 @@ def _validate_first_party_cleanup_control_artifacts(root: Path, *, expected_root
         raise ValueError(label)
 
 
+def _validate_native_host_runtime_artifacts(root: Path, *, expected_root: str,
+        terminal: dict[str, Any], repair: dict[str, Any], journal: dict[str, Any],
+        source_delivery: dict[str, Any], failure: dict[str, Any]) -> None:
+    """Bind one exact failed full-run case without resolving outer cleanup/cause."""
+    label = "fresh-batch-native-host-runtime-evidence-invalid"
+    run_id = terminal.get("workflow_run_id")
+    if type(run_id) is not int or run_id <= 0:
+        raise ValueError(label)
+    run_dir = f"{expected_root}/terminal-record-{run_id}"
+    paths = {
+        "terminal_packet": f"{run_dir}/terminal-packet.json",
+        "qualification_run_snapshot": f"{run_dir}/run.json",
+        "qualification_jobs_snapshot": f"{run_dir}/jobs.json",
+        "hosted_log": f"{run_dir}/v02-runtime-job.log",
+        "source_delivery": f"{expected_root}/source-delivery.json",
+        "hosted_delivery_journal": f"{expected_root}/hosted-delivery-journal.json",
+    }
+    values: dict[str, Any] = {}
+    raw_by_key: dict[str, bytes] = {}
+    for key, expected_path in paths.items():
+        reference = terminal.get(key)
+        if (not isinstance(reference, dict) or set(reference) != {"path", "sha256"}
+                or reference.get("path") != expected_path):
+            raise ValueError(label)
+        raw = _read_regular(_path(root, _safe_relative(expected_path, label)),
+                            cap=MAX_ADMISSION_BYTES, label=label)
+        if not isinstance(reference.get("sha256"), str) or _digest(raw) != reference["sha256"]:
+            raise ValueError(label)
+        raw_by_key[key] = raw
+        if key != "hosted_log":
+            if key == "qualification_jobs_snapshot":
+                try:
+                    parsed = json.loads(raw)
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    raise ValueError(label) from None
+                if not isinstance(parsed, list):
+                    raise ValueError(label)
+                values[key] = parsed
+            else:
+                values[key] = _json_object(raw, label)
+
+    run = values["qualification_run_snapshot"]
+    snapshot_jobs = values["qualification_jobs_snapshot"]
+    packet = values["terminal_packet"]
+    if (terminal.get("qualification_run") != run
+            or terminal.get("qualification_jobs") != snapshot_jobs
+            or not isinstance(snapshot_jobs, list)
+            or not isinstance(terminal.get("jobs"), list)):
+        raise ValueError(label)
+    if (repair.get("diagnostic_profile") != NATIVE_HOST_RUNTIME_PROFILE
+            or repair.get("diagnostic_case") != NATIVE_HOST_RUNTIME_CASE
+            or repair.get("diagnostic_only") is not True
+            or repair.get("live_retry_authorized") is not False
+            or repair.get("safety_job_failed") is not False
+            or repair.get("had_safety_job_failure") is not False
+            or repair.get("full_qualification_dispatched") is not True
+            or repair.get("qualification_accepted") is not False
+            or repair.get("unknown_high_findings") is not False
+            or repair.get("hosted_cleanup_outcome") != "unknown"
+            or repair.get("outer_runtime_cleanup") != "unknown"
+            or repair.get("inner_row_cleanup") != "confirmed"
+            or repair.get("inner_row_bound") != "none"
+            or type(repair.get("batch_return")) is not int
+            or repair.get("batch_return") != 1
+            or repair.get("desktop_child_return") != "unknown"
+            or repair.get("original_failure_cause") != "unknown"):
+        raise ValueError(label)
+    nonce = journal.get("qualification_dispatch_nonce")
+    repository = run.get("repository")
+    head_repository = run.get("head_repository")
+    if (run.get("id") != run_id or run.get("event") != "workflow_dispatch"
+            or run.get("status") != "completed" or run.get("conclusion") != "failure"
+            or run.get("path") != ".github/workflows/ci.yml"
+            or run.get("head_branch") != "main"
+            or run.get("name") != f"Plan10 qualification {nonce}"
+            or run.get("head_sha") != journal.get("public_source_sha")
+            or run.get("created_at") != journal.get("selected_run_created_at")
+            or type(run.get("run_attempt")) is not int or run.get("run_attempt") <= 0
+            or run.get("run_attempt") != terminal.get("run_attempt")
+            or run.get("display_title") != f"Plan10 qualification {nonce}"
+            or not isinstance(repository, dict)
+            or repository.get("full_name") != "szTheory/genewhip"
+            or repository.get("private") is not False
+            or not isinstance(repository.get("owner"), dict)
+            or repository["owner"].get("login") != "szTheory"
+            or not isinstance(head_repository, dict)
+            or head_repository.get("full_name") != "szTheory/genewhip"
+            or head_repository.get("private") is not False
+            or not isinstance(run.get("head_commit"), dict)
+            or run["head_commit"].get("id") != journal.get("public_source_sha")
+            or run["head_commit"].get("tree_id") != journal.get("tree_sha")):
+        raise ValueError(label)
+    if (terminal.get("event") != "workflow_dispatch"
+            or terminal.get("run_status") != "completed"
+            or terminal.get("run_conclusion") != "failure"
+            or terminal.get("head_sha") != journal.get("public_source_sha")
+            or terminal.get("created_at") != run.get("created_at")
+            or terminal.get("qualification_dispatch_nonce") != nonce
+            or terminal.get("started_at") != journal.get("started_at")
+            or terminal.get("attempt_root") != expected_root):
+        raise ValueError(label)
+    rows = terminal["jobs"]
+    names = [row.get("name") for row in rows if isinstance(row, dict)]
+    snapshot_names = [row.get("name") for row in snapshot_jobs if isinstance(row, dict)]
+    by_name = {row.get("name"): row for row in rows if isinstance(row, dict)}
+    normalized_snapshot = [{key: row.get(key) for key in ("id", "name", "status", "conclusion")}
+                           for row in snapshot_jobs if isinstance(row, dict)]
+    packet_jobs = packet.get("jobs") if isinstance(packet, dict) else None
+    raw_jobs_by_name = {row.get("name"): row for row in snapshot_jobs if isinstance(row, dict)}
+    packet_jobs_by_name = {row.get("name"): row for row in packet_jobs
+                           if isinstance(row, dict)} if isinstance(packet_jobs, list) else {}
+    failed_steps_by_name: dict[str, list[str]] = {}
+    for name in NATIVE_HOST_RUNTIME_JOBS:
+        steps = raw_jobs_by_name.get(name, {}).get("steps")
+        if steps is None:
+            steps = []
+        if not isinstance(steps, list):
+            raise ValueError(label)
+        failed_steps_by_name[name] = [step.get("name") for step in steps
+            if isinstance(step, dict) and step.get("conclusion") == "failure"]
+    if (len(rows) != 16 or len(names) != 16 or len(set(names)) != 16
+            or set(names) != NATIVE_HOST_RUNTIME_JOBS
+            or len(snapshot_jobs) != 16 or len(snapshot_names) != 16
+            or len(set(snapshot_names)) != 16 or set(snapshot_names) != NATIVE_HOST_RUNTIME_JOBS
+            or normalized_snapshot != rows
+            or not isinstance(packet_jobs, list) or len(packet_jobs) != 16
+            or len(packet_jobs_by_name) != 16 or set(packet_jobs_by_name) != NATIVE_HOST_RUNTIME_JOBS
+            or {name: by_name[name].get("conclusion") for name in NATIVE_HOST_RUNTIME_JOBS}
+                != NATIVE_HOST_RUNTIME_OUTCOMES
+            or any(by_name[name].get("status") != "completed"
+                or type(by_name[name].get("id")) is not int or by_name[name]["id"] <= 0
+                for name in NATIVE_HOST_RUNTIME_JOBS)
+            or len({by_name[name]["id"] for name in NATIVE_HOST_RUNTIME_JOBS}) != 16
+            or any(any(packet_jobs_by_name[name].get(key) != by_name[name].get(key)
+                    for key in ("id", "name", "status", "conclusion"))
+                or packet_jobs_by_name[name].get("failed_steps") != failed_steps_by_name[name]
+                for name in NATIVE_HOST_RUNTIME_JOBS)):
+        raise ValueError(label)
+    runtime_job = by_name["v02-runtime"]
+    packet_failure = packet.get("runtime_failure")
+    coordinator_terminal = packet.get("coordinator_terminal")
+    if (not isinstance(packet_failure, dict) or not isinstance(coordinator_terminal, dict)
+            or coordinator_terminal.get("exit_code") != 1
+            or coordinator_terminal.get("failure_record_reason") != "fresh-batch-qualification-failed"
+            or coordinator_terminal.get("failure_record_stage") != "qualification"
+            or runtime_job.get("id") != packet_failure.get("job_id")
+            or packet_jobs_by_name["v02-runtime"].get("failed_steps") != [
+                "Run complete current-source product safety and chunk roster"]
+            or packet_jobs_by_name["required-ci"].get("failed_steps") != [
+                "Reject incomplete or stale required lanes"]
+            or packet.get("workflow_run") != {key: run.get(key) for key in (
+                "id", "name", "event", "status", "conclusion", "created_at",
+                "head_sha", "path", "run_attempt", "display_title", "html_url")}
+            or packet.get("job_totals") != {"conclusions": {
+                "failure": 2, "skipped": 7, "success": 7}, "total": 16}
+            or packet.get("attempt_root") != expected_root
+            or packet.get("nonce") != nonce
+            or packet.get("source_commit") != journal.get("public_source_sha")
+            or packet.get("public_tree") != journal.get("tree_sha")
+            or packet.get("qualification_state") !=
+                "failed/nonqualifying; no acceptance, inventory, or release claim"):
+        raise ValueError(label)
+    safe_line = ("REJECT: qualification-child-failed:runtime:1:BLOCKED: "
+        "phase7-host-batch-failed:backend=native;report=fail;"
+        "case=recursion94/withhold-first-plate;row=fail;return=1;"
+        "cleanup=confirmed;bound=none;cleanup_reason=missing;"
+        "status_observation=missing;cleanup_queries=other")
+    log_bytes = raw_by_key["hosted_log"]
+    if (not isinstance(packet_failure, dict)
+            or packet_failure.get("bounded_failure_line") != safe_line
+            or packet_failure.get("cause_limit") !=
+                "Retained hosted log has no underlying assertion/test traceback; do not infer cause."
+            or packet_failure.get("failed_step") !=
+                "Run complete current-source product safety and chunk roster"
+            or packet_failure.get("job_id") != runtime_job["id"]
+            or packet_failure.get("log") != {"bytes": len(log_bytes), "path": paths["hosted_log"],
+                "sha256": terminal["hosted_log"]["sha256"]}
+            or safe_line.encode("utf-8") not in log_bytes):
+        raise ValueError(label)
+    pr = terminal.get("pull_request")
+    if (not isinstance(pr, dict)
+            or terminal.get("diagnostic_profile") != NATIVE_HOST_RUNTIME_PROFILE
+            or terminal.get("owning_case") != NATIVE_HOST_RUNTIME_CASE
+            or terminal.get("failed_lane") != "v02-runtime"
+            or terminal.get("inner_row_cleanup") != "confirmed"
+            or terminal.get("inner_row_bound") != "none"
+            or type(terminal.get("batch_return")) is not int
+            or terminal.get("batch_return") != 1
+            or terminal.get("outer_runtime_cleanup") != "unknown"
+            or terminal.get("hosted_cleanup_outcome") != "unknown"
+            or terminal.get("desktop_child_return") != "unknown"
+            or terminal.get("original_failure_cause") != "unknown"
+            or terminal.get("local_monitor_safety_issue") is not False
+            or terminal.get("local_monitor_cleanup") != "confirmed"
+            or terminal.get("safety_job_failed") is not False
+            or terminal.get("qualification_accepted") is not False
+            or terminal.get("full_qualification_dispatched") is not True
+            or terminal.get("merge_attempted") is not True
+            or pr.get("merged") is not True or pr.get("state") != "closed"
+            or type(pr.get("number")) is not int or pr["number"] <= 0):
+        raise ValueError(label)
+    packet_pr = packet.get("pull_request")
+    if (not isinstance(packet_pr, dict)
+            or any(packet_pr.get(key) != pr.get(key) for key in
+                ("number", "state", "merged", "head_sha", "base_sha", "merge_commit_sha"))):
+        raise ValueError(label)
+    if (journal.get("schema") != "genewhip.v02-delivery-journal.v1"
+            or journal.get("repository") != "szTheory/genewhip"
+            or journal.get("source_head") != pr.get("head_sha")
+            or journal.get("public_base_sha") != pr.get("base_sha")
+            or journal.get("public_source_sha") != pr.get("merge_commit_sha")
+            or journal.get("started_at") != terminal.get("started_at")
+            or journal.get("qualification_started_at") != journal.get("started_at")
+            or journal.get("qualification_dispatch_requested") is not True
+            or journal.get("qualification_dispatch_submitted") is not True
+            or journal.get("qualification_dispatch_nonce") != terminal.get("qualification_dispatch_nonce")
+            or journal.get("public_source_sha") != terminal.get("head_sha")
+            or journal.get("tree_sha") != packet.get("public_tree")
+            or journal.get("pull_request") != str(pr.get("number"))
+            or journal.get("merge_parents") != [journal.get("public_base_sha")]
+            or journal.get("merge_strategy") != "squash"):
+        raise ValueError(label)
+    if (source_delivery.get("status") != "merged"
+            or source_delivery.get("schema") != "genewhip.v02-public-source-delivery.v1"
+            or source_delivery.get("public_source_sha") != journal.get("public_source_sha")
+            or source_delivery.get("public_base_sha") != journal.get("public_base_sha")
+            or source_delivery.get("candidate_sha") != journal.get("candidate_sha")
+            or source_delivery.get("tree_sha") != journal.get("tree_sha")
+            or source_delivery.get("pull_request") != journal.get("pull_request")
+            or source_delivery.get("merge_parents") != journal.get("merge_parents")
+            or source_delivery.get("merge_strategy") != journal.get("merge_strategy")):
+        raise ValueError(label)
+    if (failure.get("schema") != "genewhip.phase7-fresh-batch-failure.v1"
+            or failure.get("authorization_sha256") != AUTH_SHA256
+            or failure.get("stage") != "qualification"
+            or failure.get("reason") != "fresh-batch-qualification-failed"
+            or failure.get("observed_at") != coordinator_terminal.get("failure_record_observed_at")):
+        raise ValueError(label)
+
+
 def _validate_current_target_reconciliation(root: Path, *, expected_root: str,
                                             cleanup: Any, failure: Any) -> None:
     label = "fresh-batch-current-target-reconciliation-invalid"
@@ -570,7 +831,9 @@ def _validate_predecessor(root: Path, authorization: dict[str, Any], *,
                 and all(isinstance(row, dict) and row.get("status") == "completed"
                     and row.get("conclusion") in ("success", "failure", "cancelled", "skipped")
                     for row in jobs))
-            event = ("pull_request" if isinstance(value.get("pull_request"), dict)
+            diagnostic_case = value.get("owning_case")
+            event = (value.get("event") if diagnostic_case == NATIVE_HOST_RUNTIME_CASE
+                     else "pull_request" if isinstance(value.get("pull_request"), dict)
                      else value.get("event"))
             expected_jobs = PREVIEW_REQUIRED_LANES | PREVIEW_CONDITIONAL_SKIPS
             if event == "push":
@@ -579,9 +842,14 @@ def _validate_predecessor(root: Path, authorization: dict[str, Any], *,
             by_name = {row.get("name"): row for row in jobs
                        if isinstance(row, dict) and isinstance(row.get("name"), str)} \
                 if isinstance(jobs, list) else {}
-            roster_valid = (event in ("pull_request", "push")
+            if diagnostic and diagnostic_case == NATIVE_HOST_RUNTIME_CASE:
+                roster_valid = (event == "workflow_dispatch"
+                    and isinstance(jobs, list) and len(by_name) == 16
+                    and set(by_name) == NATIVE_HOST_RUNTIME_JOBS)
+            else:
+                roster_valid = (event in ("pull_request", "push")
                 and len(by_name) == len(jobs) if isinstance(jobs, list) else False)
-            if not no_ci:
+            if not no_ci and not (diagnostic and diagnostic_case == NATIVE_HOST_RUNTIME_CASE):
                 roster_valid = (roster_valid and set(by_name) == expected_jobs
                     and all(by_name[name].get("conclusion") in
                         ("success", "failure", "cancelled") for name in PREVIEW_REQUIRED_LANES)
@@ -679,6 +947,31 @@ def _validate_predecessor(root: Path, authorization: dict[str, Any], *,
                             or value.get("observer_failure_stage") != "unknown"
                             or value.get("cleanup_signal_phase") != "unknown"):
                         raise ValueError("fresh-batch-predecessor-diagnostic-classification-invalid")
+                elif diagnostic_case == NATIVE_HOST_RUNTIME_CASE:
+                    diagnostic_profile = NATIVE_HOST_RUNTIME_PROFILE
+                    if (not roster_valid or not jobs_terminal or event != "workflow_dispatch"
+                            or value.get("failed_lane") != "v02-runtime"
+                            or value.get("diagnostic_profile") != NATIVE_HOST_RUNTIME_PROFILE
+                            or value.get("hosted_cleanup_outcome") != "unknown"
+                            or value.get("outer_runtime_cleanup") != "unknown"
+                            or value.get("desktop_child_return") != "unknown"
+                            or value.get("original_failure_cause") != "unknown"
+                            or value.get("local_monitor_safety_issue") is not False
+                            or value.get("local_monitor_cleanup") != "confirmed"
+                            or value.get("inner_row_cleanup") != "confirmed"
+                            or value.get("inner_row_bound") != "none"
+                            or type(value.get("batch_return")) is not int
+                            or value.get("batch_return") != 1
+                            or value.get("safety_job_failed") is not False
+                            or value.get("qualification_accepted") is not False
+                            or value.get("full_qualification_dispatched") is not True
+                            or value.get("merge_attempted") is not True
+                            or not isinstance(pull_request, dict)
+                            or pull_request.get("merged") is not True
+                            or pull_request.get("state") != "closed"
+                            or any(by_name[name].get("conclusion") != expected
+                                for name, expected in NATIVE_HOST_RUNTIME_OUTCOMES.items())):
+                        raise ValueError("fresh-batch-predecessor-diagnostic-classification-invalid")
                 else:
                     raise ValueError("fresh-batch-predecessor-diagnostic-classification-invalid")
             if (not (no_ci or jobs_terminal)
@@ -747,6 +1040,19 @@ def _validate_predecessor(root: Path, authorization: dict[str, Any], *,
                         or value.get("hosted_cleanup_outcome") != "unknown"
                         or value.get("qualification_accepted") is not False
                         or value.get("unknown_high_findings") is not False)
+                elif diagnostic_profile == NATIVE_HOST_RUNTIME_PROFILE:
+                    profile_invalid = (value.get("diagnostic_case") != NATIVE_HOST_RUNTIME_CASE
+                        or value.get("diagnostic_profile") != NATIVE_HOST_RUNTIME_PROFILE
+                        or value.get("safety_job_failed") is not False
+                        or value.get("had_safety_job_failure") is not False
+                        or value.get("full_qualification_dispatched") is not True
+                        or value.get("outer_runtime_cleanup") != "unknown"
+                        or value.get("inner_row_cleanup") != "confirmed"
+                        or value.get("inner_row_bound") != "none"
+                        or type(value.get("batch_return")) is not int
+                        or value.get("batch_return") != 1
+                        or value.get("desktop_child_return") != "unknown"
+                        or value.get("original_failure_cause") != "unknown")
                 else:
                     profile_invalid = True
                 if common_diagnostic_invalid or profile_invalid:
@@ -791,6 +1097,15 @@ def _validate_predecessor(root: Path, authorization: dict[str, Any], *,
             raise ValueError("fresh-batch-predecessor-diagnostic-classification-invalid")
         _validate_first_party_cleanup_control_artifacts(root, expected_root=expected_root,
             terminal=terminal_value, repair=repair_value, journal=journal_value)
+    if diagnostic_profile == NATIVE_HOST_RUNTIME_PROFILE:
+        if not all(isinstance(value, dict) for value in
+                   (terminal_value, repair_value, journal_value)):
+            raise ValueError("fresh-batch-predecessor-diagnostic-classification-invalid")
+        delivery_value, _ = _read_reference(root, terminal_value.get("source_delivery"),
+            label="fresh-batch-native-host-runtime-evidence-invalid")
+        _validate_native_host_runtime_artifacts(root, expected_root=expected_root,
+            terminal=terminal_value, repair=repair_value, journal=journal_value,
+            source_delivery=delivery_value, failure=failure_value)
     if (isinstance(terminal_value, dict)
             and terminal_value.get("ci_dispatch_state") == "not-dispatched"
             and (not isinstance(repair_value, dict)
@@ -1232,10 +1547,16 @@ def validate_batch(root: Path, authorization_path: Path, authorization_sha256: s
                     diagnostic_paths = RSS_DIAGNOSTIC_SOURCE_PATHS
                 elif diagnostic_case == FIRST_PARTY_CLEANUP_CONTROL_CASE:
                     diagnostic_paths = FIRST_PARTY_CLEANUP_CONTROL_SOURCE_PATHS
+                elif diagnostic_case == NATIVE_HOST_RUNTIME_CASE:
+                    diagnostic_paths = NATIVE_HOST_RUNTIME_SOURCE_PATHS
                 else:
                     raise ValueError("fresh-batch-diagnostic-classification-invalid")
                 if (not diagnostic_paths.issubset(pins)
                         or any(pins[name] == prior_pins.get(name) for name in diagnostic_paths)):
+                    raise ValueError("fresh-batch-diagnostic-source-change-unproven")
+                if (diagnostic_case == NATIVE_HOST_RUNTIME_CASE
+                        and {name for name, digest in pins.items()
+                             if prior_pins.get(name) != digest} != diagnostic_paths):
                     raise ValueError("fresh-batch-diagnostic-source-change-unproven")
     elif predecessor_evidence.get("infrastructure_retry_reason") not in (
             "runner-transient", "observation-reconciliation"):

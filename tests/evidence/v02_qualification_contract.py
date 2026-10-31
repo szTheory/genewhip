@@ -100,6 +100,106 @@ def synthetic_qualified_reports(benchmark, identity, source_digest, scope_id, sc
 
 
 class QualificationCoordinatorContract(unittest.TestCase):
+    def test_outer_failure_marker_distinguishes_rejections_after_persistence(self):
+        from importlib.machinery import ModuleSpec
+        from unittest import mock
+        from io import StringIO
+        import copy
+        module = load_module(self)
+        original_spec = importlib.util.spec_from_file_location
+        good = {"process_group_cleanup": "confirmed", "status": "completed", "bound_violation": False}
+        cases = (("receipt-shape", [], 1, False),
+                 ("cleanup-unconfirmed", [{**good, "process_group_cleanup": "unconfirmed"}], 1, False),
+                 ("bound-violation", [{**good, "bound_violation": True}], 1, False),
+                 ("nonzero-exit", [good], 1, False),
+                 ("launch-error", [good], None, True),
+                 (None, [good], 0, False))
+        for expected, rows, code, launch_error in cases:
+            with self.subTest(rejection=expected), tempfile.TemporaryDirectory() as temp:
+                scratch = Path(temp) / "attempts"
+                class FakeLoader:
+                    def create_module(self, _spec):
+                        return None
+                    def exec_module(self, boundary):
+                        def fake_client(_exe, argv, receipt, **_kwargs):
+                            receipt.extend(copy.deepcopy(rows))
+                            if launch_error:
+                                raise ValueError("synthetic-boundary-error")
+                            return subprocess.CompletedProcess(argv, code, "", "nested cleanup=confirmed")
+                        boundary._run_client = fake_client
+                def selected_spec(name, path):
+                    return ModuleSpec(name, FakeLoader()) if Path(path) == ROOT / "tests/session/phase6_route_contract.py" \
+                        else original_spec(name, path)
+                test = self
+                class PersistedMarkerStream(StringIO):
+                    def write(self, value):
+                        if value.startswith("GENEWHIP_COORDINATOR_FAILURE:"):
+                            saved = json.loads((scratch / "diagnostic.attempt.json").read_text())
+                            test.assertEqual(saved["processes"], rows)
+                        return super().write(value)
+                stream = PersistedMarkerStream()
+                with mock.patch.object(importlib.util, "spec_from_file_location", side_effect=selected_spec), \
+                     mock.patch.object(module.sys, "stderr", stream):
+                    if expected is None:
+                        module._bounded_command([sys.executable, "-c", "unused"],
+                            limits={"wall_seconds": 5}, scratch=scratch, timeout=5, label="diagnostic")
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "qualification-child-"):
+                            module._bounded_command([sys.executable, "-c", "unused"],
+                                limits={"wall_seconds": 5}, scratch=scratch, timeout=5, label="diagnostic")
+                lines = stream.getvalue().splitlines()
+                if expected is None:
+                    self.assertEqual(lines, [])
+                else:
+                    self.assertEqual(len(lines), 1)
+                    prefix = "GENEWHIP_COORDINATOR_FAILURE:"
+                    self.assertTrue(lines[0].startswith(prefix))
+                    value = json.loads(lines[0][len(prefix):])
+                    self.assertEqual(value["rejection"], expected)
+                    if expected == "cleanup-unconfirmed":
+                        self.assertEqual(value["cleanup"], "unconfirmed")
+                    self.assertLessEqual(len(lines[0].encode("utf-8")), 1024)
+                    for log_error in (BrokenPipeError("closed-pipe"), ValueError("closed-stream")):
+                        closed_stream = mock.Mock()
+                        closed_stream.write.side_effect = log_error
+                        with mock.patch.object(importlib.util, "spec_from_file_location", side_effect=selected_spec), \
+                             mock.patch.object(module.sys, "stderr", closed_stream):
+                            with self.assertRaisesRegex(RuntimeError, "qualification-child-"):
+                                module._bounded_command([sys.executable, "-c", "unused"],
+                                    limits={"wall_seconds": 5}, scratch=scratch / str(type(log_error).__name__),
+                                    timeout=5, label="diagnostic")
+        # A persistence failure must not emit a receipt-derived marker.
+        with tempfile.TemporaryDirectory() as temp, mock.patch.object(module, "_write_json", side_effect=OSError("persist-failed")), \
+             mock.patch.object(importlib.util, "spec_from_file_location", side_effect=selected_spec), \
+             mock.patch.object(module.sys, "stderr", StringIO()) as stream:
+            with self.assertRaisesRegex(OSError, "persist-failed"):
+                module._bounded_command([sys.executable, "-c", "unused"], limits={"wall_seconds": 5},
+                    scratch=Path(temp), timeout=5, label="diagnostic")
+            self.assertEqual(stream.getvalue(), "")
+
+    def test_outer_failure_marker_redacts_untyped_private_fields(self):
+        import copy
+        module = load_module(self)
+        secret = "PRIVATE_TOKEN /private/host/device"
+        good = {"process_group_cleanup": "confirmed", "status": "completed", "bound_violation": False,
+                "bound_violation_reason": None, "cleanup_reason": "group-inactive",
+                "cleanup_status_observation": "group-inactive", "cleanup_observation_attempts": 2,
+                "observer_failure_stage": "none", "observer_return_category": "zero",
+                "observer_error_category": "none", "cleanup_signal_phase": "status-probe"}
+        for field in good:
+            for malicious in (secret, [secret], {secret: secret}, True, -1, 10**100):
+                row = copy.deepcopy(good)
+                row[field] = malicious
+                text = module._coordinator_failure_diagnostic({"processes": [row], "returncode": malicious,
+                    "argv": [secret], "stderr_tail": secret}, malicious)
+                self.assertNotIn(secret, text)
+                self.assertLessEqual(len(text.encode("utf-8")), 1024)
+        for rows in (None, secret, {}, [secret], [], [good, good]):
+            text = module._coordinator_failure_diagnostic({"processes": rows, "returncode": True}, "receipt-shape")
+            value = json.loads(text.split(":", 1)[1])
+            self.assertNotIn(secret, text)
+            self.assertEqual(value["return"], "other")
+
     def test_nested_cancellation_fixture_is_durable_bounded_and_narrow(self):
         from types import SimpleNamespace
         source = inspect.getsource(
