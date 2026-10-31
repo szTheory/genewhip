@@ -687,15 +687,17 @@ class ReportContract(unittest.TestCase):
         error = route.NativeParserContract("test_process_group_and_stream_caps_are_enforced")
         result = type("TestResult", (), {
             "failures": [(failure, PRIVATE_TEST_PATH + "/traceback")],
-            "errors": [(error, PRIVATE_TEST_PATH + "/exception")]})()
+            "errors": [(error, PRIVATE_TEST_PATH + "/exception")],
+            "safe_exception_by_test": {id(failure): "AssertionError", id(error): "RuntimeError"},
+            "safe_cleanup_by_test": {}})()
         with tempfile.TemporaryFile(mode="w+t") as diagnostic:
             with patch("sys.stderr", diagnostic):
                 route._emit_safe_failure_diagnostics(result)
             diagnostic.seek(0)
             emitted = diagnostic.read()
         self.assertEqual(emitted.splitlines(), [
-            "GENEWHIP_TEST_RESULT:NativeParserContract.test_bounded_malformed_route_matrix_both_clients:failure",
-            "GENEWHIP_TEST_RESULT:NativeParserContract.test_process_group_and_stream_caps_are_enforced:error",
+            "GENEWHIP_TEST_RESULT:NativeParserContract.test_bounded_malformed_route_matrix_both_clients:failure:AssertionError:missing:none:missing:missing:0",
+            "GENEWHIP_TEST_RESULT:NativeParserContract.test_process_group_and_stream_caps_are_enforced:error:RuntimeError:missing:none:missing:missing:0",
         ])
         self.assertNotIn(PRIVATE_TEST_PATH, emitted)
 
