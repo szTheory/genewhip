@@ -16,6 +16,137 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
 class Phase7ExecutionContract(unittest.TestCase):
+    def test_active_scope_cmake_provenance_uses_the_consumer_build_root(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "phase7_active_scope_cmake_provenance", ROOT / "tests/fixtures/phase6_game.py")
+        fixture = importlib.util.module_from_spec(spec); spec.loader.exec_module(fixture)
+        route_spec = importlib.util.spec_from_file_location(
+            "phase7_active_scope_cmake_consumer", ROOT / "scripts/evidence/phase6_routes.py")
+        route = importlib.util.module_from_spec(route_spec); route_spec.loader.exec_module(route)
+        old_root, old_scope = fixture.ROOT, fixture._EXECUTION_SCOPE
+        with tempfile.TemporaryDirectory(prefix="gw-v02-cmake-provenance-", dir=ROOT / "build/v02") as temporary:
+            root = pathlib.Path(temporary).resolve()
+            fixture.ROOT = root
+            fixture._EXECUTION_SCOPE = {"scope_id": "synthetic-active-scope",
+                "owned_roots": ["build/v02", "artifacts/v02"]}
+            route.ROOT = root
+            try:
+                source_files = {
+                    "CMakeLists.txt": b"synthetic root CMake input\n",
+                    "tools/session/CMakeLists.txt": b"synthetic session CMake input\n",
+                    "scripts/evidence/phase6_routes.py": b"synthetic route source\n",
+                    "tests/fixtures/phase6_game.py": b"synthetic reader provenance\n",
+                    "tests/session/phase6_route_contract.py": b"synthetic reader contract\n",
+                    "fixtures/phase6/media-expectations-v1.json": b"{}\n",
+                    "fixtures/phase6/delivery-map.json": b"{}\n",
+                }
+                for relative, payload in source_files.items():
+                    source = root / relative
+                    source.parent.mkdir(parents=True, exist_ok=True)
+                    source.write_bytes(payload)
+                build = root / "build/v02/runtime-build"
+                client = build / "tools/session/gw_headless"
+                client.parent.mkdir(parents=True, exist_ok=True)
+                client.write_bytes(b"synthetic, never executed\n")
+                cache = build / "CMakeCache.txt"
+                cache.write_text("synthetic actual cache digest\n")
+                mapping = json.loads((root / "fixtures/phase6/delivery-map.json").read_text())
+                candidate = {
+                    "source_files": {relative: fixture.sha(root / relative) for relative in source_files},
+                    "client_identities": {"public-core": {
+                        "path": client.relative_to(root).as_posix(), "sha256": fixture.sha(client)}},
+                    "build_identity": {"cmake_cache_sha256": fixture.sha(cache)},
+                    "configuration_identity": {"audio_rate_hz": 48000, "profile": "VA3-NTSC-U", "test_hooks": True},
+                    "compiler_identity": {"path": "scripts/evidence/phase6_routes.py",
+                        "sha256": fixture.sha(root / "scripts/evidence/phase6_routes.py")},
+                    "delivery_map_identity": {"path": "fixtures/phase6/delivery-map.json",
+                        "sha256": route.canonical_digest(mapping)}}
+
+                fixture.freeze_build_provenance(candidate, build)
+
+                consumer_root = client.resolve().parents[2] / "evidence/build-provenance"
+                for relative, expected in candidate["source_files"].items():
+                    if pathlib.PurePosixPath(relative).name != "CMakeLists.txt":
+                        continue
+                    retained = consumer_root / f"{expected}.cmake"
+                    self.assertEqual(retained.read_bytes(), source_files[relative])
+                    self.assertEqual(fixture.sha(retained), expected)
+                self.assertFalse((root / "build/v02/runtime/build-provenance").exists())
+
+                candidate_path = root / "candidate.json"
+                candidate_path.write_text(json.dumps(candidate))
+                report = {"schema": "genewhip-phase6-product-report-v1",
+                    "candidate_sha256": route.canonical_digest(candidate),
+                    "candidate_manifest": {"path": "candidate.json", "sha256": route.digest(candidate_path)},
+                    "validation_identities": {
+                        "reader_provenance": {name: route.digest(root / name) for name in route.READER_PROVENANCE_PATHS},
+                        "media_expectations_sha256": route.digest(root / "fixtures/phase6/media-expectations-v1.json")},
+                    "roster": [], "runs": []}
+                with patch.object(route, "validate_delivery_map"), \
+                     patch.object(route, "compile_routes", return_value={"routes": []}):
+                    with self.assertRaisesRegex(route.Invalid, "product-run-count"):
+                        route.validate_product_report(report, candidate)
+
+                retained = consumer_root / f"{candidate['source_files']['CMakeLists.txt']}.cmake"
+                retained.unlink()
+                with patch.object(route, "validate_delivery_map"), \
+                     patch.object(route, "compile_routes", return_value={"routes": []}):
+                    with self.assertRaisesRegex(route.Invalid, "product-stale-source"):
+                        route.validate_product_report(report, candidate)
+
+                fixture.freeze_build_provenance(candidate, build)
+                retained.write_bytes(b"stale provenance\n")
+                with patch.object(route, "validate_delivery_map"), \
+                     patch.object(route, "compile_routes", return_value={"routes": []}):
+                    with self.assertRaisesRegex(route.Invalid, "product-stale-source"):
+                        route.validate_product_report(report, candidate)
+
+                retained.write_bytes(b"stale provenance\n")
+                with self.assertRaisesRegex(fixture.compiler.Invalid,
+                                            "candidate-cmake-provenance-collision"):
+                    fixture.freeze_build_provenance(candidate, build)
+
+                unowned_build = root / "unowned-build"
+                unowned_build.mkdir()
+                with self.assertRaisesRegex(fixture.compiler.Invalid,
+                                            "candidate-cmake-build-root-unowned"):
+                    fixture.freeze_build_provenance(candidate, unowned_build)
+
+                symlink_build = root / "build/v02/symlinked-build"
+                symlink_build.mkdir(parents=True)
+                outside = root / "outside"; outside.mkdir()
+                (symlink_build / "evidence").symlink_to(outside, target_is_directory=True)
+                with self.assertRaisesRegex(fixture.compiler.Invalid,
+                                            "candidate-cmake-provenance-path-invalid"):
+                    fixture.freeze_build_provenance(candidate, symlink_build)
+                self.assertFalse((outside / "build-provenance").exists())
+
+                source_link = root / "tools/session/CMakeLists.txt"
+                saved_source = root / "tools/session/CMakeLists.regular"
+                source_link.replace(saved_source)
+                linked_source = outside / "CMakeLists.txt"
+                linked_source.write_bytes(source_files["tools/session/CMakeLists.txt"])
+                source_link.symlink_to(linked_source)
+                symlink_input_build = root / "build/v02/symlink-input-build"
+                symlink_input_build.mkdir(parents=True)
+                with self.assertRaisesRegex(fixture.compiler.Invalid,
+                                            "candidate-cmake-provenance-mismatch"):
+                    fixture.freeze_build_provenance(candidate, symlink_input_build)
+                source_link.unlink()
+                saved_source.replace(source_link)
+
+                oversized = root / "tools/session/CMakeLists.txt"
+                oversized.write_bytes(b"x" * 131073)
+                candidate["source_files"]["tools/session/CMakeLists.txt"] = fixture.sha(oversized)
+                oversized_build = root / "build/v02/oversized-build"
+                oversized_build.mkdir(parents=True)
+                with self.assertRaisesRegex(fixture.compiler.Invalid,
+                                            "candidate-cmake-provenance-size"):
+                    fixture.freeze_build_provenance(candidate, oversized_build)
+            finally:
+                fixture.ROOT, fixture._EXECUTION_SCOPE = old_root, old_scope
+
     def _isolated_plan_inputs(self, root: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
         root.mkdir(parents=True, exist_ok=True)
         scope = json.loads((ROOT / "evidence/v02-execution.json").read_text())
