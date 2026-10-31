@@ -7,6 +7,7 @@ import argparse
 import contextlib
 import copy
 import ctypes as real_ctypes
+import errno
 import hashlib
 import importlib.util
 import importlib.machinery
@@ -151,13 +152,19 @@ class FakeFunction:
 
 class FakeLibProc:
     def __init__(self, count_bytes: int, copied_bytes: int, pids=(123,),
-                 task_result=16, resident_by_pid=None, task_error=None):
+                 task_result=16, resident_by_pid=None, task_error=None, task_errno=0,
+                 task_results=None):
         self.count_bytes = count_bytes
         self.copied_bytes = copied_bytes
         self.pids = tuple(pids)
         self.task_result = task_result
         self.resident_by_pid = resident_by_pid or {}
         self.task_error = task_error
+        self.task_errno = task_errno
+        self.task_results = list(task_results or ())
+        self.pid_batches = None
+        self._pid_batch_index = 0
+        self._active_pid_batch = None
         self.list_calls: list[tuple[bool, int]] = []
         self.pidinfo_calls: list[tuple[int, int]] = []
         self.proc_listpids = FakeFunction(self._proc_listpids)
@@ -165,6 +172,17 @@ class FakeLibProc:
 
     def _proc_listpids(self, _kind, _type, buffer, capacity):
         self.list_calls.append((buffer is not None, capacity))
+        if self.pid_batches is not None:
+            if buffer is None:
+                index = min(self._pid_batch_index, len(self.pid_batches) - 1)
+                self._active_pid_batch = self.pid_batches[index]
+                self._pid_batch_index += 1
+                return self._active_pid_batch[0]
+            _count, copied_bytes, pids = self._active_pid_batch
+            for index, pid in enumerate(pids):
+                if index < len(buffer):
+                    buffer[index] = pid
+            return copied_bytes
         if buffer is not None:
             for index, pid in enumerate(self.pids):
                 if index < len(buffer):
@@ -173,10 +191,11 @@ class FakeLibProc:
 
     def _proc_pidinfo(self, pid, _flavor, _arg, buffer, capacity):
         self.pidinfo_calls.append((pid, capacity))
+        real_ctypes.set_errno(self.task_errno)
         if self.task_error is not None:
             raise self.task_error
         buffer.raw = b"\0" * 8 + self.resident_by_pid.get(pid, 8192).to_bytes(8, byteorder=sys.byteorder) + b"\0" * (capacity - 16)
-        return self.task_result
+        return self.task_results.pop(0) if self.task_results else self.task_result
 
 
 def load_production():
@@ -204,7 +223,8 @@ class RssTracer(unittest.TestCase):
             c_int=FakeCInt, c_uint=real_ctypes.c_uint, c_void_p=real_ctypes.c_void_p,
             c_uint64=real_ctypes.c_uint64,
             sizeof=lambda value: 4 if value is FakeCInt else value.size * 4,
-            create_string_buffer=FakeBuffer)
+            create_string_buffer=FakeBuffer, get_errno=real_ctypes.get_errno,
+            set_errno=real_ctypes.set_errno)
         with mock.patch.object(self.module.sys, "platform", "darwin"), \
              mock.patch.object(self.module, "ctypes", adapter), \
              mock.patch.object(self.module.os, "getpgid", return_value=1234):
@@ -224,12 +244,13 @@ class RssEdgeContracts(unittest.TestCase):
         ALLOCATIONS.clear()
         self.module = load_production()
 
-    def observe(self, libproc, getpgid=None):
+    def observe(self, libproc, getpgid=None, diagnostics=None):
         adapter = types.SimpleNamespace(CDLL=lambda *_args, **_kwargs: libproc,
             c_int=FakeCInt, c_uint=real_ctypes.c_uint, c_void_p=real_ctypes.c_void_p,
             c_uint64=real_ctypes.c_uint64,
             sizeof=lambda value: 4 if value is FakeCInt else value.size * 4,
-            create_string_buffer=FakeBuffer)
+            create_string_buffer=FakeBuffer, get_errno=real_ctypes.get_errno,
+            set_errno=real_ctypes.set_errno)
         pgid = getpgid or (lambda _pid: 1234)
         pgid_calls = []
         def counted_pgid(pid):
@@ -238,7 +259,7 @@ class RssEdgeContracts(unittest.TestCase):
         with mock.patch.object(self.module.sys, "platform", "darwin"), \
              mock.patch.object(self.module, "ctypes", adapter), \
              mock.patch.object(self.module.os, "getpgid", side_effect=counted_pgid):
-            measured = self.module._process_group_rss_bytes(1234)
+            measured = self.module._process_group_rss_bytes(1234, diagnostics)
         OBSERVATIONS.append({"allocation_slots": max(ALLOCATIONS, default=0),
             "count_fill_calls_per_observation": len(libproc.list_calls), "fill_capacity_bytes": max(
                 (capacity for filled, capacity in libproc.list_calls if filled), default=0),
@@ -273,7 +294,14 @@ class RssEdgeContracts(unittest.TestCase):
         )
         for count, copied, pids, label in scenarios:
             libproc = FakeLibProc(count, copied, pids)
-            self.assertIsNone(self.observe(libproc), label)
+            diagnostics = {}
+            self.assertIsNone(self.observe(libproc, diagnostics=diagnostics), label)
+            expected = "pid-count-invalid" if label.endswith("count") else (
+                "pid-fill-saturated" if label == "oversized-fill" else "pid-fill-invalid")
+            self.assertEqual(diagnostics.get("reason"), expected, label)
+            expected_size = ("saturated" if label == "oversized-fill" else
+                "oversized" if label == "oversized-count" else "invalid")
+            self.assertEqual(diagnostics.get("result_size_category"), expected_size, label)
             self.assertLessEqual(max(ALLOCATIONS, default=0), EXPECTED_SLOTS, label)
             ALLOCATIONS.clear()
         CASES.append("count-fill-zero-negative-misaligned-cap-and-sentinel")
@@ -358,22 +386,60 @@ class RssEdgeContracts(unittest.TestCase):
         size = real_ctypes.sizeof(real_ctypes.c_int)
         cases = (
             (FakeLibProc(2 * size, 2 * size, [10, 10]), lambda _pid: 1234,
-             "duplicate-positive-pid"),
+             "duplicate-positive-pid", "duplicate-pid"),
             (FakeLibProc(size, size, [10]), lambda _pid: (_ for _ in ()).throw(PermissionError(13, "denied")),
-             "pid-permission-error"),
+             "pid-permission-error", "process-group-query-unavailable"),
             (FakeLibProc(size, size, [10], task_result=15), lambda _pid: 1234,
-             "short-task-info"),
-            (FakeLibProc(size, size, [10], task_result=0), lambda _pid: 1234,
-             "unavailable-task-info-fails-closed"),
+             "short-task-info", "task-info-unavailable"),
+            (FakeLibProc(size, size, [10], task_result=0, task_errno=errno.ESRCH), lambda _pid: 1234,
+             "unavailable-task-info-fails-closed", "task-info-unavailable"),
             (FakeLibProc(size, size, [10], task_result=257), lambda _pid: 1234,
-             "oversized-task-info"),
+             "oversized-task-info", "task-info-unavailable"),
             (FakeLibProc(size, size, [10], task_error=OSError(5, "native error")), lambda _pid: 1234,
-             "native-task-info-error"),
+             "native-task-info-error", "darwin-libproc-query-unavailable"),
         )
-        for libproc, pgid, label in cases:
-            self.assertIsNone(self.observe(libproc, pgid), label)
+        for libproc, pgid, label, reason in cases:
+            diagnostics = {}
+            self.assertIsNone(self.observe(libproc, pgid, diagnostics), label)
+            self.assertEqual(diagnostics.get("reason"), reason, label)
+            if label == "pid-permission-error":
+                self.assertEqual(diagnostics.get("errno_category"), "permission")
+            if label == "native-task-info-error":
+                self.assertEqual(diagnostics.get("errno_category"), "other")
+                self.assertNotIn("native error", str(diagnostics))
+            if label in ("short-task-info", "unavailable-task-info-fails-closed"):
+                self.assertEqual(diagnostics.get("result_size_category"),
+                    "missing" if label == "unavailable-task-info-fails-closed" else "short")
+            if label == "unavailable-task-info-fails-closed":
+                self.assertEqual(diagnostics.get("errno_category"), "esrch")
+            if label == "oversized-task-info":
+                self.assertEqual(diagnostics.get("result_size_category"), "oversized")
             ALLOCATIONS.clear()
         CASES.append("duplicate-permission-short-oversized-native-errors")
+
+    def test_library_and_unsupported_platform_failures_use_fixed_reasons(self):
+        diagnostics = {}
+        adapter = types.SimpleNamespace(CDLL=lambda *_args, **_kwargs:
+            (_ for _ in ()).throw(OSError(errno.EIO, "private library path detail")))
+        with mock.patch.object(self.module.sys, "platform", "darwin"), \
+             mock.patch.object(self.module, "ctypes", adapter):
+            self.assertIsNone(self.module._process_group_rss_bytes(1234, diagnostics))
+        self.assertEqual(diagnostics.get("reason"), "darwin-libproc-unavailable")
+        self.assertEqual(diagnostics.get("errno_category"), "other")
+        self.assertNotIn("private", str(diagnostics))
+
+        diagnostics.clear()
+        with mock.patch.object(self.module.sys, "platform", "freebsd"):
+            self.assertIsNone(self.module._process_group_rss_bytes(1234, diagnostics))
+        self.assertEqual(diagnostics.get("reason"), "platform-unsupported")
+        self.assertTrue(set(diagnostics.values()) <= self.module._RSS_OBSERVATION_REASONS)
+
+        diagnostics.clear()
+        with mock.patch.object(self.module.sys, "platform", "linux"), \
+             mock.patch.object(Path, "iterdir", side_effect=OSError(errno.EACCES, "private scan detail")):
+            self.assertIsNone(self.module._process_group_rss_bytes(1234, diagnostics))
+        self.assertEqual(diagnostics.get("reason"), "linux-proc-scan-unavailable")
+        CASES.append("library-and-unsupported-platform-fixed-reasons")
 
 
 class FakeOwnedProcess:
@@ -465,7 +531,8 @@ class ActualWrapperTracer(unittest.TestCase):
             c_int=FakeCInt, c_uint=real_ctypes.c_uint, c_void_p=real_ctypes.c_void_p,
             c_uint64=real_ctypes.c_uint64,
             sizeof=lambda value: 4 if value is FakeCInt else value.size * 4,
-            create_string_buffer=FakeBuffer)
+            create_string_buffer=FakeBuffer, get_errno=real_ctypes.get_errno,
+            set_errno=real_ctypes.set_errno)
         self.route = load_production()
         self.popen_calls = []
         self.next_returncode = 0
@@ -540,6 +607,9 @@ class ActualWrapperTracer(unittest.TestCase):
             "terminal receipt follows live and post-wait RSS observations")
         self.assertEqual(snapshots[-1]["process_group_cleanup"], "confirmed")
         self.assertEqual(snapshots[-1]["rss_bytes_peak"], 8192)
+        for diagnostic_key in ("rss_observation_reason", "rss_observation_errno", "rss_observation_result"):
+            self.assertNotIn(diagnostic_key, snapshots[-1],
+                "successful receipt shape must remain unchanged")
         self.assertGreaterEqual(len(snapshots), 2)
         state = self.game._V02_STATE
         self.assertGreater(state["workload_wall_seconds"], 0)
@@ -557,7 +627,9 @@ class ActualWrapperTracer(unittest.TestCase):
         CASES.append("actual-shared-launch-monitor-rss-receipt")
 
     def test_unavailable_rss_fails_actual_collect_case_after_receipt(self):
-        self.native.task_result = 8
+        self.native.pid_batches = [(0, 4, []), (4, 4, [FakeOwnedProcess.pid])]
+        self.native.task_results = [0]
+        self.native.task_errno = errno.ESRCH
         route = {"fixture": "recursion94", "case": {"id": "full-route"},
             "identity": "fake-route-id", "definitions": {"predicates": []}}
         work = self.root / "collect-case"
@@ -569,6 +641,18 @@ class ActualWrapperTracer(unittest.TestCase):
         self.assertTrue((work / "process.json").is_file())
         process_receipt = json.loads((work / "process.json").read_text())["processes"][-1]
         self.assertEqual(process_receipt["bound_violation_reason"], "phase7-rss-observation-unavailable")
+        self.assertEqual(process_receipt["rss_observation_reason"], "pid-count-invalid")
+        self.assertEqual(process_receipt["rss_bytes_observed"], None,
+            "post-cleanup failed sample must not erase first failure diagnostics")
+        self.assertEqual(process_receipt["rss_observation_result"], "invalid")
+        self.assertNotIn("rss_observation_errno", process_receipt,
+            "later sample errno must not be combined with the first failure reason")
+        self.assertEqual(len(self.native.pidinfo_calls), 1,
+            "second sample reached a distinct task-info failure after first count failure")
+        self.assertIn(process_receipt["rss_observation_reason"], self.route._RSS_OBSERVATION_REASONS)
+        diagnostic_fields = {key: value for key, value in process_receipt.items()
+            if key.startswith("rss_observation_")}
+        self.assertNotRegex(json.dumps(diagnostic_fields), r"/Users/|/private/|899001|denied|native error")
         self.assertEqual(self.receipt_snapshots[0]["processes"], [])
         statuses = [row["processes"][0]["status"] for row in self.receipt_snapshots if row["processes"]]
         self.assertEqual(statuses[0], "started")
@@ -638,7 +722,7 @@ def semantic_mutants() -> bool:
          b"if rss_bytes is None:", b"if False:", "phase7-rss-observation-unavailable"),
         ("sever-wrapper-to-helper-wiring", ActualWrapperTracer,
          "test_finite_measurement_flows_through_actual_shared_wrapper_and_receipt",
-         b"rss_bytes = _process_group_rss_bytes(process.pid)", b"rss_bytes = 0",
+         b"rss_bytes = _process_group_rss_bytes(process.pid, rss_diagnostics)", b"rss_bytes = 0",
          "actual RSS helper reach and measured value"),
     )
     passed = True
