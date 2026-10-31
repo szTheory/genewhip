@@ -11,6 +11,8 @@ if [[ "${1:-}" == "--phase7-fast" ]]; then
     exit 2
   fi
   python3 -I tests/evidence/phase7_process_admission_contract.py
+  python3 -I tests/evidence/phase7_diagnostic_contract.py
+  python3 -I tests/evidence/phase7_fresh_batch_contract.py
   python3 -I tests/evidence/v02_qualification_contract.py --contracts
   python3 -I tests/evidence/v02_matrix_contract.py --contracts
   python3 -I tests/evidence/v02_execution_contract.py --contracts
@@ -98,6 +100,8 @@ python3 tests/evidence/public_hygiene.py
 python3 tests/evidence/ci_aggregate_contract.py
 python3 tests/evidence/promotion_contract.py
 python3 tests/evidence/phase4_report_contract.py
+python3 -I tests/evidence/phase7_diagnostic_contract.py
+python3 -I tests/evidence/phase7_fresh_batch_contract.py
 python3 tests/evidence/ctest_skip_contract.py
 python3 tests/evidence/ci_dependency_contract.py
 python3 tests/evidence/independent_game_toolchain.py --self-test-current-receipt

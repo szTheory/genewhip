@@ -34,6 +34,41 @@ REPORT_SPEC.loader.exec_module(report)
 SAFE_FAILURE_DIAGNOSTIC_METHODS = frozenset(
     method for method in report.SAFE_CTEST_DIAGNOSTIC_METHODS
     if method.startswith("BaselineRecordContract."))
+SAFE_PROCESS_SUBCASES = frozenset({"success", "stdout-cap", "timeout-direct",
+    "timeout-descendant", "exact-1023", "exact-1024", "stderr-cap"})
+SAFE_PROCESS_STATES = frozenset({"not-launched", "started", "completed", "failed", "missing"})
+SAFE_PROCESS_CLEANUP = frozenset({"not-launched", "pending", "confirmed", "unconfirmed", "missing"})
+SAFE_PROCESS_RETURNS = frozenset({"zero", "nonzero", "signaled", "missing"})
+SAFE_PROCESS_ERRORS = frozenset({"AssertionError", "PermissionError", "FileNotFoundError",
+    "TimeoutExpired", "OSError", "RuntimeError", "ValueError", "TypeError", "KeyError",
+    "IndexError", "other", "missing"})
+SAFE_PROCESS_FAILURES = frozenset({"output-byte-cap", "timeout", "cleanup-unconfirmed", "other", "none"})
+
+
+def safe_process_diagnostic(subcase, runs, start, error):
+    """Project one newly-created bounded process receipt to fixed public enums."""
+    subcase = subcase if subcase in SAFE_PROCESS_SUBCASES else "other"
+    row = runs[-1] if isinstance(runs, list) and len(runs) > start else {}
+    if not isinstance(row, dict):
+        row = {}
+    raw_error = str(error) if error is not None else ""
+    failure = ("output-byte-cap" if raw_error == "bounded process output byte cap" else
+        "timeout" if raw_error == "bounded process timeout" else
+        "cleanup-unconfirmed" if raw_error == "bounded process cleanup unconfirmed: non-qualifying" else
+        "other" if raw_error else "none")
+    exc_name = type(error).__name__ if error is not None else "missing"
+    if exc_name == "ProcessCaptureError":
+        exc_name = "ValueError"
+    returncode = row.get("returncode")
+    return_category = ("missing" if type(returncode) is not int else
+        "zero" if returncode == 0 else "signaled" if returncode < 0 else "nonzero")
+    return {"subcase": subcase,
+        "exception": exc_name if exc_name in SAFE_PROCESS_ERRORS else "other",
+        "status": row.get("status") if row.get("status") in SAFE_PROCESS_STATES else "missing",
+        "cleanup": row.get("process_group_cleanup") if row.get("process_group_cleanup") in SAFE_PROCESS_CLEANUP else "missing",
+        "cleanup_error": row.get("cleanup_error") if row.get("cleanup_error") in SAFE_PROCESS_ERRORS else "missing",
+        "return_category": return_category,
+        "failure_category": failure}
 
 
 def row(**changes):
@@ -65,22 +100,33 @@ def row(**changes):
     return value
 
 
-def run_retained(process, command, *, label, **kwargs):
+def run_retained(process, command, *, label, diagnostic_case=None,
+                 diagnostic_subcase=None, **kwargs):
     import time
-    process.process_boundary().require_host_process_context()
     runs = []
+    start = len(runs)
     destination = Path(f"build/v02/baseline-process-controls/control-{time.monotonic_ns()}.json")
-    with process.receipt_file(ROOT, destination) as stream:
-        try:
-            return process.run(command, runs=runs, **kwargs)
-        finally:
-            stream.write(json.dumps({"test": label, "processes": runs},
-                                    sort_keys=True, indent=2) + "\n")
+    if diagnostic_case is not None:
+        diagnostic_case._phase5_process_diagnostic = safe_process_diagnostic(
+            diagnostic_subcase, runs, start, None)
+    try:
+        process.process_boundary().require_host_process_context()
+        with process.receipt_file(ROOT, destination) as stream:
+            try:
+                return process.run(command, runs=runs, **kwargs)
+            finally:
+                stream.write(json.dumps({"test": label, "processes": runs},
+                                        sort_keys=True, indent=2) + "\n")
+    finally:
+        if diagnostic_case is not None:
+            diagnostic_case._phase5_process_diagnostic = safe_process_diagnostic(
+                diagnostic_subcase, runs, start, sys.exc_info()[1])
 
 
 class BaselineRecordContract(unittest.TestCase):
-    def run_control(self, process, command, **kwargs):
-        return run_retained(process, command, label=self.id().split(".")[-1], **kwargs)
+    def run_control(self, process, command, *, diagnostic_subcase=None, **kwargs):
+        return run_retained(process, command, label=self.id().split(".")[-1],
+            diagnostic_case=self, diagnostic_subcase=diagnostic_subcase, **kwargs)
 
     def test_tracer_diagnostic_rom_rejects_outside_symlink(self):
         with tempfile.TemporaryDirectory(prefix="gw-phase5-build-input-") as temp:
@@ -408,20 +454,26 @@ class BaselineRecordContract(unittest.TestCase):
     def test_real_process_output_cap_timeout_and_status(self):
         process = baseline.process_tools()
         process.process_boundary().require_host_process_context()
-        result = self.run_control(process, [sys.executable, "-c", "print(42)"], cwd=ROOT)
+        result = self.run_control(process, [sys.executable, "-c", "print(42)"],
+                                  diagnostic_subcase="success", cwd=ROOT)
         self.assertEqual((result.returncode, result.stdout.strip()), (0, "42"))
-        for script, kwargs, message in (
-            ("import os; os.write(1,b'x'*8192)", {"cap": 1024}, "output byte cap"),
-            ("import time; time.sleep(5)", {"timeout": .1}, "timeout"),
-            ("import subprocess,sys; subprocess.Popen([sys.executable,'-c','import time; time.sleep(5)'])",
+        for subcase, script, kwargs, message in (
+            ("stdout-cap", "import os; os.write(1,b'x'*8192)", {"cap": 1024}, "output byte cap"),
+            ("timeout-direct", "import time; time.sleep(5)", {"timeout": .1}, "timeout"),
+            ("timeout-descendant", "import subprocess,sys; subprocess.Popen([sys.executable,'-c','import time; time.sleep(5)'])",
              {"timeout": .1}, "timeout")):
             with self.assertRaisesRegex(ValueError, message):
-                self.run_control(process, [sys.executable, "-c", script], cwd=ROOT, **kwargs)
+                self.run_control(process, [sys.executable, "-c", script],
+                                 diagnostic_subcase=subcase, cwd=ROOT, **kwargs)
         for count in (1023, 1024):
-            result = self.run_control(process, [sys.executable, "-c", f"import os; os.write(1,b'x'*{count})"], cwd=ROOT, cap=1024)
+            subcase = f"exact-{count}"
+            result = self.run_control(process,
+                [sys.executable, "-c", f"import os; os.write(1,b'x'*{count})"],
+                diagnostic_subcase=subcase, cwd=ROOT, cap=1024)
             self.assertEqual(len(result.stdout), count)
         with self.assertRaisesRegex(ValueError, "output byte cap"):
-            self.run_control(process, [sys.executable, "-c", "import os; os.write(2,b'x'*1025)"], cwd=ROOT, cap=1024)
+            self.run_control(process, [sys.executable, "-c", "import os; os.write(2,b'x'*1025)"],
+                diagnostic_subcase="stderr-cap", cwd=ROOT, cap=1024)
 
     def test_dependent_process_terminated_even_after_parent_exits(self):
         import time
@@ -472,9 +524,23 @@ class BaselineRecordContract(unittest.TestCase):
 
 def emit_safe_failure_diagnostics(result):
     for kind, rows in (("failure", result.failures), ("error", result.errors)):
-        for test, _ in rows:
+        for test, error in rows:
             method = f"{test.__class__.__name__}.{test._testMethodName}"
             if method in SAFE_FAILURE_DIAGNOSTIC_METHODS:
+                if method == "BaselineRecordContract.test_real_process_output_cap_timeout_and_status":
+                    details = getattr(test, "_phase5_process_diagnostic", None)
+                    if isinstance(details, dict):
+                        fields = (details.get("subcase"), details.get("exception"),
+                            details.get("status"), details.get("cleanup"),
+                            details.get("cleanup_error"), details.get("return_category"),
+                            details.get("failure_category"))
+                        allowed = (SAFE_PROCESS_SUBCASES, SAFE_PROCESS_ERRORS,
+                            SAFE_PROCESS_STATES, SAFE_PROCESS_CLEANUP,
+                            SAFE_PROCESS_ERRORS, SAFE_PROCESS_RETURNS, SAFE_PROCESS_FAILURES)
+                        if all(value in choices for value, choices in zip(fields, allowed)):
+                            print(f"GENEWHIP_TEST_RESULT:{method}:{kind}:process:" +
+                                  ":".join(fields), file=sys.stderr)
+                            continue
                 print(f"GENEWHIP_TEST_RESULT:{method}:{kind}", file=sys.stderr)
 
 
