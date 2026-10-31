@@ -59,7 +59,38 @@ CURRENT_RETURN_CANDIDATE_CODE_REVIEW = PHASE / "07-10-CANDIDATE-R12-REVIEW.md"
 CURRENT_RETURN_CANDIDATE_SECURITY_REVIEW = PHASE / "07-10-CANDIDATE-R12-SECURITY.md"
 CURRENT_RETURN_PURPOSE = "current-native-return"
 CURRENT_RETURN_CANDIDATE_ROOT = Path(
-    "build/v02/campaign15/original10/current-source-candidate-final-r13")
+    "build/v02/campaign15/original10/current-source-candidate-final-r15")
+R13_FAILED_HOSTED_PREDECESSOR = {
+    "journal_sha256": "03ce5756c177d33006fd3ce7f005905321a07ec84c3eccabdd54c49b8de49073",
+    "started_at": "2026-10-30T16:50:39.837827+00:00",
+    "source_head": "d1944cc3a494a20f0c98b6aec5d77ceb86184ffc",
+    "private_source_head": "1c6ff6e1c6572162731d72a5f97c7775b8e51212",
+    "public_base_sha": "ac7c5bdc8e4e87e3a6423de7a64524f5f0ca498b",
+    "public_source_sha": "9027bb0579bf559f56b26a91d5d3b44ce194c3a4",
+    "public_tree_sha": "2ae5c5ebf0fcc539152d73069a84a1e0818513c2",
+    "pull_request": "22",
+    "preview_run_id": "41174611288",
+    "merge_preview_run_id": "41175438525",
+    "qualification_run_id": "41175511179",
+    "qualification_attempt": 1,
+    "qualification_nonce": "68aa65ee32be4422a0da0beddd197560",
+    "qualification_created_at": "2026-10-31T06:10:38Z",
+    "runtime_job_id": "124462120481",
+    "required_ci_job_id": "124466207840",
+    "preparation_archive_manifest": "history/07-10-current-preparation-r13-hosted-failure/manifest.json",
+    "preparation_archive_manifest_sha256": "c2d7825ed2f902158913351d87fb033eb7a425504f2a2cab6ba30a01e36cba55",
+    "preparation_record_sha256": "4de926486e7f36ca86fd4fbbb8aac6d04901a7dc5dffc01cd929f5f0ad5f93f6",
+    "return_archive_manifest": "history/07-10-current-return-c8d/manifest.json",
+    "return_archive_manifest_sha256": "e727f4df4aefcb7d856c08ee4e8af865b2f796cc5e4a2bac3696905b630f9470",
+    "return_record_sha256": "2f8dfbb8bdabbbd1316f925da602afc4f2b9b758df896e51b5634c0e0deb2d4a",
+    "return_payload_sha256": "c8db16080a704d04f7ec4a38ced082f5241ddb5e370c946e9c12da82c94366de",
+    "return_review_sha256": "1db969b4b05e22a34b2281ae80513d29eca6f53df43654d83d36a99f42db6076",
+    "return_report_sha256": "fc47994daa089aa0f2b63271e24be0f6ccf80472ee7a29ad9059be11da02879c",
+    "candidate_root": "build/v02/campaign15/original10/current-source-candidate-final-r13",
+    "candidate_preparation_sha256": "75f3dabaa8172e96024ef9656b5397f29dba4716815fc8af17390557b33d8f6a",
+    "candidate_policy_sha256": "7d41a6f5bea563e23e9e90a4467a133aad3c9c620cbf99adfa4583dc210098f0",
+    "candidate_manifest_sha256": "83b6d43be488303403d3da0244e552caadbbddd706e50be84c584925482d94e0",
+}
 R10_SUCCESSOR_PREDECESSOR = {
     "preparation_archive_manifest": "history/07-10-current-preparation-r10-postmerge/manifest.json",
     "preparation_archive_manifest_sha256": "b3b7e1faf542386e8b3f533955bcf83d26efbf2ddb89615046367e9fb3393c4b",
@@ -87,6 +118,10 @@ R10_SUCCESSOR_PREDECESSOR = {
     "merge_tree_sha": "fb1234d6e95a2eaa3a08f7b1f9404b268a2cd6d0",
 }
 R10_SUCCESSOR_PREDECESSOR_AST_SHA = "c2aebb05b1ff7cc498b8f9ea322f7c1178d7d5323d251dd00cd520e969193362"
+R13_FAILED_HOSTED_PREDECESSOR_AST_SHA = "6605f23cf2e291699e4041523197bfde2768182c6e80cc685eb425d5712dca6c"
+R8_CONTINUATION_ADDED_FUNCTION_SHAS = {
+    "validate_r13_failed_hosted_predecessor":
+        "7d7aad6cba6503c8900e3a08c27b3b5d2b4c995bd9946f772f8c7c1ad103cd8d"}
 R3_PREPARATION_RAW_SHA = "acf381a106bbe3daf170ba8ae7d4ac5986d1023bf6673253fa9fad9f8269ef94"
 R3_PREPARATION_PAYLOAD_SHA = "2f3f492d497a2d624ddeadb583e403fad0a5e6d163e31964dce5028722457fbd"
 R8_PACKET = Path("build/v02/campaign15/original10/native-source-revalidation-r8/review-packet.json")
@@ -144,7 +179,7 @@ R8_DIAGNOSTIC_REPORT_FUNCTION_SHAS = {
     "main": ("bd8aae06c3cf800fcb4a735dcff1474d187ec919f55e9c0e377e0ee2d69a0527",
         "68c503492b783440509a97d414981c30988edd7fbfc21ed36a58804dda7522c9")}
 R8_DIAGNOSTIC_REPORT_ASSIGNMENT_SHAS = {
-    "SAFE_CTEST_DIAGNOSTIC_METHODS": "24a45ffa1e601a89e86aa365d73356174df55685afeac4d44ff4f8ea9d00ddf6",
+    "SAFE_CTEST_DIAGNOSTIC_METHODS": "48eee49fd38b9086d00ae246413c174cbc6168e2025a493fcc9a53dc512dd982",
     "SAFE_CTEST_DIAGNOSTIC_PREFIX": "c47f773d1d998b0129f16d9aae3abdf1b479906d678815d56de115232d05b77d",
     "SAFE_CTEST_DIAGNOSTIC": "79df69b58ec78ca26c214287e40cc640b3878dd2819d7d34ff76eadb93ba4e20"}
 R8_DIAGNOSTIC_ROUTE_METHOD_SET = "SAFE_FAILURE_DIAGNOSTIC_METHODS"
@@ -157,9 +192,13 @@ R8_DIAGNOSTIC_ROUTE_METHOD_SET_SHA = "4b35f4f75bd488def926b42e894dbae536621b02d3
 R8_DIAGNOSTIC_REPORT_TEST_PATH = "tests/evidence/phase4_report_contract.py"
 R8_DIAGNOSTIC_REPORT_TEST_SHAS = {
     "test_sanitized_ctest_failure_summary_identifies_only_allowlisted_methods":
-        "197468c6ffde06fafc600f7bcd4f70a74b86bab13e6ef5fa6e7047323a5e32d6",
+        "140c5e5b2ab1cb083bacdf27074e7db8702ffa4b41fe5efef058b44dd6acaf93",
     "test_phase6_runner_emits_only_owned_failure_method_and_kind":
-        "b6c497cf03d5778038f2fe11ff295f609cd062d9739c60e918d3462f68b714bc"}
+        "b6c497cf03d5778038f2fe11ff295f609cd062d9739c60e918d3462f68b714bc",
+    "test_phase5_runner_failure_is_sanitized_to_exact_method_and_kind":
+        "f1891370347cc8ca5084fb8ff5669546b5652cd2c53f46ea0116393d35c258ad"}
+R8_PHASE5_DIAGNOSTIC_TEST_PATH = "tests/evidence/phase5_baseline_contract.py"
+R8_PHASE5_DIAGNOSTIC_TEST_SHA = "984efe9a0be2d1c857dfa208bb6699f6cbae0c09883879e4634bde63b6414b24"
 R8_NATIVE_RUNS = {
     "run": R8_RESULT, "attempt": R8_ATTEMPT, "nested": R8_NESTED}
 R8_COORDINATOR_DELTA_FUNCTIONS = ("_campaign_projection", "_require_campaign_for_journal",
@@ -169,25 +208,34 @@ R8_COORDINATOR_DELTA_FUNCTIONS = ("_campaign_projection", "_require_campaign_for
 R8_COORDINATOR_ADDED_FUNCTIONS = ("_r10_successor_constants", "_validate_r10_predecessor_artifacts",
     "_required_preview_success", "_verify_r10_merged_source", "_validate_source_successor_history",
     "_write_journal_atomically", "source_successor_sanitized_source", "_adopt_incomplete_merged_source",
-    "_resume_source_successor", "_reject_output_collisions")
+    "_resume_source_successor", "_reject_output_collisions", "_r13_failed_hosted_predecessor",
+    "_r13_remote_json", "_verify_r13_failed_hosted_predecessor",
+    "_validate_r13_failed_hosted_successor", "_resume_r13_failed_hosted_successor",
+    "failed_hosted_successor_sanitized_source")
 R8_COORDINATOR_ADDED_FUNCTION_SHAS = {
     "_adopt_incomplete_merged_source": "d53d5771663bfb3d03794200769e3b99b62d1078c30e053bca1a14b913272f19",
     "_r10_successor_constants": "0b67132fb94812a34fe63555c473ccc6595c4da4c65a7a8bc562267467c23d23",
-    "_reject_output_collisions": "aff853f243a1d8e3ace13d83f88c0b483d9621cb574fd47b1e2dbf3d152bf808",
+    "_reject_output_collisions": "677088e3508bafdf349b9073a128c6ea28c17adc8e19dfadfe84c85c5dbaf7c5",
     "_required_preview_success": "3073d1d97a616810e026f00223ff227b2d73da573b465ded81bb92e9b8b34858",
     "_resume_source_successor": "b8d21a04664274c39eae4b45476f8cf47b9195c5ce035cea718a679332292e05",
     "_validate_r10_predecessor_artifacts": "616e9df00728bd1b903e72c5dbae5526cc12aca7eda16855647f37656dbb32ac",
-    "_validate_source_successor_history": "354c3402e59608c0d79adf7f488a6ecf1cc4aef3aafdf530bfff4037e5e3f8b1",
+    "_validate_source_successor_history": "77f7f973ef6dbadd02606d8bc4029dd34678cd19905a2a1933a81e01efaeaf7b",
+    "_r13_failed_hosted_predecessor": "af7ec09c3380e10e9c2d643a30d4ea3c0725551af1033303c1d4f7ce6baf8205",
+    "_r13_remote_json": "fa4c0dd622dca1a4f3ed8b4a0db7a5ea7fec7320bc2428ff29baf34f6b96eed9",
+    "_verify_r13_failed_hosted_predecessor": "2e9010cfd27e1c593b002025eda73b9fa9078e70004d8fffe33dca01048ccd88",
+    "_validate_r13_failed_hosted_successor": "01d5dff51e355de9efd13a06011fe8b71f67519e0b7dccffe275a6fb119e11e4",
+    "_resume_r13_failed_hosted_successor": "277c1e8c1a7e7485df14bcbad2d91f3584e50a9e8efa9679ed9c178413d53b0e",
+    "failed_hosted_successor_sanitized_source": "683c2a8004aca884f7c9f92473c640d8bd51fb9e9fd5b1893f2a365184b6178b",
     "_verify_r10_merged_source": "f5aaf3fd6ac885d3f5c6107bfbf83e8e3aae370cacc309284f83a3477b6d91fb",
     "_write_journal_atomically": "5c9569b3f555a00015a66fde111f74e2a744846fd9de894c63a6fa41e3d1942a",
     "source_successor_sanitized_source": "d58a973456d0619de2feb85a2a16047dea6018b9af0ed9b7be128ea0b29fe70e"}
 R8_COORDINATOR_SPECIAL_FUNCTION_SHAS = {
     "_require_campaign_layout": (
         "1b471f79693725bf718ea84e09bdb157dad90b5bb0ba30464b661fa62c4e2ebd",
-        "2edeb583eccd8332cb0b71345e17b6505e9038387138a631a268865151198d13"),
+        "994da11eaa997544bd0e0642213bc8f7ac3cf76987312ade8db5357efa93e960"),
     "main": (
         "4a2716348ca978175c5b991ce9f77d123356de1ea7ad6582306950edc32da0cb",
-        "290d26183568033b5f093f7f23aba2d3a537ad05e42290bb6b94a03054eeed22"),
+        "494cba858014c571a3a1c87222b5ecf346b51863bc18ce80cc7be9495fb4ecba"),
     "_verified_merge_receipt": (
         "09055c5c1d85695105c71b22df53bc7fb44643fe1526367791bbac4765243af1",
         "cbb8a819fce1e7e2294a3cdbcbc3e84ad9bb2b3484b464b1ef4b2efea24b862c"),
@@ -203,7 +251,8 @@ R8_CONTINUATION_DELTA_FUNCTIONS = (
     "validate_current_native_continuation", "_validate_r3_preparation_record",
     "_validate_current_native_preparation_record", "_current_return_candidate_facts", "_current_native_return_payload",
     "_write_exclusive_json", "build_current_native_return", "validate_r10_merged_predecessor",
-    "_validate_current_return_candidate_review", "validate_current_native_return")
+    "_validate_current_return_candidate_review", "validate_current_native_return",
+    "validate_r13_failed_hosted_predecessor")
 R8_CONTINUATION_DELTA_ASSIGNMENTS = (
     "CURRENT_NATIVE_CONTINUATION", "CURRENT_NATIVE_CODE_REVIEW",
     "CURRENT_NATIVE_SECURITY_REVIEW", "CURRENT_NATIVE_CANDIDATE_REVIEW",
@@ -220,8 +269,10 @@ R8_CONTINUATION_DELTA_ASSIGNMENTS = (
     "R8_ATTEMPT_SHA", "R8_NESTED", "R8_NESTED_SHA", "R8_RESULT_REVIEW",
     "R8_RESULT_REVIEW_SHA", "R8_ADMISSION_REVIEW", "R8_ADMISSION_REVIEW_SHA",
     "R8_SOURCE_SNAPSHOT", "R8_NATIVE_SOURCE_PATHS", "R8_NATIVE_RUNS",
+    "R13_FAILED_HOSTED_PREDECESSOR", "R13_FAILED_HOSTED_PREDECESSOR_AST_SHA",
     "R8_COORDINATOR_DELTA_FUNCTIONS", "R8_COORDINATOR_ADDED_FUNCTIONS",
     "R8_COORDINATOR_ADDED_FUNCTION_SHAS", "R8_COORDINATOR_SPECIAL_FUNCTION_SHAS",
+    "R8_CONTINUATION_ADDED_FUNCTION_SHAS",
     "R8_CONTINUATION_DELTA_FUNCTIONS",
     "R8_CONTINUATION_DELTA_ASSIGNMENTS", "R8_DARWIN_TEST_PATH",
     "R8_DARWIN_TEST_METHOD", "R8_DARWIN_TEST_OLD_AST_SHA",
@@ -237,7 +288,8 @@ R8_CONTINUATION_DELTA_ASSIGNMENTS = (
     "R8_DIAGNOSTIC_REPORT_ASSIGNMENT_SHAS", "R8_DIAGNOSTIC_ROUTE_METHOD_SET",
     "R8_DIAGNOSTIC_ROUTE_HELPER", "R8_DIAGNOSTIC_ROUTE_MAIN_SHAS",
     "R8_DIAGNOSTIC_ROUTE_HELPER_SHA", "R8_DIAGNOSTIC_ROUTE_METHOD_SET_SHA",
-    "R8_DIAGNOSTIC_REPORT_TEST_PATH", "R8_DIAGNOSTIC_REPORT_TEST_SHAS")
+    "R8_DIAGNOSTIC_REPORT_TEST_PATH", "R8_DIAGNOSTIC_REPORT_TEST_SHAS",
+    "R8_PHASE5_DIAGNOSTIC_TEST_PATH", "R8_PHASE5_DIAGNOSTIC_TEST_SHA")
 RETAINED_DUTIES = {
     "original10": [
         "repair public-export mismatch and refresh affected source/candidate/privacy proofs",
@@ -790,7 +842,7 @@ def _validate_r8_current_source_delta(root: Path, native_source_pins: dict[str, 
                 and candidate_root_name in _top_level_assignment_names(node)]
             expected_candidate_root = ast.parse(
                 'CURRENT_RETURN_CANDIDATE_ROOT = Path("build/v02/campaign15/original10/'
-                'current-source-candidate-final-r13")').body[0]
+                'current-source-candidate-final-r15")').body[0]
             if (old_candidate_root or len(new_candidate_root) != 1
                     or ast.dump(new_candidate_root[0], include_attributes=False)
                     != ast.dump(expected_candidate_root, include_attributes=False)):
@@ -801,6 +853,21 @@ def _validate_r8_current_source_delta(root: Path, native_source_pins: dict[str, 
                     predecessor_rows[0], include_attributes=False).encode("utf-8"))
                     != R10_SUCCESSOR_PREDECESSOR_AST_SHA):
                 raise ValueError("current-native-r10-predecessor-constant-unreviewed")
+            hosted_rows = [node for node in new_tree.body if isinstance(node, ast.Assign)
+                and "R13_FAILED_HOSTED_PREDECESSOR" in _top_level_assignment_names(node)]
+            if (len(hosted_rows) != 1 or sha_bytes(ast.dump(
+                    hosted_rows[0], include_attributes=False).encode("utf-8"))
+                    != R13_FAILED_HOSTED_PREDECESSOR_AST_SHA):
+                raise ValueError("current-native-r13-predecessor-constant-unreviewed")
+            continuation_functions = {node.name: node for node in new_tree.body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+            if set(R8_CONTINUATION_ADDED_FUNCTION_SHAS) != {"validate_r13_failed_hosted_predecessor"}:
+                raise ValueError("current-native-continuation-added-function-pin-set-invalid")
+            for name, expected_sha in R8_CONTINUATION_ADDED_FUNCTION_SHAS.items():
+                actual_sha = sha_bytes(ast.dump(continuation_functions[name],
+                    include_attributes=False).encode("utf-8"))
+                if actual_sha != expected_sha:
+                    raise ValueError("current-native-continuation-added-function-unreviewed:" + name)
         test_method_delta = None
         specific_delta: dict[str, Any] = {}
         if relative == R8_DARWIN_TEST_PATH:
@@ -1118,6 +1185,13 @@ def _validate_r8_current_source_delta(root: Path, native_source_pins: dict[str, 
             "prelaunch_only_review_boundary": relative not in {
                 R8_SAFETY_REPORT_PATH, R8_SAFETY_REPORT_TEST_PATH, R8_DARWIN_TEST_PATH,
                 "scripts/release/v02_qualification.py"}}
+    phase5_test_sha = sha_bytes(_regular(root / R8_PHASE5_DIAGNOSTIC_TEST_PATH, cap=2 * 1024 * 1024))
+    if phase5_test_sha != R8_PHASE5_DIAGNOSTIC_TEST_SHA:
+        raise ValueError("current-native-phase5-diagnostic-test-unreviewed")
+    delta["additional_diagnostic_test_source"] = {
+        "path": R8_PHASE5_DIAGNOSTIC_TEST_PATH, "sha256": phase5_test_sha,
+        "diagnostic_only": True, "native_runtime_changed": False,
+        "r8_native_execution_credit": False}
     return delta
 
 
@@ -1217,7 +1291,7 @@ def _current_native_record_payload(root: Path) -> dict[str, Any]:
             for relative in ("tests/evidence/v02_qualification_contract.py",
                 "tests/evidence/phase7_continuation_contract.py",
                 "tests/evidence/phase7_return_consumer_contract.py",
-                "tests/evidence/phase7_sticky_denial.py")},
+                "tests/evidence/phase7_sticky_denial.py", R8_PHASE5_DIAGNOSTIC_TEST_PATH)},
         "continuation_module_sha256": _module_pin(root),
         "current_risk_evidence_sha256": {
             "source": sha_bytes(_regular(root / RISK_SOURCE, cap=2 * 1024 * 1024)),
@@ -1628,6 +1702,147 @@ def validate_r10_merged_predecessor(root: Path, *, journal_bytes: bytes | None =
     return {**expected, "preparation_payload_sha256": expected["preparation_payload_sha256"],
         "return_payload_sha256": expected["return_payload_sha256"],
         "journal_sha256": sha_bytes(journal_raw)}
+
+
+def validate_r13_failed_hosted_predecessor(root: Path,
+        *, journal_bytes: bytes | None = None) -> dict[str, Any]:
+    """Validate the one exact R13 source plus failed full-hosted lineage."""
+    expected = R13_FAILED_HOSTED_PREDECESSOR
+    phase = PHASE
+    manifest_specs = (
+        (expected["preparation_archive_manifest"], expected["preparation_archive_manifest_sha256"], {
+            "history/07-10-current-preparation-r13-hosted-failure/07-10-CURRENT-SOURCE-CONTINUATION.json":
+                expected["preparation_record_sha256"],
+            "history/07-10-current-preparation-r13-hosted-failure/07-10-CURRENT-SOURCE-CODE-REVIEW.md":
+                "bb8afc998a2bfeb149ea26695cbdac05fb712d1afc21bf53b0f86bd541d56204",
+            "history/07-10-current-preparation-r13-hosted-failure/07-10-CURRENT-SOURCE-SECURITY-REVIEW.md":
+                "d55df6841db2708c882a7213ab5ff8a0bb508f6959d1198e120d7e25765cb3aa"}),
+        (expected["return_archive_manifest"], expected["return_archive_manifest_sha256"], {
+            "history/07-10-current-return-c8d/07-10-CURRENT-SOURCE-RETURN.json":
+                expected["return_record_sha256"],
+            "history/07-10-current-return-c8d/07-10-RETURN-REVIEW.md":
+                expected["return_review_sha256"],
+            "history/07-10-current-return-c8d/07-10-RETURN.md":
+                expected["return_report_sha256"]}))
+    for manifest_relative, digest, members in manifest_specs:
+        manifest_path = _candidate_path(root, (phase / manifest_relative).as_posix())
+        raw = _regular(manifest_path, cap=64 * 1024)
+        if sha_bytes(raw) != digest:
+            raise ValueError("r13-failed-hosted-archive-manifest-stale")
+        manifest = _json_object(raw, "r13-failed-hosted-archive-manifest-invalid")
+        rows = manifest.get("files")
+        if (manifest.get("schema") != "genewhip-original10-preserved-review-revision-v1"
+                or not isinstance(rows, list) or len(rows) < len(members)):
+            raise ValueError("r13-failed-hosted-archive-manifest-invalid")
+        actual: dict[str, str] = {}
+        for row in rows:
+            if not isinstance(row, dict) or set(row) != {"archive", "source", "size_bytes", "sha256"}:
+                raise ValueError("r13-failed-hosted-archive-manifest-invalid")
+            relative = row.get("archive")
+            if not isinstance(relative, str) or relative in actual:
+                raise ValueError("r13-failed-hosted-archive-manifest-invalid")
+            member = _regular(_candidate_path(root, (phase / relative).as_posix()), cap=4 * 1024 * 1024)
+            if (not isinstance(row.get("size_bytes"), int) or isinstance(row.get("size_bytes"), bool)
+                    or row["size_bytes"] != len(member) or row.get("sha256") != sha_bytes(member)):
+                raise ValueError("r13-failed-hosted-archive-member-stale")
+            actual[relative] = row["sha256"]
+        if any(actual.get(relative) != member_sha for relative, member_sha in members.items()):
+            raise ValueError("r13-failed-hosted-archive-member-stale")
+
+    return_path = _candidate_path(root, (phase /
+        "history/07-10-current-return-c8d/07-10-CURRENT-SOURCE-RETURN.json").as_posix())
+    return_raw = _regular(return_path, cap=256 * 1024)
+    record = _json_object(return_raw, "r13-failed-hosted-return-invalid")
+    payload_sha = sha_bytes(json.dumps(record, sort_keys=True, separators=(",", ":")).encode())
+    candidate = record.get("candidate")
+    if (sha_bytes(return_raw) != expected["return_record_sha256"]
+            or payload_sha != expected["return_payload_sha256"]
+            or record.get("purpose") != "current-native-return"
+            or record.get("product_qualification_claim") is not False
+            or record.get("qualification_status") != "current-source-return-pending-parent-review"
+            or not isinstance(candidate, dict)
+            or candidate.get("public_head") != expected["source_head"]
+            or candidate.get("public_base") != expected["public_base_sha"]
+            or candidate.get("public_tree") != expected["public_tree_sha"]
+            or candidate.get("private_source_head") != expected["private_source_head"]
+            or candidate.get("preparation_sha256") != expected["candidate_preparation_sha256"]
+            or candidate.get("repository_policy_sha256") != expected["candidate_policy_sha256"]
+            or candidate.get("source_manifest_sha256") != expected["candidate_manifest_sha256"]):
+        raise ValueError("r13-failed-hosted-return-stale")
+    candidate_root = _candidate_path(root, expected["candidate_root"])
+    prep_raw = _regular(_candidate_path(root, expected["candidate_root"] + "/preparation.json"),
+        cap=4 * 1024 * 1024)
+    if sha_bytes(prep_raw) != expected["candidate_preparation_sha256"]:
+        raise ValueError("r13-failed-hosted-candidate-stale")
+    prep = _json_object(prep_raw, "r13-failed-hosted-candidate-invalid")
+    policy_relative = prep.get("repository_preflight")
+    if not isinstance(policy_relative, str):
+        raise ValueError("r13-failed-hosted-candidate-stale")
+    policy_raw = _regular(_candidate_path(root, policy_relative), cap=4 * 1024 * 1024)
+    if sha_bytes(policy_raw) != expected["candidate_policy_sha256"]:
+        raise ValueError("r13-failed-hosted-candidate-stale")
+    publication = _candidate_path(root, expected["candidate_root"] + "/publication")
+    if (_candidate_git(publication, "rev-parse", "HEAD") != expected["source_head"]
+            or _candidate_git(publication, "rev-parse", "HEAD^") != expected["public_base_sha"]
+            or _candidate_git(publication, "rev-parse", "HEAD^{tree}") != expected["public_tree_sha"]
+            or _candidate_git(publication, "status", "--porcelain", "--untracked-files=all")):
+        raise ValueError("r13-failed-hosted-candidate-git-identity-invalid")
+
+    if journal_bytes is None:
+        journal_path = _candidate_path(root, "build/v02/campaign15/hosted-delivery-journal.json")
+        journal_bytes = _regular(journal_path, cap=64 * 1024)
+    if len(journal_bytes) > 64 * 1024 or sha_bytes(journal_bytes) != expected["journal_sha256"]:
+        raise ValueError("r13-failed-hosted-journal-stale")
+    journal = _json_object(journal_bytes, "r13-failed-hosted-journal-invalid")
+    if (journal.get("schema") != "genewhip.v02-delivery-journal.v1"
+            or journal.get("started_at") != expected["started_at"]
+            or journal.get("qualification_started_at") != expected["started_at"]
+            or journal.get("repository") != "szTheory/genewhip"
+            or journal.get("source_head") != expected["source_head"]
+            or journal.get("public_base_sha") != expected["public_base_sha"]
+            or journal.get("public_source_sha") != expected["public_source_sha"]
+            or journal.get("tree_sha") != expected["public_tree_sha"]
+            or journal.get("candidate_sha") != expected["source_head"]
+            or journal.get("pull_request") != expected["pull_request"]
+            or journal.get("branch") != "v0.2-source-" + expected["source_head"][:12]
+            or journal.get("push_performed") is not True
+            or journal.get("qualification_dispatch_nonce") != expected["qualification_nonce"]
+            or journal.get("qualification_dispatch_requested") is not True
+            or journal.get("qualification_dispatch_submitted") is not True
+            or journal.get("selected_run_created_at") != expected["qualification_created_at"]
+            or journal.get("source_successor") is None
+            or any(key in journal for key in ("inventory", "inventory_sha256", "package_sha256",
+                "publisher", "release", "accepted_at", "requirements_qualified"))):
+        raise ValueError("r13-failed-hosted-journal-stale")
+    lineage = journal.get("source_successor")
+    if (not isinstance(lineage, dict)
+            or lineage.get("schema") != "genewhip.v02-source-successor.v1"
+            or lineage.get("archive") !=
+                "build/v02/failures/merged-source-predecessor-4464fc51a9f1c817064a1e0baa1816bf7222009d-89232a2d8899937a3e797435c05228306817b3d10e479d7e30849e13cd4bd08c.json"
+            or lineage.get("archive_sha256") !=
+                "89232a2d8899937a3e797435c05228306817b3d10e479d7e30849e13cd4bd08c"
+            or lineage.get("started_at") != expected["started_at"]
+            or lineage.get("prior_source_head") != "4464fc51a9f1c817064a1e0baa1816bf7222009d"
+            or lineage.get("prior_public_base_sha") != "e505490ff67dae9a1dcace82049857dab8189588"
+            or lineage.get("prior_merge_commit_sha") != "ac7c5bdc8e4e87e3a6423de7a64524f5f0ca498b"
+            or lineage.get("prior_merge_tree_sha") != "fb1234d6e95a2eaa3a08f7b1f9404b268a2cd6d0"
+            or lineage.get("prior_pull_request") != "21"
+            or lineage.get("prior_preview_run_id") != "41163927669"
+            or lineage.get("active_source_head") != expected["source_head"]
+            or lineage.get("active_base_sha") != expected["public_base_sha"]
+            or lineage.get("active_repository") != "szTheory/genewhip"
+            or lineage.get("required_check") != {
+                "name": "required-ci", "status": "COMPLETED", "conclusion": "SUCCESS"}
+            or "failed_hosted" in lineage):
+        raise ValueError("r13-failed-hosted-r10-lineage-stale")
+    campaign_raw = _regular(root / "build/v02/campaign15/campaign.json", cap=64 * 1024)
+    campaign = _json_object(campaign_raw, "r13-failed-hosted-campaign-invalid")
+    if (sha_bytes(campaign_raw) != "f309198a4f25fee9ffb017570e0900de70c199732d9880a4f375d70bc847aad1"
+            or campaign.get("started_at") != expected["started_at"]
+            or campaign.get("runtime_cutoff") != "2026-10-31T10:50:39.837827+00:00"):
+        raise ValueError("r13-failed-hosted-campaign-stale")
+    return {**expected, "journal": journal, "journal_bytes": journal_bytes,
+        "return_record": record, "candidate_root": candidate_root}
 
 
 def _write_exclusive_json(root: Path, relative: Path, payload: dict[str, Any]) -> None:

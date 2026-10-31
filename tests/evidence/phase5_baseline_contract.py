@@ -24,6 +24,16 @@ if BASELINE_SPEC is None or BASELINE_SPEC.loader is None:
     raise RuntimeError("phase5 baseline tracer unavailable")
 baseline = importlib.util.module_from_spec(BASELINE_SPEC)
 BASELINE_SPEC.loader.exec_module(baseline)
+REPORT_SPEC = importlib.util.spec_from_file_location(
+    "phase4_report", ROOT / "scripts/evidence/phase4_report.py")
+if REPORT_SPEC is None or REPORT_SPEC.loader is None:
+    raise RuntimeError("phase5 safe test diagnostic policy unavailable")
+report = importlib.util.module_from_spec(REPORT_SPEC)
+REPORT_SPEC.loader.exec_module(report)
+
+SAFE_FAILURE_DIAGNOSTIC_METHODS = frozenset(
+    method for method in report.SAFE_CTEST_DIAGNOSTIC_METHODS
+    if method.startswith("BaselineRecordContract."))
 
 
 def row(**changes):
@@ -460,6 +470,14 @@ class BaselineRecordContract(unittest.TestCase):
                 baseline.validate_handoff(path, report, synthetic=True)
 
 
+def emit_safe_failure_diagnostics(result):
+    for kind, rows in (("failure", result.failures), ("error", result.errors)):
+        for test, _ in rows:
+            method = f"{test.__class__.__name__}.{test._testMethodName}"
+            if method in SAFE_FAILURE_DIAGNOSTIC_METHODS:
+                print(f"GENEWHIP_TEST_RESULT:{method}:{kind}", file=sys.stderr)
+
+
 def main() -> int:
     arguments = sys.argv[1:]
     if arguments == ["--self-test", "--host-process-context"]:
@@ -469,7 +487,9 @@ def main() -> int:
     if arguments == ["--self-test"]:
         baseline.process_tools().process_boundary().require_host_process_context()
         suite = unittest.defaultTestLoader.loadTestsFromTestCase(BaselineRecordContract)
-        return 0 if unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful() else 1
+        result = unittest.TextTestRunner(verbosity=2).run(suite)
+        emit_safe_failure_diagnostics(result)
+        return 0 if result.wasSuccessful() else 1
     if len(sys.argv) == 2 and sys.argv[1] == "--tracer":
         print("--tracer requires a built gw_headless path", file=sys.stderr)
         return 2

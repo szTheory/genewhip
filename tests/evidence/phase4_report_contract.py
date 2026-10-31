@@ -634,7 +634,12 @@ class ReportContract(unittest.TestCase):
             "phase6_route_diagnostic_contract", ROOT / "tests/session/phase6_route_contract.py")
         route = importlib.util.module_from_spec(route_spec)
         route_spec.loader.exec_module(route)
-        self.assertEqual(route.SAFE_FAILURE_DIAGNOSTIC_METHODS,
+        phase5_spec = importlib.util.spec_from_file_location(
+            "phase5_baseline_diagnostic_contract", ROOT / "tests/evidence/phase5_baseline_contract.py")
+        phase5 = importlib.util.module_from_spec(phase5_spec)
+        phase5_spec.loader.exec_module(phase5)
+        self.assertEqual(route.SAFE_FAILURE_DIAGNOSTIC_METHODS |
+                         phase5.SAFE_FAILURE_DIAGNOSTIC_METHODS,
                          module.SAFE_CTEST_DIAGNOSTIC_METHODS)
         with tempfile.TemporaryDirectory() as temporary:
             source_xml = Path(temporary) / "raw.xml"
@@ -693,6 +698,80 @@ class ReportContract(unittest.TestCase):
             "GENEWHIP_TEST_RESULT:NativeParserContract.test_process_group_and_stream_caps_are_enforced:error",
         ])
         self.assertNotIn(PRIVATE_TEST_PATH, emitted)
+
+    def test_phase5_runner_failure_is_sanitized_to_exact_method_and_kind(self):
+        import contextlib
+        import io
+        from types import SimpleNamespace
+
+        phase5_spec = importlib.util.spec_from_file_location(
+            "phase5_baseline_diagnostic_contract", ROOT / "tests/evidence/phase5_baseline_contract.py")
+        phase5 = importlib.util.module_from_spec(phase5_spec)
+        phase5_spec.loader.exec_module(phase5)
+        methods = frozenset("BaselineRecordContract." + name
+            for name, value in vars(phase5.BaselineRecordContract).items()
+            if name.startswith("test_") and callable(value))
+        self.assertEqual(phase5.SAFE_FAILURE_DIAGNOSTIC_METHODS, methods)
+        self.assertTrue(methods <= module.SAFE_CTEST_DIAGNOSTIC_METHODS)
+
+        suite = unittest.TestSuite([
+            phase5.BaselineRecordContract("test_valid_record_round_trips"),
+            phase5.BaselineRecordContract("test_status_only_pass_is_rejected")])
+        private_token = "PRIVATE" + "_TOKEN"
+        private_message = PRIVATE_TEST_PATH + "/" + private_token
+        process_tools = SimpleNamespace(process_boundary=lambda: SimpleNamespace(
+            require_host_process_context=lambda: None))
+        with tempfile.TemporaryDirectory() as temporary:
+            raw_output = io.StringIO()
+            with patch.object(phase5.baseline, "process_tools", return_value=process_tools), \
+                    patch.object(phase5.unittest.defaultTestLoader, "loadTestsFromTestCase",
+                        return_value=suite), \
+                    patch.object(phase5.BaselineRecordContract, "test_valid_record_round_trips",
+                        side_effect=AssertionError(private_message)), \
+                    patch.object(phase5.BaselineRecordContract, "test_status_only_pass_is_rejected",
+                        side_effect=RuntimeError(private_message)), \
+                    patch.object(sys, "argv", ["phase5_baseline_contract.py", "--self-test"]), \
+                    contextlib.redirect_stderr(raw_output):
+                self.assertEqual(phase5.main(), 1)
+            expected_markers = [
+                "GENEWHIP_TEST_RESULT:BaselineRecordContract.test_valid_record_round_trips:failure",
+                "GENEWHIP_TEST_RESULT:BaselineRecordContract.test_status_only_pass_is_rejected:error",
+            ]
+            raw_text = raw_output.getvalue()
+            self.assertTrue(all(marker in raw_text for marker in expected_markers))
+            raw_xml = Path(temporary) / "raw.xml"
+            safe_xml = Path(temporary) / "safe.xml"
+            root = module.ET.Element("testsuites")
+            suite_node = module.ET.SubElement(root, "testsuite")
+            case = module.ET.SubElement(suite_node, "testcase", {"name": "phase5_baseline_contract"})
+            module.ET.SubElement(case, "failure", {"message": private_message}).text = private_message
+            module.ET.SubElement(case, "system-err").text = raw_text
+            raw_xml.write_bytes(module.ET.tostring(root, encoding="utf-8"))
+            module.sanitize_ctest_junit(raw_xml, safe_xml)
+            sanitized = safe_xml.read_bytes()
+            self.assertNotIn(PRIVATE_TEST_PATH.encode(), sanitized)
+            self.assertNotIn(private_token.encode(), sanitized)
+            self.assertNotIn(b"AssertionError", sanitized)
+            self.assertNotIn(b"RuntimeError", sanitized)
+            self.assertEqual(module.summarize_sanitized_ctest_failures(safe_xml), [
+                "CTest failure [failure]",
+                "CTest subtest failure: BaselineRecordContract.test_status_only_pass_is_rejected [error]",
+                "CTest subtest failure: BaselineRecordContract.test_valid_record_round_trips [failure]",
+            ])
+
+            unknown_xml = Path(temporary) / "unknown.xml"
+            unknown_safe = Path(temporary) / "unknown-safe.xml"
+            unknown_root = module.ET.Element("testsuites")
+            unknown_suite = module.ET.SubElement(unknown_root, "testsuite")
+            unknown_case = module.ET.SubElement(unknown_suite, "testcase",
+                {"name": "phase5_baseline_contract"})
+            module.ET.SubElement(unknown_case, "failure")
+            module.ET.SubElement(unknown_case, "system-out").text = (
+                "GENEWHIP_TEST_RESULT:BaselineRecordContract.test_injected_" + private_token + ":failure")
+            unknown_xml.write_bytes(module.ET.tostring(unknown_root, encoding="utf-8"))
+            with self.assertRaisesRegex(ValueError, "safety-ctest-diagnostic-invalid"):
+                module.sanitize_ctest_junit(unknown_xml, unknown_safe)
+            self.assertFalse(unknown_safe.exists())
 
     def test_safety_junit_residual_private_path_rejects_without_output(self):
         windows_marker = "C:" + chr(92) + "Users" + chr(92) + "example" + chr(92) + "leak"
