@@ -1,0 +1,310 @@
+{
+  "schema": "genewhip-phase6-pea-short-manifest-v1",
+  "status": "reserved-before-launch",
+  "process_rows": [
+    {
+      "case": "native-red-c-driver",
+      "record_id": "GW-06-AUTH-pea-short-contract-native-red-c-driver",
+      "limits": {
+        "watchdog_seconds": 60,
+        "guest_instructions": 128,
+        "fields": 8
+      },
+      "source_identity_at_reservation": "48adc38b0dece1c9489f94c5b830265ca76e575e9a86825860ae4e36ad08bcaa",
+      "contract_identity": "M68000PRM-PEA-p4-159;MC68000UM-table7-11;original-guest-contract-v1",
+      "result": {
+        "command": "build/phase6/phase6_repairs_contract pea",
+        "exit_code": 1,
+        "target": "PEA absolute-long executes",
+        "target_file": "tests/api/phase6_repairs_contract.c",
+        "expected": "GW_STOP_TARGET with independently expected stack result",
+        "actual": "GW_STOP_UNSUPPORTED_INSTRUCTION; named PEA assertion failed",
+        "semantic_assessment": "valid intentional RED: test compiled, executed the public machine run path, and failed on the named PEA behavior because the opcode is not yet implemented"
+      },
+      "status": "completed"
+    },
+    {
+      "case": "native-red-public-client",
+      "record_id": "GW-06-AUTH-pea-short-contract-native-red-public-client",
+      "limits": {
+        "watchdog_seconds": 60,
+        "guest_instructions": 128,
+        "fields": 8
+      },
+      "source_identity_at_reservation": "48adc38b0dece1c9489f94c5b830265ca76e575e9a86825860ae4e36ad08bcaa",
+      "contract_identity": "M68000PRM-PEA-p4-159;MC68000UM-table7-11;original-guest-contract-v1",
+      "status": "completed",
+      "result": {
+        "exit_code": 1,
+        "target": "PEA abs-long unsupported in public headless guest",
+        "trace_rows": 2,
+        "instruction_address": 512,
+        "opcode": 18553,
+        "stop_reason": 2,
+        "semantic_assessment": "valid original-client RED: ROM loaded, public client fetched the authored PEA opcode and stopped specifically with unsupported-instruction"
+      },
+      "source_identity_at_execution": "a9ce0f1e90be3597ae47b1bbb602006cb41ec3f3aa1902acb4e2ac118afef3b8"
+    },
+    {
+      "case": "native-green-c-driver",
+      "record_id": "GW-06-AUTH-pea-short-contract-native-green-c-driver",
+      "limits": {
+        "watchdog_seconds": 60,
+        "guest_instructions": 128,
+        "fields": 8
+      },
+      "source_identity_at_reservation": "48adc38b0dece1c9489f94c5b830265ca76e575e9a86825860ae4e36ad08bcaa",
+      "contract_identity": "M68000PRM-PEA-p4-159;MC68000UM-table7-11;original-guest-contract-v1",
+      "status": "completed",
+      "result": {
+        "command": "build/phase6/phase6_repairs_contract pea",
+        "exit_code": 0,
+        "assertions": "absolute-long PEA stack address, A7, CCR and current-model timing",
+        "semantic_assessment": "native implementation smoke passed before the later EA table expansion"
+      },
+      "source_identity_at_execution": "b8d52593b6a3dd20ab577968e28de2bd44c9bbc53ffc6e5219e64efdc1756cd6"
+    },
+    {
+      "case": "native-green-public-client",
+      "record_id": "GW-06-AUTH-pea-short-contract-native-green-public-client",
+      "limits": {
+        "watchdog_seconds": 60,
+        "guest_instructions": 128,
+        "fields": 8
+      },
+      "source_identity_at_reservation": "48adc38b0dece1c9489f94c5b830265ca76e575e9a86825860ae4e36ad08bcaa",
+      "contract_identity": "M68000PRM-PEA-p4-159;MC68000UM-table7-11;original-guest-contract-v1",
+      "status": "completed",
+      "result": {
+        "command": [
+          "build/phase6/tools/session/gw_headless",
+          "build/phase6/pea-public-vjndqcy8/pea.grom",
+          "--fields",
+          "1",
+          "--peek",
+          "0xfffefc",
+          "4",
+          "--dump-instruction-trace",
+          "build/phase6/pea-public-vjndqcy8/trace.jsonl"
+        ],
+        "exit_code": 0,
+        "wall_seconds": 0.004,
+        "stdout": "{\"sequence\":0,\"width\":256,\"height\":224,\"pitch_bytes\":1280,\"end_tick\":766080,\"fnv1a64\":\"c9b1e505f9a82325\"}\n{\"fields\":1,\"ram_fnv1a64\":\"f82e27a96a8853b5\",\"peek\":\"00e00010\",\"unsupported\":0,\"stop_reason\":1,\"instruction_address\":518,\"opcode\":20082,\"fault_address\":0}\n",
+        "stderr": "",
+        "trace_rows": 3,
+        "trace": [
+          "{\"tick\":252,\"pc\":512,\"opcode\":18553,\"stop_reason\":0,\"fault_address\":0}",
+          "{\"tick\":308,\"pc\":518,\"opcode\":20082,\"stop_reason\":1,\"fault_address\":0}",
+          "{\"count\":2,\"dropped\":0,\"state\":{\"tick\":896040,\"pc\":522,\"sr\":9984,\"d\":[0,0,0,0,0,0,0,0],\"a\":[0,0,0,0,0,0,0,16776956],\"stop_reason\":1}}"
+        ],
+        "source_identity_at_execution": "1cc5067dc807a0194d9882b7a76e49752bbfcf8787b6eead1440280b73c772de",
+        "client_sha256": "326e32595b70061c1d3f8d95f0ada01bdc0cddc6b22fa40b3107a236eb330b3e",
+        "rom_sha256": "24d6970b0d0d8ae4ab7e36a7fd3ba7c847f6a0153def0d2a15d2ae2c17d522f3"
+      },
+      "source_identity_at_execution": "1cc5067dc807a0194d9882b7a76e49752bbfcf8787b6eead1440280b73c772de"
+    },
+    {
+      "case": "sanitize-green-c-driver",
+      "record_id": "GW-06-AUTH-pea-short-contract-sanitize-green-c-driver",
+      "limits": {
+        "watchdog_seconds": 60,
+        "guest_instructions": 128,
+        "fields": 8
+      },
+      "source_identity_at_reservation": "48adc38b0dece1c9489f94c5b830265ca76e575e9a86825860ae4e36ad08bcaa",
+      "contract_identity": "M68000PRM-PEA-p4-159;MC68000UM-table7-11;original-guest-contract-v1",
+      "status": "completed",
+      "result": {
+        "command": [
+          "build/phase6-movem-sanitize/phase6_repairs_contract",
+          "pea"
+        ],
+        "exit_code": 0,
+        "stdout": "phase6_repairs_contract: PASS\n",
+        "source_identity_at_execution": "1cc5067dc807a0194d9882b7a76e49752bbfcf8787b6eead1440280b73c772de"
+      },
+      "source_identity_at_execution": "1cc5067dc807a0194d9882b7a76e49752bbfcf8787b6eead1440280b73c772de"
+    },
+    {
+      "case": "sanitize-green-public-client",
+      "record_id": "GW-06-AUTH-pea-short-contract-sanitize-green-public-client",
+      "limits": {
+        "watchdog_seconds": 60,
+        "guest_instructions": 128,
+        "fields": 8
+      },
+      "source_identity_at_reservation": "48adc38b0dece1c9489f94c5b830265ca76e575e9a86825860ae4e36ad08bcaa",
+      "contract_identity": "M68000PRM-PEA-p4-159;MC68000UM-table7-11;original-guest-contract-v1",
+      "status": "completed",
+      "result": {
+        "command": [
+          "build/phase6-movem-sanitize/tools/session/gw_headless",
+          "build/phase6-movem-sanitize/pea-public-un7ixucq/pea.grom",
+          "--fields",
+          "1",
+          "--peek",
+          "0xfffefc",
+          "4",
+          "--dump-instruction-trace",
+          "build/phase6-movem-sanitize/pea-public-un7ixucq/trace.jsonl"
+        ],
+        "exit_code": 0,
+        "wall_seconds": 0.08,
+        "stdout": "{\"sequence\":0,\"width\":256,\"height\":224,\"pitch_bytes\":1280,\"end_tick\":766080,\"fnv1a64\":\"c9b1e505f9a82325\"}\n{\"fields\":1,\"ram_fnv1a64\":\"f82e27a96a8853b5\",\"peek\":\"00e00010\",\"unsupported\":0,\"stop_reason\":1,\"instruction_address\":518,\"opcode\":20082,\"fault_address\":0}\n",
+        "stderr": "",
+        "trace_rows": 3,
+        "trace": [
+          "{\"tick\":252,\"pc\":512,\"opcode\":18553,\"stop_reason\":0,\"fault_address\":0}",
+          "{\"tick\":308,\"pc\":518,\"opcode\":20082,\"stop_reason\":1,\"fault_address\":0}",
+          "{\"count\":2,\"dropped\":0,\"state\":{\"tick\":896040,\"pc\":522,\"sr\":9984,\"d\":[0,0,0,0,0,0,0,0],\"a\":[0,0,0,0,0,0,0,16776956],\"stop_reason\":1}}"
+        ],
+        "source_identity_at_execution": "1cc5067dc807a0194d9882b7a76e49752bbfcf8787b6eead1440280b73c772de",
+        "client_sha256": "8e8f1069c938a1b2472fa7aa323f126811e43807c666d5dd5ba696c47a83bde1",
+        "rom_sha256": "24d6970b0d0d8ae4ab7e36a7fd3ba7c847f6a0153def0d2a15d2ae2c17d522f3"
+      },
+      "source_identity_at_execution": "1cc5067dc807a0194d9882b7a76e49752bbfcf8787b6eead1440280b73c772de"
+    },
+    {
+      "case": "hooks-off-green-c-driver",
+      "record_id": "GW-06-AUTH-pea-short-contract-hooks-off-green-c-driver",
+      "limits": {
+        "watchdog_seconds": 60,
+        "guest_instructions": 128,
+        "fields": 8
+      },
+      "source_identity_at_reservation": "48adc38b0dece1c9489f94c5b830265ca76e575e9a86825860ae4e36ad08bcaa",
+      "contract_identity": "M68000PRM-PEA-p4-159;MC68000UM-table7-11;original-guest-contract-v1",
+      "status": "completed",
+      "result": {
+        "command": [
+          "build/phase6-movem-hooks-off/phase6_repairs_contract",
+          "pea"
+        ],
+        "exit_code": 0,
+        "stdout": "phase6_repairs_contract: PASS\n",
+        "source_identity_at_execution": "1cc5067dc807a0194d9882b7a76e49752bbfcf8787b6eead1440280b73c772de"
+      },
+      "source_identity_at_execution": "1cc5067dc807a0194d9882b7a76e49752bbfcf8787b6eead1440280b73c772de"
+    },
+    {
+      "case": "hooks-off-green-public-client",
+      "record_id": "GW-06-AUTH-pea-short-contract-hooks-off-green-public-client",
+      "limits": {
+        "watchdog_seconds": 60,
+        "guest_instructions": 128,
+        "fields": 8
+      },
+      "source_identity_at_reservation": "48adc38b0dece1c9489f94c5b830265ca76e575e9a86825860ae4e36ad08bcaa",
+      "contract_identity": "M68000PRM-PEA-p4-159;MC68000UM-table7-11;original-guest-contract-v1",
+      "status": "completed",
+      "result": {
+        "command": [
+          "build/phase6-movem-hooks-off/tools/session/gw_headless",
+          "build/phase6-movem-hooks-off/pea-public-mkzmqo_c/pea.grom",
+          "--fields",
+          "1",
+          "--peek",
+          "0xfffefc",
+          "4",
+          "--dump-instruction-trace",
+          "build/phase6-movem-hooks-off/pea-public-mkzmqo_c/trace.jsonl"
+        ],
+        "exit_code": 0,
+        "wall_seconds": 0.005,
+        "stdout": "{\"sequence\":0,\"width\":256,\"height\":224,\"pitch_bytes\":1280,\"end_tick\":766080,\"fnv1a64\":\"c9b1e505f9a82325\"}\n{\"fields\":1,\"ram_fnv1a64\":\"f82e27a96a8853b5\",\"peek\":\"00e00010\",\"unsupported\":0,\"stop_reason\":1,\"instruction_address\":518,\"opcode\":20082,\"fault_address\":0}\n",
+        "stderr": "",
+        "trace_rows": 3,
+        "trace": [
+          "{\"tick\":252,\"pc\":512,\"opcode\":18553,\"stop_reason\":0,\"fault_address\":0}",
+          "{\"tick\":308,\"pc\":518,\"opcode\":20082,\"stop_reason\":1,\"fault_address\":0}",
+          "{\"count\":2,\"dropped\":0,\"state\":{\"tick\":896040,\"pc\":522,\"sr\":9984,\"d\":[0,0,0,0,0,0,0,0],\"a\":[0,0,0,0,0,0,0,16776956],\"stop_reason\":1}}"
+        ],
+        "source_identity_at_execution": "1cc5067dc807a0194d9882b7a76e49752bbfcf8787b6eead1440280b73c772de",
+        "client_sha256": "5f8ab2641451b0704bb8ad0b3170ff28cb01b013b6aea473cc37c0a93702f3db",
+        "rom_sha256": "24d6970b0d0d8ae4ab7e36a7fd3ba7c847f6a0153def0d2a15d2ae2c17d522f3"
+      },
+      "source_identity_at_execution": "1cc5067dc807a0194d9882b7a76e49752bbfcf8787b6eead1440280b73c772de"
+    },
+    {
+      "case": "native-mutant-wrong-address",
+      "record_id": "GW-06-AUTH-pea-short-contract-native-mutant-wrong-address",
+      "limits": {
+        "watchdog_seconds": 60,
+        "guest_instructions": 128,
+        "fields": 8
+      },
+      "source_identity_at_reservation": "48adc38b0dece1c9489f94c5b830265ca76e575e9a86825860ae4e36ad08bcaa",
+      "contract_identity": "M68000PRM-PEA-p4-159;MC68000UM-table7-11;original-guest-contract-v1",
+      "status": "completed",
+      "result": {
+        "command": [
+          "build/phase6/phase6_repairs_contract",
+          "pea-mutant-address"
+        ],
+        "exit_code": 1,
+        "stderr": "FAIL: PEA expected-memory assertion rejects wrong-address/stack-order mutant (line 251)\n",
+        "source_identity_at_execution": "1cc5067dc807a0194d9882b7a76e49752bbfcf8787b6eead1440280b73c772de"
+      },
+      "source_identity_at_execution": "1cc5067dc807a0194d9882b7a76e49752bbfcf8787b6eead1440280b73c772de"
+    },
+    {
+      "case": "native-mutant-stack-order",
+      "record_id": "GW-06-AUTH-pea-short-contract-native-mutant-stack-order",
+      "limits": {
+        "watchdog_seconds": 60,
+        "guest_instructions": 128,
+        "fields": 8
+      },
+      "source_identity_at_reservation": "48adc38b0dece1c9489f94c5b830265ca76e575e9a86825860ae4e36ad08bcaa",
+      "contract_identity": "M68000PRM-PEA-p4-159;MC68000UM-table7-11;original-guest-contract-v1",
+      "status": "completed",
+      "result": {
+        "command": [
+          "build/phase6/phase6_repairs_contract",
+          "pea-mutant-stack"
+        ],
+        "exit_code": 1,
+        "stderr": "FAIL: PEA expected-memory assertion rejects wrong-address/stack-order mutant (line 251)\n",
+        "source_identity_at_execution": "1cc5067dc807a0194d9882b7a76e49752bbfcf8787b6eead1440280b73c772de"
+      },
+      "source_identity_at_execution": "1cc5067dc807a0194d9882b7a76e49752bbfcf8787b6eead1440280b73c772de"
+    }
+  ],
+  "authority": {
+    "programmers_reference": "NXP M68000PRM, PEA, p.4-159",
+    "users_manual": "NXP MC68000UM, section7.9 Table7-11 p.7-8",
+    "urls": [
+      "https://www.nxp.com/docs/en/reference-manual/M68000PRM.pdf",
+      "https://www.nxp.com/docs/en/reference-manual/MC68000UM.pdf"
+    ]
+  },
+  "final_semantic_verification": {
+    "status": "pass",
+    "source_identity": "391bdb6b4ce48b3e77cedcb2902eb316fcd645bbaa4a2fe248f1676da82a8a9a",
+    "source_files": {
+      "src/cpu68000.c": "fdff069f39dcc0f4868fd43358b4ef6f18eac0bdbe3a5a695976b34ec191a301",
+      "tests/api/phase6_repairs_contract.c": "bca921c61633cc620ae013e23707b19e2d2f9f509d4fca320dba964ccf876421"
+    },
+    "builds": {
+      "build/phase6": {
+        "contract_binary_sha256": "1befbaef019babd456620a72eedb728a0ca75f4a2823165c5707ad57f5096458",
+        "core_sha256": "dd07f4b1fd6d3ac0624115ca1df4b7b2294fb127243ff354b5ffdb0a0dbcfba1"
+      },
+      "build/phase6-movem-sanitize": {
+        "contract_binary_sha256": "b2b4159f91fdf42c727e1d0181ee04b3ad131b4ff4953672b5312fa3999a2017",
+        "core_sha256": "ad4fd92919f67e99147a58fb1af07b5d208abcfccb6e2cda499f0f2e5d70c427"
+      },
+      "build/phase6-movem-hooks-off": {
+        "contract_binary_sha256": "99d2d31eb65fdb21fccd29f7dbffcae5bdf9d7996377d6bc00efe39023a4edec",
+        "core_sha256": "84febeda3f9acbc455cdbebd9ca41a0f328d59cf67bfe50b12425bb138162510"
+      }
+    },
+    "ctest": {
+      "native": "phase6_repairs_contract: passed 1/1",
+      "sanitize": "phase6_repairs_contract: passed 1/1",
+      "hooks_off": "phase6_repairs_contract: passed 1/1"
+    },
+    "red_classifier": "RED_EVIDENCE_OK",
+    "pea_regressions": "all 10 reserved rows verified read-only; no relaunch"
+  }
+}

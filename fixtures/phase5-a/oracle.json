@@ -1,0 +1,22 @@
+{
+  "schema": "genewhip-phase5-oracle-v1",
+  "title_id": "tank-battle",
+  "authority": "Pinned source semantics define intended behavior; MAME is differential evidence, not hardware authority.",
+  "predicates": [
+    {
+      "id": "p1_score_one",
+      "field_window": [120, 500],
+      "signal": "p1_score",
+      "equals": 1,
+      "source": "local-fixtures/phase5/tank-battle/clean-b/src/main.c: updateBullets increments tanks[b->owner].score only on a live opposing tank collision; score persists through startRound."
+    },
+    {
+      "id": "p1_score_two",
+      "field_window": [2761, 3600],
+      "signal": "p1_score",
+      "equals": 2,
+      "source": "local-fixtures/phase5/tank-battle/clean-b/src/main.c: the second owner-0 collision increments persistent P1 score; active_ticks counts only STATE_PLAYING fields."
+    }
+  ],
+  "visual_audio": "Capture the pinned MAME rendered game frame at field 120 and WAV output with sound enabled. Source shoot/explosion effects corroborate route actions; neither is a standalone progress predicate."
+}

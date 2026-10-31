@@ -1,0 +1,459 @@
+{
+  "accounting": {
+    "actual_process_cap_seconds": 1800.0,
+    "actual_process_spent_seconds": 5.244,
+    "arithmetic_process_remainder_seconds": 1794.756,
+    "bootstrap_prefix_seconds": 184.256,
+    "closed_active_interval_seconds": 2003.216,
+    "global_wall_measured_in_closed_anchor_once": true,
+    "historical_rows_rewritten": false,
+    "pea_charge_seconds": 5.244,
+    "pea_remaining_seconds": 2305.663,
+    "pea_used_seconds_after_charge": 7097.572,
+    "production_attempts_added": 0,
+    "production_authorization_reservations_fabricated": false,
+    "production_ledger_before_sha256": "c182084bb65e4c6c75fe17deba178010074943d591da085797c1276d59ffca83",
+    "terminal_allowance_basis": "conservative, global-only, not a monotonic measurement",
+    "terminal_allowance_seconds": 120.0,
+    "unplanned_controls_accepted_as_original_slots": false
+  },
+  "actual_parent_driver_wall_seconds": [
+    2.615,
+    2.629
+  ],
+  "actual_parent_process_wall_seconds": 5.244,
+  "actual_processes": [
+    {
+      "client_sha256": "f15b0cadc720f4c8c4c6dca3b9deb02f13df647b23de5a78324637ad591bd7c2",
+      "command": [
+        "python3",
+        "-I",
+        "tests/fixtures/phase4_game.py",
+        "build/phase6/tools/session/gw_headless",
+        "--report",
+        "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/report.json",
+        "--retain-artifacts",
+        "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/pcm"
+      ],
+      "command_sha256": "ee40e41b406a727f71ca2d5d778a114e547ed54236de10cf76bf488bbf00b9b3",
+      "driver_executable_sha256": "067f7f37f4850f7a0adef0a0317f2191cd31e87ccbd9fb268eeada674693534a",
+      "driver_return_code": 0,
+      "driver_wall_seconds": 2.615,
+      "fields_sum": 840,
+      "native_child_count": 6,
+      "native_child_return_codes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "native_child_wall_seconds_sum": 2.386797,
+      "pcm_bytes_sum": 2691452,
+      "repetition": 1,
+      "rows": 6
+    },
+    {
+      "client_sha256": "f15b0cadc720f4c8c4c6dca3b9deb02f13df647b23de5a78324637ad591bd7c2",
+      "command": [
+        "python3",
+        "-I",
+        "tests/fixtures/phase4_game.py",
+        "build/phase6/tools/session/gw_headless",
+        "--report",
+        "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/report.json",
+        "--retain-artifacts",
+        "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/pcm"
+      ],
+      "command_sha256": "b1bdcea7cf6977e012283706960e2e85215eb351085aa054d2a7ea1e43f14f7f",
+      "driver_executable_sha256": "067f7f37f4850f7a0adef0a0317f2191cd31e87ccbd9fb268eeada674693534a",
+      "driver_return_code": 0,
+      "driver_wall_seconds": 2.629,
+      "fields_sum": 840,
+      "native_child_count": 6,
+      "native_child_return_codes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "native_child_wall_seconds_sum": 2.391043,
+      "pcm_bytes_sum": 2691452,
+      "repetition": 2,
+      "rows": 6
+    }
+  ],
+  "audit_id": "GW-06-D124-20-consumer-isolation-scope-breach",
+  "cause": {
+    "actual_imported_module_path": "tests/fixtures/phase4_game.py",
+    "coordinator_root": "project checkout",
+    "effect": "two real original-control drivers ran after the synthetic PEA capture boundary; the Tank capture itself was fake",
+    "expected_fake_boundary_module_path": "tests/evidence/phase4_game.py",
+    "ledger_root": "temporary isolated ledger; deleted at test teardown"
+  },
+  "coordinator_receipt": {
+    "actual_control_drivers": 2,
+    "actual_native_children": 12,
+    "actual_tank_process": false,
+    "container_status": "passed-capture",
+    "original14_acceptance": false,
+    "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt.json",
+    "sha256": "ea9202e25ce8ae78ebd6388a86826344ff0f2f386acf02f21408d3d85120faec",
+    "synthetic_tank_capture": true
+  },
+  "created_at": "2026-10-24T22:37:05.851418+00:00",
+  "failed_harness_report": {
+    "bytes": 236,
+    "guest_launches_zero_metadata": "disavowed; contradicted by retained actual child process records",
+    "path": "build/phase6/d124-consumers/tracer-g10.json",
+    "sha256": "5e0a102c188b65546973f139f4df6529a81afa97d863731a37edc5a268312f85"
+  },
+  "plan": "06-20",
+  "production_ledger_audit_sha256_before_receipt_reference": "96db4f51e1d601869f1cd47ab19bd4130297c9f572d060d8d18b4fbb87f529d3",
+  "qualification_or_acceptance_claims": {
+    "Phase6": "incomplete",
+    "Plan12_09": "blocked",
+    "Plan20": "halted",
+    "Tank": "not run",
+    "observer_component_candidate": "unaccepted",
+    "original14": "not accepted",
+    "synthetic_consumer_fixture": "failed; boundary mismatch",
+    "two control drivers": "unplanned and quarantined, not accepted original controls"
+  },
+  "retained_files": [
+    {
+      "bytes": 236,
+      "path": "build/phase6/d124-consumers/tracer-g10.json",
+      "role": "failed-harness-report",
+      "sha256": "5e0a102c188b65546973f139f4df6529a81afa97d863731a37edc5a268312f85"
+    },
+    {
+      "bytes": 92284,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt.json",
+      "role": "coordinator-output-with-synthetic-tank",
+      "sha256": "ea9202e25ce8ae78ebd6388a86826344ff0f2f386acf02f21408d3d85120faec"
+    },
+    {
+      "bytes": 23235,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/report.json",
+      "role": "control-1-driver-report",
+      "sha256": "a7967db6d2823b4db684bd20e96225667b8c23b2b97e7bdfa758c7dfa641b0fd"
+    },
+    {
+      "bytes": 0,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/driver.stderr.raw",
+      "role": "control-1-driver-stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 23235,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/driver.stdout.raw",
+      "role": "control-1-driver-stdout",
+      "sha256": "a7967db6d2823b4db684bd20e96225667b8c23b2b97e7bdfa758c7dfa641b0fd"
+    },
+    {
+      "bytes": 0,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/pcm/title-no-start/headless/child.stderr.raw",
+      "role": "control-1-child-1-stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 1570,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/pcm/title-no-start/headless/child.stdout.raw",
+      "role": "control-1-child-1-stdout",
+      "sha256": "26de7f47b61270ef3114b346c25e98d2bf11a75272b3974ea6bf133ab21b6398"
+    },
+    {
+      "bytes": 0,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/pcm/start-idle/headless/child.stderr.raw",
+      "role": "control-1-child-2-stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 2444,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/pcm/start-idle/headless/child.stdout.raw",
+      "role": "control-1-child-2-stdout",
+      "sha256": "ccd91adecf988616883f7755e88da478215542687e22f574b33a638901bd0a12"
+    },
+    {
+      "bytes": 0,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/pcm/start-move/headless/child.stderr.raw",
+      "role": "control-1-child-3-stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 4624,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/pcm/start-move/headless/child.stdout.raw",
+      "role": "control-1-child-3-stdout",
+      "sha256": "52e6dd4372ddacbf53809a790b859106c2ac8bf70df1c745026bec1b5678ac54"
+    },
+    {
+      "bytes": 0,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/pcm/action-sound/headless/child.stderr.raw",
+      "role": "control-1-child-4-stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 2880,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/pcm/action-sound/headless/child.stdout.raw",
+      "role": "control-1-child-4-stdout",
+      "sha256": "747c3eb6e69f5d4102f5ccf3d2c2524b243e33922ad2a51983f83a01c86d248d"
+    },
+    {
+      "bytes": 0,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/pcm/action-no-trigger/headless/child.stderr.raw",
+      "role": "control-1-child-5-stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 2880,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/pcm/action-no-trigger/headless/child.stdout.raw",
+      "role": "control-1-child-5-stdout",
+      "sha256": "4a6952389a8d39f0791a8f4fd34b184148ceee2fbb5947be204b138ce1ccede3"
+    },
+    {
+      "bytes": 0,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/pcm/sustained-play/headless/child.stderr.raw",
+      "role": "control-1-child-6-stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 79975,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/pcm/sustained-play/headless/child.stdout.raw",
+      "role": "control-1-child-6-stdout",
+      "sha256": "ceae61d9fd25a08296f267150e0abb03a4eefb2a0b6e3ac258a391bfbc987ec1"
+    },
+    {
+      "bytes": 38448,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/pcm/title-no-start.pcm",
+      "role": "control-1-pcm-title-no-start",
+      "sha256": "3e93c57f44ce12fdee179a4fa15708a3a74b9a19c462ed0aaec690bf584f6771"
+    },
+    {
+      "bytes": 64080,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/pcm/start-idle.pcm",
+      "role": "control-1-pcm-start-idle",
+      "sha256": "d3e9179b5d54b8cc5e0a5c26e7c83cc9040b0f846d549ef604a0b97e42a87f5c"
+    },
+    {
+      "bytes": 128164,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/pcm/start-move.pcm",
+      "role": "control-1-pcm-start-move",
+      "sha256": "93d7635dc432550c90809923e190a514feec0d78736accb686156b1d6c577e19"
+    },
+    {
+      "bytes": 76896,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/pcm/action-sound.pcm",
+      "role": "control-1-pcm-action-sound",
+      "sha256": "a96fda11ab418198d89162bea85ff4ded211d5b144c6a48448c7257346150988"
+    },
+    {
+      "bytes": 76896,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/pcm/action-no-trigger.pcm",
+      "role": "control-1-pcm-action-no-trigger",
+      "sha256": "be03b4905fe4296ec1b23dd0efe2c174a008fb8cf4db196bb23d4803a8fd0568"
+    },
+    {
+      "bytes": 2306968,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-1/pcm/sustained-play.pcm",
+      "role": "control-1-pcm-sustained-play",
+      "sha256": "6d5d72303f6517074901704fb9350056d3390ed40689f5ed41f05f200fd58184"
+    },
+    {
+      "bytes": 23237,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/report.json",
+      "role": "control-2-driver-report",
+      "sha256": "b8af9893f282ae92132e37f317da9d30aef7923432dc98b63861e844cb22b255"
+    },
+    {
+      "bytes": 0,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/driver.stderr.raw",
+      "role": "control-2-driver-stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 23237,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/driver.stdout.raw",
+      "role": "control-2-driver-stdout",
+      "sha256": "b8af9893f282ae92132e37f317da9d30aef7923432dc98b63861e844cb22b255"
+    },
+    {
+      "bytes": 0,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/pcm/title-no-start/headless/child.stderr.raw",
+      "role": "control-2-child-1-stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 1570,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/pcm/title-no-start/headless/child.stdout.raw",
+      "role": "control-2-child-1-stdout",
+      "sha256": "26de7f47b61270ef3114b346c25e98d2bf11a75272b3974ea6bf133ab21b6398"
+    },
+    {
+      "bytes": 0,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/pcm/start-idle/headless/child.stderr.raw",
+      "role": "control-2-child-2-stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 2444,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/pcm/start-idle/headless/child.stdout.raw",
+      "role": "control-2-child-2-stdout",
+      "sha256": "ccd91adecf988616883f7755e88da478215542687e22f574b33a638901bd0a12"
+    },
+    {
+      "bytes": 0,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/pcm/start-move/headless/child.stderr.raw",
+      "role": "control-2-child-3-stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 4624,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/pcm/start-move/headless/child.stdout.raw",
+      "role": "control-2-child-3-stdout",
+      "sha256": "52e6dd4372ddacbf53809a790b859106c2ac8bf70df1c745026bec1b5678ac54"
+    },
+    {
+      "bytes": 0,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/pcm/action-sound/headless/child.stderr.raw",
+      "role": "control-2-child-4-stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 2880,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/pcm/action-sound/headless/child.stdout.raw",
+      "role": "control-2-child-4-stdout",
+      "sha256": "747c3eb6e69f5d4102f5ccf3d2c2524b243e33922ad2a51983f83a01c86d248d"
+    },
+    {
+      "bytes": 0,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/pcm/action-no-trigger/headless/child.stderr.raw",
+      "role": "control-2-child-5-stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 2880,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/pcm/action-no-trigger/headless/child.stdout.raw",
+      "role": "control-2-child-5-stdout",
+      "sha256": "4a6952389a8d39f0791a8f4fd34b184148ceee2fbb5947be204b138ce1ccede3"
+    },
+    {
+      "bytes": 0,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/pcm/sustained-play/headless/child.stderr.raw",
+      "role": "control-2-child-6-stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 79975,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/pcm/sustained-play/headless/child.stdout.raw",
+      "role": "control-2-child-6-stdout",
+      "sha256": "ceae61d9fd25a08296f267150e0abb03a4eefb2a0b6e3ac258a391bfbc987ec1"
+    },
+    {
+      "bytes": 38448,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/pcm/title-no-start.pcm",
+      "role": "control-2-pcm-title-no-start",
+      "sha256": "3e93c57f44ce12fdee179a4fa15708a3a74b9a19c462ed0aaec690bf584f6771"
+    },
+    {
+      "bytes": 64080,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/pcm/start-idle.pcm",
+      "role": "control-2-pcm-start-idle",
+      "sha256": "d3e9179b5d54b8cc5e0a5c26e7c83cc9040b0f846d549ef604a0b97e42a87f5c"
+    },
+    {
+      "bytes": 128164,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/pcm/start-move.pcm",
+      "role": "control-2-pcm-start-move",
+      "sha256": "93d7635dc432550c90809923e190a514feec0d78736accb686156b1d6c577e19"
+    },
+    {
+      "bytes": 76896,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/pcm/action-sound.pcm",
+      "role": "control-2-pcm-action-sound",
+      "sha256": "a96fda11ab418198d89162bea85ff4ded211d5b144c6a48448c7257346150988"
+    },
+    {
+      "bytes": 76896,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/pcm/action-no-trigger.pcm",
+      "role": "control-2-pcm-action-no-trigger",
+      "sha256": "be03b4905fe4296ec1b23dd0efe2c174a008fb8cf4db196bb23d4803a8fd0568"
+    },
+    {
+      "bytes": 2306968,
+      "path": "build/phase6/d124-consumers/tracer-g10-coordinator-receipt-controls/repetition-2/pcm/sustained-play.pcm",
+      "role": "control-2-pcm-sustained-play",
+      "sha256": "6d5d72303f6517074901704fb9350056d3390ed40689f5ed41f05f200fd58184"
+    }
+  ],
+  "schema": "phase6-d124-consumer-isolation-scope-breach-v1",
+  "source_identities": [
+    {
+      "bytes": 122688,
+      "path": "scripts/evidence/phase6_accounting.py",
+      "sha256": "f536bcd200bdecd88e34b5dcaf58e60a5d5aa41682f1060902afc49647834eb5"
+    },
+    {
+      "bytes": 85221,
+      "path": "tests/evidence/phase6_accounting_contract.py",
+      "sha256": "0b5e5a1a084701b3867271730086b10d473764177a0e77951108ffa53a61d70b"
+    },
+    {
+      "bytes": 162273,
+      "path": "tests/evidence/phase6_tank_continuation_contract.py",
+      "sha256": "caaa35ff503d5a37fa9d83e453976fb785ea4e52f7ad1a662f3b5699fc08a8eb"
+    },
+    {
+      "bytes": 67221,
+      "path": "tests/fixtures/phase6_repairs.py",
+      "sha256": "27f8bcc84f8e205c243001feb280b82fa12071adfff4fc283e84f7c52f379cb3"
+    },
+    {
+      "bytes": 23045,
+      "path": "tests/evidence/phase6_d124_consumers_contract.py",
+      "sha256": "3cca587c8f60ab26fdc9ced02c0d4b53778e6a6ec492e1806fb9f74e5ed26514"
+    },
+    {
+      "bytes": 20150,
+      "path": "tests/fixtures/phase4_game.py",
+      "sha256": "067f7f37f4850f7a0adef0a0317f2191cd31e87ccbd9fb268eeada674693534a"
+    },
+    {
+      "exists": false,
+      "path": "tests/evidence/phase4_game.py"
+    },
+    {
+      "bytes": 56087,
+      "path": "tests/session/phase6_route_contract.py",
+      "sha256": "11ba7c89e590a82c7602f2b9e6455c803e6e1ac23641d6984f55e27501c7aaf4"
+    },
+    {
+      "bytes": 6188,
+      "path": "fixtures/independent-game-v2/scenario.json",
+      "sha256": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2"
+    },
+    {
+      "bytes": 3053,
+      "path": "fixtures/independent-game-v2/oracle.json",
+      "sha256": "1a9d99cb01496f26fe3dc33d0c1bcb0cf22bd9178088fa183e5bba37a8600f42"
+    },
+    {
+      "bytes": 16384,
+      "path": "fixtures/independent-game-v2/game.bin",
+      "sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb"
+    },
+    {
+      "bytes": 217672,
+      "path": "build/phase6/tools/session/gw_headless",
+      "sha256": "f15b0cadc720f4c8c4c6dca3b9deb02f13df647b23de5a78324637ad591bd7c2"
+    }
+  ],
+  "status": "halted-scope-breach",
+  "subsidiary_child_wall_seconds_sums": [
+    2.386797,
+    2.391043
+  ]
+}

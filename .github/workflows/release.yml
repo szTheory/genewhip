@@ -20,6 +20,14 @@ on:
         description: Unique identifier for this exact promotion dispatch
         required: true
         type: string
+      release_version:
+        description: Versioned release contract to promote
+        required: true
+        type: choice
+        options:
+          - 0.1.0
+          - 0.2.0
+        default: 0.1.0
 permissions: {}
 jobs:
   promote:
@@ -59,7 +67,8 @@ jobs:
           SOURCE_SHA: ${{ inputs.source_sha }}
           RUN_ID: ${{ inputs.run_id }}
           RUN_ATTEMPT: ${{ inputs.run_attempt }}
-          AUTHORIZED_RECOVERY_RELEASE_ID: "420400458"
+          AUTHORIZED_RECOVERY_RELEASE_ID: ${{ inputs.release_version == '0.1.0' && '420400458' || '0' }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
           EVENT_PATH: ${{ github.event_path }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: >-
@@ -69,5 +78,6 @@ jobs:
           --run-id "$RUN_ID"
           --run-attempt "$RUN_ATTEMPT"
           --authorized-recovery-release-id "$AUTHORIZED_RECOVERY_RELEASE_ID"
+          --release-version "$RELEASE_VERSION"
           --event "$EVENT_PATH"
           --asset-dir release-assets

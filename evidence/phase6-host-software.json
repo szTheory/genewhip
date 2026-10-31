@@ -1,0 +1,4466 @@
+{
+  "attempts": [
+    {
+      "attempt_directory": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-full-route-attempt1",
+      "attempt_number": 1,
+      "audio": {
+        "audio_device_activity": true,
+        "audio_device_consumed_frames": 2754999,
+        "audio_device_id": 21,
+        "audio_device_name": "System audio playback device",
+        "audio_driver": "disk",
+        "audio_submitted_frames": 2908428,
+        "pcm_frames": 2908428
+      },
+      "backend": "software",
+      "capability": "audio-enabled",
+      "case": "full-route",
+      "client": "sdl",
+      "common_boundary": {
+        "desktop_pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-full-route-attempt1/audio.pcm",
+          "sha256": "5453830f84ab326e068d1e39a698afd37979274d1236f72218941b44070ba644"
+        },
+        "full_pcm_equal": true,
+        "headless_native_sha256": "9a689d834778e5dfc0a0e484fdf67c80643d58c7772880fe91c2580d0b5df292",
+        "headless_pcm": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-full-route-1/audio.pcm",
+          "sha256": "5453830f84ab326e068d1e39a698afd37979274d1236f72218941b44070ba644"
+        },
+        "headless_pixel": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-full-route-1/fields/field-3601.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        },
+        "host_native_sha256": "88a2c9e8e4d57d3bbcec2bff0095af3e3595859df7f8d299d046d175735a9ee4",
+        "inputs": {
+          "core_count": 20,
+          "equal": true,
+          "host_count": 20,
+          "rows": [
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-01",
+              "index": 0,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-02",
+              "index": 1,
+              "port": 0
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-03",
+              "index": 2,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-04",
+              "index": 3,
+              "port": 0
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-05",
+              "index": 4,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-06",
+              "index": 5,
+              "port": 0
+            },
+            {
+              "desired": 32,
+              "effective": 32,
+              "equal": true,
+              "event_id": "input-event-07",
+              "index": 6,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-08",
+              "index": 7,
+              "port": 0
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-09",
+              "index": 8,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-10",
+              "index": 9,
+              "port": 0
+            },
+            {
+              "desired": 32,
+              "effective": 32,
+              "equal": true,
+              "event_id": "input-event-11",
+              "index": 10,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-12",
+              "index": 11,
+              "port": 0
+            },
+            {
+              "desired": 1,
+              "effective": 1,
+              "equal": true,
+              "event_id": "input-event-13",
+              "index": 12,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-14",
+              "index": 13,
+              "port": 0
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-15",
+              "index": 14,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-16",
+              "index": 15,
+              "port": 0
+            },
+            {
+              "desired": 2,
+              "effective": 2,
+              "equal": true,
+              "event_id": "input-event-17",
+              "index": 16,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-18",
+              "index": 17,
+              "port": 0
+            },
+            {
+              "desired": 16,
+              "effective": 16,
+              "equal": true,
+              "event_id": "input-event-19",
+              "index": 18,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "cleanup-release",
+              "index": 19,
+              "port": 0
+            }
+          ]
+        },
+        "renderer_pixel": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-full-route-attempt1/renderer-field.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        },
+        "renderer_pixel_equal": true,
+        "source_samples_equal": true,
+        "source_samples_sha256": "7dd7794cd7740ab19b438be8e491d4f4570411e5f07d10e8a9250daa5cdb8caf"
+      },
+      "core_outcome": "pass",
+      "delivery_map_sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff",
+      "error": null,
+      "fixture": "recursion94",
+      "host_outcome": "pass-diagnostic",
+      "identity": {
+        "input_program_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "input_sha256": "67e81e5dbab490c621948b84cc8cc3bd6ef7ab98e7baeaa6a30febb621749bef",
+        "oracle_sha256": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389",
+        "rom_sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff",
+        "scenario_sha256": "31e9c22129a6ce1b3ac2d1980c325e86bfbefb4e2fda85ae018c311e2cb40700"
+      },
+      "observed_clocks": {
+        "active_ticks": 3600,
+        "boundary_calls": 32044795,
+        "fields": 3631,
+        "status": 0
+      },
+      "process": {
+        "bound_violation": false,
+        "client": "desktop",
+        "pgid": 2757,
+        "pid": 2757,
+        "process_group_cleanup": "confirmed",
+        "report_bytes": 911911,
+        "report_schema": "genewhip-route-native-v1",
+        "report_status": 0,
+        "return_code": 0,
+        "status": "completed",
+        "stderr_bytes": 350,
+        "stdout_bytes": 1667,
+        "wall_seconds": 60.591802624985576
+      },
+      "raw_outputs": {
+        "host": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-full-route-attempt1/host.json",
+          "sha256": "dbf1c3934799f9c7cbecff645c6ce6e0a30fce1166764cdf8fc3825532c4e6fa"
+        },
+        "native": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-full-route-attempt1/native.json",
+          "sha256": "88a2c9e8e4d57d3bbcec2bff0095af3e3595859df7f8d299d046d175735a9ee4"
+        },
+        "pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-full-route-attempt1/audio.pcm",
+          "sha256": "5453830f84ab326e068d1e39a698afd37979274d1236f72218941b44070ba644"
+        },
+        "renderer": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-full-route-attempt1/renderer-field.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        }
+      },
+      "reason": null,
+      "renderer": {
+        "renderer": "software",
+        "renderer_capture_field": 3601,
+        "renderer_capture_fnv1a64": "ebef3b40ee176b3a",
+        "renderer_readback_activity": true,
+        "video_driver": "dummy"
+      },
+      "route_metadata": {
+        "client": "sdl",
+        "map_id": "recursion94-genewhip-public-client-v1",
+        "original_input_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "schema": "genewhip-consumed-input-map-v1",
+        "sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff"
+      },
+      "route_plan_sha256": "53a95e09d95aad137c3724c7a80a3ee350c02d14a7a02039e32fc5303825983b",
+      "status": "pass",
+      "streams": {
+        "stderr": {
+          "observed_bytes": 350,
+          "retained_bytes": 350,
+          "sha256": "fd7b7d059529876f0db9d95badac26a38202917acabd6c0867c7e107cc13022a",
+          "truncated": false
+        },
+        "stdout": {
+          "observed_bytes": 1667,
+          "retained_bytes": 1667,
+          "sha256": "c764588cadbc93f99223b8db0f29225604d1c7baf52597148a3ecfa34c639b30",
+          "truncated": false
+        }
+      }
+    },
+    {
+      "attempt_directory": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt1",
+      "attempt_number": 1,
+      "audio": {
+        "audio_device_activity": true,
+        "audio_device_consumed_frames": 2759907,
+        "audio_device_id": 21,
+        "audio_device_name": "System audio playback device",
+        "audio_driver": "disk",
+        "audio_submitted_frames": 2908428,
+        "pcm_frames": 2908428
+      },
+      "backend": "software",
+      "capability": "audio-enabled",
+      "case": "withhold-first-plate",
+      "client": "sdl",
+      "common_boundary": {
+        "desktop_pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt1/audio.pcm",
+          "sha256": "5453830f84ab326e068d1e39a698afd37979274d1236f72218941b44070ba644"
+        },
+        "full_pcm_equal": true,
+        "headless_native_sha256": "3e857aa3b92171b6fef97561c99c4c11d576c1207d372fb34e45c986208a235a",
+        "headless_pcm": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-withhold-first-plate-1/audio.pcm",
+          "sha256": "5453830f84ab326e068d1e39a698afd37979274d1236f72218941b44070ba644"
+        },
+        "headless_pixel": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-withhold-first-plate-1/fields/field-3601.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        },
+        "host_native_sha256": "6ada6aa662cefa07d43208f03d06b19aab9098018f986c8fc1deb9d8f5da43df",
+        "inputs": {
+          "core_count": 18,
+          "equal": false,
+          "host_count": 18
+        },
+        "renderer_pixel": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt1/renderer-field.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        },
+        "renderer_pixel_equal": true,
+        "source_samples_equal": true,
+        "source_samples_sha256": "63d4cd140b733fc4b50191e0440ae659d6590a43a0c9b94f70fc8df31a89661c"
+      },
+      "core_outcome": "fail",
+      "delivery_map_sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff",
+      "error": null,
+      "fixture": "recursion94",
+      "host_outcome": "pass-diagnostic",
+      "identity": {
+        "input_program_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "input_sha256": "67e81e5dbab490c621948b84cc8cc3bd6ef7ab98e7baeaa6a30febb621749bef",
+        "oracle_sha256": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389",
+        "rom_sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff",
+        "scenario_sha256": "31e9c22129a6ce1b3ac2d1980c325e86bfbefb4e2fda85ae018c311e2cb40700"
+      },
+      "observed_clocks": {
+        "active_ticks": 3600,
+        "boundary_calls": 32061170,
+        "fields": 3631,
+        "status": 0
+      },
+      "process": {
+        "bound_violation": false,
+        "client": "desktop",
+        "pgid": 5156,
+        "pid": 5156,
+        "process_group_cleanup": "confirmed",
+        "report_bytes": 909610,
+        "report_schema": "genewhip-route-native-v1",
+        "report_status": 0,
+        "return_code": 0,
+        "status": "completed",
+        "stderr_bytes": 360,
+        "stdout_bytes": 1667,
+        "wall_seconds": 60.56837054202333
+      },
+      "raw_outputs": {
+        "host": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt1/host.json",
+          "sha256": "45a66626cde19e1915edd34640a4fafd6e77b775b1e56ca263f16e65504c888a"
+        },
+        "native": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt1/native.json",
+          "sha256": "6ada6aa662cefa07d43208f03d06b19aab9098018f986c8fc1deb9d8f5da43df"
+        },
+        "pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt1/audio.pcm",
+          "sha256": "5453830f84ab326e068d1e39a698afd37979274d1236f72218941b44070ba644"
+        },
+        "renderer": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt1/renderer-field.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        }
+      },
+      "reason": "core-input-progress-or-common-boundary-mismatch",
+      "renderer": {
+        "renderer": "software",
+        "renderer_capture_field": 3601,
+        "renderer_capture_fnv1a64": "ebef3b40ee176b3a",
+        "renderer_readback_activity": true,
+        "video_driver": "dummy"
+      },
+      "route_metadata": {
+        "client": "sdl",
+        "map_id": "recursion94-genewhip-public-client-v1",
+        "original_input_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "schema": "genewhip-consumed-input-map-v1",
+        "sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff"
+      },
+      "route_plan_sha256": "206e6266c4fd58608937119988a6ed5d32bf45963c7aad9f38af93656f5e6c2d",
+      "status": "fail",
+      "streams": {
+        "stderr": {
+          "observed_bytes": 360,
+          "retained_bytes": 360,
+          "sha256": "a2d8c027df2b7b35d97eeed997cbfb491b360b8ab9e235f583ebc261eec3f3f2",
+          "truncated": false
+        },
+        "stdout": {
+          "observed_bytes": 1667,
+          "retained_bytes": 1667,
+          "sha256": "258ae38a784bb48daa4c58ad254baf4f506371fb75f7aa4a5bc84cfc3f810640",
+          "truncated": false
+        }
+      }
+    },
+    {
+      "attempt_directory": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt2",
+      "attempt_number": 2,
+      "audio": {
+        "audio_device_activity": true,
+        "audio_device_consumed_frames": 2867158,
+        "audio_device_id": 21,
+        "audio_device_name": "System audio playback device",
+        "audio_driver": "disk",
+        "audio_submitted_frames": 2908428,
+        "pcm_frames": 2908428
+      },
+      "backend": "software",
+      "capability": "audio-enabled",
+      "case": "withhold-first-plate",
+      "client": "sdl",
+      "common_boundary": {
+        "desktop_pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt2/audio.pcm",
+          "sha256": "5453830f84ab326e068d1e39a698afd37979274d1236f72218941b44070ba644"
+        },
+        "full_pcm_equal": true,
+        "headless_native_sha256": "3e857aa3b92171b6fef97561c99c4c11d576c1207d372fb34e45c986208a235a",
+        "headless_pcm": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-withhold-first-plate-1/audio.pcm",
+          "sha256": "5453830f84ab326e068d1e39a698afd37979274d1236f72218941b44070ba644"
+        },
+        "headless_pixel": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-withhold-first-plate-1/fields/field-3601.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        },
+        "host_native_sha256": "6ada6aa662cefa07d43208f03d06b19aab9098018f986c8fc1deb9d8f5da43df",
+        "inputs": {
+          "core_count": 18,
+          "equal": true,
+          "host_count": 18,
+          "rows": [
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-03",
+              "index": 0,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-04",
+              "index": 1,
+              "port": 0
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-05",
+              "index": 2,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-06",
+              "index": 3,
+              "port": 0
+            },
+            {
+              "desired": 32,
+              "effective": 32,
+              "equal": true,
+              "event_id": "input-event-07",
+              "index": 4,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-08",
+              "index": 5,
+              "port": 0
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-09",
+              "index": 6,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-10",
+              "index": 7,
+              "port": 0
+            },
+            {
+              "desired": 32,
+              "effective": 32,
+              "equal": true,
+              "event_id": "input-event-11",
+              "index": 8,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-12",
+              "index": 9,
+              "port": 0
+            },
+            {
+              "desired": 1,
+              "effective": 1,
+              "equal": true,
+              "event_id": "input-event-13",
+              "index": 10,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-14",
+              "index": 11,
+              "port": 0
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-15",
+              "index": 12,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-16",
+              "index": 13,
+              "port": 0
+            },
+            {
+              "desired": 2,
+              "effective": 2,
+              "equal": true,
+              "event_id": "input-event-17",
+              "index": 14,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-18",
+              "index": 15,
+              "port": 0
+            },
+            {
+              "desired": 16,
+              "effective": 16,
+              "equal": true,
+              "event_id": "input-event-19",
+              "index": 16,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "cleanup-release",
+              "index": 17,
+              "port": 0
+            }
+          ]
+        },
+        "renderer_pixel": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt2/renderer-field.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        },
+        "renderer_pixel_equal": true,
+        "source_samples_equal": true,
+        "source_samples_sha256": "63d4cd140b733fc4b50191e0440ae659d6590a43a0c9b94f70fc8df31a89661c"
+      },
+      "core_outcome": "pass",
+      "delivery_map_sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff",
+      "error": null,
+      "fixture": "recursion94",
+      "host_outcome": "pass-diagnostic",
+      "identity": {
+        "input_program_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "input_sha256": "67e81e5dbab490c621948b84cc8cc3bd6ef7ab98e7baeaa6a30febb621749bef",
+        "oracle_sha256": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389",
+        "rom_sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff",
+        "scenario_sha256": "31e9c22129a6ce1b3ac2d1980c325e86bfbefb4e2fda85ae018c311e2cb40700"
+      },
+      "observed_clocks": {
+        "active_ticks": 3600,
+        "boundary_calls": 32061170,
+        "fields": 3631,
+        "status": 0
+      },
+      "process": {
+        "bound_violation": false,
+        "client": "desktop",
+        "pgid": 13327,
+        "pid": 13327,
+        "process_group_cleanup": "confirmed",
+        "report_bytes": 909610,
+        "report_schema": "genewhip-route-native-v1",
+        "report_status": 0,
+        "return_code": 0,
+        "status": "completed",
+        "stderr_bytes": 362,
+        "stdout_bytes": 1663,
+        "wall_seconds": 60.6067676669918
+      },
+      "raw_outputs": {
+        "host": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt2/host.json",
+          "sha256": "1507d911e666ad4aebaa47142f291f238e1dc1b6e413bbe48d68dea8b655c180"
+        },
+        "native": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt2/native.json",
+          "sha256": "6ada6aa662cefa07d43208f03d06b19aab9098018f986c8fc1deb9d8f5da43df"
+        },
+        "pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt2/audio.pcm",
+          "sha256": "5453830f84ab326e068d1e39a698afd37979274d1236f72218941b44070ba644"
+        },
+        "renderer": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt2/renderer-field.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        }
+      },
+      "reason": null,
+      "renderer": {
+        "renderer": "software",
+        "renderer_capture_field": 3601,
+        "renderer_capture_fnv1a64": "ebef3b40ee176b3a",
+        "renderer_readback_activity": true,
+        "video_driver": "dummy"
+      },
+      "route_metadata": {
+        "client": "sdl",
+        "map_id": "recursion94-genewhip-public-client-v1",
+        "original_input_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "schema": "genewhip-consumed-input-map-v1",
+        "sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff"
+      },
+      "route_plan_sha256": "206e6266c4fd58608937119988a6ed5d32bf45963c7aad9f38af93656f5e6c2d",
+      "status": "pass",
+      "streams": {
+        "stderr": {
+          "observed_bytes": 362,
+          "retained_bytes": 362,
+          "sha256": "d25c600f5a546899590386db97ef283a2faa5b56bcd69bd7b68109541b7424e2",
+          "truncated": false
+        },
+        "stdout": {
+          "observed_bytes": 1663,
+          "retained_bytes": 1663,
+          "sha256": "c7ffd1c4599c725e56d6f4bebe58d70ed48169631a70ca9acdfe829022063b60",
+          "truncated": false
+        }
+      }
+    },
+    {
+      "attempt_directory": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-final-b-attempt1",
+      "attempt_number": 1,
+      "audio": {
+        "audio_device_activity": true,
+        "audio_device_consumed_frames": 2875753,
+        "audio_device_id": 21,
+        "audio_device_name": "System audio playback device",
+        "audio_driver": "disk",
+        "audio_submitted_frames": 2908428,
+        "pcm_frames": 2908428
+      },
+      "backend": "software",
+      "capability": "audio-enabled",
+      "case": "withhold-final-b",
+      "client": "sdl",
+      "common_boundary": {
+        "desktop_pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-final-b-attempt1/audio.pcm",
+          "sha256": "6444e2601ebf4a2849d1c58ede9e198ce37667892f7be7c7b5daca26edf6ca06"
+        },
+        "full_pcm_equal": true,
+        "headless_native_sha256": "018bdb178835768e0c107d54d6588ef53de7455558b4e54de26835aedf1cd8f5",
+        "headless_pcm": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-withhold-final-b-1/audio.pcm",
+          "sha256": "6444e2601ebf4a2849d1c58ede9e198ce37667892f7be7c7b5daca26edf6ca06"
+        },
+        "headless_pixel": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-withhold-final-b-1/fields/field-3601.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        },
+        "host_native_sha256": "919a83b4cedcb90925a386c2b43c3b7a9916d70c7d141ff48b166d28736dc84c",
+        "inputs": {
+          "core_count": 18,
+          "equal": false,
+          "host_count": 18
+        },
+        "renderer_pixel": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-final-b-attempt1/renderer-field.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        },
+        "renderer_pixel_equal": true,
+        "source_samples_equal": true,
+        "source_samples_sha256": "938ff2cac9f85312f7566f88a3c333b2929feb65d322d7c389b8d202f1c765e9"
+      },
+      "core_outcome": "fail",
+      "delivery_map_sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff",
+      "error": null,
+      "fixture": "recursion94",
+      "host_outcome": "pass-diagnostic",
+      "identity": {
+        "input_program_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "input_sha256": "67e81e5dbab490c621948b84cc8cc3bd6ef7ab98e7baeaa6a30febb621749bef",
+        "oracle_sha256": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389",
+        "rom_sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff",
+        "scenario_sha256": "31e9c22129a6ce1b3ac2d1980c325e86bfbefb4e2fda85ae018c311e2cb40700"
+      },
+      "observed_clocks": {
+        "active_ticks": 3600,
+        "boundary_calls": 32040348,
+        "fields": 3631,
+        "status": 0
+      },
+      "process": {
+        "bound_violation": false,
+        "client": "desktop",
+        "pgid": 26381,
+        "pid": 26381,
+        "process_group_cleanup": "confirmed",
+        "report_bytes": 911724,
+        "report_schema": "genewhip-route-native-v1",
+        "report_status": 0,
+        "return_code": 0,
+        "status": "completed",
+        "stderr_bytes": 358,
+        "stdout_bytes": 1665,
+        "wall_seconds": 60.569856250076555
+      },
+      "raw_outputs": {
+        "host": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-final-b-attempt1/host.json",
+          "sha256": "c2b0852295972531e40321253524b7b76cba32ef886cb5c44c8e34455b06a914"
+        },
+        "native": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-final-b-attempt1/native.json",
+          "sha256": "919a83b4cedcb90925a386c2b43c3b7a9916d70c7d141ff48b166d28736dc84c"
+        },
+        "pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-final-b-attempt1/audio.pcm",
+          "sha256": "6444e2601ebf4a2849d1c58ede9e198ce37667892f7be7c7b5daca26edf6ca06"
+        },
+        "renderer": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-final-b-attempt1/renderer-field.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        }
+      },
+      "reason": "core-input-progress-or-common-boundary-mismatch",
+      "renderer": {
+        "renderer": "software",
+        "renderer_capture_field": 3601,
+        "renderer_capture_fnv1a64": "ebef3b40ee176b3a",
+        "renderer_readback_activity": true,
+        "video_driver": "dummy"
+      },
+      "route_metadata": {
+        "client": "sdl",
+        "map_id": "recursion94-genewhip-public-client-v1",
+        "original_input_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "schema": "genewhip-consumed-input-map-v1",
+        "sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff"
+      },
+      "route_plan_sha256": "5bce783f08b166432d1a450ea55647fd3282a592ee14e560cc26f4c6b22b08dd",
+      "status": "fail",
+      "streams": {
+        "stderr": {
+          "observed_bytes": 358,
+          "retained_bytes": 358,
+          "sha256": "9b21242bf0664a89ad028a6a26e6cd7e3dced0f342b07504a85fa93237f7d836",
+          "truncated": false
+        },
+        "stdout": {
+          "observed_bytes": 1665,
+          "retained_bytes": 1665,
+          "sha256": "a8e1d1f8c7241be5767d5c6b3c6dde4fcd1fd7ab22f8d610e27e6fa3b9ff91ec",
+          "truncated": false
+        }
+      }
+    },
+    {
+      "attempt_directory": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-full-route-attempt1",
+      "attempt_number": 1,
+      "audio": {
+        "audio_device_activity": true,
+        "audio_device_consumed_frames": 3316494,
+        "audio_device_id": 21,
+        "audio_device_name": "System audio playback device",
+        "audio_driver": "disk",
+        "audio_submitted_frames": 3361011,
+        "pcm_frames": 3361011
+      },
+      "backend": "software",
+      "capability": "audio-enabled",
+      "case": "full-route",
+      "client": "sdl",
+      "common_boundary": {
+        "desktop_pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-full-route-attempt1/audio.pcm",
+          "sha256": "756185bde82ee09a83377db2b7964d1576ba8281e9787f4afb901f684f5173e8"
+        },
+        "full_pcm_equal": true,
+        "headless_native_sha256": "ef692e554237671c5a9204dbef08ea81fe3949d6123a0645b6726ee8902fc8be",
+        "headless_pcm": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/tank-battle-full-route-1/audio.pcm",
+          "sha256": "756185bde82ee09a83377db2b7964d1576ba8281e9787f4afb901f684f5173e8"
+        },
+        "headless_pixel": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/tank-battle-full-route-1/fields/field-119.bin",
+          "sha256": "2287e53d2bf3bf35b42e55deb9e49dcf870a6f85bb51ee3cda3396dd496afedd"
+        },
+        "host_native_sha256": "b349ad933ad47f207b25b061cd6ae6d937e1ae00220ff9d4c7700acd51bd0c30",
+        "inputs": {
+          "core_count": 22,
+          "equal": false,
+          "host_count": 22
+        },
+        "renderer_pixel": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-full-route-attempt1/renderer-field.bin",
+          "sha256": "2287e53d2bf3bf35b42e55deb9e49dcf870a6f85bb51ee3cda3396dd496afedd"
+        },
+        "renderer_pixel_equal": true,
+        "source_samples_equal": true,
+        "source_samples_sha256": "a1f7fceb04e8997c29f9aac78edd32dc5899cbe883ae77f0ee2854ebceacca6c"
+      },
+      "core_outcome": "fail",
+      "delivery_map_sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff",
+      "error": null,
+      "fixture": "tank-battle",
+      "host_outcome": "pass-diagnostic",
+      "identity": {
+        "input_program_sha256": "e3478d34dcd98a71265b97f33c56b9f5f0f858628a516a9034cc3dbe0b5c8ed2",
+        "input_sha256": "43a1bfca71f01830bcd74fab3fce34013986f8272bc3e9c36efd8aae7280faf1",
+        "oracle_sha256": "2bf285d507c3e7c917329f3c4601c48d17fcdc14f4c01c8665fb98bbfe94fc3e",
+        "rom_sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723",
+        "scenario_sha256": "0df6c9a42d9ba90a96f681e8f4ab7396c1f8c56d47dc887f64cab5a766792bb1"
+      },
+      "observed_clocks": {
+        "active_ticks": 3600,
+        "boundary_calls": 4196,
+        "fields": 4196,
+        "status": 0
+      },
+      "process": {
+        "bound_violation": false,
+        "client": "desktop",
+        "pgid": 44955,
+        "pid": 44955,
+        "process_group_cleanup": "confirmed",
+        "report_bytes": 400525,
+        "report_schema": "genewhip-route-native-v1",
+        "report_status": 0,
+        "return_code": 0,
+        "status": "completed",
+        "stderr_bytes": 352,
+        "stdout_bytes": 1663,
+        "wall_seconds": 69.9945539169712
+      },
+      "raw_outputs": {
+        "host": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-full-route-attempt1/host.json",
+          "sha256": "76022a8c89c5e6239e0af88e78c1902cff803b957a31d5752902a522da392043"
+        },
+        "native": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-full-route-attempt1/native.json",
+          "sha256": "b349ad933ad47f207b25b061cd6ae6d937e1ae00220ff9d4c7700acd51bd0c30"
+        },
+        "pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-full-route-attempt1/audio.pcm",
+          "sha256": "756185bde82ee09a83377db2b7964d1576ba8281e9787f4afb901f684f5173e8"
+        },
+        "renderer": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-full-route-attempt1/renderer-field.bin",
+          "sha256": "2287e53d2bf3bf35b42e55deb9e49dcf870a6f85bb51ee3cda3396dd496afedd"
+        }
+      },
+      "reason": "core-input-progress-or-common-boundary-mismatch",
+      "renderer": {
+        "renderer": "software",
+        "renderer_capture_field": 119,
+        "renderer_capture_fnv1a64": "b093bd1508d3e725",
+        "renderer_readback_activity": true,
+        "video_driver": "dummy"
+      },
+      "route_metadata": null,
+      "route_plan_sha256": "ca6968de1962504fdea54a0ab8b174127d4be2a79d07e18737053b301fe0dd82",
+      "status": "fail",
+      "streams": {
+        "stderr": {
+          "observed_bytes": 352,
+          "retained_bytes": 352,
+          "sha256": "556de47e3783256ad202545b7d8c843b9a3a9223dfe12a06f52c5b9ae9308d60",
+          "truncated": false
+        },
+        "stdout": {
+          "observed_bytes": 1663,
+          "retained_bytes": 1663,
+          "sha256": "cf5e0273b613e61521263f0e50454bcfb673f6443577fef848cefc04069c2502",
+          "truncated": false
+        }
+      }
+    },
+    {
+      "attempt_directory": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-early-hit-attempt1",
+      "attempt_number": 1,
+      "audio": {
+        "audio_device_activity": true,
+        "audio_device_consumed_frames": 2893749,
+        "audio_device_id": 21,
+        "audio_device_name": "System audio playback device",
+        "audio_driver": "disk",
+        "audio_submitted_frames": 2931658,
+        "pcm_frames": 2931658
+      },
+      "backend": "software",
+      "capability": "audio-enabled",
+      "case": "withhold-early-hit",
+      "client": "sdl",
+      "common_boundary": {
+        "desktop_pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-early-hit-attempt1/audio.pcm",
+          "sha256": "842195cf3d19bebe00269b57bacbd6621301ede7b475f790f23bbeb756cf5dcb"
+        },
+        "full_pcm_equal": true,
+        "headless_native_sha256": "60d98912136acc2f0e12168c7ed7062bd974de1e0eac77101cef023a5255161e",
+        "headless_pcm": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/tank-battle-withhold-early-hit-1/audio.pcm",
+          "sha256": "842195cf3d19bebe00269b57bacbd6621301ede7b475f790f23bbeb756cf5dcb"
+        },
+        "headless_pixel": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/tank-battle-withhold-early-hit-1/fields/field-119.bin",
+          "sha256": "2287e53d2bf3bf35b42e55deb9e49dcf870a6f85bb51ee3cda3396dd496afedd"
+        },
+        "host_native_sha256": "91e478f58da594785d139b1c24e62117c4edc4dc8f00d1cc13f0f940a6aa8638",
+        "inputs": {
+          "core_count": 2,
+          "equal": true,
+          "host_count": 2,
+          "rows": [
+            {
+              "desired": 64,
+              "effective": 64,
+              "equal": true,
+              "event_id": "tank-battle-route-event-1",
+              "index": 0,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-2",
+              "index": 1,
+              "port": 0
+            }
+          ]
+        },
+        "renderer_pixel": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-early-hit-attempt1/renderer-field.bin",
+          "sha256": "2287e53d2bf3bf35b42e55deb9e49dcf870a6f85bb51ee3cda3396dd496afedd"
+        },
+        "renderer_pixel_equal": true,
+        "source_samples_equal": true,
+        "source_samples_sha256": "659445990c3a978853c28bddc5731ec9d4beda4900be3aea1129423ddcc8b1e5"
+      },
+      "core_outcome": "pass",
+      "delivery_map_sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff",
+      "error": null,
+      "fixture": "tank-battle",
+      "host_outcome": "pass-diagnostic",
+      "identity": {
+        "input_program_sha256": "e3478d34dcd98a71265b97f33c56b9f5f0f858628a516a9034cc3dbe0b5c8ed2",
+        "input_sha256": "43a1bfca71f01830bcd74fab3fce34013986f8272bc3e9c36efd8aae7280faf1",
+        "oracle_sha256": "2bf285d507c3e7c917329f3c4601c48d17fcdc14f4c01c8665fb98bbfe94fc3e",
+        "rom_sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723",
+        "scenario_sha256": "0df6c9a42d9ba90a96f681e8f4ab7396c1f8c56d47dc887f64cab5a766792bb1"
+      },
+      "observed_clocks": {
+        "active_ticks": 3600,
+        "boundary_calls": 3660,
+        "fields": 3660,
+        "status": 0
+      },
+      "process": {
+        "bound_violation": false,
+        "client": "desktop",
+        "pgid": 57355,
+        "pid": 57355,
+        "process_group_cleanup": "confirmed",
+        "report_bytes": 349676,
+        "report_schema": "genewhip-route-native-v1",
+        "report_status": 0,
+        "return_code": 0,
+        "status": "completed",
+        "stderr_bytes": 360,
+        "stdout_bytes": 1663,
+        "wall_seconds": 61.04899683292024
+      },
+      "raw_outputs": {
+        "host": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-early-hit-attempt1/host.json",
+          "sha256": "ce4b67e5214ef88e166e8d9881bd8b717ff7e4f76444c3408bc5c6c4ea955b59"
+        },
+        "native": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-early-hit-attempt1/native.json",
+          "sha256": "91e478f58da594785d139b1c24e62117c4edc4dc8f00d1cc13f0f940a6aa8638"
+        },
+        "pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-early-hit-attempt1/audio.pcm",
+          "sha256": "842195cf3d19bebe00269b57bacbd6621301ede7b475f790f23bbeb756cf5dcb"
+        },
+        "renderer": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-early-hit-attempt1/renderer-field.bin",
+          "sha256": "2287e53d2bf3bf35b42e55deb9e49dcf870a6f85bb51ee3cda3396dd496afedd"
+        }
+      },
+      "reason": null,
+      "renderer": {
+        "renderer": "software",
+        "renderer_capture_field": 119,
+        "renderer_capture_fnv1a64": "b093bd1508d3e725",
+        "renderer_readback_activity": true,
+        "video_driver": "dummy"
+      },
+      "route_metadata": null,
+      "route_plan_sha256": "6328d0f273ab02b5a3fa648a7e157f9aa16ebd9534a66d582b4aad798801585e",
+      "status": "pass",
+      "streams": {
+        "stderr": {
+          "observed_bytes": 360,
+          "retained_bytes": 360,
+          "sha256": "ac74cd0255243b624631f915b92528853a14189c3eab8358e3de97d1a0b432c1",
+          "truncated": false
+        },
+        "stdout": {
+          "observed_bytes": 1663,
+          "retained_bytes": 1663,
+          "sha256": "5bc5ed5ac1da68e37e556ccc70348d0e0c08427652cf1935997c9897e6ca7775",
+          "truncated": false
+        }
+      }
+    },
+    {
+      "attempt_directory": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-late-hit-attempt1",
+      "attempt_number": 1,
+      "audio": {
+        "audio_device_activity": true,
+        "audio_device_consumed_frames": 3105114,
+        "audio_device_id": 21,
+        "audio_device_name": "System audio playback device",
+        "audio_driver": "disk",
+        "audio_submitted_frames": 3146335,
+        "pcm_frames": 3146335
+      },
+      "backend": "software",
+      "capability": "audio-enabled",
+      "case": "withhold-late-hit",
+      "client": "sdl",
+      "common_boundary": {
+        "desktop_pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-late-hit-attempt1/audio.pcm",
+          "sha256": "aa87fe4567a1d205976d9ca2a99571672ca0a7d029f8f23aa53bedc3276c68be"
+        },
+        "full_pcm_equal": true,
+        "headless_native_sha256": "57590512edc663f8789d5e4dc7745277563a994e36ada2a2e6655e2ca923f09e",
+        "headless_pcm": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/tank-battle-withhold-late-hit-1/audio.pcm",
+          "sha256": "aa87fe4567a1d205976d9ca2a99571672ca0a7d029f8f23aa53bedc3276c68be"
+        },
+        "headless_pixel": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/tank-battle-withhold-late-hit-1/fields/field-119.bin",
+          "sha256": "2287e53d2bf3bf35b42e55deb9e49dcf870a6f85bb51ee3cda3396dd496afedd"
+        },
+        "host_native_sha256": "faa664e5d23fcb9c793773e1f83177e7743b7753b63e848231b78aced2d08410",
+        "inputs": {
+          "core_count": 12,
+          "equal": true,
+          "host_count": 12,
+          "rows": [
+            {
+              "desired": 64,
+              "effective": 64,
+              "equal": true,
+              "event_id": "tank-battle-route-event-1",
+              "index": 0,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-2",
+              "index": 1,
+              "port": 0
+            },
+            {
+              "desired": 1,
+              "effective": 1,
+              "equal": true,
+              "event_id": "tank-battle-route-event-3",
+              "index": 2,
+              "port": 0
+            },
+            {
+              "desired": 1,
+              "effective": 1,
+              "equal": true,
+              "event_id": "tank-battle-route-event-4",
+              "index": 3,
+              "port": 1
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-5",
+              "index": 4,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-6",
+              "index": 5,
+              "port": 1
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "tank-battle-route-event-7",
+              "index": 6,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-8",
+              "index": 7,
+              "port": 0
+            },
+            {
+              "desired": 4,
+              "effective": 4,
+              "equal": true,
+              "event_id": "tank-battle-route-event-9",
+              "index": 8,
+              "port": 1
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-10",
+              "index": 9,
+              "port": 1
+            },
+            {
+              "desired": 16,
+              "effective": 16,
+              "equal": true,
+              "event_id": "tank-battle-route-event-11",
+              "index": 10,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-12",
+              "index": 11,
+              "port": 0
+            }
+          ]
+        },
+        "renderer_pixel": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-late-hit-attempt1/renderer-field.bin",
+          "sha256": "2287e53d2bf3bf35b42e55deb9e49dcf870a6f85bb51ee3cda3396dd496afedd"
+        },
+        "renderer_pixel_equal": true,
+        "source_samples_equal": true,
+        "source_samples_sha256": "429efc3d7b62e0ea880662e753902e636025d9108769cbc2ca497cd10e193dd9"
+      },
+      "core_outcome": "pass",
+      "delivery_map_sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff",
+      "error": null,
+      "fixture": "tank-battle",
+      "host_outcome": "pass-diagnostic",
+      "identity": {
+        "input_program_sha256": "e3478d34dcd98a71265b97f33c56b9f5f0f858628a516a9034cc3dbe0b5c8ed2",
+        "input_sha256": "43a1bfca71f01830bcd74fab3fce34013986f8272bc3e9c36efd8aae7280faf1",
+        "oracle_sha256": "2bf285d507c3e7c917329f3c4601c48d17fcdc14f4c01c8665fb98bbfe94fc3e",
+        "rom_sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723",
+        "scenario_sha256": "0df6c9a42d9ba90a96f681e8f4ab7396c1f8c56d47dc887f64cab5a766792bb1"
+      },
+      "observed_clocks": {
+        "active_ticks": 3600,
+        "boundary_calls": 3928,
+        "fields": 3928,
+        "status": 0
+      },
+      "process": {
+        "bound_violation": false,
+        "client": "desktop",
+        "pgid": 69019,
+        "pid": 69019,
+        "process_group_cleanup": "confirmed",
+        "report_bytes": 374947,
+        "report_schema": "genewhip-route-native-v1",
+        "report_status": 0,
+        "return_code": 0,
+        "status": "completed",
+        "stderr_bytes": 359,
+        "stdout_bytes": 1663,
+        "wall_seconds": 66.98755504202563
+      },
+      "raw_outputs": {
+        "host": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-late-hit-attempt1/host.json",
+          "sha256": "cff9b5c10375b0d54aa7326ab1a0792fb074a70d0368f12f3e9973d003c790ef"
+        },
+        "native": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-late-hit-attempt1/native.json",
+          "sha256": "faa664e5d23fcb9c793773e1f83177e7743b7753b63e848231b78aced2d08410"
+        },
+        "pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-late-hit-attempt1/audio.pcm",
+          "sha256": "aa87fe4567a1d205976d9ca2a99571672ca0a7d029f8f23aa53bedc3276c68be"
+        },
+        "renderer": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-late-hit-attempt1/renderer-field.bin",
+          "sha256": "2287e53d2bf3bf35b42e55deb9e49dcf870a6f85bb51ee3cda3396dd496afedd"
+        }
+      },
+      "reason": null,
+      "renderer": {
+        "renderer": "software",
+        "renderer_capture_field": 119,
+        "renderer_capture_fnv1a64": "b093bd1508d3e725",
+        "renderer_readback_activity": true,
+        "video_driver": "dummy"
+      },
+      "route_metadata": null,
+      "route_plan_sha256": "6d2fe5ea74c34a230c9019bf4514f9c58932551e47bea0db2914cb54a98b9d3a",
+      "status": "pass",
+      "streams": {
+        "stderr": {
+          "observed_bytes": 359,
+          "retained_bytes": 359,
+          "sha256": "4d03cffba1412d6d52f3a6a2eb53127a2f7505c369cd85954a096e1e3926820d",
+          "truncated": false
+        },
+        "stdout": {
+          "observed_bytes": 1663,
+          "retained_bytes": 1663,
+          "sha256": "38288f0cad56f85ee7365c1bc7bf73cc9470dcf497ba5664ec5ba21c817082c3",
+          "truncated": false
+        }
+      }
+    }
+  ],
+  "backend": "software",
+  "candidate_sha256": "88b4cc0bb53f89b2b07e7fd27b8d2894b18dce54073cc8028bed3439f1bc1139",
+  "controls": {
+    "counts": {
+      "fail": 0,
+      "pass": 6,
+      "skipped": 2
+    },
+    "denominator": 8,
+    "error": null,
+    "mode": "software",
+    "outcome": "pass",
+    "process": {
+      "bound_violation": false,
+      "client": "headless",
+      "pgid": 84546,
+      "pid": 84546,
+      "process_group_cleanup": "confirmed",
+      "report_bytes": 52598,
+      "report_schema": "genewhip-phase4-host-sessions",
+      "report_status": "pass",
+      "return_code": 0,
+      "status": "completed",
+      "stderr_bytes": 0,
+      "stdout_bytes": 86,
+      "wall_seconds": 60.800547707942314
+    },
+    "report": {
+      "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/original-host-controls-attempt1.json",
+      "sha256": "fbb89f53355f1e0aa95e0363d07468a8033b66132b1473601ddeb764300cfe49"
+    },
+    "return_code": 0,
+    "runs": [
+      {
+        "build_configuration_sha256": "5227ad4b419b9156ef779781c07abd277976f29eacbf1d74aa24659f138550f5",
+        "control_sha256": "3bece05f616f9b152f222b9f4d930c117d9f73ff228062e381e218058611c6fb",
+        "controls_exercised": [
+          "drop",
+          "exit",
+          "mute",
+          "pause",
+          "reject-cartridge",
+          "replace",
+          "reset",
+          "resume",
+          "unmute"
+        ],
+        "desktop_build_sha256": "e582142e77c1cbc12e9710ea515a1782c82953a16b40a1b8c70e47426f006174",
+        "deterministic": {
+          "core_pcm_frames": 576742,
+          "core_pcm_sha256": "75288a264f4e46e65b349a7718ec202bb2ed92ec3b97f72ed5de272a91577e54",
+          "deterministic_join": true,
+          "field_hashes_sha256": "a00f1e2148158b3f22b93a2ff05f46d0a97eec9bff9572caadb31b87d3b06a4d",
+          "field_identity_sha256": "7beeeea6b83d2b75c66979e164b108226e9e398e079bd4a52c76dd48cc6b0233",
+          "fields": 720,
+          "headless_core_pcm_sha256": "75288a264f4e46e65b349a7718ec202bb2ed92ec3b97f72ed5de272a91577e54",
+          "headless_field_hashes_sha256": "a00f1e2148158b3f22b93a2ff05f46d0a97eec9bff9572caadb31b87d3b06a4d",
+          "headless_field_identity_sha256": "7beeeea6b83d2b75c66979e164b108226e9e398e079bd4a52c76dd48cc6b0233",
+          "headless_machine_digest": "eb05052ea5b62325",
+          "machine_digest": "eb05052ea5b62325"
+        },
+        "deterministic_identity_sha256": "935c18ed3de0234066a52e8c28d4beb9ef0267545d0069c95ce1084f8b3d02d1",
+        "device_queue_observation": "unavailable: SDL reports source queue, not physical device consumption",
+        "elapsed_exposure_ns": 12259880500,
+        "fixture_id": "genewhip-independent-game-v2",
+        "headless_build_sha256": "23ca55f2d56be3cd59205c138e70ca89970b8d8f31adf254bf236ca4bd40c047",
+        "host_audio_queue_kind": "SDL queued source bytes/frames",
+        "host_settings": {
+          "architecture": "arm64",
+          "audio_backend_requested": "dummy",
+          "audio_queue_policy": {
+            "cap_source_frames": 9612,
+            "sample_api": "SDL_GetAudioStreamQueued input bytes converted to stereo source frames",
+            "target_source_frames": 2403
+          },
+          "audio_rate_hz": 48000,
+          "display_identity": {
+            "reason": "system_profiler returned no display rows",
+            "status": "unavailable"
+          },
+          "os": "Darwin",
+          "os_release": "25.6.0",
+          "os_version": "26.6.2",
+          "physical_scanout": "unobserved",
+          "renderer_readback": {
+            "reason": "runner hashes core field pixels before SDL submission; it exposes no renderer readback",
+            "status": "unavailable"
+          },
+          "video_driver": "dummy",
+          "vsync_actual": "unknown: runner ignores SDL_SetRenderVSync result and exposes no query",
+          "vsync_requested": true
+        },
+        "id": "independent-game-v2-software-dummy",
+        "input_log_sha256": "99b29c9a49f86d4bcd07e0de5f51c9e23efaec1a2a4f49f451ebca5d91e6ac65",
+        "input_script_sha256": "a214deccf4e5c4bc88c68ff7a147793840c3c31823e783cc25e8e16351abafc1",
+        "outcome": "pass",
+        "paused_fields": 10,
+        "physical_audio_quality": "unobserved",
+        "rejected_cartridge_reason": "REJECT: missing genewhip-phase4-missing-cartridge.bin",
+        "rom_path": "fixtures/independent-game-v2/game.bin",
+        "rom_sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb",
+        "scenario_path": "fixtures/independent-game-v2/scenario.json",
+        "scenario_sha256": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2",
+        "source_sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe",
+        "stats": {
+          "audio": "on",
+          "audio_available": 1,
+          "audio_muted": 0,
+          "audio_paused": 0,
+          "audio_saturated": 0,
+          "catchup_fields": 0,
+          "clock_exposure_ns": 12183051667,
+          "consumed_frames": 567279,
+          "core_clipped": 0,
+          "core_clipped_frames": 0,
+          "core_frames": 576742,
+          "core_lost": 0,
+          "core_lost_frames": 0,
+          "discarded_wall_ns": 697372,
+          "dropped_frames": 9994,
+          "emulated_fields": 720,
+          "host_cap_dropped_frames": 0,
+          "host_cap_overruns": 0,
+          "intentional_clear_frames": 9994,
+          "last_present_error": "",
+          "last_presented_field_id": 719,
+          "late_deadlines": 731,
+          "lateness_gt_4ms": 5,
+          "lateness_le_0_ns": 0,
+          "lateness_le_100us": 9,
+          "lateness_le_1ms": 82,
+          "lateness_le_250us": 23,
+          "lateness_le_2ms": 153,
+          "lateness_le_4ms": 421,
+          "lateness_le_500us": 38,
+          "lateness_max_ns": 12493982,
+          "lateness_samples": 731,
+          "lateness_total_ns": 1425546617,
+          "mute_transitions": 2,
+          "overruns": 0,
+          "pause_clear_frames": 6864,
+          "pause_ramp_frames": 240,
+          "present_calls": 720,
+          "present_errors": 0,
+          "present_successes": 720,
+          "presentation_error": 0,
+          "produced_frames": 581788,
+          "producer_starvation_observations": 0,
+          "queue_clock_regressed": 0,
+          "queue_depth_one_frame": 0,
+          "queue_depth_over_cap_frames": 0,
+          "queue_depth_to_cap_frames": 411,
+          "queue_depth_to_target_frames": 234,
+          "queue_depth_to_two_targets_frames": 800,
+          "queue_depth_zero_frames": 2,
+          "queue_exposure_ns": 12168272125,
+          "queue_sample_first_ns": 22454875,
+          "queue_sample_last_ns": 12190727000,
+          "queue_samples": 1447,
+          "queue_source_bytes": 18060,
+          "queue_source_bytes_max": 28128,
+          "queue_source_bytes_min": 0,
+          "queue_source_frames": 4515,
+          "queue_source_frames_max": 7032,
+          "queue_source_frames_min": 0,
+          "queue_source_unit": "SDL input bytes and stereo source frames",
+          "queued_frames": 4515,
+          "queued_frames_max": 7032,
+          "queued_frames_min": 0,
+          "ratio": 1.005,
+          "ratio_max": 1.005,
+          "ratio_min": 0.995,
+          "repeated_field_ids": 0,
+          "reprime_clear_frames": 3130,
+          "reprime_silence_frames": 4806,
+          "scheduled_deadlines": 731,
+          "stats_saturated": false,
+          "stats_version": 2,
+          "stream_failure_dropped_frames": 0,
+          "superseded_fields": 0,
+          "underruns": 0
+        },
+        "stats_schema": 2
+      },
+      {
+        "build_configuration_sha256": "5227ad4b419b9156ef779781c07abd277976f29eacbf1d74aa24659f138550f5",
+        "control_sha256": "3bece05f616f9b152f222b9f4d930c117d9f73ff228062e381e218058611c6fb",
+        "controls_exercised": [
+          "drop",
+          "exit",
+          "mute",
+          "pause",
+          "reject-cartridge",
+          "replace",
+          "reset",
+          "resume",
+          "unmute"
+        ],
+        "desktop_build_sha256": "e582142e77c1cbc12e9710ea515a1782c82953a16b40a1b8c70e47426f006174",
+        "deterministic": {
+          "core_pcm_frames": 576742,
+          "core_pcm_sha256": "75288a264f4e46e65b349a7718ec202bb2ed92ec3b97f72ed5de272a91577e54",
+          "deterministic_join": true,
+          "field_hashes_sha256": "a00f1e2148158b3f22b93a2ff05f46d0a97eec9bff9572caadb31b87d3b06a4d",
+          "field_identity_sha256": "7beeeea6b83d2b75c66979e164b108226e9e398e079bd4a52c76dd48cc6b0233",
+          "fields": 720,
+          "headless_core_pcm_sha256": "75288a264f4e46e65b349a7718ec202bb2ed92ec3b97f72ed5de272a91577e54",
+          "headless_field_hashes_sha256": "a00f1e2148158b3f22b93a2ff05f46d0a97eec9bff9572caadb31b87d3b06a4d",
+          "headless_field_identity_sha256": "7beeeea6b83d2b75c66979e164b108226e9e398e079bd4a52c76dd48cc6b0233",
+          "headless_machine_digest": "eb05052ea5b62325",
+          "machine_digest": "eb05052ea5b62325"
+        },
+        "deterministic_identity_sha256": "935c18ed3de0234066a52e8c28d4beb9ef0267545d0069c95ce1084f8b3d02d1",
+        "device_queue_observation": "unavailable: SDL reports source queue, not physical device consumption",
+        "disk_sink_bytes": 2294400,
+        "disk_sink_sha256": "68c174cbff2558f7731b8ba4d11f0e9d4c616f4799a032d74a396b70f18850a3",
+        "elapsed_exposure_ns": 12260850917,
+        "fixture_id": "genewhip-independent-game-v2",
+        "headless_build_sha256": "23ca55f2d56be3cd59205c138e70ca89970b8d8f31adf254bf236ca4bd40c047",
+        "host_audio_queue_kind": "SDL queued source bytes/frames",
+        "host_settings": {
+          "architecture": "arm64",
+          "audio_backend_requested": "disk",
+          "audio_queue_policy": {
+            "cap_source_frames": 9612,
+            "sample_api": "SDL_GetAudioStreamQueued input bytes converted to stereo source frames",
+            "target_source_frames": 2403
+          },
+          "audio_rate_hz": 48000,
+          "display_identity": {
+            "reason": "system_profiler returned no display rows",
+            "status": "unavailable"
+          },
+          "os": "Darwin",
+          "os_release": "25.6.0",
+          "os_version": "26.6.2",
+          "physical_scanout": "unobserved",
+          "renderer_readback": {
+            "reason": "runner hashes core field pixels before SDL submission; it exposes no renderer readback",
+            "status": "unavailable"
+          },
+          "video_driver": "dummy",
+          "vsync_actual": "unknown: runner ignores SDL_SetRenderVSync result and exposes no query",
+          "vsync_requested": true
+        },
+        "id": "independent-game-v2-software-disk",
+        "input_log_sha256": "99b29c9a49f86d4bcd07e0de5f51c9e23efaec1a2a4f49f451ebca5d91e6ac65",
+        "input_script_sha256": "a214deccf4e5c4bc88c68ff7a147793840c3c31823e783cc25e8e16351abafc1",
+        "outcome": "pass",
+        "paused_fields": 10,
+        "physical_audio_quality": "unobserved",
+        "rejected_cartridge_reason": "REJECT: missing genewhip-phase4-missing-cartridge.bin",
+        "rom_path": "fixtures/independent-game-v2/game.bin",
+        "rom_sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb",
+        "scenario_path": "fixtures/independent-game-v2/scenario.json",
+        "scenario_sha256": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2",
+        "source_sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe",
+        "stats": {
+          "audio": "on",
+          "audio_available": 1,
+          "audio_muted": 0,
+          "audio_paused": 0,
+          "audio_saturated": 0,
+          "catchup_fields": 0,
+          "clock_exposure_ns": 12182689000,
+          "consumed_frames": 566263,
+          "core_clipped": 0,
+          "core_clipped_frames": 0,
+          "core_frames": 576742,
+          "core_lost": 0,
+          "core_lost_frames": 0,
+          "discarded_wall_ns": 334080,
+          "dropped_frames": 11010,
+          "emulated_fields": 720,
+          "host_cap_dropped_frames": 0,
+          "host_cap_overruns": 0,
+          "intentional_clear_frames": 11010,
+          "last_present_error": "",
+          "last_presented_field_id": 719,
+          "late_deadlines": 731,
+          "lateness_gt_4ms": 4,
+          "lateness_le_0_ns": 0,
+          "lateness_le_100us": 24,
+          "lateness_le_1ms": 156,
+          "lateness_le_250us": 51,
+          "lateness_le_2ms": 197,
+          "lateness_le_4ms": 203,
+          "lateness_le_500us": 96,
+          "lateness_max_ns": 7225235,
+          "lateness_samples": 731,
+          "lateness_total_ns": 977953351,
+          "mute_transitions": 2,
+          "overruns": 0,
+          "pause_clear_frames": 7212,
+          "pause_ramp_frames": 240,
+          "present_calls": 720,
+          "present_errors": 0,
+          "present_successes": 720,
+          "presentation_error": 0,
+          "produced_frames": 581788,
+          "producer_starvation_observations": 0,
+          "queue_clock_regressed": 0,
+          "queue_depth_one_frame": 0,
+          "queue_depth_over_cap_frames": 0,
+          "queue_depth_to_cap_frames": 481,
+          "queue_depth_to_target_frames": 171,
+          "queue_depth_to_two_targets_frames": 793,
+          "queue_depth_zero_frames": 2,
+          "queue_exposure_ns": 12167183875,
+          "queue_sample_first_ns": 21038500,
+          "queue_sample_last_ns": 12188222375,
+          "queue_samples": 1447,
+          "queue_source_bytes": 18060,
+          "queue_source_bytes_max": 32500,
+          "queue_source_bytes_min": 0,
+          "queue_source_frames": 4515,
+          "queue_source_frames_max": 8125,
+          "queue_source_frames_min": 0,
+          "queue_source_unit": "SDL input bytes and stereo source frames",
+          "queued_frames": 4515,
+          "queued_frames_max": 8125,
+          "queued_frames_min": 0,
+          "ratio": 1.005,
+          "ratio_max": 1.005,
+          "ratio_min": 0.995,
+          "repeated_field_ids": 0,
+          "reprime_clear_frames": 3798,
+          "reprime_silence_frames": 4806,
+          "scheduled_deadlines": 731,
+          "stats_saturated": false,
+          "stats_version": 2,
+          "stream_failure_dropped_frames": 0,
+          "superseded_fields": 0,
+          "underruns": 0
+        },
+        "stats_schema": 2
+      },
+      {
+        "build_configuration_sha256": "5227ad4b419b9156ef779781c07abd277976f29eacbf1d74aa24659f138550f5",
+        "control_sha256": "3bece05f616f9b152f222b9f4d930c117d9f73ff228062e381e218058611c6fb",
+        "controls_exercised": [
+          "drop",
+          "exit",
+          "mute",
+          "pause",
+          "reject-cartridge",
+          "replace",
+          "reset",
+          "resume",
+          "unmute"
+        ],
+        "desktop_build_sha256": "e582142e77c1cbc12e9710ea515a1782c82953a16b40a1b8c70e47426f006174",
+        "deterministic": {
+          "core_pcm_frames": 576742,
+          "core_pcm_sha256": "75288a264f4e46e65b349a7718ec202bb2ed92ec3b97f72ed5de272a91577e54",
+          "deterministic_join": true,
+          "field_hashes_sha256": "a00f1e2148158b3f22b93a2ff05f46d0a97eec9bff9572caadb31b87d3b06a4d",
+          "field_identity_sha256": "7beeeea6b83d2b75c66979e164b108226e9e398e079bd4a52c76dd48cc6b0233",
+          "fields": 720,
+          "headless_core_pcm_sha256": "75288a264f4e46e65b349a7718ec202bb2ed92ec3b97f72ed5de272a91577e54",
+          "headless_field_hashes_sha256": "a00f1e2148158b3f22b93a2ff05f46d0a97eec9bff9572caadb31b87d3b06a4d",
+          "headless_field_identity_sha256": "7beeeea6b83d2b75c66979e164b108226e9e398e079bd4a52c76dd48cc6b0233",
+          "headless_machine_digest": "eb05052ea5b62325",
+          "machine_digest": "eb05052ea5b62325"
+        },
+        "deterministic_identity_sha256": "935c18ed3de0234066a52e8c28d4beb9ef0267545d0069c95ce1084f8b3d02d1",
+        "device_queue_observation": "unavailable: SDL reports source queue, not physical device consumption",
+        "elapsed_exposure_ns": 12209622250,
+        "fixture_id": "genewhip-independent-game-v2",
+        "headless_build_sha256": "23ca55f2d56be3cd59205c138e70ca89970b8d8f31adf254bf236ca4bd40c047",
+        "host_audio_queue_kind": "SDL queued source bytes/frames",
+        "host_settings": {
+          "architecture": "arm64",
+          "audio_backend_requested": "unavailable-injected",
+          "audio_queue_policy": {
+            "cap_source_frames": 9612,
+            "sample_api": "SDL_GetAudioStreamQueued input bytes converted to stereo source frames",
+            "target_source_frames": 2403
+          },
+          "audio_rate_hz": 48000,
+          "display_identity": {
+            "reason": "system_profiler returned no display rows",
+            "status": "unavailable"
+          },
+          "os": "Darwin",
+          "os_release": "25.6.0",
+          "os_version": "26.6.2",
+          "physical_scanout": "unobserved",
+          "renderer_readback": {
+            "reason": "runner hashes core field pixels before SDL submission; it exposes no renderer readback",
+            "status": "unavailable"
+          },
+          "video_driver": "dummy",
+          "vsync_actual": "unknown: runner ignores SDL_SetRenderVSync result and exposes no query",
+          "vsync_requested": true
+        },
+        "id": "independent-game-v2-missing-audio-negative",
+        "input_log_sha256": "99b29c9a49f86d4bcd07e0de5f51c9e23efaec1a2a4f49f451ebca5d91e6ac65",
+        "input_script_sha256": "a214deccf4e5c4bc88c68ff7a147793840c3c31823e783cc25e8e16351abafc1",
+        "outcome": "skipped",
+        "paused_fields": 10,
+        "physical_audio_quality": "unobserved",
+        "reason": "injected unavailable SDL audio backend; core PCM still compared exactly",
+        "rejected_cartridge_reason": "REJECT: missing genewhip-phase4-missing-cartridge.bin",
+        "rom_path": "fixtures/independent-game-v2/game.bin",
+        "rom_sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb",
+        "scenario_path": "fixtures/independent-game-v2/scenario.json",
+        "scenario_sha256": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2",
+        "source_sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe",
+        "stats": {
+          "audio": "off",
+          "audio_available": 0,
+          "audio_muted": 0,
+          "audio_paused": 0,
+          "audio_saturated": 0,
+          "catchup_fields": 0,
+          "clock_exposure_ns": 12185100917,
+          "consumed_frames": 0,
+          "core_clipped": 0,
+          "core_clipped_frames": 0,
+          "core_frames": 576742,
+          "core_lost": 0,
+          "core_lost_frames": 0,
+          "discarded_wall_ns": 2746664,
+          "dropped_frames": 0,
+          "emulated_fields": 720,
+          "host_cap_dropped_frames": 0,
+          "host_cap_overruns": 0,
+          "intentional_clear_frames": 0,
+          "last_present_error": "",
+          "last_presented_field_id": 719,
+          "late_deadlines": 731,
+          "lateness_gt_4ms": 8,
+          "lateness_le_0_ns": 0,
+          "lateness_le_100us": 14,
+          "lateness_le_1ms": 74,
+          "lateness_le_250us": 33,
+          "lateness_le_2ms": 144,
+          "lateness_le_4ms": 414,
+          "lateness_le_500us": 44,
+          "lateness_max_ns": 5522193,
+          "lateness_samples": 731,
+          "lateness_total_ns": 1388361479,
+          "mute_transitions": 2,
+          "overruns": 0,
+          "pause_clear_frames": 0,
+          "pause_ramp_frames": 0,
+          "present_calls": 720,
+          "present_errors": 0,
+          "present_successes": 720,
+          "presentation_error": 0,
+          "produced_frames": 0,
+          "producer_starvation_observations": 0,
+          "queue_clock_regressed": 0,
+          "queue_depth_one_frame": 0,
+          "queue_depth_over_cap_frames": 0,
+          "queue_depth_to_cap_frames": 0,
+          "queue_depth_to_target_frames": 0,
+          "queue_depth_to_two_targets_frames": 0,
+          "queue_depth_zero_frames": 0,
+          "queue_exposure_ns": 0,
+          "queue_sample_first_ns": 0,
+          "queue_sample_last_ns": 0,
+          "queue_samples": 0,
+          "queue_source_bytes": 0,
+          "queue_source_bytes_max": 0,
+          "queue_source_bytes_min": 0,
+          "queue_source_frames": 0,
+          "queue_source_frames_max": 0,
+          "queue_source_frames_min": 0,
+          "queue_source_unit": "SDL input bytes and stereo source frames",
+          "queued_frames": 0,
+          "queued_frames_max": 0,
+          "queued_frames_min": 0,
+          "ratio": 1.0,
+          "ratio_max": 1.0,
+          "ratio_min": 1.0,
+          "repeated_field_ids": 0,
+          "reprime_clear_frames": 0,
+          "reprime_silence_frames": 0,
+          "scheduled_deadlines": 731,
+          "stats_saturated": false,
+          "stats_version": 2,
+          "stream_failure_dropped_frames": 0,
+          "superseded_fields": 0,
+          "underruns": 0
+        },
+        "stats_schema": 2
+      },
+      {
+        "build_configuration_sha256": "5227ad4b419b9156ef779781c07abd277976f29eacbf1d74aa24659f138550f5",
+        "complete_pcm_frames": 64081,
+        "complete_pcm_sha256": "0ac4d072f33334524cb612bb0331290844c1162224b532ddfe0dc8a3aaa044b0",
+        "control_sha256": "3bece05f616f9b152f222b9f4d930c117d9f73ff228062e381e218058611c6fb",
+        "controls_exercised": [
+          "drop",
+          "replace"
+        ],
+        "desktop_build_sha256": "e582142e77c1cbc12e9710ea515a1782c82953a16b40a1b8c70e47426f006174",
+        "deterministic_segment_join": true,
+        "device_queue_observation": "unavailable: SDL reports source queue, not physical device consumption",
+        "elapsed_exposure_ns": 1412105791,
+        "field_hashes_sha256": "fa13c95af67fae5d639f930a388b0974633cee5dd500bba589b7395bfa500726",
+        "field_identity_sha256": "71912a77dacc6c9576d1b2f015b33c5cc85c806771aff81e164e5b63aa8640a5",
+        "fields_by_segment": [
+          20,
+          30,
+          30
+        ],
+        "headless_build_sha256": "23ca55f2d56be3cd59205c138e70ca89970b8d8f31adf254bf236ca4bd40c047",
+        "headless_core_pcm_sha256": "0ac4d072f33334524cb612bb0331290844c1162224b532ddfe0dc8a3aaa044b0",
+        "headless_field_hashes_sha256": "fa13c95af67fae5d639f930a388b0974633cee5dd500bba589b7395bfa500726",
+        "headless_field_identity_sha256": "71912a77dacc6c9576d1b2f015b33c5cc85c806771aff81e164e5b63aa8640a5",
+        "headless_machine_digest": "eb05052ea5b62325",
+        "host_audio_queue_kind": "SDL queued source bytes/frames",
+        "host_settings": {
+          "architecture": "arm64",
+          "audio_backend_requested": "disk",
+          "audio_queue_policy": {
+            "cap_source_frames": 9612,
+            "sample_api": "SDL_GetAudioStreamQueued input bytes converted to stereo source frames",
+            "target_source_frames": 2403
+          },
+          "audio_rate_hz": 48000,
+          "display_identity": {
+            "reason": "system_profiler returned no display rows",
+            "status": "unavailable"
+          },
+          "os": "Darwin",
+          "os_release": "25.6.0",
+          "os_version": "26.6.2",
+          "physical_scanout": "unobserved",
+          "renderer_readback": {
+            "reason": "runner hashes core field pixels before SDL submission; it exposes no renderer readback",
+            "status": "unavailable"
+          },
+          "video_driver": "dummy",
+          "vsync_actual": "unknown: runner ignores SDL_SetRenderVSync result and exposes no query",
+          "vsync_requested": true
+        },
+        "id": "independent-game-v2-replace-drop",
+        "input_log_sha256": "2291a81e3f8190980009a2db8bb971e44893e2ae9c66012d246431792592e32a",
+        "input_script_sha256": "edec42e5ef9a3c1e22633024e3494ea2cd07c3e8546f953cc075c0d088e7596f",
+        "machine_digest": "eb05052ea5b62325",
+        "outcome": "pass",
+        "physical_audio_quality": "unobserved",
+        "primary": {
+          "fixture_id": "genewhip-independent-game-v2",
+          "rom_path": "fixtures/independent-game-v2/game.bin",
+          "rom_sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb",
+          "scenario_path": "fixtures/independent-game-v2/scenario.json",
+          "scenario_sha256": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2",
+          "source_sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe"
+        },
+        "replacement": {
+          "fixture_id": "genewhip-raster-toy-v1",
+          "rom_path": "fixtures/raster-toy/toy.bin",
+          "rom_sha256": "fded06ae78eb1177f5e65ac43a849092bf1b6458fd39d59d78c6a191889865ab",
+          "scenario_path": "fixtures/raster-toy/scenario.json",
+          "scenario_sha256": "fb444e5d8cf77eb0a0c3142466d41ea9d285bfd3115b2c36a636de7625dbc4b2",
+          "source_sha256": "ea04a9895e249188a6f8609a8e94861d16e0e5e6bade3afef6014f87530c5e41"
+        },
+        "stats": {
+          "audio": "on",
+          "audio_available": 1,
+          "audio_muted": 0,
+          "audio_paused": 0,
+          "audio_saturated": 0,
+          "catchup_fields": 0,
+          "clock_exposure_ns": 1337614708,
+          "consumed_frames": 61516,
+          "core_clipped": 0,
+          "core_clipped_frames": 0,
+          "core_frames": 24031,
+          "core_lost": 0,
+          "core_lost_frames": 0,
+          "discarded_wall_ns": 2560097,
+          "dropped_frames": 4147,
+          "emulated_fields": 80,
+          "host_cap_dropped_frames": 0,
+          "host_cap_overruns": 0,
+          "intentional_clear_frames": 4147,
+          "last_present_error": "",
+          "last_presented_field_id": 29,
+          "late_deadlines": 81,
+          "lateness_gt_4ms": 1,
+          "lateness_le_0_ns": 0,
+          "lateness_le_100us": 2,
+          "lateness_le_1ms": 13,
+          "lateness_le_250us": 1,
+          "lateness_le_2ms": 20,
+          "lateness_le_4ms": 38,
+          "lateness_le_500us": 6,
+          "lateness_max_ns": 5107436,
+          "lateness_samples": 81,
+          "lateness_total_ns": 146379957,
+          "mute_transitions": 0,
+          "overruns": 0,
+          "pause_clear_frames": 0,
+          "pause_ramp_frames": 0,
+          "present_calls": 80,
+          "present_errors": 0,
+          "present_successes": 80,
+          "presentation_error": 0,
+          "produced_frames": 68887,
+          "producer_starvation_observations": 0,
+          "queue_clock_regressed": 0,
+          "queue_depth_one_frame": 0,
+          "queue_depth_over_cap_frames": 0,
+          "queue_depth_to_cap_frames": 0,
+          "queue_depth_to_target_frames": 60,
+          "queue_depth_to_two_targets_frames": 103,
+          "queue_depth_zero_frames": 1,
+          "queue_exposure_ns": 1319169542,
+          "queue_sample_first_ns": 19190083,
+          "queue_sample_last_ns": 1338359625,
+          "queue_samples": 164,
+          "queue_source_bytes": 12896,
+          "queue_source_bytes_max": 13072,
+          "queue_source_bytes_min": 0,
+          "queue_source_frames": 3224,
+          "queue_source_frames_max": 3268,
+          "queue_source_frames_min": 0,
+          "queue_source_unit": "SDL input bytes and stereo source frames",
+          "queued_frames": 3224,
+          "queued_frames_max": 3268,
+          "queued_frames_min": 0,
+          "ratio": 1.00079,
+          "ratio_max": 1.002663,
+          "ratio_min": 0.995,
+          "repeated_field_ids": 0,
+          "reprime_clear_frames": 4147,
+          "reprime_silence_frames": 4806,
+          "scheduled_deadlines": 81,
+          "stats_saturated": false,
+          "stats_version": 2,
+          "stream_failure_dropped_frames": 0,
+          "superseded_fields": 0,
+          "underruns": 0
+        }
+      },
+      {
+        "build_configuration_sha256": "5227ad4b419b9156ef779781c07abd277976f29eacbf1d74aa24659f138550f5",
+        "control_sha256": "3bece05f616f9b152f222b9f4d930c117d9f73ff228062e381e218058611c6fb",
+        "controls_exercised": [
+          "drop",
+          "exit",
+          "mute",
+          "pause",
+          "reject-cartridge",
+          "replace",
+          "reset",
+          "resume",
+          "unmute"
+        ],
+        "desktop_build_sha256": "e582142e77c1cbc12e9710ea515a1782c82953a16b40a1b8c70e47426f006174",
+        "deterministic": {
+          "core_pcm_frames": 96123,
+          "core_pcm_sha256": "30096a88ad3e7bc399cc412f13ffe5a9ff3fee5b4927d84754dd353ea89d90c3",
+          "deterministic_join": true,
+          "field_hashes_sha256": "ff0edb275f76507b7ae2aeea08fde383b54d27725d7f64222ba7c11807604260",
+          "field_identity_sha256": "466288d6a58bae07d6a9f3edc26b5ca8bbb9efadcbc91736736fafbaf95b6114",
+          "fields": 120,
+          "headless_core_pcm_sha256": "30096a88ad3e7bc399cc412f13ffe5a9ff3fee5b4927d84754dd353ea89d90c3",
+          "headless_field_hashes_sha256": "ff0edb275f76507b7ae2aeea08fde383b54d27725d7f64222ba7c11807604260",
+          "headless_field_identity_sha256": "466288d6a58bae07d6a9f3edc26b5ca8bbb9efadcbc91736736fafbaf95b6114",
+          "headless_machine_digest": "7019e89dfed360cc",
+          "machine_digest": "7019e89dfed360cc"
+        },
+        "deterministic_identity_sha256": "2916b5857cd97e9f81100bc4899f6a607946531eb2990f4d25dafc6f4bf78549",
+        "device_queue_observation": "unavailable: SDL reports source queue, not physical device consumption",
+        "elapsed_exposure_ns": 2234159208,
+        "fixture_id": "genewhip-raster-toy-v1",
+        "headless_build_sha256": "23ca55f2d56be3cd59205c138e70ca89970b8d8f31adf254bf236ca4bd40c047",
+        "host_audio_queue_kind": "SDL queued source bytes/frames",
+        "host_settings": {
+          "architecture": "arm64",
+          "audio_backend_requested": "dummy",
+          "audio_queue_policy": {
+            "cap_source_frames": 9612,
+            "sample_api": "SDL_GetAudioStreamQueued input bytes converted to stereo source frames",
+            "target_source_frames": 2403
+          },
+          "audio_rate_hz": 48000,
+          "display_identity": {
+            "reason": "system_profiler returned no display rows",
+            "status": "unavailable"
+          },
+          "os": "Darwin",
+          "os_release": "25.6.0",
+          "os_version": "26.6.2",
+          "physical_scanout": "unobserved",
+          "renderer_readback": {
+            "reason": "runner hashes core field pixels before SDL submission; it exposes no renderer readback",
+            "status": "unavailable"
+          },
+          "video_driver": "dummy",
+          "vsync_actual": "unknown: runner ignores SDL_SetRenderVSync result and exposes no query",
+          "vsync_requested": true
+        },
+        "id": "sounded-diagnostic-software-dummy",
+        "input_log_sha256": "fb89c4ac6b7ab7566df534454f67dcb71a0a5a846fe861f992ed589696e253f6",
+        "input_script_sha256": "c8e2e1d49e0c654006c9f2d50b44f9b3e90af009cb2cc4957accb838cce6dda8",
+        "outcome": "pass",
+        "paused_fields": 10,
+        "physical_audio_quality": "unobserved",
+        "rejected_cartridge_reason": "REJECT: missing genewhip-phase4-missing-cartridge.bin",
+        "rom_path": "fixtures/raster-toy/toy.bin",
+        "rom_sha256": "fded06ae78eb1177f5e65ac43a849092bf1b6458fd39d59d78c6a191889865ab",
+        "scenario_path": "fixtures/raster-toy/scenario.json",
+        "scenario_sha256": "fb444e5d8cf77eb0a0c3142466d41ea9d285bfd3115b2c36a636de7625dbc4b2",
+        "source_sha256": "ea04a9895e249188a6f8609a8e94861d16e0e5e6bade3afef6014f87530c5e41",
+        "stats": {
+          "audio": "on",
+          "audio_available": 1,
+          "audio_muted": 0,
+          "audio_paused": 0,
+          "audio_saturated": 0,
+          "catchup_fields": 0,
+          "clock_exposure_ns": 2171793500,
+          "consumed_frames": 93527,
+          "core_clipped": 0,
+          "core_clipped_frames": 0,
+          "core_frames": 96123,
+          "core_lost": 0,
+          "core_lost_frames": 0,
+          "discarded_wall_ns": 2331647,
+          "dropped_frames": 4423,
+          "emulated_fields": 120,
+          "host_cap_dropped_frames": 0,
+          "host_cap_overruns": 0,
+          "intentional_clear_frames": 4423,
+          "last_present_error": "",
+          "last_presented_field_id": 119,
+          "late_deadlines": 131,
+          "lateness_gt_4ms": 2,
+          "lateness_le_0_ns": 0,
+          "lateness_le_100us": 6,
+          "lateness_le_1ms": 16,
+          "lateness_le_250us": 5,
+          "lateness_le_2ms": 19,
+          "lateness_le_4ms": 74,
+          "lateness_le_500us": 9,
+          "lateness_max_ns": 11453651,
+          "lateness_samples": 131,
+          "lateness_total_ns": 240985604,
+          "mute_transitions": 2,
+          "overruns": 0,
+          "pause_clear_frames": 1207,
+          "pause_ramp_frames": 240,
+          "present_calls": 120,
+          "present_errors": 0,
+          "present_successes": 120,
+          "presentation_error": 0,
+          "produced_frames": 101169,
+          "producer_starvation_observations": 0,
+          "queue_clock_regressed": 0,
+          "queue_depth_one_frame": 0,
+          "queue_depth_over_cap_frames": 0,
+          "queue_depth_to_cap_frames": 0,
+          "queue_depth_to_target_frames": 167,
+          "queue_depth_to_two_targets_frames": 78,
+          "queue_depth_zero_frames": 2,
+          "queue_exposure_ns": 2156698542,
+          "queue_sample_first_ns": 16173416,
+          "queue_sample_last_ns": 2172871958,
+          "queue_samples": 247,
+          "queue_source_bytes": 12876,
+          "queue_source_bytes_max": 16080,
+          "queue_source_bytes_min": 0,
+          "queue_source_frames": 3219,
+          "queue_source_frames_max": 4020,
+          "queue_source_frames_min": 0,
+          "queue_source_unit": "SDL input bytes and stereo source frames",
+          "queued_frames": 3219,
+          "queued_frames_max": 4020,
+          "queued_frames_min": 0,
+          "ratio": 1.000624,
+          "ratio_max": 1.005,
+          "ratio_min": 0.995,
+          "repeated_field_ids": 0,
+          "reprime_clear_frames": 3216,
+          "reprime_silence_frames": 4806,
+          "scheduled_deadlines": 131,
+          "stats_saturated": false,
+          "stats_version": 2,
+          "stream_failure_dropped_frames": 0,
+          "superseded_fields": 0,
+          "underruns": 0
+        },
+        "stats_schema": 2
+      },
+      {
+        "build_configuration_sha256": "5227ad4b419b9156ef779781c07abd277976f29eacbf1d74aa24659f138550f5",
+        "control_sha256": "3bece05f616f9b152f222b9f4d930c117d9f73ff228062e381e218058611c6fb",
+        "controls_exercised": [
+          "drop",
+          "exit",
+          "mute",
+          "pause",
+          "reject-cartridge",
+          "replace",
+          "reset",
+          "resume",
+          "unmute"
+        ],
+        "desktop_build_sha256": "e582142e77c1cbc12e9710ea515a1782c82953a16b40a1b8c70e47426f006174",
+        "deterministic": {
+          "core_pcm_frames": 96123,
+          "core_pcm_sha256": "30096a88ad3e7bc399cc412f13ffe5a9ff3fee5b4927d84754dd353ea89d90c3",
+          "deterministic_join": true,
+          "field_hashes_sha256": "ff0edb275f76507b7ae2aeea08fde383b54d27725d7f64222ba7c11807604260",
+          "field_identity_sha256": "466288d6a58bae07d6a9f3edc26b5ca8bbb9efadcbc91736736fafbaf95b6114",
+          "fields": 120,
+          "headless_core_pcm_sha256": "30096a88ad3e7bc399cc412f13ffe5a9ff3fee5b4927d84754dd353ea89d90c3",
+          "headless_field_hashes_sha256": "ff0edb275f76507b7ae2aeea08fde383b54d27725d7f64222ba7c11807604260",
+          "headless_field_identity_sha256": "466288d6a58bae07d6a9f3edc26b5ca8bbb9efadcbc91736736fafbaf95b6114",
+          "headless_machine_digest": "7019e89dfed360cc",
+          "machine_digest": "7019e89dfed360cc"
+        },
+        "deterministic_identity_sha256": "2916b5857cd97e9f81100bc4899f6a607946531eb2990f4d25dafc6f4bf78549",
+        "device_queue_observation": "unavailable: SDL reports source queue, not physical device consumption",
+        "disk_sink_bytes": 412800,
+        "disk_sink_sha256": "39bc18e93cf7f093d527de071eb9eb49cd95a6587bee07fe8dbca40e7166e0d0",
+        "elapsed_exposure_ns": 2234375542,
+        "fixture_id": "genewhip-raster-toy-v1",
+        "headless_build_sha256": "23ca55f2d56be3cd59205c138e70ca89970b8d8f31adf254bf236ca4bd40c047",
+        "host_audio_queue_kind": "SDL queued source bytes/frames",
+        "host_settings": {
+          "architecture": "arm64",
+          "audio_backend_requested": "disk",
+          "audio_queue_policy": {
+            "cap_source_frames": 9612,
+            "sample_api": "SDL_GetAudioStreamQueued input bytes converted to stereo source frames",
+            "target_source_frames": 2403
+          },
+          "audio_rate_hz": 48000,
+          "display_identity": {
+            "reason": "system_profiler returned no display rows",
+            "status": "unavailable"
+          },
+          "os": "Darwin",
+          "os_release": "25.6.0",
+          "os_version": "26.6.2",
+          "physical_scanout": "unobserved",
+          "renderer_readback": {
+            "reason": "runner hashes core field pixels before SDL submission; it exposes no renderer readback",
+            "status": "unavailable"
+          },
+          "video_driver": "dummy",
+          "vsync_actual": "unknown: runner ignores SDL_SetRenderVSync result and exposes no query",
+          "vsync_requested": true
+        },
+        "id": "sounded-diagnostic-software-disk",
+        "input_log_sha256": "fb89c4ac6b7ab7566df534454f67dcb71a0a5a846fe861f992ed589696e253f6",
+        "input_script_sha256": "c8e2e1d49e0c654006c9f2d50b44f9b3e90af009cb2cc4957accb838cce6dda8",
+        "outcome": "pass",
+        "paused_fields": 10,
+        "physical_audio_quality": "unobserved",
+        "rejected_cartridge_reason": "REJECT: missing genewhip-phase4-missing-cartridge.bin",
+        "rom_path": "fixtures/raster-toy/toy.bin",
+        "rom_sha256": "fded06ae78eb1177f5e65ac43a849092bf1b6458fd39d59d78c6a191889865ab",
+        "scenario_path": "fixtures/raster-toy/scenario.json",
+        "scenario_sha256": "fb444e5d8cf77eb0a0c3142466d41ea9d285bfd3115b2c36a636de7625dbc4b2",
+        "source_sha256": "ea04a9895e249188a6f8609a8e94861d16e0e5e6bade3afef6014f87530c5e41",
+        "stats": {
+          "audio": "on",
+          "audio_available": 1,
+          "audio_muted": 0,
+          "audio_paused": 0,
+          "audio_saturated": 0,
+          "catchup_fields": 0,
+          "clock_exposure_ns": 2169630750,
+          "consumed_frames": 93524,
+          "core_clipped": 0,
+          "core_clipped_frames": 0,
+          "core_frames": 96123,
+          "core_lost": 0,
+          "core_lost_frames": 0,
+          "discarded_wall_ns": 168688,
+          "dropped_frames": 4427,
+          "emulated_fields": 120,
+          "host_cap_dropped_frames": 0,
+          "host_cap_overruns": 0,
+          "intentional_clear_frames": 4427,
+          "last_present_error": "",
+          "last_presented_field_id": 119,
+          "late_deadlines": 131,
+          "lateness_gt_4ms": 1,
+          "lateness_le_0_ns": 0,
+          "lateness_le_100us": 5,
+          "lateness_le_1ms": 17,
+          "lateness_le_250us": 11,
+          "lateness_le_2ms": 20,
+          "lateness_le_4ms": 66,
+          "lateness_le_500us": 11,
+          "lateness_max_ns": 9359359,
+          "lateness_samples": 131,
+          "lateness_total_ns": 218429396,
+          "mute_transitions": 2,
+          "overruns": 0,
+          "pause_clear_frames": 1207,
+          "pause_ramp_frames": 240,
+          "present_calls": 120,
+          "present_errors": 0,
+          "present_successes": 120,
+          "presentation_error": 0,
+          "produced_frames": 101169,
+          "producer_starvation_observations": 0,
+          "queue_clock_regressed": 0,
+          "queue_depth_one_frame": 0,
+          "queue_depth_over_cap_frames": 0,
+          "queue_depth_to_cap_frames": 0,
+          "queue_depth_to_target_frames": 167,
+          "queue_depth_to_two_targets_frames": 78,
+          "queue_depth_zero_frames": 2,
+          "queue_exposure_ns": 2154765584,
+          "queue_sample_first_ns": 18660791,
+          "queue_sample_last_ns": 2173426375,
+          "queue_samples": 247,
+          "queue_source_bytes": 12872,
+          "queue_source_bytes_max": 12880,
+          "queue_source_bytes_min": 0,
+          "queue_source_frames": 3218,
+          "queue_source_frames_max": 3220,
+          "queue_source_frames_min": 0,
+          "queue_source_unit": "SDL input bytes and stereo source frames",
+          "queued_frames": 3218,
+          "queued_frames_max": 3220,
+          "queued_frames_min": 0,
+          "ratio": 1.000582,
+          "ratio_max": 1.000665,
+          "ratio_min": 0.995,
+          "repeated_field_ids": 0,
+          "reprime_clear_frames": 3220,
+          "reprime_silence_frames": 4806,
+          "scheduled_deadlines": 131,
+          "stats_saturated": false,
+          "stats_version": 2,
+          "stream_failure_dropped_frames": 0,
+          "superseded_fields": 0,
+          "underruns": 0
+        },
+        "stats_schema": 2
+      },
+      {
+        "build_configuration_sha256": "5227ad4b419b9156ef779781c07abd277976f29eacbf1d74aa24659f138550f5",
+        "control_sha256": "3bece05f616f9b152f222b9f4d930c117d9f73ff228062e381e218058611c6fb",
+        "controls_exercised": [
+          "drop",
+          "exit",
+          "mute",
+          "pause",
+          "reject-cartridge",
+          "replace",
+          "reset",
+          "resume",
+          "unmute"
+        ],
+        "desktop_build_sha256": "e582142e77c1cbc12e9710ea515a1782c82953a16b40a1b8c70e47426f006174",
+        "deterministic": {
+          "core_pcm_frames": 96123,
+          "core_pcm_sha256": "30096a88ad3e7bc399cc412f13ffe5a9ff3fee5b4927d84754dd353ea89d90c3",
+          "deterministic_join": true,
+          "field_hashes_sha256": "ff0edb275f76507b7ae2aeea08fde383b54d27725d7f64222ba7c11807604260",
+          "field_identity_sha256": "466288d6a58bae07d6a9f3edc26b5ca8bbb9efadcbc91736736fafbaf95b6114",
+          "fields": 120,
+          "headless_core_pcm_sha256": "30096a88ad3e7bc399cc412f13ffe5a9ff3fee5b4927d84754dd353ea89d90c3",
+          "headless_field_hashes_sha256": "ff0edb275f76507b7ae2aeea08fde383b54d27725d7f64222ba7c11807604260",
+          "headless_field_identity_sha256": "466288d6a58bae07d6a9f3edc26b5ca8bbb9efadcbc91736736fafbaf95b6114",
+          "headless_machine_digest": "7019e89dfed360cc",
+          "machine_digest": "7019e89dfed360cc"
+        },
+        "deterministic_identity_sha256": "2916b5857cd97e9f81100bc4899f6a607946531eb2990f4d25dafc6f4bf78549",
+        "device_queue_observation": "unavailable: SDL reports source queue, not physical device consumption",
+        "elapsed_exposure_ns": 2198399083,
+        "fixture_id": "genewhip-raster-toy-v1",
+        "headless_build_sha256": "23ca55f2d56be3cd59205c138e70ca89970b8d8f31adf254bf236ca4bd40c047",
+        "host_audio_queue_kind": "SDL queued source bytes/frames",
+        "host_settings": {
+          "architecture": "arm64",
+          "audio_backend_requested": "unavailable-injected",
+          "audio_queue_policy": {
+            "cap_source_frames": 9612,
+            "sample_api": "SDL_GetAudioStreamQueued input bytes converted to stereo source frames",
+            "target_source_frames": 2403
+          },
+          "audio_rate_hz": 48000,
+          "display_identity": {
+            "reason": "system_profiler returned no display rows",
+            "status": "unavailable"
+          },
+          "os": "Darwin",
+          "os_release": "25.6.0",
+          "os_version": "26.6.2",
+          "physical_scanout": "unobserved",
+          "renderer_readback": {
+            "reason": "runner hashes core field pixels before SDL submission; it exposes no renderer readback",
+            "status": "unavailable"
+          },
+          "video_driver": "dummy",
+          "vsync_actual": "unknown: runner ignores SDL_SetRenderVSync result and exposes no query",
+          "vsync_requested": true
+        },
+        "id": "sounded-diagnostic-missing-audio-negative",
+        "input_log_sha256": "fb89c4ac6b7ab7566df534454f67dcb71a0a5a846fe861f992ed589696e253f6",
+        "input_script_sha256": "c8e2e1d49e0c654006c9f2d50b44f9b3e90af009cb2cc4957accb838cce6dda8",
+        "outcome": "skipped",
+        "paused_fields": 10,
+        "physical_audio_quality": "unobserved",
+        "reason": "injected unavailable SDL audio backend; core PCM still compared exactly",
+        "rejected_cartridge_reason": "REJECT: missing genewhip-phase4-missing-cartridge.bin",
+        "rom_path": "fixtures/raster-toy/toy.bin",
+        "rom_sha256": "fded06ae78eb1177f5e65ac43a849092bf1b6458fd39d59d78c6a191889865ab",
+        "scenario_path": "fixtures/raster-toy/scenario.json",
+        "scenario_sha256": "fb444e5d8cf77eb0a0c3142466d41ea9d285bfd3115b2c36a636de7625dbc4b2",
+        "source_sha256": "ea04a9895e249188a6f8609a8e94861d16e0e5e6bade3afef6014f87530c5e41",
+        "stats": {
+          "audio": "off",
+          "audio_available": 0,
+          "audio_muted": 0,
+          "audio_paused": 0,
+          "audio_saturated": 0,
+          "catchup_fields": 0,
+          "clock_exposure_ns": 2170301291,
+          "consumed_frames": 0,
+          "core_clipped": 0,
+          "core_clipped_frames": 0,
+          "core_frames": 96123,
+          "core_lost": 0,
+          "core_lost_frames": 0,
+          "discarded_wall_ns": 838855,
+          "dropped_frames": 0,
+          "emulated_fields": 120,
+          "host_cap_dropped_frames": 0,
+          "host_cap_overruns": 0,
+          "intentional_clear_frames": 0,
+          "last_present_error": "",
+          "last_presented_field_id": 119,
+          "late_deadlines": 131,
+          "lateness_gt_4ms": 0,
+          "lateness_le_0_ns": 0,
+          "lateness_le_100us": 3,
+          "lateness_le_1ms": 15,
+          "lateness_le_250us": 8,
+          "lateness_le_2ms": 40,
+          "lateness_le_4ms": 57,
+          "lateness_le_500us": 8,
+          "lateness_max_ns": 3977390,
+          "lateness_samples": 131,
+          "lateness_total_ns": 218753727,
+          "mute_transitions": 2,
+          "overruns": 0,
+          "pause_clear_frames": 0,
+          "pause_ramp_frames": 0,
+          "present_calls": 120,
+          "present_errors": 0,
+          "present_successes": 120,
+          "presentation_error": 0,
+          "produced_frames": 0,
+          "producer_starvation_observations": 0,
+          "queue_clock_regressed": 0,
+          "queue_depth_one_frame": 0,
+          "queue_depth_over_cap_frames": 0,
+          "queue_depth_to_cap_frames": 0,
+          "queue_depth_to_target_frames": 0,
+          "queue_depth_to_two_targets_frames": 0,
+          "queue_depth_zero_frames": 0,
+          "queue_exposure_ns": 0,
+          "queue_sample_first_ns": 0,
+          "queue_sample_last_ns": 0,
+          "queue_samples": 0,
+          "queue_source_bytes": 0,
+          "queue_source_bytes_max": 0,
+          "queue_source_bytes_min": 0,
+          "queue_source_frames": 0,
+          "queue_source_frames_max": 0,
+          "queue_source_frames_min": 0,
+          "queue_source_unit": "SDL input bytes and stereo source frames",
+          "queued_frames": 0,
+          "queued_frames_max": 0,
+          "queued_frames_min": 0,
+          "ratio": 1.0,
+          "ratio_max": 1.0,
+          "ratio_min": 1.0,
+          "repeated_field_ids": 0,
+          "reprime_clear_frames": 0,
+          "reprime_silence_frames": 0,
+          "scheduled_deadlines": 131,
+          "stats_saturated": false,
+          "stats_version": 2,
+          "stream_failure_dropped_frames": 0,
+          "superseded_fields": 0,
+          "underruns": 0
+        },
+        "stats_schema": 2
+      },
+      {
+        "build_configuration_sha256": "5227ad4b419b9156ef779781c07abd277976f29eacbf1d74aa24659f138550f5",
+        "complete_pcm_frames": 64081,
+        "complete_pcm_sha256": "e60c17904c5c82d9171eaa7697d5027c1481edea779675c1b823401a55be71c3",
+        "control_sha256": "3bece05f616f9b152f222b9f4d930c117d9f73ff228062e381e218058611c6fb",
+        "controls_exercised": [
+          "drop",
+          "replace"
+        ],
+        "desktop_build_sha256": "e582142e77c1cbc12e9710ea515a1782c82953a16b40a1b8c70e47426f006174",
+        "deterministic_segment_join": true,
+        "device_queue_observation": "unavailable: SDL reports source queue, not physical device consumption",
+        "elapsed_exposure_ns": 1401418000,
+        "field_hashes_sha256": "262ce65c351abe956ec4b38e56d44cc271485848b6904b385197a92b2693ad26",
+        "field_identity_sha256": "71912a77dacc6c9576d1b2f015b33c5cc85c806771aff81e164e5b63aa8640a5",
+        "fields_by_segment": [
+          20,
+          30,
+          30
+        ],
+        "headless_build_sha256": "23ca55f2d56be3cd59205c138e70ca89970b8d8f31adf254bf236ca4bd40c047",
+        "headless_core_pcm_sha256": "e60c17904c5c82d9171eaa7697d5027c1481edea779675c1b823401a55be71c3",
+        "headless_field_hashes_sha256": "262ce65c351abe956ec4b38e56d44cc271485848b6904b385197a92b2693ad26",
+        "headless_field_identity_sha256": "71912a77dacc6c9576d1b2f015b33c5cc85c806771aff81e164e5b63aa8640a5",
+        "headless_machine_digest": "a69c9b74bc5137f7",
+        "host_audio_queue_kind": "SDL queued source bytes/frames",
+        "host_settings": {
+          "architecture": "arm64",
+          "audio_backend_requested": "disk",
+          "audio_queue_policy": {
+            "cap_source_frames": 9612,
+            "sample_api": "SDL_GetAudioStreamQueued input bytes converted to stereo source frames",
+            "target_source_frames": 2403
+          },
+          "audio_rate_hz": 48000,
+          "display_identity": {
+            "reason": "system_profiler returned no display rows",
+            "status": "unavailable"
+          },
+          "os": "Darwin",
+          "os_release": "25.6.0",
+          "os_version": "26.6.2",
+          "physical_scanout": "unobserved",
+          "renderer_readback": {
+            "reason": "runner hashes core field pixels before SDL submission; it exposes no renderer readback",
+            "status": "unavailable"
+          },
+          "video_driver": "dummy",
+          "vsync_actual": "unknown: runner ignores SDL_SetRenderVSync result and exposes no query",
+          "vsync_requested": true
+        },
+        "id": "sounded-diagnostic-replace-drop",
+        "input_log_sha256": "2291a81e3f8190980009a2db8bb971e44893e2ae9c66012d246431792592e32a",
+        "input_script_sha256": "0648ad30aeb1eb673084ae74aa7a4df19712f9bb9d0b2253582446937c91ac81",
+        "machine_digest": "a69c9b74bc5137f7",
+        "outcome": "pass",
+        "physical_audio_quality": "unobserved",
+        "primary": {
+          "fixture_id": "genewhip-raster-toy-v1",
+          "rom_path": "fixtures/raster-toy/toy.bin",
+          "rom_sha256": "fded06ae78eb1177f5e65ac43a849092bf1b6458fd39d59d78c6a191889865ab",
+          "scenario_path": "fixtures/raster-toy/scenario.json",
+          "scenario_sha256": "fb444e5d8cf77eb0a0c3142466d41ea9d285bfd3115b2c36a636de7625dbc4b2",
+          "source_sha256": "ea04a9895e249188a6f8609a8e94861d16e0e5e6bade3afef6014f87530c5e41"
+        },
+        "replacement": {
+          "fixture_id": "genewhip-independent-game-v2",
+          "rom_path": "fixtures/independent-game-v2/game.bin",
+          "rom_sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb",
+          "scenario_path": "fixtures/independent-game-v2/scenario.json",
+          "scenario_sha256": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2",
+          "source_sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe"
+        },
+        "stats": {
+          "audio": "on",
+          "audio_available": 1,
+          "audio_muted": 0,
+          "audio_paused": 0,
+          "audio_saturated": 0,
+          "catchup_fields": 0,
+          "clock_exposure_ns": 1337383375,
+          "consumed_frames": 61562,
+          "core_clipped": 0,
+          "core_clipped_frames": 0,
+          "core_frames": 24030,
+          "core_lost": 0,
+          "core_lost_frames": 0,
+          "discarded_wall_ns": 2329097,
+          "dropped_frames": 3322,
+          "emulated_fields": 80,
+          "host_cap_dropped_frames": 0,
+          "host_cap_overruns": 0,
+          "intentional_clear_frames": 3322,
+          "last_present_error": "",
+          "last_presented_field_id": 29,
+          "late_deadlines": 81,
+          "lateness_gt_4ms": 0,
+          "lateness_le_0_ns": 0,
+          "lateness_le_100us": 4,
+          "lateness_le_1ms": 10,
+          "lateness_le_250us": 2,
+          "lateness_le_2ms": 18,
+          "lateness_le_4ms": 40,
+          "lateness_le_500us": 7,
+          "lateness_max_ns": 3051107,
+          "lateness_samples": 81,
+          "lateness_total_ns": 135233859,
+          "mute_transitions": 0,
+          "overruns": 0,
+          "pause_clear_frames": 0,
+          "pause_ramp_frames": 0,
+          "present_calls": 80,
+          "present_errors": 0,
+          "present_successes": 80,
+          "presentation_error": 0,
+          "produced_frames": 68887,
+          "producer_starvation_observations": 0,
+          "queue_clock_regressed": 0,
+          "queue_depth_one_frame": 0,
+          "queue_depth_over_cap_frames": 0,
+          "queue_depth_to_cap_frames": 0,
+          "queue_depth_to_target_frames": 44,
+          "queue_depth_to_two_targets_frames": 119,
+          "queue_depth_zero_frames": 1,
+          "queue_exposure_ns": 1322110542,
+          "queue_sample_first_ns": 18955916,
+          "queue_sample_last_ns": 1341066458,
+          "queue_samples": 164,
+          "queue_source_bytes": 16012,
+          "queue_source_bytes_max": 16084,
+          "queue_source_bytes_min": 0,
+          "queue_source_frames": 4003,
+          "queue_source_frames_max": 4021,
+          "queue_source_frames_min": 0,
+          "queue_source_unit": "SDL input bytes and stereo source frames",
+          "queued_frames": 4003,
+          "queued_frames_max": 4021,
+          "queued_frames_min": 0,
+          "ratio": 1.005,
+          "ratio_max": 1.005,
+          "ratio_min": 0.995,
+          "repeated_field_ids": 0,
+          "reprime_clear_frames": 3322,
+          "reprime_silence_frames": 4806,
+          "scheduled_deadlines": 81,
+          "stats_saturated": false,
+          "stats_version": 2,
+          "stream_failure_dropped_frames": 0,
+          "superseded_fields": 0,
+          "underruns": 0
+        }
+      }
+    ],
+    "schema": "genewhip-phase4-host-sessions",
+    "streams": {
+      "stderr": {
+        "observed_bytes": 0,
+        "retained_bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "truncated": false
+      },
+      "stdout": {
+        "observed_bytes": 86,
+        "retained_bytes": 86,
+        "sha256": "d5dfd40079f0ff843f43861104c6dd1c319289ff7847d24b4a4991e352684d73",
+        "truncated": false
+      }
+    }
+  },
+  "controls_roster": {
+    "fixture_controls": [
+      "pause",
+      "resume",
+      "reset",
+      "mute",
+      "unmute",
+      "replace",
+      "drop",
+      "reject-cartridge",
+      "exit"
+    ],
+    "sessions": [
+      "independent-game-v2",
+      "sounded-diagnostic"
+    ]
+  },
+  "host_identity": {
+    "audio_source_sha256": "49a52bff4e38bd421e6adb354ad1eeafeda5d1e549ce6870c4b6e58db8906ba2",
+    "cmake_cache_sha256": "5227ad4b419b9156ef779781c07abd277976f29eacbf1d74aa24659f138550f5",
+    "core_candidate_sha256": "88b4cc0bb53f89b2b07e7fd27b8d2894b18dce54073cc8028bed3439f1bc1139",
+    "core_report": {
+      "path": "evidence/phase6-core-routes.json",
+      "sha256": "8bd3288bd0e7fa5777282be59602a4b6a167269f2e6974473bf2e3d3ce738612"
+    },
+    "delivery_map": {
+      "path": "fixtures/phase6/recursion94-consumed-map-v1.json",
+      "sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff"
+    },
+    "desktop_binary": {
+      "path": "build/phase6/tools/desktop/genewhip-desktop",
+      "sha256": "e582142e77c1cbc12e9710ea515a1782c82953a16b40a1b8c70e47426f006174"
+    },
+    "desktop_source_sha256": "9958e85611002480dc4e09ccc3616cebe46426b918416ba9a4004bb3bcc14de3",
+    "desktop_test_source_sha256": "68c897fd8308df6ea97369b155479cb23226531d5e7775ee50407f9c1855040d",
+    "input_contract": {
+      "path": "build/phase6/evidence/phase6-sdl-input-contract/phase6-sdl-input-contract-final-2.json",
+      "sha256": "079d3b2b862694af27c7645663a4ea37c774fc9477b23c060366ada48221fc97"
+    },
+    "media_expectations_sha256": "09087f6397aa8c3249a0af9c489958892fdee039cfbf21892b27bc12cf2df386",
+    "phase4_control_source_sha256": "0914597398c16d4a00cbf96758dac707149da19854459002976f8d58cb382e21",
+    "proof_dependencies": {
+      "device": "SDL audio stream submission and observed queued-frame consumption",
+      "input": "two virtual SDL gamepads through normal event handling and sample_port",
+      "pcm": "actual full core PCM before host gain/drift, submitted to runner_audio",
+      "renderer": "SDL renderer target readback after RenderTexture and before RenderPresent"
+    },
+    "schema": "genewhip-phase6-host-identity-v1"
+  },
+  "host_identity_history": [
+    {
+      "identity": {
+        "audio_source_sha256": "49a52bff4e38bd421e6adb354ad1eeafeda5d1e549ce6870c4b6e58db8906ba2",
+        "cmake_cache_sha256": "5227ad4b419b9156ef779781c07abd277976f29eacbf1d74aa24659f138550f5",
+        "core_candidate_sha256": "88b4cc0bb53f89b2b07e7fd27b8d2894b18dce54073cc8028bed3439f1bc1139",
+        "core_report": {
+          "path": "evidence/phase6-core-routes.json",
+          "sha256": "d1880249573cf4614487c25ce77f6a048a431df116c2f54098f8b39fef3f9d3c"
+        },
+        "delivery_map": {
+          "path": "fixtures/phase6/recursion94-consumed-map-v1.json",
+          "sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff"
+        },
+        "desktop_binary": {
+          "path": "build/phase6/tools/desktop/genewhip-desktop",
+          "sha256": "e582142e77c1cbc12e9710ea515a1782c82953a16b40a1b8c70e47426f006174"
+        },
+        "desktop_source_sha256": "9958e85611002480dc4e09ccc3616cebe46426b918416ba9a4004bb3bcc14de3",
+        "desktop_test_source_sha256": "f9e616b6f8ffa0a1f1fb4d7c460e2a8d5d5a32e5cfe6df4317ceeedb3d4aed0b",
+        "input_contract": {
+          "path": "build/phase6/evidence/phase6-sdl-input-contract/phase6-sdl-input-contract-final-2.json",
+          "sha256": "079d3b2b862694af27c7645663a4ea37c774fc9477b23c060366ada48221fc97"
+        },
+        "media_expectations_sha256": "09087f6397aa8c3249a0af9c489958892fdee039cfbf21892b27bc12cf2df386",
+        "proof_dependencies": {
+          "device": "SDL audio stream submission and observed queued-frame consumption",
+          "input": "two virtual SDL gamepads through normal event handling and sample_port",
+          "pcm": "actual full core PCM before host gain/drift, submitted to runner_audio",
+          "renderer": "SDL renderer target readback after RenderTexture and before RenderPresent"
+        },
+        "schema": "genewhip-phase6-host-identity-v1"
+      },
+      "sha256": "d286f4385672f5eb54c0ff0e8cc19db4cf40d434302af29cf4a28f373b8e06e5"
+    },
+    {
+      "identity": {
+        "audio_source_sha256": "49a52bff4e38bd421e6adb354ad1eeafeda5d1e549ce6870c4b6e58db8906ba2",
+        "cmake_cache_sha256": "5227ad4b419b9156ef779781c07abd277976f29eacbf1d74aa24659f138550f5",
+        "core_candidate_sha256": "88b4cc0bb53f89b2b07e7fd27b8d2894b18dce54073cc8028bed3439f1bc1139",
+        "core_report": {
+          "path": "evidence/phase6-core-routes.json",
+          "sha256": "d1880249573cf4614487c25ce77f6a048a431df116c2f54098f8b39fef3f9d3c"
+        },
+        "delivery_map": {
+          "path": "fixtures/phase6/recursion94-consumed-map-v1.json",
+          "sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff"
+        },
+        "desktop_binary": {
+          "path": "build/phase6/tools/desktop/genewhip-desktop",
+          "sha256": "e582142e77c1cbc12e9710ea515a1782c82953a16b40a1b8c70e47426f006174"
+        },
+        "desktop_source_sha256": "9958e85611002480dc4e09ccc3616cebe46426b918416ba9a4004bb3bcc14de3",
+        "desktop_test_source_sha256": "b1e0e2baffd0b32375f39f44de507992c97990892a56ecff30a79051c845d591",
+        "input_contract": {
+          "path": "build/phase6/evidence/phase6-sdl-input-contract/phase6-sdl-input-contract-final-2.json",
+          "sha256": "079d3b2b862694af27c7645663a4ea37c774fc9477b23c060366ada48221fc97"
+        },
+        "media_expectations_sha256": "09087f6397aa8c3249a0af9c489958892fdee039cfbf21892b27bc12cf2df386",
+        "proof_dependencies": {
+          "device": "SDL audio stream submission and observed queued-frame consumption",
+          "input": "two virtual SDL gamepads through normal event handling and sample_port",
+          "pcm": "actual full core PCM before host gain/drift, submitted to runner_audio",
+          "renderer": "SDL renderer target readback after RenderTexture and before RenderPresent"
+        },
+        "schema": "genewhip-phase6-host-identity-v1"
+      },
+      "sha256": "dd06488bd3306ebd674c354acd466f28f089c152fbc7ae59de339e8ad863cc07"
+    },
+    {
+      "identity": {
+        "audio_source_sha256": "49a52bff4e38bd421e6adb354ad1eeafeda5d1e549ce6870c4b6e58db8906ba2",
+        "cmake_cache_sha256": "5227ad4b419b9156ef779781c07abd277976f29eacbf1d74aa24659f138550f5",
+        "core_candidate_sha256": "88b4cc0bb53f89b2b07e7fd27b8d2894b18dce54073cc8028bed3439f1bc1139",
+        "core_report": {
+          "path": "evidence/phase6-core-routes.json",
+          "sha256": "d1880249573cf4614487c25ce77f6a048a431df116c2f54098f8b39fef3f9d3c"
+        },
+        "delivery_map": {
+          "path": "fixtures/phase6/recursion94-consumed-map-v1.json",
+          "sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff"
+        },
+        "desktop_binary": {
+          "path": "build/phase6/tools/desktop/genewhip-desktop",
+          "sha256": "e582142e77c1cbc12e9710ea515a1782c82953a16b40a1b8c70e47426f006174"
+        },
+        "desktop_source_sha256": "9958e85611002480dc4e09ccc3616cebe46426b918416ba9a4004bb3bcc14de3",
+        "desktop_test_source_sha256": "ffb824285b52aa0385c556fa198586ffbe56a122f0164ec6ed6c465b130a452f",
+        "input_contract": {
+          "path": "build/phase6/evidence/phase6-sdl-input-contract/phase6-sdl-input-contract-final-2.json",
+          "sha256": "079d3b2b862694af27c7645663a4ea37c774fc9477b23c060366ada48221fc97"
+        },
+        "media_expectations_sha256": "09087f6397aa8c3249a0af9c489958892fdee039cfbf21892b27bc12cf2df386",
+        "proof_dependencies": {
+          "device": "SDL audio stream submission and observed queued-frame consumption",
+          "input": "two virtual SDL gamepads through normal event handling and sample_port",
+          "pcm": "actual full core PCM before host gain/drift, submitted to runner_audio",
+          "renderer": "SDL renderer target readback after RenderTexture and before RenderPresent"
+        },
+        "schema": "genewhip-phase6-host-identity-v1"
+      },
+      "sha256": "ab1072fd6d941dcdea1fcaea0aad730a262a2efcd7ea4a6e137e0c598a920702"
+    },
+    {
+      "identity": {
+        "audio_source_sha256": "49a52bff4e38bd421e6adb354ad1eeafeda5d1e549ce6870c4b6e58db8906ba2",
+        "cmake_cache_sha256": "5227ad4b419b9156ef779781c07abd277976f29eacbf1d74aa24659f138550f5",
+        "core_candidate_sha256": "88b4cc0bb53f89b2b07e7fd27b8d2894b18dce54073cc8028bed3439f1bc1139",
+        "core_report": {
+          "path": "evidence/phase6-core-routes.json",
+          "sha256": "d1880249573cf4614487c25ce77f6a048a431df116c2f54098f8b39fef3f9d3c"
+        },
+        "delivery_map": {
+          "path": "fixtures/phase6/recursion94-consumed-map-v1.json",
+          "sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff"
+        },
+        "desktop_binary": {
+          "path": "build/phase6/tools/desktop/genewhip-desktop",
+          "sha256": "e582142e77c1cbc12e9710ea515a1782c82953a16b40a1b8c70e47426f006174"
+        },
+        "desktop_source_sha256": "9958e85611002480dc4e09ccc3616cebe46426b918416ba9a4004bb3bcc14de3",
+        "desktop_test_source_sha256": "17b7660250541c0588bf5d22cdb1a7166a4cf800b98e6519a11eff9b1bc5fd90",
+        "input_contract": {
+          "path": "build/phase6/evidence/phase6-sdl-input-contract/phase6-sdl-input-contract-final-2.json",
+          "sha256": "079d3b2b862694af27c7645663a4ea37c774fc9477b23c060366ada48221fc97"
+        },
+        "media_expectations_sha256": "09087f6397aa8c3249a0af9c489958892fdee039cfbf21892b27bc12cf2df386",
+        "proof_dependencies": {
+          "device": "SDL audio stream submission and observed queued-frame consumption",
+          "input": "two virtual SDL gamepads through normal event handling and sample_port",
+          "pcm": "actual full core PCM before host gain/drift, submitted to runner_audio",
+          "renderer": "SDL renderer target readback after RenderTexture and before RenderPresent"
+        },
+        "schema": "genewhip-phase6-host-identity-v1"
+      },
+      "sha256": "ca6c13445172277e529b2a561f085296e2e06253b739510b028a89cb3f700b04"
+    }
+  ],
+  "host_identity_sha256": "fce060d405033f7521d1317f6f70659208f3d2a4b5671628750de3bfa7cd724d",
+  "processes": [
+    {
+      "bound_violation": false,
+      "client": "desktop",
+      "pgid": 2757,
+      "pid": 2757,
+      "process_group_cleanup": "confirmed",
+      "report_bytes": 911911,
+      "report_schema": "genewhip-route-native-v1",
+      "report_status": 0,
+      "return_code": 0,
+      "status": "completed",
+      "stderr_bytes": 350,
+      "stdout_bytes": 1667,
+      "wall_seconds": 60.591802624985576
+    },
+    {
+      "bound_violation": false,
+      "client": "desktop",
+      "pgid": 5156,
+      "pid": 5156,
+      "process_group_cleanup": "confirmed",
+      "report_bytes": 909610,
+      "report_schema": "genewhip-route-native-v1",
+      "report_status": 0,
+      "return_code": 0,
+      "status": "completed",
+      "stderr_bytes": 360,
+      "stdout_bytes": 1667,
+      "wall_seconds": 60.56837054202333
+    },
+    {
+      "bound_violation": false,
+      "client": "desktop",
+      "pgid": 13327,
+      "pid": 13327,
+      "process_group_cleanup": "confirmed",
+      "report_bytes": 909610,
+      "report_schema": "genewhip-route-native-v1",
+      "report_status": 0,
+      "return_code": 0,
+      "status": "completed",
+      "stderr_bytes": 362,
+      "stdout_bytes": 1663,
+      "wall_seconds": 60.6067676669918
+    },
+    {
+      "bound_violation": false,
+      "client": "desktop",
+      "pgid": 26381,
+      "pid": 26381,
+      "process_group_cleanup": "confirmed",
+      "report_bytes": 911724,
+      "report_schema": "genewhip-route-native-v1",
+      "report_status": 0,
+      "return_code": 0,
+      "status": "completed",
+      "stderr_bytes": 358,
+      "stdout_bytes": 1665,
+      "wall_seconds": 60.569856250076555
+    },
+    {
+      "bound_violation": false,
+      "client": "desktop",
+      "pgid": 44955,
+      "pid": 44955,
+      "process_group_cleanup": "confirmed",
+      "report_bytes": 400525,
+      "report_schema": "genewhip-route-native-v1",
+      "report_status": 0,
+      "return_code": 0,
+      "status": "completed",
+      "stderr_bytes": 352,
+      "stdout_bytes": 1663,
+      "wall_seconds": 69.9945539169712
+    },
+    {
+      "bound_violation": false,
+      "client": "desktop",
+      "pgid": 57355,
+      "pid": 57355,
+      "process_group_cleanup": "confirmed",
+      "report_bytes": 349676,
+      "report_schema": "genewhip-route-native-v1",
+      "report_status": 0,
+      "return_code": 0,
+      "status": "completed",
+      "stderr_bytes": 360,
+      "stdout_bytes": 1663,
+      "wall_seconds": 61.04899683292024
+    },
+    {
+      "bound_violation": false,
+      "client": "desktop",
+      "pgid": 69019,
+      "pid": 69019,
+      "process_group_cleanup": "confirmed",
+      "report_bytes": 374947,
+      "report_schema": "genewhip-route-native-v1",
+      "report_status": 0,
+      "return_code": 0,
+      "status": "completed",
+      "stderr_bytes": 359,
+      "stdout_bytes": 1663,
+      "wall_seconds": 66.98755504202563
+    },
+    {
+      "bound_violation": false,
+      "client": "headless",
+      "pgid": 84546,
+      "pid": 84546,
+      "process_group_cleanup": "confirmed",
+      "report_bytes": 52598,
+      "report_schema": "genewhip-phase4-host-sessions",
+      "report_status": "pass",
+      "return_code": 0,
+      "status": "completed",
+      "stderr_bytes": 0,
+      "stdout_bytes": 86,
+      "wall_seconds": 60.800547707942314
+    },
+    {
+      "bound_violation": false,
+      "client": "headless",
+      "pgid": 84546,
+      "pid": 84546,
+      "process_group_cleanup": "confirmed",
+      "report_bytes": 52598,
+      "report_schema": "genewhip-phase4-host-sessions",
+      "report_status": "pass",
+      "return_code": 0,
+      "status": "completed",
+      "stderr_bytes": 0,
+      "stdout_bytes": 86,
+      "wall_seconds": 60.800547707942314
+    }
+  ],
+  "reader_reconciliations": [
+    {
+      "case": "withhold-final-b",
+      "fixture": "recursion94",
+      "prior_status": "fail",
+      "reason": null,
+      "result_status": "pass",
+      "retained_attempt": 1
+    },
+    {
+      "case": "full-route",
+      "fixture": "tank-battle",
+      "prior_status": "fail",
+      "reason": null,
+      "result_status": "pass",
+      "retained_attempt": 1
+    }
+  ],
+  "reasons": [],
+  "resources": {
+    "owned_artifact_bytes": 173366293,
+    "owned_directory": "build/phase6/evidence/phase6-sdl-host-g577h6k3",
+    "shared_window": {
+      "deadline": "2026-10-29T00:10:21.516946+00:00",
+      "started_at": "2026-10-28T16:10:21.516946+00:00",
+      "workload_cutoff": "2026-10-28T23:45:21.516946+00:00"
+    },
+    "workload_wall_seconds": 561.968998291879
+  },
+  "roster": [
+    {
+      "attempt_budget": 600,
+      "case": "full-route",
+      "expected_status": "pass",
+      "fixture": "recursion94"
+    },
+    {
+      "attempt_budget": 600,
+      "case": "withhold-first-plate",
+      "expected_status": "pass",
+      "fixture": "recursion94"
+    },
+    {
+      "attempt_budget": 600,
+      "case": "withhold-final-b",
+      "expected_status": "pass",
+      "fixture": "recursion94"
+    },
+    {
+      "attempt_budget": 300,
+      "case": "full-route",
+      "expected_status": "pass",
+      "fixture": "tank-battle"
+    },
+    {
+      "attempt_budget": 300,
+      "case": "withhold-early-hit",
+      "expected_status": "pass",
+      "fixture": "tank-battle"
+    },
+    {
+      "attempt_budget": 300,
+      "case": "withhold-late-hit",
+      "expected_status": "pass",
+      "fixture": "tank-battle"
+    }
+  ],
+  "runs": [
+    {
+      "attempt_directory": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-full-route-attempt1",
+      "attempt_number": 1,
+      "audio": {
+        "audio_device_activity": true,
+        "audio_device_consumed_frames": 2754999,
+        "audio_device_id": 21,
+        "audio_device_name": "System audio playback device",
+        "audio_driver": "disk",
+        "audio_submitted_frames": 2908428,
+        "pcm_frames": 2908428
+      },
+      "backend": "software",
+      "capability": "audio-enabled",
+      "case": "full-route",
+      "client": "sdl",
+      "common_boundary": {
+        "desktop_pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-full-route-attempt1/audio.pcm",
+          "sha256": "5453830f84ab326e068d1e39a698afd37979274d1236f72218941b44070ba644"
+        },
+        "full_pcm_equal": true,
+        "headless_native_sha256": "9a689d834778e5dfc0a0e484fdf67c80643d58c7772880fe91c2580d0b5df292",
+        "headless_pcm": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-full-route-1/audio.pcm",
+          "sha256": "5453830f84ab326e068d1e39a698afd37979274d1236f72218941b44070ba644"
+        },
+        "headless_pixel": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-full-route-1/fields/field-3601.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        },
+        "host_native_sha256": "88a2c9e8e4d57d3bbcec2bff0095af3e3595859df7f8d299d046d175735a9ee4",
+        "inputs": {
+          "core_count": 20,
+          "equal": true,
+          "host_count": 20,
+          "rows": [
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-01",
+              "index": 0,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-02",
+              "index": 1,
+              "port": 0
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-03",
+              "index": 2,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-04",
+              "index": 3,
+              "port": 0
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-05",
+              "index": 4,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-06",
+              "index": 5,
+              "port": 0
+            },
+            {
+              "desired": 32,
+              "effective": 32,
+              "equal": true,
+              "event_id": "input-event-07",
+              "index": 6,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-08",
+              "index": 7,
+              "port": 0
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-09",
+              "index": 8,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-10",
+              "index": 9,
+              "port": 0
+            },
+            {
+              "desired": 32,
+              "effective": 32,
+              "equal": true,
+              "event_id": "input-event-11",
+              "index": 10,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-12",
+              "index": 11,
+              "port": 0
+            },
+            {
+              "desired": 1,
+              "effective": 1,
+              "equal": true,
+              "event_id": "input-event-13",
+              "index": 12,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-14",
+              "index": 13,
+              "port": 0
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-15",
+              "index": 14,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-16",
+              "index": 15,
+              "port": 0
+            },
+            {
+              "desired": 2,
+              "effective": 2,
+              "equal": true,
+              "event_id": "input-event-17",
+              "index": 16,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-18",
+              "index": 17,
+              "port": 0
+            },
+            {
+              "desired": 16,
+              "effective": 16,
+              "equal": true,
+              "event_id": "input-event-19",
+              "index": 18,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "cleanup-release",
+              "index": 19,
+              "port": 0
+            }
+          ]
+        },
+        "renderer_pixel": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-full-route-attempt1/renderer-field.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        },
+        "renderer_pixel_equal": true,
+        "source_samples_equal": true,
+        "source_samples_sha256": "7dd7794cd7740ab19b438be8e491d4f4570411e5f07d10e8a9250daa5cdb8caf"
+      },
+      "core_outcome": "pass",
+      "delivery_map_sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff",
+      "error": null,
+      "fixture": "recursion94",
+      "host_outcome": "pass-diagnostic",
+      "identity": {
+        "input_program_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "input_sha256": "67e81e5dbab490c621948b84cc8cc3bd6ef7ab98e7baeaa6a30febb621749bef",
+        "oracle_sha256": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389",
+        "rom_sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff",
+        "scenario_sha256": "31e9c22129a6ce1b3ac2d1980c325e86bfbefb4e2fda85ae018c311e2cb40700"
+      },
+      "observed_clocks": {
+        "active_ticks": 3600,
+        "boundary_calls": 32044795,
+        "fields": 3631,
+        "status": 0
+      },
+      "process": {
+        "bound_violation": false,
+        "client": "desktop",
+        "pgid": 2757,
+        "pid": 2757,
+        "process_group_cleanup": "confirmed",
+        "report_bytes": 911911,
+        "report_schema": "genewhip-route-native-v1",
+        "report_status": 0,
+        "return_code": 0,
+        "status": "completed",
+        "stderr_bytes": 350,
+        "stdout_bytes": 1667,
+        "wall_seconds": 60.591802624985576
+      },
+      "raw_outputs": {
+        "host": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-full-route-attempt1/host.json",
+          "sha256": "dbf1c3934799f9c7cbecff645c6ce6e0a30fce1166764cdf8fc3825532c4e6fa"
+        },
+        "native": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-full-route-attempt1/native.json",
+          "sha256": "88a2c9e8e4d57d3bbcec2bff0095af3e3595859df7f8d299d046d175735a9ee4"
+        },
+        "pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-full-route-attempt1/audio.pcm",
+          "sha256": "5453830f84ab326e068d1e39a698afd37979274d1236f72218941b44070ba644"
+        },
+        "renderer": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-full-route-attempt1/renderer-field.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        }
+      },
+      "reason": null,
+      "renderer": {
+        "renderer": "software",
+        "renderer_capture_field": 3601,
+        "renderer_capture_fnv1a64": "ebef3b40ee176b3a",
+        "renderer_readback_activity": true,
+        "video_driver": "dummy"
+      },
+      "route_metadata": {
+        "client": "sdl",
+        "map_id": "recursion94-genewhip-public-client-v1",
+        "original_input_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "schema": "genewhip-consumed-input-map-v1",
+        "sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff"
+      },
+      "route_plan_sha256": "53a95e09d95aad137c3724c7a80a3ee350c02d14a7a02039e32fc5303825983b",
+      "status": "pass",
+      "streams": {
+        "stderr": {
+          "observed_bytes": 350,
+          "retained_bytes": 350,
+          "sha256": "fd7b7d059529876f0db9d95badac26a38202917acabd6c0867c7e107cc13022a",
+          "truncated": false
+        },
+        "stdout": {
+          "observed_bytes": 1667,
+          "retained_bytes": 1667,
+          "sha256": "c764588cadbc93f99223b8db0f29225604d1c7baf52597148a3ecfa34c639b30",
+          "truncated": false
+        }
+      }
+    },
+    {
+      "attempt_directory": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt2",
+      "attempt_number": 2,
+      "audio": {
+        "audio_device_activity": true,
+        "audio_device_consumed_frames": 2867158,
+        "audio_device_id": 21,
+        "audio_device_name": "System audio playback device",
+        "audio_driver": "disk",
+        "audio_submitted_frames": 2908428,
+        "pcm_frames": 2908428
+      },
+      "backend": "software",
+      "capability": "audio-enabled",
+      "case": "withhold-first-plate",
+      "client": "sdl",
+      "common_boundary": {
+        "desktop_pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt2/audio.pcm",
+          "sha256": "5453830f84ab326e068d1e39a698afd37979274d1236f72218941b44070ba644"
+        },
+        "full_pcm_equal": true,
+        "headless_native_sha256": "3e857aa3b92171b6fef97561c99c4c11d576c1207d372fb34e45c986208a235a",
+        "headless_pcm": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-withhold-first-plate-1/audio.pcm",
+          "sha256": "5453830f84ab326e068d1e39a698afd37979274d1236f72218941b44070ba644"
+        },
+        "headless_pixel": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-withhold-first-plate-1/fields/field-3601.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        },
+        "host_native_sha256": "6ada6aa662cefa07d43208f03d06b19aab9098018f986c8fc1deb9d8f5da43df",
+        "inputs": {
+          "core_count": 18,
+          "equal": true,
+          "host_count": 18,
+          "rows": [
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-03",
+              "index": 0,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-04",
+              "index": 1,
+              "port": 0
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-05",
+              "index": 2,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-06",
+              "index": 3,
+              "port": 0
+            },
+            {
+              "desired": 32,
+              "effective": 32,
+              "equal": true,
+              "event_id": "input-event-07",
+              "index": 4,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-08",
+              "index": 5,
+              "port": 0
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-09",
+              "index": 6,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-10",
+              "index": 7,
+              "port": 0
+            },
+            {
+              "desired": 32,
+              "effective": 32,
+              "equal": true,
+              "event_id": "input-event-11",
+              "index": 8,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-12",
+              "index": 9,
+              "port": 0
+            },
+            {
+              "desired": 1,
+              "effective": 1,
+              "equal": true,
+              "event_id": "input-event-13",
+              "index": 10,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-14",
+              "index": 11,
+              "port": 0
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-15",
+              "index": 12,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-16",
+              "index": 13,
+              "port": 0
+            },
+            {
+              "desired": 2,
+              "effective": 2,
+              "equal": true,
+              "event_id": "input-event-17",
+              "index": 14,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-18",
+              "index": 15,
+              "port": 0
+            },
+            {
+              "desired": 16,
+              "effective": 16,
+              "equal": true,
+              "event_id": "input-event-19",
+              "index": 16,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "cleanup-release",
+              "index": 17,
+              "port": 0
+            }
+          ]
+        },
+        "renderer_pixel": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt2/renderer-field.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        },
+        "renderer_pixel_equal": true,
+        "source_samples_equal": true,
+        "source_samples_sha256": "63d4cd140b733fc4b50191e0440ae659d6590a43a0c9b94f70fc8df31a89661c"
+      },
+      "core_outcome": "pass",
+      "delivery_map_sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff",
+      "error": null,
+      "fixture": "recursion94",
+      "host_outcome": "pass-diagnostic",
+      "identity": {
+        "input_program_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "input_sha256": "67e81e5dbab490c621948b84cc8cc3bd6ef7ab98e7baeaa6a30febb621749bef",
+        "oracle_sha256": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389",
+        "rom_sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff",
+        "scenario_sha256": "31e9c22129a6ce1b3ac2d1980c325e86bfbefb4e2fda85ae018c311e2cb40700"
+      },
+      "observed_clocks": {
+        "active_ticks": 3600,
+        "boundary_calls": 32061170,
+        "fields": 3631,
+        "status": 0
+      },
+      "process": {
+        "bound_violation": false,
+        "client": "desktop",
+        "pgid": 13327,
+        "pid": 13327,
+        "process_group_cleanup": "confirmed",
+        "report_bytes": 909610,
+        "report_schema": "genewhip-route-native-v1",
+        "report_status": 0,
+        "return_code": 0,
+        "status": "completed",
+        "stderr_bytes": 362,
+        "stdout_bytes": 1663,
+        "wall_seconds": 60.6067676669918
+      },
+      "raw_outputs": {
+        "host": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt2/host.json",
+          "sha256": "1507d911e666ad4aebaa47142f291f238e1dc1b6e413bbe48d68dea8b655c180"
+        },
+        "native": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt2/native.json",
+          "sha256": "6ada6aa662cefa07d43208f03d06b19aab9098018f986c8fc1deb9d8f5da43df"
+        },
+        "pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt2/audio.pcm",
+          "sha256": "5453830f84ab326e068d1e39a698afd37979274d1236f72218941b44070ba644"
+        },
+        "renderer": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-first-plate-attempt2/renderer-field.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        }
+      },
+      "reason": null,
+      "renderer": {
+        "renderer": "software",
+        "renderer_capture_field": 3601,
+        "renderer_capture_fnv1a64": "ebef3b40ee176b3a",
+        "renderer_readback_activity": true,
+        "video_driver": "dummy"
+      },
+      "route_metadata": {
+        "client": "sdl",
+        "map_id": "recursion94-genewhip-public-client-v1",
+        "original_input_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "schema": "genewhip-consumed-input-map-v1",
+        "sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff"
+      },
+      "route_plan_sha256": "206e6266c4fd58608937119988a6ed5d32bf45963c7aad9f38af93656f5e6c2d",
+      "status": "pass",
+      "streams": {
+        "stderr": {
+          "observed_bytes": 362,
+          "retained_bytes": 362,
+          "sha256": "d25c600f5a546899590386db97ef283a2faa5b56bcd69bd7b68109541b7424e2",
+          "truncated": false
+        },
+        "stdout": {
+          "observed_bytes": 1663,
+          "retained_bytes": 1663,
+          "sha256": "c7ffd1c4599c725e56d6f4bebe58d70ed48169631a70ca9acdfe829022063b60",
+          "truncated": false
+        }
+      }
+    },
+    {
+      "attempt_directory": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-final-b-attempt1",
+      "attempt_number": 1,
+      "audio": {
+        "audio_device_activity": true,
+        "audio_device_consumed_frames": 2875753,
+        "audio_device_id": 21,
+        "audio_device_name": "System audio playback device",
+        "audio_driver": "disk",
+        "audio_submitted_frames": 2908428,
+        "pcm_frames": 2908428
+      },
+      "backend": "software",
+      "capability": "audio-enabled",
+      "case": "withhold-final-b",
+      "client": "sdl",
+      "common_boundary": {
+        "desktop_pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-final-b-attempt1/audio.pcm",
+          "sha256": "6444e2601ebf4a2849d1c58ede9e198ce37667892f7be7c7b5daca26edf6ca06"
+        },
+        "full_pcm_equal": true,
+        "headless_native_sha256": "018bdb178835768e0c107d54d6588ef53de7455558b4e54de26835aedf1cd8f5",
+        "headless_pcm": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-withhold-final-b-1/audio.pcm",
+          "sha256": "6444e2601ebf4a2849d1c58ede9e198ce37667892f7be7c7b5daca26edf6ca06"
+        },
+        "headless_pixel": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/recursion94-withhold-final-b-1/fields/field-3601.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        },
+        "host_native_sha256": "919a83b4cedcb90925a386c2b43c3b7a9916d70c7d141ff48b166d28736dc84c",
+        "inputs": {
+          "core_count": 18,
+          "equal": true,
+          "host_count": 18,
+          "rows": [
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-01",
+              "index": 0,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-02",
+              "index": 1,
+              "port": 0
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-03",
+              "index": 2,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-04",
+              "index": 3,
+              "port": 0
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-05",
+              "index": 4,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-06",
+              "index": 5,
+              "port": 0
+            },
+            {
+              "desired": 32,
+              "effective": 32,
+              "equal": true,
+              "event_id": "input-event-07",
+              "index": 6,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-08",
+              "index": 7,
+              "port": 0
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-09",
+              "index": 8,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-10",
+              "index": 9,
+              "port": 0
+            },
+            {
+              "desired": 32,
+              "effective": 32,
+              "equal": true,
+              "event_id": "input-event-11",
+              "index": 10,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-12",
+              "index": 11,
+              "port": 0
+            },
+            {
+              "desired": 1,
+              "effective": 1,
+              "equal": true,
+              "event_id": "input-event-13",
+              "index": 12,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-14",
+              "index": 13,
+              "port": 0
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "input-event-15",
+              "index": 14,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-16",
+              "index": 15,
+              "port": 0
+            },
+            {
+              "desired": 2,
+              "effective": 2,
+              "equal": true,
+              "event_id": "input-event-17",
+              "index": 16,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "input-event-18",
+              "index": 17,
+              "port": 0
+            }
+          ]
+        },
+        "renderer_pixel": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-final-b-attempt1/renderer-field.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        },
+        "renderer_pixel_equal": true,
+        "source_samples_equal": true,
+        "source_samples_sha256": "938ff2cac9f85312f7566f88a3c333b2929feb65d322d7c389b8d202f1c765e9"
+      },
+      "core_outcome": "pass",
+      "delivery_map_sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff",
+      "error": null,
+      "fixture": "recursion94",
+      "host_outcome": "pass-diagnostic",
+      "identity": {
+        "input_program_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "input_sha256": "67e81e5dbab490c621948b84cc8cc3bd6ef7ab98e7baeaa6a30febb621749bef",
+        "oracle_sha256": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389",
+        "rom_sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff",
+        "scenario_sha256": "31e9c22129a6ce1b3ac2d1980c325e86bfbefb4e2fda85ae018c311e2cb40700"
+      },
+      "observed_clocks": {
+        "active_ticks": 3600,
+        "boundary_calls": 32040348,
+        "fields": 3631,
+        "status": 0
+      },
+      "process": {
+        "bound_violation": false,
+        "client": "desktop",
+        "pgid": 26381,
+        "pid": 26381,
+        "process_group_cleanup": "confirmed",
+        "report_bytes": 911724,
+        "report_schema": "genewhip-route-native-v1",
+        "report_status": 0,
+        "return_code": 0,
+        "status": "completed",
+        "stderr_bytes": 358,
+        "stdout_bytes": 1665,
+        "wall_seconds": 60.569856250076555
+      },
+      "raw_outputs": {
+        "host": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-final-b-attempt1/host.json",
+          "sha256": "c2b0852295972531e40321253524b7b76cba32ef886cb5c44c8e34455b06a914"
+        },
+        "native": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-final-b-attempt1/native.json",
+          "sha256": "919a83b4cedcb90925a386c2b43c3b7a9916d70c7d141ff48b166d28736dc84c"
+        },
+        "pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-final-b-attempt1/audio.pcm",
+          "sha256": "6444e2601ebf4a2849d1c58ede9e198ce37667892f7be7c7b5daca26edf6ca06"
+        },
+        "renderer": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/recursion94-withhold-final-b-attempt1/renderer-field.bin",
+          "sha256": "3aeba0559ad6ad2495a6a2cb52a6bc34ffd2cb5ffdbe0926d071c597569bfe4c"
+        }
+      },
+      "reason": null,
+      "renderer": {
+        "renderer": "software",
+        "renderer_capture_field": 3601,
+        "renderer_capture_fnv1a64": "ebef3b40ee176b3a",
+        "renderer_readback_activity": true,
+        "video_driver": "dummy"
+      },
+      "route_metadata": {
+        "client": "sdl",
+        "map_id": "recursion94-genewhip-public-client-v1",
+        "original_input_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "schema": "genewhip-consumed-input-map-v1",
+        "sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff"
+      },
+      "route_plan_sha256": "5bce783f08b166432d1a450ea55647fd3282a592ee14e560cc26f4c6b22b08dd",
+      "status": "pass",
+      "streams": {
+        "stderr": {
+          "observed_bytes": 358,
+          "retained_bytes": 358,
+          "sha256": "9b21242bf0664a89ad028a6a26e6cd7e3dced0f342b07504a85fa93237f7d836",
+          "truncated": false
+        },
+        "stdout": {
+          "observed_bytes": 1665,
+          "retained_bytes": 1665,
+          "sha256": "a8e1d1f8c7241be5767d5c6b3c6dde4fcd1fd7ab22f8d610e27e6fa3b9ff91ec",
+          "truncated": false
+        }
+      }
+    },
+    {
+      "attempt_directory": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-full-route-attempt1",
+      "attempt_number": 1,
+      "audio": {
+        "audio_device_activity": true,
+        "audio_device_consumed_frames": 3316494,
+        "audio_device_id": 21,
+        "audio_device_name": "System audio playback device",
+        "audio_driver": "disk",
+        "audio_submitted_frames": 3361011,
+        "pcm_frames": 3361011
+      },
+      "backend": "software",
+      "capability": "audio-enabled",
+      "case": "full-route",
+      "client": "sdl",
+      "common_boundary": {
+        "desktop_pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-full-route-attempt1/audio.pcm",
+          "sha256": "756185bde82ee09a83377db2b7964d1576ba8281e9787f4afb901f684f5173e8"
+        },
+        "full_pcm_equal": true,
+        "headless_native_sha256": "ef692e554237671c5a9204dbef08ea81fe3949d6123a0645b6726ee8902fc8be",
+        "headless_pcm": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/tank-battle-full-route-1/audio.pcm",
+          "sha256": "756185bde82ee09a83377db2b7964d1576ba8281e9787f4afb901f684f5173e8"
+        },
+        "headless_pixel": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/tank-battle-full-route-1/fields/field-119.bin",
+          "sha256": "2287e53d2bf3bf35b42e55deb9e49dcf870a6f85bb51ee3cda3396dd496afedd"
+        },
+        "host_native_sha256": "b349ad933ad47f207b25b061cd6ae6d937e1ae00220ff9d4c7700acd51bd0c30",
+        "inputs": {
+          "core_count": 22,
+          "equal": true,
+          "host_count": 22,
+          "rows": [
+            {
+              "desired": 64,
+              "effective": 64,
+              "equal": true,
+              "event_id": "tank-battle-route-event-1",
+              "index": 0,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-2",
+              "index": 1,
+              "port": 0
+            },
+            {
+              "desired": 1,
+              "effective": 1,
+              "equal": true,
+              "event_id": "tank-battle-route-event-3",
+              "index": 2,
+              "port": 0
+            },
+            {
+              "desired": 1,
+              "effective": 1,
+              "equal": true,
+              "event_id": "tank-battle-route-event-4",
+              "index": 3,
+              "port": 1
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-5",
+              "index": 4,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-6",
+              "index": 5,
+              "port": 1
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "tank-battle-route-event-7",
+              "index": 6,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-8",
+              "index": 7,
+              "port": 0
+            },
+            {
+              "desired": 4,
+              "effective": 4,
+              "equal": true,
+              "event_id": "tank-battle-route-event-9",
+              "index": 8,
+              "port": 1
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-10",
+              "index": 9,
+              "port": 1
+            },
+            {
+              "desired": 16,
+              "effective": 16,
+              "equal": true,
+              "event_id": "tank-battle-route-event-11",
+              "index": 10,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-12",
+              "index": 11,
+              "port": 0
+            },
+            {
+              "desired": 1,
+              "effective": 1,
+              "equal": true,
+              "event_id": "tank-battle-route-event-13",
+              "index": 12,
+              "port": 0
+            },
+            {
+              "desired": 1,
+              "effective": 1,
+              "equal": true,
+              "event_id": "tank-battle-route-event-14",
+              "index": 13,
+              "port": 1
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-15",
+              "index": 14,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-16",
+              "index": 15,
+              "port": 1
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "tank-battle-route-event-17",
+              "index": 16,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-18",
+              "index": 17,
+              "port": 0
+            },
+            {
+              "desired": 4,
+              "effective": 4,
+              "equal": true,
+              "event_id": "tank-battle-route-event-19",
+              "index": 18,
+              "port": 1
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-20",
+              "index": 19,
+              "port": 1
+            },
+            {
+              "desired": 16,
+              "effective": 16,
+              "equal": true,
+              "event_id": "tank-battle-route-event-21",
+              "index": 20,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-22",
+              "index": 21,
+              "port": 0
+            }
+          ]
+        },
+        "renderer_pixel": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-full-route-attempt1/renderer-field.bin",
+          "sha256": "2287e53d2bf3bf35b42e55deb9e49dcf870a6f85bb51ee3cda3396dd496afedd"
+        },
+        "renderer_pixel_equal": true,
+        "source_samples_equal": true,
+        "source_samples_sha256": "a1f7fceb04e8997c29f9aac78edd32dc5899cbe883ae77f0ee2854ebceacca6c"
+      },
+      "core_outcome": "pass",
+      "delivery_map_sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff",
+      "error": null,
+      "fixture": "tank-battle",
+      "host_outcome": "pass-diagnostic",
+      "identity": {
+        "input_program_sha256": "e3478d34dcd98a71265b97f33c56b9f5f0f858628a516a9034cc3dbe0b5c8ed2",
+        "input_sha256": "43a1bfca71f01830bcd74fab3fce34013986f8272bc3e9c36efd8aae7280faf1",
+        "oracle_sha256": "2bf285d507c3e7c917329f3c4601c48d17fcdc14f4c01c8665fb98bbfe94fc3e",
+        "rom_sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723",
+        "scenario_sha256": "0df6c9a42d9ba90a96f681e8f4ab7396c1f8c56d47dc887f64cab5a766792bb1"
+      },
+      "observed_clocks": {
+        "active_ticks": 3600,
+        "boundary_calls": 4196,
+        "fields": 4196,
+        "status": 0
+      },
+      "process": {
+        "bound_violation": false,
+        "client": "desktop",
+        "pgid": 44955,
+        "pid": 44955,
+        "process_group_cleanup": "confirmed",
+        "report_bytes": 400525,
+        "report_schema": "genewhip-route-native-v1",
+        "report_status": 0,
+        "return_code": 0,
+        "status": "completed",
+        "stderr_bytes": 352,
+        "stdout_bytes": 1663,
+        "wall_seconds": 69.9945539169712
+      },
+      "raw_outputs": {
+        "host": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-full-route-attempt1/host.json",
+          "sha256": "76022a8c89c5e6239e0af88e78c1902cff803b957a31d5752902a522da392043"
+        },
+        "native": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-full-route-attempt1/native.json",
+          "sha256": "b349ad933ad47f207b25b061cd6ae6d937e1ae00220ff9d4c7700acd51bd0c30"
+        },
+        "pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-full-route-attempt1/audio.pcm",
+          "sha256": "756185bde82ee09a83377db2b7964d1576ba8281e9787f4afb901f684f5173e8"
+        },
+        "renderer": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-full-route-attempt1/renderer-field.bin",
+          "sha256": "2287e53d2bf3bf35b42e55deb9e49dcf870a6f85bb51ee3cda3396dd496afedd"
+        }
+      },
+      "reason": null,
+      "renderer": {
+        "renderer": "software",
+        "renderer_capture_field": 119,
+        "renderer_capture_fnv1a64": "b093bd1508d3e725",
+        "renderer_readback_activity": true,
+        "video_driver": "dummy"
+      },
+      "route_metadata": null,
+      "route_plan_sha256": "ca6968de1962504fdea54a0ab8b174127d4be2a79d07e18737053b301fe0dd82",
+      "status": "pass",
+      "streams": {
+        "stderr": {
+          "observed_bytes": 352,
+          "retained_bytes": 352,
+          "sha256": "556de47e3783256ad202545b7d8c843b9a3a9223dfe12a06f52c5b9ae9308d60",
+          "truncated": false
+        },
+        "stdout": {
+          "observed_bytes": 1663,
+          "retained_bytes": 1663,
+          "sha256": "cf5e0273b613e61521263f0e50454bcfb673f6443577fef848cefc04069c2502",
+          "truncated": false
+        }
+      }
+    },
+    {
+      "attempt_directory": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-early-hit-attempt1",
+      "attempt_number": 1,
+      "audio": {
+        "audio_device_activity": true,
+        "audio_device_consumed_frames": 2893749,
+        "audio_device_id": 21,
+        "audio_device_name": "System audio playback device",
+        "audio_driver": "disk",
+        "audio_submitted_frames": 2931658,
+        "pcm_frames": 2931658
+      },
+      "backend": "software",
+      "capability": "audio-enabled",
+      "case": "withhold-early-hit",
+      "client": "sdl",
+      "common_boundary": {
+        "desktop_pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-early-hit-attempt1/audio.pcm",
+          "sha256": "842195cf3d19bebe00269b57bacbd6621301ede7b475f790f23bbeb756cf5dcb"
+        },
+        "full_pcm_equal": true,
+        "headless_native_sha256": "60d98912136acc2f0e12168c7ed7062bd974de1e0eac77101cef023a5255161e",
+        "headless_pcm": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/tank-battle-withhold-early-hit-1/audio.pcm",
+          "sha256": "842195cf3d19bebe00269b57bacbd6621301ede7b475f790f23bbeb756cf5dcb"
+        },
+        "headless_pixel": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/tank-battle-withhold-early-hit-1/fields/field-119.bin",
+          "sha256": "2287e53d2bf3bf35b42e55deb9e49dcf870a6f85bb51ee3cda3396dd496afedd"
+        },
+        "host_native_sha256": "91e478f58da594785d139b1c24e62117c4edc4dc8f00d1cc13f0f940a6aa8638",
+        "inputs": {
+          "core_count": 2,
+          "equal": true,
+          "host_count": 2,
+          "rows": [
+            {
+              "desired": 64,
+              "effective": 64,
+              "equal": true,
+              "event_id": "tank-battle-route-event-1",
+              "index": 0,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-2",
+              "index": 1,
+              "port": 0
+            }
+          ]
+        },
+        "renderer_pixel": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-early-hit-attempt1/renderer-field.bin",
+          "sha256": "2287e53d2bf3bf35b42e55deb9e49dcf870a6f85bb51ee3cda3396dd496afedd"
+        },
+        "renderer_pixel_equal": true,
+        "source_samples_equal": true,
+        "source_samples_sha256": "659445990c3a978853c28bddc5731ec9d4beda4900be3aea1129423ddcc8b1e5"
+      },
+      "core_outcome": "pass",
+      "delivery_map_sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff",
+      "error": null,
+      "fixture": "tank-battle",
+      "host_outcome": "pass-diagnostic",
+      "identity": {
+        "input_program_sha256": "e3478d34dcd98a71265b97f33c56b9f5f0f858628a516a9034cc3dbe0b5c8ed2",
+        "input_sha256": "43a1bfca71f01830bcd74fab3fce34013986f8272bc3e9c36efd8aae7280faf1",
+        "oracle_sha256": "2bf285d507c3e7c917329f3c4601c48d17fcdc14f4c01c8665fb98bbfe94fc3e",
+        "rom_sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723",
+        "scenario_sha256": "0df6c9a42d9ba90a96f681e8f4ab7396c1f8c56d47dc887f64cab5a766792bb1"
+      },
+      "observed_clocks": {
+        "active_ticks": 3600,
+        "boundary_calls": 3660,
+        "fields": 3660,
+        "status": 0
+      },
+      "process": {
+        "bound_violation": false,
+        "client": "desktop",
+        "pgid": 57355,
+        "pid": 57355,
+        "process_group_cleanup": "confirmed",
+        "report_bytes": 349676,
+        "report_schema": "genewhip-route-native-v1",
+        "report_status": 0,
+        "return_code": 0,
+        "status": "completed",
+        "stderr_bytes": 360,
+        "stdout_bytes": 1663,
+        "wall_seconds": 61.04899683292024
+      },
+      "raw_outputs": {
+        "host": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-early-hit-attempt1/host.json",
+          "sha256": "ce4b67e5214ef88e166e8d9881bd8b717ff7e4f76444c3408bc5c6c4ea955b59"
+        },
+        "native": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-early-hit-attempt1/native.json",
+          "sha256": "91e478f58da594785d139b1c24e62117c4edc4dc8f00d1cc13f0f940a6aa8638"
+        },
+        "pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-early-hit-attempt1/audio.pcm",
+          "sha256": "842195cf3d19bebe00269b57bacbd6621301ede7b475f790f23bbeb756cf5dcb"
+        },
+        "renderer": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-early-hit-attempt1/renderer-field.bin",
+          "sha256": "2287e53d2bf3bf35b42e55deb9e49dcf870a6f85bb51ee3cda3396dd496afedd"
+        }
+      },
+      "reason": null,
+      "renderer": {
+        "renderer": "software",
+        "renderer_capture_field": 119,
+        "renderer_capture_fnv1a64": "b093bd1508d3e725",
+        "renderer_readback_activity": true,
+        "video_driver": "dummy"
+      },
+      "route_metadata": null,
+      "route_plan_sha256": "6328d0f273ab02b5a3fa648a7e157f9aa16ebd9534a66d582b4aad798801585e",
+      "status": "pass",
+      "streams": {
+        "stderr": {
+          "observed_bytes": 360,
+          "retained_bytes": 360,
+          "sha256": "ac74cd0255243b624631f915b92528853a14189c3eab8358e3de97d1a0b432c1",
+          "truncated": false
+        },
+        "stdout": {
+          "observed_bytes": 1663,
+          "retained_bytes": 1663,
+          "sha256": "5bc5ed5ac1da68e37e556ccc70348d0e0c08427652cf1935997c9897e6ca7775",
+          "truncated": false
+        }
+      }
+    },
+    {
+      "attempt_directory": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-late-hit-attempt1",
+      "attempt_number": 1,
+      "audio": {
+        "audio_device_activity": true,
+        "audio_device_consumed_frames": 3105114,
+        "audio_device_id": 21,
+        "audio_device_name": "System audio playback device",
+        "audio_driver": "disk",
+        "audio_submitted_frames": 3146335,
+        "pcm_frames": 3146335
+      },
+      "backend": "software",
+      "capability": "audio-enabled",
+      "case": "withhold-late-hit",
+      "client": "sdl",
+      "common_boundary": {
+        "desktop_pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-late-hit-attempt1/audio.pcm",
+          "sha256": "aa87fe4567a1d205976d9ca2a99571672ca0a7d029f8f23aa53bedc3276c68be"
+        },
+        "full_pcm_equal": true,
+        "headless_native_sha256": "57590512edc663f8789d5e4dc7745277563a994e36ada2a2e6655e2ca923f09e",
+        "headless_pcm": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/tank-battle-withhold-late-hit-1/audio.pcm",
+          "sha256": "aa87fe4567a1d205976d9ca2a99571672ca0a7d029f8f23aa53bedc3276c68be"
+        },
+        "headless_pixel": {
+          "path": "build/phase6/evidence/canonical-core-vstv9lcg/tank-battle-withhold-late-hit-1/fields/field-119.bin",
+          "sha256": "2287e53d2bf3bf35b42e55deb9e49dcf870a6f85bb51ee3cda3396dd496afedd"
+        },
+        "host_native_sha256": "faa664e5d23fcb9c793773e1f83177e7743b7753b63e848231b78aced2d08410",
+        "inputs": {
+          "core_count": 12,
+          "equal": true,
+          "host_count": 12,
+          "rows": [
+            {
+              "desired": 64,
+              "effective": 64,
+              "equal": true,
+              "event_id": "tank-battle-route-event-1",
+              "index": 0,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-2",
+              "index": 1,
+              "port": 0
+            },
+            {
+              "desired": 1,
+              "effective": 1,
+              "equal": true,
+              "event_id": "tank-battle-route-event-3",
+              "index": 2,
+              "port": 0
+            },
+            {
+              "desired": 1,
+              "effective": 1,
+              "equal": true,
+              "event_id": "tank-battle-route-event-4",
+              "index": 3,
+              "port": 1
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-5",
+              "index": 4,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-6",
+              "index": 5,
+              "port": 1
+            },
+            {
+              "desired": 8,
+              "effective": 8,
+              "equal": true,
+              "event_id": "tank-battle-route-event-7",
+              "index": 6,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-8",
+              "index": 7,
+              "port": 0
+            },
+            {
+              "desired": 4,
+              "effective": 4,
+              "equal": true,
+              "event_id": "tank-battle-route-event-9",
+              "index": 8,
+              "port": 1
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-10",
+              "index": 9,
+              "port": 1
+            },
+            {
+              "desired": 16,
+              "effective": 16,
+              "equal": true,
+              "event_id": "tank-battle-route-event-11",
+              "index": 10,
+              "port": 0
+            },
+            {
+              "desired": 0,
+              "effective": 0,
+              "equal": true,
+              "event_id": "tank-battle-route-event-12",
+              "index": 11,
+              "port": 0
+            }
+          ]
+        },
+        "renderer_pixel": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-late-hit-attempt1/renderer-field.bin",
+          "sha256": "2287e53d2bf3bf35b42e55deb9e49dcf870a6f85bb51ee3cda3396dd496afedd"
+        },
+        "renderer_pixel_equal": true,
+        "source_samples_equal": true,
+        "source_samples_sha256": "429efc3d7b62e0ea880662e753902e636025d9108769cbc2ca497cd10e193dd9"
+      },
+      "core_outcome": "pass",
+      "delivery_map_sha256": "4d9dc7e7cb3b87cfd736d0d007f119da57129d0621dc0c41947af18706f9d5ff",
+      "error": null,
+      "fixture": "tank-battle",
+      "host_outcome": "pass-diagnostic",
+      "identity": {
+        "input_program_sha256": "e3478d34dcd98a71265b97f33c56b9f5f0f858628a516a9034cc3dbe0b5c8ed2",
+        "input_sha256": "43a1bfca71f01830bcd74fab3fce34013986f8272bc3e9c36efd8aae7280faf1",
+        "oracle_sha256": "2bf285d507c3e7c917329f3c4601c48d17fcdc14f4c01c8665fb98bbfe94fc3e",
+        "rom_sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723",
+        "scenario_sha256": "0df6c9a42d9ba90a96f681e8f4ab7396c1f8c56d47dc887f64cab5a766792bb1"
+      },
+      "observed_clocks": {
+        "active_ticks": 3600,
+        "boundary_calls": 3928,
+        "fields": 3928,
+        "status": 0
+      },
+      "process": {
+        "bound_violation": false,
+        "client": "desktop",
+        "pgid": 69019,
+        "pid": 69019,
+        "process_group_cleanup": "confirmed",
+        "report_bytes": 374947,
+        "report_schema": "genewhip-route-native-v1",
+        "report_status": 0,
+        "return_code": 0,
+        "status": "completed",
+        "stderr_bytes": 359,
+        "stdout_bytes": 1663,
+        "wall_seconds": 66.98755504202563
+      },
+      "raw_outputs": {
+        "host": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-late-hit-attempt1/host.json",
+          "sha256": "cff9b5c10375b0d54aa7326ab1a0792fb074a70d0368f12f3e9973d003c790ef"
+        },
+        "native": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-late-hit-attempt1/native.json",
+          "sha256": "faa664e5d23fcb9c793773e1f83177e7743b7753b63e848231b78aced2d08410"
+        },
+        "pcm": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-late-hit-attempt1/audio.pcm",
+          "sha256": "aa87fe4567a1d205976d9ca2a99571672ca0a7d029f8f23aa53bedc3276c68be"
+        },
+        "renderer": {
+          "path": "build/phase6/evidence/phase6-sdl-host-g577h6k3/tank-battle-withhold-late-hit-attempt1/renderer-field.bin",
+          "sha256": "2287e53d2bf3bf35b42e55deb9e49dcf870a6f85bb51ee3cda3396dd496afedd"
+        }
+      },
+      "reason": null,
+      "renderer": {
+        "renderer": "software",
+        "renderer_capture_field": 119,
+        "renderer_capture_fnv1a64": "b093bd1508d3e725",
+        "renderer_readback_activity": true,
+        "video_driver": "dummy"
+      },
+      "route_metadata": null,
+      "route_plan_sha256": "6d2fe5ea74c34a230c9019bf4514f9c58932551e47bea0db2914cb54a98b9d3a",
+      "status": "pass",
+      "streams": {
+        "stderr": {
+          "observed_bytes": 359,
+          "retained_bytes": 359,
+          "sha256": "4d03cffba1412d6d52f3a6a2eb53127a2f7505c369cd85954a096e1e3926820d",
+          "truncated": false
+        },
+        "stdout": {
+          "observed_bytes": 1663,
+          "retained_bytes": 1663,
+          "sha256": "38288f0cad56f85ee7365c1bc7bf73cc9470dcf497ba5664ec5ba21c817082c3",
+          "truncated": false
+        }
+      }
+    }
+  ],
+  "schema": "genewhip-phase6-host-v1",
+  "status": "pass"
+}

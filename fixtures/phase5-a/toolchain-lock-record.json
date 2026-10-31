@@ -1,0 +1,1 @@
+{"build_record_tool_lock_sha256":"bfb46f6392e7e5f6fb1a66ddee2f326343f743107905a03c071cd56b27a8e704","retained_tool_lock":{"path":"fixtures/phase5-a/toolchain.lock","sha256":"afea8b6c5a633c073fe2f8ff837049d53277ecc700e3d7a11d2635a990310137"},"schema":"genewhip-phase5-toolchain-lock-record-v1","title_id":"tank-battle"}

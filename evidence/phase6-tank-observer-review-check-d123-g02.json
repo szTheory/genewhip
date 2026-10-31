@@ -1,0 +1,17 @@
+{
+  "bridge_path": "evidence/phase6-tank-observer-bridge-d123-g02.json",
+  "bridge_sha256": "6ff8254b4f072f7c29ee55e311f1703567291799636ddc60dc3b511c1762c0f7",
+  "check_sha256": "e4f70ecdf40f6eef0040867ba834d69148579a814a076ea0cff2cad367bdd025",
+  "checker_sha256": "709f3b8afb0f569ad2e09e1b9f7b571470840838f388b670236368c56742958a",
+  "launches": 0,
+  "manifest_sha256": "bcdea865c38137fe70d4ded4c571d2612b5232dd4d0fcd4f3e36fa1fbbf7501c",
+  "qualification_sha256": "e4da50366bb46238976201601be84d94afaa8b3d55303f22048e3f059b2d5fe7",
+  "review_path": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/06-19-PROOF-REVIEW.md",
+  "review_sha256": "3099a58334e2d04421e30bbf4385410b0b997d02b90d48d23a102468c6b9d211",
+  "reviewer_identity": "gsd-code-reviewer:d123_independent_review",
+  "reviewer_role": "gsd-code-reviewer",
+  "schema": "phase6-d123-observer-review-check-v1",
+  "source_identity": "bc4d31aa500494b6b74d18ae06dacb23bf2f01013ce8ee42481b28dae88866ad",
+  "status": "accepted",
+  "trusted_handoff_sha256": "a63f259ceb07ab3074ca9b41e2c6b97b590adac41286de0021b3e7c635747aee"
+}

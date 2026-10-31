@@ -1,576 +1,636 @@
 {
-  "schema_version": 1,
   "fixtures": [
     {
+      "assets": [],
+      "build": {
+        "command": "gw_build_rom tests/diagnostic/diagnostic.S diagnostic.bin",
+        "sha256": "ff912fecb5ef349bd33a9890a284c9ddea1c62e0a4a1d08c29f41c20b369f7b0",
+        "source": "tests/diagnostic/build_rom.c",
+        "toolchain": "Original bounded C17 data-directive emitter; native compiler identity is bound in run configuration"
+      },
       "id": "genewhip-diagnostic-v1",
-      "status": "admitted",
-      "outcome": "pass",
-      "project": "Genewhip",
-      "revision": "955798e93d7ce3d9ca6f4935a34678746f68d2b8",
-      "source": "tests/diagnostic/diagnostic.S",
-      "source_sha256": "50b7a91d751c5dc0528442a3c54372ab02ae36c34eddc5534b2ebba459a64250",
+      "input": "no-events-target-10000-v1",
       "license": "MIT",
       "notices": [
         "LICENSE"
       ],
-      "assets": [],
-      "build": {
-        "source": "tests/diagnostic/build_rom.c",
-        "sha256": "ff912fecb5ef349bd33a9890a284c9ddea1c62e0a4a1d08c29f41c20b369f7b0",
-        "toolchain": "Original bounded C17 data-directive emitter; native compiler identity is bound in run configuration",
-        "command": "gw_build_rom tests/diagnostic/diagnostic.S diagnostic.bin"
-      },
-      "sha256": "411191ba90be4a31898f90401c159022df724419129ab10da3c8c6478e045e9a",
       "oracle": "original-authored-constants-v1",
+      "outcome": "pass",
       "profile": "va3-ntsc-u-v1",
-      "input": "no-events-target-10000-v1"
+      "project": "Genewhip",
+      "revision": "955798e93d7ce3d9ca6f4935a34678746f68d2b8",
+      "sha256": "411191ba90be4a31898f90401c159022df724419129ab10da3c8c6478e045e9a",
+      "source": "tests/diagnostic/diagnostic.S",
+      "source_sha256": "50b7a91d751c5dc0528442a3c54372ab02ae36c34eddc5534b2ebba459a64250",
+      "status": "admitted"
     },
     {
+      "assets": [],
+      "build": {
+        "command": "fixtures/independent-game/build.sh --verify-reproducible",
+        "sha256": "6cd5eb7b5f8da0c216f2927ee35bf3b89196fb11cb3da9786d01c41db55c8684",
+        "source": "fixtures/independent-game/build.sh",
+        "toolchain": "GNU Binutils 2.47 source-built m68k-elf-as"
+      },
+      "evidence_sha256": "7d5eb88c7e74b806a4522afd53cfcecdf8daf1ba5ec080ffc60edb81b65609b4",
       "id": "genewhip-independent-game-v1",
-      "status": "admitted",
-      "outcome": "pass",
-      "project": "Genewhip",
-      "revision": "e561e04afd9e9f600c418b51c58ad15f1644ef10",
-      "source": "fixtures/independent-game/src/game.s",
-      "source_sha256": "624e2d788104530a380a7ad6ac1ef8e140decc765e3a83f7d2c7d8fb3569e75d",
+      "input": "genewhip-independent-game-start-right-ntscu-v1",
       "license": "MIT",
       "notices": [
         "fixtures/independent-game/NOTICES.md"
       ],
-      "assets": [],
-      "build": {
-        "source": "fixtures/independent-game/build.sh",
-        "sha256": "6cd5eb7b5f8da0c216f2927ee35bf3b89196fb11cb3da9786d01c41db55c8684",
-        "toolchain": "GNU Binutils 2.47 source-built m68k-elf-as",
-        "command": "fixtures/independent-game/build.sh --verify-reproducible"
-      },
-      "sha256": "c17ad98e22d3237feac4f2dfe9d96295f32398a9ce8e4cf0b0542b1035bb0fc1",
-      "rom": "fixtures/independent-game/game.bin",
-      "evidence_sha256": "7d5eb88c7e74b806a4522afd53cfcecdf8daf1ba5ec080ffc60edb81b65609b4",
       "oracle": "independent-work-ram-progression",
+      "outcome": "pass",
       "profile": "VA3-NTSC-U",
-      "input": "genewhip-independent-game-start-right-ntscu-v1"
+      "project": "Genewhip",
+      "revision": "e561e04afd9e9f600c418b51c58ad15f1644ef10",
+      "rom": "fixtures/independent-game/game.bin",
+      "sha256": "c17ad98e22d3237feac4f2dfe9d96295f32398a9ce8e4cf0b0542b1035bb0fc1",
+      "source": "fixtures/independent-game/src/game.s",
+      "source_sha256": "624e2d788104530a380a7ad6ac1ef8e140decc765e3a83f7d2c7d8fb3569e75d",
+      "status": "admitted"
     },
     {
-      "id": "free-retro-games-pong",
-      "status": "rejected",
-      "outcome": "unknown",
-      "project": "retro-homebrew-games",
-      "revision": "eb7dc3044f9d2f76047f3b3573971bf86575ca52",
-      "source": "genesis/pong/src/main.c",
-      "source_sha256": "23b53fae07413c7011018da8625fbab6f7bc1f34b46f042c3667271ef0781edf",
-      "license": "Repository MIT; linked SDK and generated-ROM rights unresolved",
-      "notices": [
-        "LICENSE"
-      ],
       "assets": [],
-      "build": {
-        "audit": "fixtures/pong-candidate-audit.json",
-        "status": "not-run"
-      },
-      "sha256": null,
-      "oracle": "game-source-progression; no independent runtime observation",
-      "profile": "va3-ntsc-u-v1",
-      "input": "future-title-start-one-player-bounded-score-scenario",
       "blocked_gates": [
         "generated-byte-rights",
         "reproducible-build",
         "scripted-runtime-sram"
       ],
-      "replacement": "Select an independently authored commissioned minimal homebrew with written MIT source/assets/generated-ROM rights; no implementation may depend on it until delivered and admitted. Original diagnostic remains the lawful Phase 1 fixture."
-    },
-    {
-      "id": "kleleatoms-md-alternative",
-      "status": "unadmitted",
-      "outcome": "unknown",
-      "project": "KleleAtoms-MD",
-      "revision": "53f2344636c65b66ae0033e5345fa5502ebb0a21",
-      "source": "README.md",
-      "source_sha256": null,
-      "license": "MIT game declaration; external-art rights not admitted",
+      "build": {
+        "audit": "fixtures/pong-candidate-audit.json",
+        "status": "not-run"
+      },
+      "id": "free-retro-games-pong",
+      "input": "future-title-start-one-player-bounded-score-scenario",
+      "license": "Repository MIT; linked SDK and generated-ROM rights unresolved",
       "notices": [
         "LICENSE"
       ],
-      "assets": [],
-      "build": {
-        "status": "not-run",
-        "toolchain": "SGDK 2.11 candidate; not pinned or audited"
-      },
-      "sha256": null,
-      "oracle": "not-qualified",
+      "oracle": "game-source-progression; no independent runtime observation",
+      "outcome": "unknown",
       "profile": "va3-ntsc-u-v1",
-      "input": "not-selected",
+      "project": "retro-homebrew-games",
+      "replacement": "Select an independently authored commissioned minimal homebrew with written MIT source/assets/generated-ROM rights; no implementation may depend on it until delivered and admitted. Original diagnostic remains the lawful Phase 1 fixture.",
+      "revision": "eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+      "sha256": null,
+      "source": "genesis/pong/src/main.c",
+      "source_sha256": "23b53fae07413c7011018da8625fbab6f7bc1f34b46f042c3667271ef0781edf",
+      "status": "rejected"
+    },
+    {
+      "assets": [],
       "blocked_gates": [
         "external-art",
         "build",
         "sram",
         "mouse-and-additional-controller"
       ],
-      "replacement": "Same commissioned independent homebrew selection as rejected Pong; this is an unadmitted alternative, not a fallback ROM."
+      "build": {
+        "status": "not-run",
+        "toolchain": "SGDK 2.11 candidate; not pinned or audited"
+      },
+      "id": "kleleatoms-md-alternative",
+      "input": "not-selected",
+      "license": "MIT game declaration; external-art rights not admitted",
+      "notices": [
+        "LICENSE"
+      ],
+      "oracle": "not-qualified",
+      "outcome": "unknown",
+      "profile": "va3-ntsc-u-v1",
+      "project": "KleleAtoms-MD",
+      "replacement": "Same commissioned independent homebrew selection as rejected Pong; this is an unadmitted alternative, not a fallback ROM.",
+      "revision": "53f2344636c65b66ae0033e5345fa5502ebb0a21",
+      "sha256": null,
+      "source": "README.md",
+      "source_sha256": null,
+      "status": "unadmitted"
     },
     {
+      "assets": [],
+      "build": {
+        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible ports",
+        "name": "ports",
+        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
+        "source": "scripts/fixtures/build-original-roms.sh",
+        "toolchain": "fixtures/independent-game/toolchain.lock"
+      },
       "id": "genewhip-seam-ports-v1",
+      "input": "none",
       "kind": "original-rom",
-      "status": "admitted",
-      "outcome": "pass",
-      "project": "Genewhip",
-      "revision": "repository-tracked",
-      "source": "tests/devices/roms/ports.s",
-      "source_sha256": "6f5a1d51a06e0443c2cb7d998af5b39c59fd148eb8ad3db2e02e36b82bca2504",
       "license": "MIT",
       "notices": [
         "tests/devices/roms/NOTICES.md"
       ],
-      "assets": [],
-      "build": {
-        "source": "scripts/fixtures/build-original-roms.sh",
-        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
-        "toolchain": "fixtures/independent-game/toolchain.lock",
-        "name": "ports",
-        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible ports"
-      },
+      "oracle": "documented-hardware-behaviour",
+      "outcome": "pass",
+      "profile": "va3-ntsc-u-v1",
+      "project": "Genewhip",
+      "revision": "repository-tracked",
       "rom": "tests/devices/roms/ports.bin",
       "rom_bytes": 1024,
       "sha256": "f56949025ca1d9b7a23a43c05073cd18e60c99d5ea38432d7529f6dc112d4a00",
-      "oracle": "documented-hardware-behaviour",
-      "profile": "va3-ntsc-u-v1",
-      "input": "none"
+      "source": "tests/devices/roms/ports.s",
+      "source_sha256": "6f5a1d51a06e0443c2cb7d998af5b39c59fd148eb8ad3db2e02e36b82bca2504",
+      "status": "admitted"
     },
     {
+      "assets": [],
+      "build": {
+        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible pad_echo",
+        "name": "pad_echo",
+        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
+        "source": "scripts/fixtures/build-original-roms.sh",
+        "toolchain": "fixtures/independent-game/toolchain.lock"
+      },
       "id": "genewhip-seam-pad-echo-v1",
+      "input": "scheduled-pad-events",
       "kind": "original-rom",
-      "status": "admitted",
-      "outcome": "pass",
-      "project": "Genewhip",
-      "revision": "repository-tracked",
-      "source": "tests/devices/roms/pad_echo.s",
-      "source_sha256": "f7a6ad8453968f31f3547286e624c710dd3d0f86598e4da2a2e2ca0d3bdd8a07",
       "license": "MIT",
       "notices": [
         "tests/devices/roms/NOTICES.md"
       ],
-      "assets": [],
-      "build": {
-        "source": "scripts/fixtures/build-original-roms.sh",
-        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
-        "toolchain": "fixtures/independent-game/toolchain.lock",
-        "name": "pad_echo",
-        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible pad_echo"
-      },
+      "oracle": "documented-hardware-behaviour",
+      "outcome": "pass",
+      "profile": "va3-ntsc-u-v1",
+      "project": "Genewhip",
+      "revision": "repository-tracked",
       "rom": "tests/devices/roms/pad_echo.bin",
       "rom_bytes": 1024,
       "sha256": "a8fd15900804c76b0a658ef93043f888a287fe2b35eb2fe66413d69e9232ed5a",
-      "oracle": "documented-hardware-behaviour",
-      "profile": "va3-ntsc-u-v1",
-      "input": "scheduled-pad-events"
+      "source": "tests/devices/roms/pad_echo.s",
+      "source_sha256": "f7a6ad8453968f31f3547286e624c710dd3d0f86598e4da2a2e2ca0d3bdd8a07",
+      "status": "admitted"
     },
     {
+      "assets": [],
+      "build": {
+        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible th",
+        "name": "th",
+        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
+        "source": "scripts/fixtures/build-original-roms.sh",
+        "toolchain": "fixtures/independent-game/toolchain.lock"
+      },
       "id": "genewhip-seam-th-v1",
+      "input": "scheduled-pad-events",
       "kind": "original-rom",
-      "status": "admitted",
-      "outcome": "pass",
-      "project": "Genewhip",
-      "revision": "repository-tracked",
-      "source": "tests/devices/roms/th.s",
-      "source_sha256": "d045bcd052069f713e14d10455238b49d735bdd0dfff95042261752ef8345b75",
       "license": "MIT",
       "notices": [
         "tests/devices/roms/NOTICES.md"
       ],
-      "assets": [],
-      "build": {
-        "source": "scripts/fixtures/build-original-roms.sh",
-        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
-        "toolchain": "fixtures/independent-game/toolchain.lock",
-        "name": "th",
-        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible th"
-      },
+      "oracle": "documented-hardware-behaviour",
+      "outcome": "pass",
+      "profile": "va3-ntsc-u-v1",
+      "project": "Genewhip",
+      "revision": "repository-tracked",
       "rom": "tests/devices/roms/th.bin",
       "rom_bytes": 1024,
       "sha256": "e0e483779a940b49267a9e2e338f96d555eba7aaa4011caf9132896fdc20646b",
-      "oracle": "documented-hardware-behaviour",
-      "profile": "va3-ntsc-u-v1",
-      "input": "scheduled-pad-events"
+      "source": "tests/devices/roms/th.s",
+      "source_sha256": "d045bcd052069f713e14d10455238b49d735bdd0dfff95042261752ef8345b75",
+      "status": "admitted"
     },
     {
+      "assets": [],
+      "build": {
+        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible dma",
+        "name": "dma",
+        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
+        "source": "scripts/fixtures/build-original-roms.sh",
+        "toolchain": "fixtures/independent-game/toolchain.lock"
+      },
       "id": "genewhip-seam-dma-v1",
+      "input": "none",
       "kind": "original-rom",
-      "status": "admitted",
-      "outcome": "pass",
-      "project": "Genewhip",
-      "revision": "repository-tracked",
-      "source": "tests/devices/roms/dma.s",
-      "source_sha256": "7f0635447eef27350989af7402fd504137c63ea49fbbc1fb69791dc5cfed29c7",
       "license": "MIT",
       "notices": [
         "tests/devices/roms/NOTICES.md"
       ],
-      "assets": [],
-      "build": {
-        "source": "scripts/fixtures/build-original-roms.sh",
-        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
-        "toolchain": "fixtures/independent-game/toolchain.lock",
-        "name": "dma",
-        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible dma"
-      },
+      "oracle": "documented-hardware-behaviour",
+      "outcome": "pass",
+      "profile": "va3-ntsc-u-v1",
+      "project": "Genewhip",
+      "revision": "repository-tracked",
       "rom": "tests/devices/roms/dma.bin",
       "rom_bytes": 2048,
       "sha256": "5667d62ee8c9fff8c06c215310fe9b4edb22d80f8bdecdbd7ea563fbb27f2a03",
-      "oracle": "documented-hardware-behaviour",
-      "profile": "va3-ntsc-u-v1",
-      "input": "none"
+      "source": "tests/devices/roms/dma.s",
+      "source_sha256": "7f0635447eef27350989af7402fd504137c63ea49fbbc1fb69791dc5cfed29c7",
+      "status": "admitted"
     },
     {
+      "assets": [],
+      "build": {
+        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible fifo",
+        "name": "fifo",
+        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
+        "source": "scripts/fixtures/build-original-roms.sh",
+        "toolchain": "fixtures/independent-game/toolchain.lock"
+      },
       "id": "genewhip-seam-fifo-v1",
+      "input": "none",
       "kind": "original-rom",
-      "status": "admitted",
-      "outcome": "pass",
-      "project": "Genewhip",
-      "revision": "repository-tracked",
-      "source": "tests/devices/roms/fifo.s",
-      "source_sha256": "af9769d17b84d738e13a6f30f04fe3bf2701f0550ec63e512113a6e96c710899",
       "license": "MIT",
       "notices": [
         "tests/devices/roms/NOTICES.md"
       ],
-      "assets": [],
-      "build": {
-        "source": "scripts/fixtures/build-original-roms.sh",
-        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
-        "toolchain": "fixtures/independent-game/toolchain.lock",
-        "name": "fifo",
-        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible fifo"
-      },
+      "oracle": "documented-hardware-behaviour",
+      "outcome": "pass",
+      "profile": "va3-ntsc-u-v1",
+      "project": "Genewhip",
+      "revision": "repository-tracked",
       "rom": "tests/devices/roms/fifo.bin",
       "rom_bytes": 1024,
       "sha256": "1aafc0d9b5775875d5703e552c9edc43eed2e54945a2bd9601336b0c55d193fb",
-      "oracle": "documented-hardware-behaviour",
-      "profile": "va3-ntsc-u-v1",
-      "input": "none"
+      "source": "tests/devices/roms/fifo.s",
+      "source_sha256": "af9769d17b84d738e13a6f30f04fe3bf2701f0550ec63e512113a6e96c710899",
+      "status": "admitted"
     },
     {
+      "assets": [],
+      "build": {
+        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible irq",
+        "name": "irq",
+        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
+        "source": "scripts/fixtures/build-original-roms.sh",
+        "toolchain": "fixtures/independent-game/toolchain.lock"
+      },
       "id": "genewhip-seam-irq-v1",
+      "input": "none",
       "kind": "original-rom",
-      "status": "admitted",
-      "outcome": "pass",
-      "project": "Genewhip",
-      "revision": "repository-tracked",
-      "source": "tests/devices/roms/irq.s",
-      "source_sha256": "6389158b206e9921dc4ebffc413658dbc231bf3d8e14618410baa8dfae5f67c6",
       "license": "MIT",
       "notices": [
         "tests/devices/roms/NOTICES.md"
       ],
-      "assets": [],
-      "build": {
-        "source": "scripts/fixtures/build-original-roms.sh",
-        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
-        "toolchain": "fixtures/independent-game/toolchain.lock",
-        "name": "irq",
-        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible irq"
-      },
+      "oracle": "documented-hardware-behaviour",
+      "outcome": "pass",
+      "profile": "va3-ntsc-u-v1",
+      "project": "Genewhip",
+      "revision": "repository-tracked",
       "rom": "tests/devices/roms/irq.bin",
       "rom_bytes": 2048,
       "sha256": "67cb160c5a021937420eeddd8bdbbd4c736f0bd0656b0d74729532028be9b3c1",
-      "oracle": "documented-hardware-behaviour",
-      "profile": "va3-ntsc-u-v1",
-      "input": "none"
+      "source": "tests/devices/roms/irq.s",
+      "source_sha256": "6389158b206e9921dc4ebffc413658dbc231bf3d8e14618410baa8dfae5f67c6",
+      "status": "admitted"
     },
     {
+      "assets": [],
+      "build": {
+        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible bus_arb",
+        "name": "bus_arb",
+        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
+        "source": "scripts/fixtures/build-original-roms.sh",
+        "toolchain": "fixtures/independent-game/toolchain.lock",
+        "z80_include": "tests/devices/roms/z80/bus_arb.inc",
+        "z80_source": "tests/devices/roms/z80/bus_arb.s"
+      },
       "id": "genewhip-seam-bus-arb-v1",
+      "input": "none",
       "kind": "original-rom",
-      "status": "admitted",
-      "outcome": "pass",
-      "project": "Genewhip",
-      "revision": "repository-tracked",
-      "source": "tests/devices/roms/bus_arb.s",
-      "source_sha256": "5b819f2b4233b241e9a62b2ea5a8c133524cd9f3f4d130fad0b3dd43a21fd2e1",
       "license": "MIT",
       "notices": [
         "tests/devices/roms/NOTICES.md"
       ],
-      "assets": [],
-      "build": {
-        "source": "scripts/fixtures/build-original-roms.sh",
-        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
-        "toolchain": "fixtures/independent-game/toolchain.lock",
-        "name": "bus_arb",
-        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible bus_arb",
-        "z80_source": "tests/devices/roms/z80/bus_arb.s",
-        "z80_include": "tests/devices/roms/z80/bus_arb.inc"
-      },
+      "oracle": "guest-source-derived-arithmetic",
+      "outcome": "pass",
+      "profile": "va3-ntsc-u-v1",
+      "project": "Genewhip",
+      "revision": "repository-tracked",
       "rom": "tests/devices/roms/bus_arb.bin",
       "rom_bytes": 2048,
       "sha256": "837a71ec9abb79dbf499c1bd768b44766cf8936ee24b22d823b8585b14cee5ba",
-      "oracle": "guest-source-derived-arithmetic",
-      "profile": "va3-ntsc-u-v1",
-      "input": "none"
+      "source": "tests/devices/roms/bus_arb.s",
+      "source_sha256": "5b819f2b4233b241e9a62b2ea5a8c133524cd9f3f4d130fad0b3dd43a21fd2e1",
+      "status": "admitted"
     },
     {
+      "assets": [],
+      "build": {
+        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible bus_arb_midinstr",
+        "name": "bus_arb_midinstr",
+        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
+        "source": "scripts/fixtures/build-original-roms.sh",
+        "toolchain": "fixtures/independent-game/toolchain.lock",
+        "z80_include": "tests/devices/roms/z80/bus_arb_midinstr.inc",
+        "z80_source": "tests/devices/roms/z80/bus_arb_midinstr.s"
+      },
       "id": "genewhip-seam-bus-arb-midinstr-v1",
+      "input": "none",
       "kind": "original-rom",
-      "status": "admitted",
-      "outcome": "pass",
-      "project": "Genewhip",
-      "revision": "repository-tracked",
-      "source": "tests/devices/roms/bus_arb_midinstr.s",
-      "source_sha256": "7386e14c1a12a004aeb4a5b269b4e58e21a4cfa578f754db6a62ac3a6cfb14f0",
       "license": "MIT",
       "notices": [
         "tests/devices/roms/NOTICES.md"
       ],
-      "assets": [],
-      "build": {
-        "source": "scripts/fixtures/build-original-roms.sh",
-        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
-        "toolchain": "fixtures/independent-game/toolchain.lock",
-        "name": "bus_arb_midinstr",
-        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible bus_arb_midinstr",
-        "z80_source": "tests/devices/roms/z80/bus_arb_midinstr.s",
-        "z80_include": "tests/devices/roms/z80/bus_arb_midinstr.inc"
-      },
+      "oracle": "guest-source-derived-arithmetic",
+      "outcome": "pass",
+      "profile": "va3-ntsc-u-v1",
+      "project": "Genewhip",
+      "revision": "repository-tracked",
       "rom": "tests/devices/roms/bus_arb_midinstr.bin",
       "rom_bytes": 2048,
       "sha256": "1636ae177adc465c27215ba49fe41025dae48bd6865438301f4e42cc472ca0b0",
-      "oracle": "guest-source-derived-arithmetic",
-      "profile": "va3-ntsc-u-v1",
-      "input": "none"
+      "source": "tests/devices/roms/bus_arb_midinstr.s",
+      "source_sha256": "7386e14c1a12a004aeb4a5b269b4e58e21a4cfa578f754db6a62ac3a6cfb14f0",
+      "status": "admitted"
     },
     {
+      "assets": [],
+      "build": {
+        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible z80_bank",
+        "name": "z80_bank",
+        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
+        "source": "scripts/fixtures/build-original-roms.sh",
+        "toolchain": "fixtures/independent-game/toolchain.lock",
+        "z80_include": "tests/devices/roms/z80/z80_bank.inc",
+        "z80_source": "tests/devices/roms/z80/z80_bank.s"
+      },
       "id": "genewhip-seam-z80-bank-v1",
+      "input": "none",
       "kind": "original-rom",
-      "status": "admitted",
-      "outcome": "pass",
-      "project": "Genewhip",
-      "revision": "repository-tracked",
-      "source": "tests/devices/roms/z80_bank.s",
-      "source_sha256": "70499a9950352736b02aa267c40fb4147739c9bd50be8aec3670340ff9f3edc3",
       "license": "MIT",
       "notices": [
         "tests/devices/roms/NOTICES.md"
       ],
-      "assets": [],
-      "build": {
-        "source": "scripts/fixtures/build-original-roms.sh",
-        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
-        "toolchain": "fixtures/independent-game/toolchain.lock",
-        "name": "z80_bank",
-        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible z80_bank",
-        "z80_source": "tests/devices/roms/z80/z80_bank.s",
-        "z80_include": "tests/devices/roms/z80/z80_bank.inc"
-      },
+      "oracle": "guest-source-derived-arithmetic",
+      "outcome": "pass",
+      "profile": "va3-ntsc-u-v1",
+      "project": "Genewhip",
+      "revision": "repository-tracked",
       "rom": "tests/devices/roms/z80_bank.bin",
       "rom_bytes": 65536,
       "sha256": "85e6a25051bcfc90cd1f289ec663e77070a20dbb7e34d832d5232e4b001fa1b0",
-      "oracle": "guest-source-derived-arithmetic",
-      "profile": "va3-ntsc-u-v1",
-      "input": "none"
+      "source": "tests/devices/roms/z80_bank.s",
+      "source_sha256": "70499a9950352736b02aa267c40fb4147739c9bd50be8aec3670340ff9f3edc3",
+      "status": "admitted"
     },
     {
+      "assets": [],
+      "build": {
+        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible z80_guest",
+        "name": "z80_guest",
+        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
+        "source": "scripts/fixtures/build-original-roms.sh",
+        "toolchain": "fixtures/independent-game/toolchain.lock",
+        "z80_include": "tests/devices/roms/z80/z80_guest.inc",
+        "z80_source": "tests/devices/roms/z80/z80_guest.s"
+      },
       "id": "genewhip-seam-z80-guest-v1",
+      "input": "field interrupt delivery with Z80 reset, EI, HALT, IM1 handler, RETI; ten VINTs",
       "kind": "original-rom",
-      "status": "admitted",
-      "outcome": "pass",
-      "project": "Genewhip",
-      "revision": "repository-tracked",
-      "source": "tests/devices/roms/z80_guest.s",
-      "source_sha256": "af0821e68181d3434da2d4bb4f71f0c3dfbdc98425fd4dbee26ffe7c8fe1b68d",
       "license": "MIT",
       "notices": [
         "tests/devices/roms/NOTICES.md"
       ],
-      "assets": [],
-      "build": {
-        "source": "scripts/fixtures/build-original-roms.sh",
-        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
-        "toolchain": "fixtures/independent-game/toolchain.lock",
-        "name": "z80_guest",
-        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible z80_guest",
-        "z80_source": "tests/devices/roms/z80/z80_guest.s",
-        "z80_include": "tests/devices/roms/z80/z80_guest.inc"
-      },
+      "oracle": "guest-source-derived-arithmetic",
+      "outcome": "pass",
+      "profile": "VA3-NTSC-U",
+      "project": "Genewhip",
+      "revision": "repository-tracked",
       "rom": "tests/devices/roms/z80_guest.bin",
       "rom_bytes": 65536,
       "sha256": "ccb9c4ec8ec43c9c3a4ad96ec6c88a013688bd46cbb14e335f4b46ac1b111422",
-      "oracle": "guest-source-derived-arithmetic",
-      "profile": "VA3-NTSC-U",
-      "input": "field interrupt delivery with Z80 reset, EI, HALT, IM1 handler, RETI; ten VINTs"
+      "source": "tests/devices/roms/z80_guest.s",
+      "source_sha256": "af0821e68181d3434da2d4bb4f71f0c3dfbdc98425fd4dbee26ffe7c8fe1b68d",
+      "status": "admitted"
     },
     {
+      "assets": [],
+      "build": {
+        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible psg",
+        "name": "psg",
+        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
+        "source": "scripts/fixtures/build-original-roms.sh",
+        "toolchain": "fixtures/independent-game/toolchain.lock"
+      },
       "id": "genewhip-seam-psg-v1",
+      "input": "none",
       "kind": "original-rom",
-      "status": "admitted",
-      "outcome": "pass",
-      "project": "Genewhip",
-      "revision": "repository-tracked",
-      "source": "tests/devices/roms/psg.s",
-      "source_sha256": "3b79b2f54654085aea6ce7125ebc9355a72f63a4fc7b523326b07e2958e3849e",
       "license": "MIT",
       "notices": [
         "tests/devices/roms/NOTICES.md"
       ],
-      "assets": [],
-      "build": {
-        "source": "scripts/fixtures/build-original-roms.sh",
-        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
-        "toolchain": "fixtures/independent-game/toolchain.lock",
-        "name": "psg",
-        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible psg"
-      },
+      "oracle": "documented-sn76489-formulas",
+      "outcome": "pass",
+      "profile": "va3-ntsc-u-v1",
+      "project": "Genewhip",
+      "revision": "repository-tracked",
       "rom": "tests/devices/roms/psg.bin",
       "rom_bytes": 2048,
       "sha256": "cec34883592b68f67c62741dbc3cef1c6fc4ec41c06828c87bd54edeadd503f0",
-      "oracle": "documented-sn76489-formulas",
-      "profile": "va3-ntsc-u-v1",
-      "input": "none"
+      "source": "tests/devices/roms/psg.s",
+      "source_sha256": "3b79b2f54654085aea6ce7125ebc9355a72f63a4fc7b523326b07e2958e3849e",
+      "status": "admitted"
     },
     {
+      "assets": [],
+      "build": {
+        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible sprites",
+        "name": "sprites",
+        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
+        "source": "scripts/fixtures/build-original-roms.sh",
+        "toolchain": "fixtures/independent-game/toolchain.lock"
+      },
       "id": "genewhip-seam-sprites-v1",
+      "input": "none",
       "kind": "original-rom",
-      "status": "admitted",
-      "outcome": "pass",
-      "project": "Genewhip",
-      "revision": "repository-tracked",
-      "source": "tests/devices/roms/sprites.s",
-      "source_sha256": "450a756738bf35b6b84c9c35e2907978fb21285538d6ef02b14df3334e569948",
       "license": "MIT",
       "notices": [
         "tests/devices/roms/NOTICES.md"
       ],
-      "assets": [],
-      "build": {
-        "source": "scripts/fixtures/build-original-roms.sh",
-        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
-        "toolchain": "fixtures/independent-game/toolchain.lock",
-        "name": "sprites",
-        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible sprites"
-      },
+      "oracle": "documented-hardware-behaviour",
+      "outcome": "pass",
+      "profile": "va3-ntsc-u-v1",
+      "project": "Genewhip",
+      "revision": "repository-tracked",
       "rom": "tests/devices/roms/sprites.bin",
       "rom_bytes": 8192,
       "sha256": "9a2b6ce4064666a4de54f2d00c6bad2bd4598812880ebee8d344dd74a899ae57",
-      "oracle": "documented-hardware-behaviour",
-      "profile": "va3-ntsc-u-v1",
-      "input": "none"
+      "source": "tests/devices/roms/sprites.s",
+      "source_sha256": "450a756738bf35b6b84c9c35e2907978fb21285538d6ef02b14df3334e569948",
+      "status": "admitted"
     },
     {
+      "assets": [],
+      "build": {
+        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible raster-toy",
+        "name": "raster-toy",
+        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
+        "source": "scripts/fixtures/build-original-roms.sh",
+        "toolchain": "fixtures/independent-game/toolchain.lock",
+        "z80_include": "fixtures/raster-toy/z80/driver.inc",
+        "z80_include_sha256": "7ad3985efc4c3ba67a03b3adb7de334a1b4eb66f117d8012ef21c97a5796b86a",
+        "z80_source": "fixtures/raster-toy/z80/driver.s",
+        "z80_source_sha256": "6c4ae30dd66c15b6cdc3efb2660914d48fd4388a49113c6d9fdce679570d5fd1"
+      },
       "id": "genewhip-raster-toy-v1",
+      "input": "A PSG blip, B FM note, then C DAC sample; one-frame press edges with releases",
       "kind": "original-rom",
-      "status": "admitted",
-      "outcome": "pass",
-      "project": "Genewhip",
-      "revision": "repository-tracked",
-      "source": "fixtures/raster-toy/src/toy.s",
-      "source_sha256": "ea04a9895e249188a6f8609a8e94861d16e0e5e6bade3afef6014f87530c5e41",
       "license": "MIT",
       "notices": [
         "fixtures/raster-toy/NOTICES.md"
       ],
-      "assets": [],
-      "build": {
-        "source": "scripts/fixtures/build-original-roms.sh",
-        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
-        "toolchain": "fixtures/independent-game/toolchain.lock",
-        "name": "raster-toy",
-        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible raster-toy",
-        "z80_source": "fixtures/raster-toy/z80/driver.s",
-        "z80_source_sha256": "6c4ae30dd66c15b6cdc3efb2660914d48fd4388a49113c6d9fdce679570d5fd1",
-        "z80_include": "fixtures/raster-toy/z80/driver.inc",
-        "z80_include_sha256": "7ad3985efc4c3ba67a03b3adb7de334a1b4eb66f117d8012ef21c97a5796b86a"
-      },
+      "oracle": "guest-source-derived-arithmetic",
+      "outcome": "pass",
+      "profile": "va3-ntsc-u-v1",
+      "project": "Genewhip",
+      "revision": "repository-tracked",
       "rom": "fixtures/raster-toy/toy.bin",
       "rom_bytes": 32768,
       "sha256": "fded06ae78eb1177f5e65ac43a849092bf1b6458fd39d59d78c6a191889865ab",
-      "oracle": "guest-source-derived-arithmetic",
-      "profile": "va3-ntsc-u-v1",
-      "input": "A PSG blip, B FM note, then C DAC sample; one-frame press edges with releases"
+      "source": "fixtures/raster-toy/src/toy.s",
+      "source_sha256": "ea04a9895e249188a6f8609a8e94861d16e0e5e6bade3afef6014f87530c5e41",
+      "status": "admitted"
     },
     {
+      "assets": [],
+      "build": {
+        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible fm_script",
+        "name": "fm_script",
+        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
+        "source": "scripts/fixtures/build-original-roms.sh",
+        "toolchain": "fixtures/independent-game/toolchain.lock",
+        "z80_include": "tests/devices/roms/z80/fm_script.inc",
+        "z80_source": "tests/devices/roms/z80/fm_script.s"
+      },
       "id": "genewhip-seam-fm-script-v1",
+      "input": "64-field-IM1-register-script-v2-audible",
       "kind": "original-rom",
-      "status": "admitted",
-      "outcome": "pass",
-      "project": "Genewhip",
-      "revision": "repository-tracked",
-      "source": "tests/devices/roms/fm_script.s",
-      "source_sha256": "bb3e27774c52522c5b199c188533ba846d2af531ed2845ff8be465cb48524fa4",
       "license": "MIT",
       "notices": [
         "tests/devices/roms/NOTICES.md"
       ],
-      "assets": [],
-      "build": {
-        "source": "scripts/fixtures/build-original-roms.sh",
-        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
-        "toolchain": "fixtures/independent-game/toolchain.lock",
-        "name": "fm_script",
-        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible fm_script",
-        "z80_source": "tests/devices/roms/z80/fm_script.s",
-        "z80_include": "tests/devices/roms/z80/fm_script.inc"
-      },
+      "oracle": "guest-source-derived-arithmetic",
+      "outcome": "pass",
+      "profile": "VA3-NTSC-U",
+      "project": "Genewhip",
+      "revision": "repository-tracked",
       "rom": "tests/devices/roms/fm_script.bin",
       "rom_bytes": 65536,
       "sha256": "00eacbeb21af2c2b2da77c2e5dc6d0c8e24a8bb023c5bc807ac02a8a6318a67b",
-      "oracle": "guest-source-derived-arithmetic",
-      "profile": "VA3-NTSC-U",
-      "input": "64-field-IM1-register-script-v2-audible",
-      "z80_source_sha256": "3d0f376d11f3fcbf83fda2164315cf94e6c5314175791d3af17f6bb3973e7d5a",
-      "z80_include_sha256": "a62c2b079280c32d4fc4e6b56e758faf64d4f76c0ce499b270f90f0ea6b131b7"
+      "source": "tests/devices/roms/fm_script.s",
+      "source_sha256": "bb3e27774c52522c5b199c188533ba846d2af531ed2845ff8be465cb48524fa4",
+      "status": "admitted",
+      "z80_include_sha256": "a62c2b079280c32d4fc4e6b56e758faf64d4f76c0ce499b270f90f0ea6b131b7",
+      "z80_source_sha256": "3d0f376d11f3fcbf83fda2164315cf94e6c5314175791d3af17f6bb3973e7d5a"
     },
     {
+      "assets": [],
+      "build": {
+        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible dac",
+        "name": "dac",
+        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
+        "source": "scripts/fixtures/build-original-roms.sh",
+        "toolchain": "fixtures/independent-game/toolchain.lock",
+        "z80_include": "tests/devices/roms/z80/dac.inc",
+        "z80_source": "tests/devices/roms/z80/dac.s"
+      },
       "id": "genewhip-seam-dac-v1",
+      "input": "source-triangle-256-byte-dac-stream-v1",
       "kind": "original-rom",
-      "status": "admitted",
-      "outcome": "pass",
-      "project": "Genewhip",
-      "revision": "repository-tracked",
-      "source": "tests/devices/roms/dac.s",
-      "source_sha256": "85e2342ebfa9203343d7d0ef9dca817bf985b5ded10a10f85a6539c478c859b8",
       "license": "MIT",
       "notices": [
         "tests/devices/roms/NOTICES.md"
       ],
-      "assets": [],
-      "build": {
-        "source": "scripts/fixtures/build-original-roms.sh",
-        "sha256": "296a8025eda992bc1cd717fcfb88cab36a646dbfcd5d1fa81c88c8cca919f1c4",
-        "toolchain": "fixtures/independent-game/toolchain.lock",
-        "name": "dac",
-        "command": "scripts/fixtures/build-original-roms.sh --verify-reproducible dac",
-        "z80_source": "tests/devices/roms/z80/dac.s",
-        "z80_include": "tests/devices/roms/z80/dac.inc"
-      },
+      "oracle": "guest-source-derived-arithmetic",
+      "outcome": "pass",
+      "profile": "VA3-NTSC-U",
+      "project": "Genewhip",
+      "revision": "repository-tracked",
       "rom": "tests/devices/roms/dac.bin",
       "rom_bytes": 65536,
       "sha256": "b4c48042328c7946c5677fcf10177e7820d0bbb751aaf425eb7d58440aca4816",
-      "oracle": "guest-source-derived-arithmetic",
-      "profile": "VA3-NTSC-U",
-      "input": "source-triangle-256-byte-dac-stream-v1"
+      "source": "tests/devices/roms/dac.s",
+      "source_sha256": "85e2342ebfa9203343d7d0ef9dca817bf985b5ded10a10f85a6539c478c859b8",
+      "status": "admitted"
     },
     {
+      "assets": [],
+      "build": {
+        "command": "fixtures/independent-game-v2/build.sh --verify-reproducible",
+        "sha256": "15f321b986db3c2f7df6a6d55ff5b49d9415399bccd0a241f518351ead7356f4",
+        "source": "fixtures/independent-game-v2/build.sh",
+        "toolchain": "GNU Binutils 2.47 source-built m68k-elf-as"
+      },
+      "evidence_sha256": "1dbd848110894016c1a557f397db7a27e60cced2f34d3598b2250369eae763f7",
       "id": "genewhip-independent-game-v2",
-      "status": "admitted",
-      "outcome": "pass",
-      "project": "Genewhip",
-      "revision": "7a2f3df7460a7a4c9ea1f11a52ab11747026bd2d",
-      "source": "fixtures/independent-game-v2/src/game.s",
-      "source_sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe",
+      "input": "genewhip-independent-game-v2",
       "license": "MIT",
       "notices": [
         "fixtures/independent-game-v2/NOTICES.md"
       ],
+      "oracle": "genewhip-independent-game-v2-source-oracle-v1",
+      "outcome": "pass",
+      "profile": "VA3-NTSC-U",
+      "project": "Genewhip",
+      "revision": "7a2f3df7460a7a4c9ea1f11a52ab11747026bd2d",
+      "rom": "fixtures/independent-game-v2/game.bin",
+      "sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb",
+      "source": "fixtures/independent-game-v2/src/game.s",
+      "source_sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe",
+      "status": "admitted"
+    },
+    {
+      "admission": {
+        "path": "evidence/phase5-public-admissions.json",
+        "sha256": "daebbe9458c62e0616d8cd5c3fdc37f8a33ebd8c0ec5550380d61a6a4ca15000"
+      },
       "assets": [],
       "build": {
-        "source": "fixtures/independent-game-v2/build.sh",
-        "sha256": "15f321b986db3c2f7df6a6d55ff5b49d9415399bccd0a241f518351ead7356f4",
-        "toolchain": "GNU Binutils 2.47 source-built m68k-elf-as",
-        "command": "fixtures/independent-game-v2/build.sh --verify-reproducible"
+        "command": "retained pinned build inputs; no build executed during admission",
+        "sha256": "599910bd324d00b17618ea37fadc22d62282f23213cc5dafa7fae40a5cb8e1b7",
+        "source": "fixtures/phase5-a/build-recipe.json",
+        "toolchain": "6faae09cbe3a5ff5122ee7af21f111b64961b50de6ad506ae736fd3ef83988a6"
       },
-      "sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb",
-      "rom": "fixtures/independent-game-v2/game.bin",
-      "evidence_sha256": "1dbd848110894016c1a557f397db7a27e60cced2f34d3598b2250369eae763f7",
-      "oracle": "genewhip-independent-game-v2-source-oracle-v1",
+      "id": "genewhip-phase5-a",
+      "input": "source-state program preserved; client capability assessed in baseline",
+      "kind": "phase5-independent-game-v1",
+      "license": "See per-material terms; mixed components",
+      "notices": [
+        "fixtures/phase5-a/NOTICES.md"
+      ],
+      "oracle": "independently source-derived; see bound oracle",
+      "outcome": "pass",
       "profile": "VA3-NTSC-U",
-      "input": "genewhip-independent-game-v2"
+      "project": "monteslu/retro-homebrew-games",
+      "revision": "eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+      "rom": "fixtures/phase5-a/game.bin",
+      "sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723",
+      "source": "fixtures/phase5-a/source.tar",
+      "source_sha256": "0751013a99631e08b0309bfde06c8ff578abeda0113c3b208aaf81951a1e6753",
+      "status": "admitted"
+    },
+    {
+      "admission": {
+        "path": "evidence/phase5-public-admissions.json",
+        "sha256": "daebbe9458c62e0616d8cd5c3fdc37f8a33ebd8c0ec5550380d61a6a4ca15000"
+      },
+      "assets": [],
+      "build": {
+        "command": "retained pinned build inputs; no build executed during admission",
+        "sha256": "b692069925c141109aeeccf1122b3b76b3787ad1ff90c6bb4fc39fdb861c255a",
+        "source": "fixtures/phase5-b/build-recipe.json",
+        "toolchain": "784cddd1d8c80cc61145a1dc2464ad3c69a3e5b1ed06592cc5aacfcbd13e6923"
+      },
+      "id": "genewhip-phase5-b",
+      "input": "source-state program preserved; client capability assessed in baseline",
+      "kind": "phase5-independent-game-v1",
+      "license": "See per-material terms; mixed components",
+      "notices": [
+        "fixtures/phase5-b/NOTICES.md"
+      ],
+      "oracle": "independently source-derived; see bound oracle",
+      "outcome": "pass",
+      "profile": "VA3-NTSC-U",
+      "project": "baba20o/RECURSION94",
+      "revision": "ab73bc9c7d2bbc4fcd94b3e0e2b89756cb1dc0cd",
+      "rom": "fixtures/phase5-b/game.bin",
+      "sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff",
+      "source": "fixtures/phase5-b/source.tar",
+      "source_sha256": "d6302d23168fb7e20e643c97eed0c694ef702b23cea0b26897e0bb8152e3ad1b",
+      "status": "admitted"
     }
-  ]
+  ],
+  "schema_version": 1
 }

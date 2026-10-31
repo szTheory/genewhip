@@ -256,10 +256,16 @@ int main(int argc, char **argv)
     check_diagnostic(b, 1, 0);
 
     memcpy(variant, rom, sizeof(rom));
-    variant[0x200] = 0xc0; variant[0x201] = 0xc0; /* legal MULU.W D0,D0, unsupported */
+    variant[0x200] = 0xc1; variant[0x201] = 0x40; /* legal EXG D0,D0, unsupported */
     CHECK(gw_load_rom(a, variant, sizeof(variant)) == GW_OK, "unsupported fixture load");
     result = run(a, 10000);
-    CHECK(result.stop_reason == GW_STOP_UNSUPPORTED_INSTRUCTION && result.opcode == 0xc0c0 &&
+    if (result.stop_reason != GW_STOP_UNSUPPORTED_INSTRUCTION || result.opcode != 0xc140 ||
+        result.instruction_address != 0x200) {
+        fprintf(stderr, "unsupported result: reason=%u opcode=%04x address=%06x tick=%llu\n",
+                result.stop_reason, result.opcode, result.instruction_address,
+                (unsigned long long)result.actual_tick);
+    }
+    CHECK(result.stop_reason == GW_STOP_UNSUPPORTED_INSTRUCTION && result.opcode == 0xc140 &&
           result.instruction_address == 0x200, "legal unsupported instruction visible");
     CHECK(snapshot(a).exceptions == 0 && snapshot(a).instructions == 0, "unsupported is not illegal exception or success");
     CHECK(run(a, 20000).actual_tick == result.actual_tick, "unsupported stop is sticky");

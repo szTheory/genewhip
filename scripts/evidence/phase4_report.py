@@ -43,6 +43,32 @@ GAME_IDENTITIES = {"source_sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93
                    "rom_sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb",
                    "scenario_sha256": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2",
                    "oracle_sha256": "1a9d99cb01496f26fe3dc33d0c1bcb0cf22bd9178088fa183e5bba37a8600f42"}
+SAFE_CTEST_DIAGNOSTIC_METHODS = frozenset({
+    "NativeParserContract.test_phase7_launcher_keeps_shorter_caller_deadline",
+    "NativeParserContract.test_darwin_group_liveness_distinguishes_zombies",
+    "NativeParserContract.test_partial_json_cannot_erase_completed_process_receipt",
+    "NativeParserContract.test_bounded_malformed_route_matrix_both_clients",
+    "NativeParserContract.test_process_group_and_stream_caps_are_enforced",
+    "NativeParserContract.test_process_group_is_killed_when_leader_exits_first",
+    "NativeParserContract.test_monitored_symlink_is_rejected_before_process_start",
+    "NativeParserContract.test_preimport_popen_denial_is_observed_and_sticky",
+    "NativeParserContract.test_wrong_popen_mock_does_not_replace_the_launch_boundary",
+    "NativeParserContract.test_sigterm_during_popen_is_deferred_until_the_group_is_owned",
+    "NativeParserContract.test_sigterm_after_pid_registration_uses_owned_group_cleanup",
+    "NativeParserContract.test_sigterm_and_launch_error_restore_previous_handler_without_owned_child",
+    "NativeParserContract.test_runner_setup_error_restores_previous_handler_before_any_launch",
+    "RepairLedgerContract.test_distinct_budget_includes_discovered_next_stops_once",
+    "RepairLedgerContract.test_identical_duplicate_receipt_is_counted_once",
+    "RepairLedgerContract.test_conflicting_duplicate_receipt_is_rejected",
+    "RepairLedgerContract.test_forged_history_correction_does_not_count_as_execution",
+    "MediaConsumerContract.test_source_clock_must_match_the_declared_media_scene",
+    "MediaConsumerContract.test_source_tone_analysis_rejects_silence_and_wrong_pitch",
+    "MediaConsumerContract.test_boot_score_consumer_checks_programmed_pcm_pitch",
+    "MediaConsumerContract.test_source_image_features_and_tank_palette_reject_pixel_mutants",
+})
+SAFE_CTEST_DIAGNOSTIC_PREFIX = "GENEWHIP_TEST_RESULT:"
+SAFE_CTEST_DIAGNOSTIC = re.compile(
+    r"^GENEWHIP_TEST_RESULT:([A-Za-z][A-Za-z0-9_]*\.test_[A-Za-z0-9_]+):(failure|error)$")
 HOST_SCHEMA = "genewhip-phase4-host-sessions"
 HOST_CONTROLS = ROOT / "fixtures/independent-game-v2/host-controls.json"
 HOST_HEX = re.compile(r"^[0-9a-f]{64}$")
@@ -187,7 +213,7 @@ def _remove_safety_export(path):
 
 
 def sanitize_ctest_junit(source, destination):
-    """Keep only testcase names and outcome markers; discard freeform runner output."""
+    """Keep testcase outcomes and exact allowlisted method IDs; discard freeform output."""
     source, destination = Path(source), Path(destination)
     _remove_safety_export(destination)
     try:
@@ -207,6 +233,22 @@ def sanitize_ctest_junit(source, destination):
         for marker in ("skipped", "failure", "error"):
             if case.find(marker) is not None:
                 ET.SubElement(safe_case, marker)
+        diagnostics = set()
+        for stream in case.iter():
+            if stream.tag not in {"system-out", "system-err"}:
+                continue
+            for line in (stream.text or "").splitlines():
+                if not line.startswith(SAFE_CTEST_DIAGNOSTIC_PREFIX):
+                    continue
+                match = SAFE_CTEST_DIAGNOSTIC.fullmatch(line)
+                if not match or match.group(1) not in SAFE_CTEST_DIAGNOSTIC_METHODS:
+                    raise ValueError("safety-ctest-diagnostic-invalid")
+                diagnostics.add((match.group(1), match.group(2)))
+        if diagnostics:
+            safe_output = ET.SubElement(safe_case, "system-out")
+            safe_output.text = "\n".join(
+                f"GENEWHIP_SAFE_TEST_RESULT:{method}:{kind}"
+                for method, kind in sorted(diagnostics))
     payload = ET.tostring(root, encoding="utf-8", xml_declaration=True) + b"\n"
     if PERSONAL_HOME_PATH.search(payload):
         raise ValueError("safety-ctest-personal-path")
@@ -224,6 +266,36 @@ def sanitize_ctest_junit(source, destination):
         if temp_name and os.path.exists(temp_name):
             os.unlink(temp_name)
     return destination
+
+
+def summarize_sanitized_ctest_failures(source):
+    """Return fixed outcome enums and allowlisted method IDs, never testcase names."""
+    try:
+        root = ET.parse(source).getroot()
+    except (OSError, ET.ParseError) as exc:
+        raise ValueError("safety-ctest-junit-invalid") from exc
+    cases = root.findall(".//testcase")
+    if not cases:
+        raise ValueError("safety-ctest-empty")
+    output = []
+    for case in cases:
+        name = case.get("name", "")
+        if not name or PERSONAL_HOME_PATH.search(name.encode("utf-8")):
+            raise ValueError("safety-ctest-personal-path")
+        for kind in ("failure", "error"):
+            if case.find(kind) is not None:
+                output.append(f"CTest failure [{kind}]")
+        for stream in case.findall("system-out"):
+            for line in (stream.text or "").splitlines():
+                if not line.startswith("GENEWHIP_SAFE_TEST_RESULT:"):
+                    continue
+                match = re.fullmatch(
+                    r"GENEWHIP_SAFE_TEST_RESULT:([A-Za-z][A-Za-z0-9_]*\.test_[A-Za-z0-9_]+):(failure|error)",
+                    line)
+                if not match or match.group(1) not in SAFE_CTEST_DIAGNOSTIC_METHODS:
+                    raise ValueError("safety-ctest-diagnostic-invalid")
+                output.append(f"CTest subtest failure: {match.group(1)} [{match.group(2)}]")
+    return sorted(set(output))
 
 
 def _safety_lane_files(ci, lane):
@@ -702,8 +774,8 @@ def validate_host_sessions(evidence, expected_revision=None, expected_identity=N
     expected_identity = expected_identity or {}
     fixture_identities = host_fixture_identities()
     control_sha = sha(HOST_CONTROLS)
-    all_ids = set()
     for mode in ("software", "live"):
+        all_ids = set()
         report = evidence.get(mode)
         if not isinstance(report, dict) or report.get("schema") != HOST_SCHEMA or report.get("version") != 1:
             problems.append(("desktop-host-schema", mode)); continue
@@ -732,7 +804,7 @@ def validate_host_sessions(evidence, expected_revision=None, expected_identity=N
             problems.append(("desktop-host-counts", mode))
         if mode == "live" and report.get("outcome") == "skipped" and not runs:
             continue
-        expected_modes = (("live",) if mode == "live" else
+        expected_modes = (("live", "replace-drop") if mode == "live" else
                           ("software-dummy", "software-disk", "missing-audio-negative", "replace-drop"))
         expected_ids = {fixture + "-" + run_mode for fixture in fixture_identities for run_mode in expected_modes}
         actual_ids = {row.get("id") for row in runs if isinstance(row, dict)}
@@ -740,6 +812,9 @@ def validate_host_sessions(evidence, expected_revision=None, expected_identity=N
             problems.append(("desktop-host-roster", mode))
         if report.get("outcome") == "pass" and any(row.get("outcome") == "fail" for row in runs):
             problems.append(("desktop-host-outcome", mode + " contains failed run"))
+        if mode == "live" and report.get("outcome") == "pass" and any(
+                isinstance(row, dict) and row.get("outcome") != "pass" for row in runs):
+            problems.append(("desktop-host-outcome", "live pass requires every run to pass"))
         host = report.get("host")
         if not isinstance(host, dict) or not host.get("video_driver") or not host.get("audio_backend_requested") or \
                 not isinstance(host.get("audio_rate_hz"), int) or not isinstance(host.get("audio_queue_policy"), dict):
@@ -789,8 +864,12 @@ def validate_host_sessions(evidence, expected_revision=None, expected_identity=N
                 if stats.get("stats_version") != 2:
                     problems.append(("desktop-host-stats-version", str(row_id)))
                 if row.get("elapsed_exposure_ns", 0) <= 0 or not isinstance(settings, dict) or \
-                        settings.get("video_driver") != "dummy" or settings.get("audio_backend_requested") != "disk":
+                        settings.get("video_driver") != ("cocoa" if mode == "live" else "dummy") or \
+                        settings.get("audio_backend_requested") != ("coreaudio" if mode == "live" else "disk"):
                     problems.append(("desktop-host-setup", str(row_id)))
+                if mode == "live" and not _valid_host_display_identity(
+                        settings.get("display_identity") if isinstance(settings, dict) else None):
+                    problems.append(("desktop-host-capability", str(row_id)))
                 if "present_errors" not in stats or not isinstance(stats.get("present_errors"), int) or \
                         stats.get("present_errors") != 0 or stats.get("presentation_error") != 0 or \
                         stats.get("present_calls", 0) != stats.get("present_successes", 0) + stats.get("present_errors", 0) or \
@@ -1034,7 +1113,7 @@ def validate_safety_contracts(evidence, expected_revision=None):
         if not isinstance(summary, dict):
             problems.append(("safety-summary-contract", name)); continue
         expected_summary = {"mode": mode, "seed": "47573105", "cases": 16, "safety_pass": 16,
-                            "audio_pass": 256, "negative_controls": 6,
+                            "audio_pass": 256, "negative_controls": 12,
                             "steps_per_case": 8, "tick_budget": 180000,
                             "output_cap_frames": 128,
                             "allocation_instrumented": instrumented,
@@ -1320,6 +1399,8 @@ def main(argv=None):
     sanitize = sub.add_parser("safety-sanitize-junit")
     sanitize.add_argument("--input", type=Path, required=True)
     sanitize.add_argument("--output", type=Path, required=True)
+    failure_summary = sub.add_parser("safety-ctest-failure-summary")
+    failure_summary.add_argument("--input", type=Path, required=True)
     export = sub.add_parser("safety-export")
     export.add_argument("--build", type=Path, required=True)
     export.add_argument("--out", type=Path, required=True)
@@ -1342,6 +1423,15 @@ def main(argv=None):
     if args.command == "safety-sanitize-junit":
         try:
             sanitize_ctest_junit(args.input, args.output)
+        except (OSError, ValueError) as exc:
+            reason = str(exc) if isinstance(exc, ValueError) else "safety-ctest-junit-io"
+            print("REJECT: " + reason, file=sys.stderr)
+            return 1
+        return 0
+    if args.command == "safety-ctest-failure-summary":
+        try:
+            for line in summarize_sanitized_ctest_failures(args.input):
+                print(line)
         except (OSError, ValueError) as exc:
             reason = str(exc) if isinstance(exc, ValueError) else "safety-ctest-junit-io"
             print("REJECT: " + reason, file=sys.stderr)
