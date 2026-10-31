@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import importlib.util
 import json
@@ -25,6 +26,8 @@ FIELD_TICKS = 896040
 MASTER_HZ = 53693175
 RATE = 48000
 TIMEOUT = 180
+EXECUTION_SCOPE: dict | None = None
+PROCESS_RECEIPTS: list[dict] = []
 BUTTONS = {"Start": 128, "Right": 8, "Left": 4, "Up": 1, "Down": 2, "A": 64,
            "B": 16, "C": 32}
 HASH_LINE = re.compile(r'^\{"(?:sequence|fields)":')
@@ -66,7 +69,43 @@ def json_rows(output: str) -> list[dict]:
     return [json.loads(line) for line in output.splitlines() if HASH_LINE.match(line)]
 
 
-def run(args: list[object], env: dict[str, str], timeout: int = TIMEOUT) -> subprocess.CompletedProcess:
+def run(args: list[object], env: dict[str, str], timeout: int = TIMEOUT, *,
+        ownership_callback=None) -> subprocess.CompletedProcess:
+    if EXECUTION_SCOPE is not None:
+        command=list(map(str,args));scratch_paths=[]
+        for flag in ("--dump-audio","--dump-fields","--record"):
+            if flag in command and command.index(flag)+1<len(command):scratch_paths.append(Path(command[command.index(flag)+1]))
+        root=next((path.parent if path.suffix else path for path in scratch_paths),None)
+        if root is None or not root.is_dir():raise RuntimeError("phase7-host-control-scratch-root-invalid")
+        spec=importlib.util.spec_from_file_location("gw_phase7_host_control_boundary",ROOT/"tests/session/phase6_route_contract.py")
+        if spec is None or spec.loader is None:raise RuntimeError("phase7-host-control-boundary-import")
+        boundary=importlib.util.module_from_spec(spec);spec.loader.exec_module(boundary)
+        streams={};receipts=[]
+        # Open the owned sink before launch; keep each child receipt rather than
+        # replacing the preceding child's ownership in a shared temporary root.
+        helper_spec=importlib.util.spec_from_file_location("gw_phase7_host_receipt",ROOT/"scripts/evidence/phase5_process.py")
+        if helper_spec is None or helper_spec.loader is None:raise RuntimeError("phase7-host-receipt-import")
+        helper=importlib.util.module_from_spec(helper_spec);helper_spec.loader.exec_module(helper)
+        relative=Path(f"bounded-child-process-{len(PROCESS_RECEIPTS):04d}.json")
+        with helper.receipt_file(root,relative) as receipt_stream:
+            try:
+                result=boundary._run_client(Path(command[0]),command,receipts,report=root/"bounded-child-report.json",
+                    timeout=min(float(timeout),float(EXECUTION_SCOPE["per_child_limits"]["wall_seconds"])),cwd=ROOT,env=env,
+                    retained_streams=streams,limits=EXECUTION_SCOPE["per_child_limits"],scratch_roots=(root,),
+                    process_receipt_stream=receipt_stream, ownership_callback=ownership_callback)
+            finally:
+                PROCESS_RECEIPTS.extend(receipts)
+                try:
+                    receipt_stream.seek(0)
+                    json.dump({"processes":receipts,"streams":streams,"scope_id":EXECUTION_SCOPE.get("scope_id"),
+                        "historical_window_access":False},receipt_stream,sort_keys=True,indent=2)
+                    receipt_stream.write("\n");receipt_stream.truncate();receipt_stream.flush();os.fsync(receipt_stream.fileno())
+                except BaseException as error:
+                    error.process_receipts=receipts
+                    raise
+        return subprocess.CompletedProcess(command,result.returncode,result.stdout,result.stderr)
+    if ownership_callback is not None:
+        raise ValueError("owned callback requires scoped desktop execution")
     return subprocess.run(list(map(str, args)), cwd=ROOT, env=env, text=True,
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
 
@@ -325,7 +364,7 @@ def run_controls(name: str, session: dict, headless: Path, desktop: Path, build:
 
 
 def run_replacement(name: str, session: dict, headless: Path, desktop: Path,
-                    temp: Path) -> dict:
+                    temp: Path, mode: str = "software") -> dict:
     primary, _, primary_identity = load_fixture(session)
     other_name = "sounded-diagnostic" if name == "independent-game-v2" else "independent-game-v2"
     other_session = load_controls()["sessions"][other_name]
@@ -338,12 +377,19 @@ def run_replacement(name: str, session: dict, headless: Path, desktop: Path,
     script.write_text(f"{start_fields} drop {replacement.relative_to(ROOT)}\n"
                       f"{start_fields + first_tail} drop {primary.relative_to(ROOT)}\n"
                       f"{start_fields + first_tail + second_tail} quit\n")
-    env = dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="disk",
-               SDL_AUDIO_DISK_OUTPUT_FILE=str(temp / (name + "-replace-sink.pcm")))
+    if mode == "live":
+        env = dict(os.environ, SDL_VIDEODRIVER="cocoa", SDL_AUDIODRIVER="coreaudio")
+    else:
+        env = dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="disk",
+                   SDL_AUDIO_DISK_OUTPUT_FILE=str(temp / (name + "-replace-sink.pcm")))
     started = time.monotonic_ns()
     result = run([desktop, "--fields", 1000, "--host-script", script, "--record", log,
                   "--print-field-hashes", "--dump-audio", desktop_pcm_path, "--stats", stats_path, primary], env)
     elapsed_ns = time.monotonic_ns() - started
+    if mode == "live" and ("Could not initialise SDL video" in result.stderr or
+                            "Could not create the window or renderer" in result.stderr):
+        return {"id": name + "-replace-drop", "outcome": "skipped",
+                "reason": "real macOS window/display could not be opened"}
     if result.returncode or "LOADED: " not in result.stderr:
         raise ValueError(name + " cartridge replacement/drop did not load: " + result.stderr[-1000:])
     rows = json_rows(result.stdout)
@@ -377,6 +423,10 @@ def run_replacement(name: str, session: dict, headless: Path, desktop: Path,
         raise ValueError(name + " full replacement/drop PCM differs from complete headless segments")
     if not log.read_text().startswith("genewhip-input-log 1\n"):
         raise ValueError(name + " replacement session did not produce a valid input log")
+    stats = json.loads(stats_path.read_text())
+    if mode == "live" and stats.get("audio_available") != 1:
+        return {"id": name + "-replace-drop", "outcome": "skipped",
+                "reason": "requested CoreAudio device unavailable"}
     return {"id": name + "-replace-drop", "outcome": "pass",
             "controls_exercised": sorted(("replace", "drop")),
             "primary": primary_identity, "replacement": replacement_identity,
@@ -396,12 +446,13 @@ def run_replacement(name: str, session: dict, headless: Path, desktop: Path,
             "input_script_sha256": sha(script),
             "build_configuration_sha256": sha(headless.parent.parent.parent / "CMakeCache.txt"),
             "desktop_build_sha256": sha(desktop), "headless_build_sha256": sha(headless),
-            "host_settings": host_settings("dummy", "disk"), "elapsed_exposure_ns": elapsed_ns,
+            "host_settings": host_settings("cocoa" if mode == "live" else "dummy",
+                                            "coreaudio" if mode == "live" else "disk"), "elapsed_exposure_ns": elapsed_ns,
             "host_audio_queue_kind": "SDL queued source bytes/frames",
             "device_queue_observation": "unavailable: SDL reports source queue, not physical device consumption",
             "physical_audio_quality": "unobserved",
             "deterministic_segment_join": True,
-            "stats": json.loads(stats_path.read_text())}
+            "stats": stats}
 
 
 def run_missing_audio(name: str, session: dict, headless: Path, desktop: Path, build: Path,
@@ -436,7 +487,13 @@ def run_all(args) -> int:
             print("SKIP: phase4_host_live (both real display and audio opt-ins are required)")
             return 77
     runs = []
-    with tempfile.TemporaryDirectory(prefix="gw-phase4-host-") as directory:
+    if EXECUTION_SCOPE is not None:
+        control_root=ROOT/"build/v02/runtime/host-controls"
+        control_root.mkdir(parents=True,exist_ok=True)
+        temp_context=contextlib.nullcontext(tempfile.mkdtemp(prefix="attempt-",dir=control_root))
+    else:
+        temp_context=tempfile.TemporaryDirectory(prefix="gw-phase4-host-")
+    with temp_context as directory:
         temp = Path(directory)
         if args.mode == "software":
             for client_name, session in controls["sessions"].items():
@@ -447,8 +504,14 @@ def run_all(args) -> int:
                 runs.append(run_replacement(client_name, session, headless, desktop, temp))
         else:
             for client_name, session in controls["sessions"].items():
-                runs.append(run_controls(client_name + "-live", session, headless, desktop,
-                                         build, "live", temp))
+                primary = run_controls(client_name + "-live", session, headless, desktop,
+                                       build, "live", temp)
+                runs.append(primary)
+                if primary.get("outcome") == "pass":
+                    runs.append(run_replacement(client_name, session, headless, desktop, temp, "live"))
+                else:
+                    runs.append({"id": client_name + "-replace-drop", "outcome": "skipped",
+                        "reason": "native host capability unavailable before replacement/drop"})
     passing = all(row.get("outcome") == "pass" for row in runs if not row["id"].endswith("missing-audio-negative"))
     capability_skips = [row for row in runs if row.get("outcome") == "skipped" and
                          not row["id"].endswith("missing-audio-negative")]
@@ -464,7 +527,9 @@ def run_all(args) -> int:
               "denominator": len(runs), "runs": runs,
               "counts": {"pass": sum(r.get("outcome") == "pass" for r in runs),
                          "skipped": sum(r.get("outcome") == "skipped" for r in runs),
-                         "fail": sum(r.get("outcome") == "fail" for r in runs)}}
+                         "fail": sum(r.get("outcome") == "fail" for r in runs)},
+              "process_receipts": PROCESS_RECEIPTS if EXECUTION_SCOPE is not None else None,
+              "historical_window_access": False if EXECUTION_SCOPE is not None else None}
     write_report(args.out, report)
     print(json.dumps({"outcome": report["outcome"], "denominator": report["denominator"],
                       "counts": report["counts"]}, sort_keys=True))
@@ -479,13 +544,20 @@ def write_report(path: Path, report: dict) -> None:
 
 
 def main(argv=None) -> int:
+    global EXECUTION_SCOPE, PROCESS_RECEIPTS
     parser = argparse.ArgumentParser()
     parser.add_argument("mode", choices=("contract", "software", "live"))
     parser.add_argument("--headless", type=Path)
     parser.add_argument("--desktop", type=Path)
     parser.add_argument("--build", type=Path)
     parser.add_argument("--out", type=Path)
+    parser.add_argument("--execution-scope", type=Path)
     args = parser.parse_args(argv)
+    if args.execution_scope is not None:
+        EXECUTION_SCOPE=json.loads(args.execution_scope.read_text(encoding="utf-8"));PROCESS_RECEIPTS=[]
+        if (EXECUTION_SCOPE.get("schema")!="genewhip-v02-execution-v1" or
+                EXECUTION_SCOPE.get("scope_id")!="phase7-serial-child-workloads"):
+            parser.error("invalid Phase 7 execution scope")
     if args.mode == "contract":
         result = unittest.TextTestRunner(verbosity=2).run(
             unittest.defaultTestLoader.loadTestsFromTestCase(HostControlsContract))

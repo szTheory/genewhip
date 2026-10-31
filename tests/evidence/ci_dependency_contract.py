@@ -4,6 +4,8 @@
 import pathlib
 import json
 import hashlib
+import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -13,6 +15,16 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
 class CIDependencyContract(unittest.TestCase):
+    def test_current_keyring_pin_is_updated_without_rewriting_historical_lock(self):
+        expected_current = "8013de59880f7a59f53b6bd207f4d2a408d67b84a82fa9cba1dbbf443428e2db"
+        historical = "0fe55175b96a8ea1c4b670cc3fe11d56b341e4eff81b161ea49958ae550be6ca"
+        recipe = (ROOT / "fixtures/independent-game/toolchain/build-binutils.sh").read_text()
+        validator = (ROOT / "tests/evidence/independent_game_toolchain.py").read_text()
+        lock = json.loads((ROOT / "fixtures/independent-game/toolchain.lock").read_text())
+        self.assertIn(f"KEYRING_SHA={expected_current}", recipe)
+        self.assertIn(f'CURRENT_KEYRING_SHA = "{expected_current}"', validator)
+        self.assertEqual(lock["assembler"]["signature"]["keyring_sha256"], historical)
+
     def test_prepare_script_builds_each_locked_evidence_dependency(self):
         script = (ROOT / "scripts/ci/prepare_evidence_dependencies.sh").read_text()
         self.assertIn("--current-host", script, "missing-current-host-toolchain-receipt")
@@ -135,17 +147,84 @@ class CIDependencyContract(unittest.TestCase):
     def test_native_gate_and_desktop_lane_reject_unapproved_skips(self):
         required = (ROOT / "scripts/ci/required-gate.sh").read_text()
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
-        self.assertEqual(required.count("scripts/ci/check_ctest_skips.py"), 2)
-        self.assertEqual(required.count("--output-junit ctest-junit.raw.xml"), 2)
-        self.assertEqual(required.count("safety-sanitize-junit"), 2)
-        normalized = " ".join(required.replace("\\", " ").split())
-        self.assertIn('--input "build/ci/$lane/ctest-junit.raw.xml" --output "$junit"', normalized)
-        self.assertIn("--input build/ci/production/ctest-junit.raw.xml "
-                      "--output build/ci/production/ctest-junit.xml", normalized)
+        helper = re.search(r"(?ms)^run_required_ctest\(\) \{\n.*?^\}", required)
+        self.assertIsNotNone(helper, "required CTest helper missing")
+        helper_body = helper.group(0)
+        self.assertIn('--output-junit ctest-junit.raw.xml', helper_body)
+        self.assertIn('scripts/evidence/phase4_report.py safety-sanitize-junit', helper_body)
+        self.assertIn('scripts/ci/check_ctest_skips.py "$junit"', helper_body)
+        self.assertIn('run_required_ctest "$lane" "$junit" "$leaks"', required)
+        self.assertIn('run_required_ctest production build/ci/production/ctest-junit.xml "$leaks"', required)
+        self.assertNotIn('scripts/ci/check_ctest_skips.py "$junit"', required.replace(helper_body, ""))
         self.assertNotIn("--output-junit ctest-junit.xml", required)
         desktop = workflow.split("  desktop:\n", 1)[1].split("  package:\n", 1)[0]
         self.assertIn("scripts/ci/check_ctest_skips.py build/desktop/ctest-junit.xml", desktop)
         self.assertIn("--output-junit ctest-junit.xml", desktop)
+
+    def test_failed_required_ctest_is_sanitized_before_nonzero_return(self):
+        gate = (ROOT / "scripts/ci/required-gate.sh").read_text()
+        helper = re.search(r"(?ms)^run_required_ctest\(\) \{\n.*?^\}", gate)
+        self.assertIsNotNone(helper, "required CTest sanitizing helper missing")
+        with tempfile.TemporaryDirectory(prefix="required-ctest-failure-") as temporary:
+            root = pathlib.Path(temporary)
+            tools = root / "tools"
+            tools.mkdir()
+            build = root / "build/ci/native"
+            build.mkdir(parents=True)
+            junit = build / "ctest-junit.xml"
+            events = root / "events.log"
+            ctest = tools / "ctest"
+            ctest.write_text("""#!/bin/sh
+printf 'ctest\\n' >> "$EVENTS"
+for arg in "$@"; do
+  if [ "$arg" = --output-on-failure ]; then printf 'PRIVATE_TEST_OUTPUT_MARKER\\n'; fi
+done
+test_dir=''
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = --test-dir ]; then shift; test_dir=$1; fi
+  shift
+done
+printf '<testsuites><system-out>PRIVATE_TEST_OUTPUT_MARKER</system-out></testsuites>\\n' \\
+  > "$test_dir/ctest-junit.raw.xml"
+exit 7
+""")
+            ctest.chmod(0o755)
+            python = tools / "python3"
+            python.write_text("""#!/bin/sh
+case "$1" in
+  */phase4_report.py)
+    [ "$2" = safety-sanitize-junit ] || exit 91
+    shift 2
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --input) input=$2; shift 2 ;;
+        --output) output=$2; shift 2 ;;
+        *) exit 92 ;;
+      esac
+    done
+    sed 's/PRIVATE_TEST_OUTPUT_MARKER/[redacted]/g' "$input" > "$output"
+    printf 'sanitize\\n' >> "$EVENTS"
+    ;;
+  */check_ctest_skips.py)
+    test -f "$2" || exit 93
+    printf 'skip-check\\n' >> "$EVENTS"
+    ;;
+  *) exit 94 ;;
+esac
+""")
+            python.chmod(0o755)
+            source = (helper.group(0) + "\nset -euo pipefail\n"
+                + 'run_required_ctest "$1" "$2" 0 || exit $?\n'
+                + 'printf "continued\\n" >> "$EVENTS"\n')
+            result = subprocess.run(["bash", "-c", source, "test", "native", str(junit)],
+                cwd=root, text=True, capture_output=True,
+                env={**os.environ, "PATH": str(tools) + os.pathsep + os.environ.get("PATH", ""),
+                     "EVENTS": str(events)})
+            self.assertEqual(result.returncode, 7, result.stderr)
+            self.assertNotIn("PRIVATE_TEST_OUTPUT_MARKER", result.stdout + result.stderr)
+            self.assertEqual(events.read_text().splitlines(), ["ctest", "sanitize", "skip-check"])
+            self.assertIn("PRIVATE_TEST_OUTPUT_MARKER", (build / "ctest-junit.raw.xml").read_text())
+            self.assertNotIn("PRIVATE_TEST_OUTPUT_MARKER", junit.read_text())
 
 
 if __name__ == "__main__":

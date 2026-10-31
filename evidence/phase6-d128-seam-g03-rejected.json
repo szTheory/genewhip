@@ -1,0 +1,51 @@
+{
+  "variant": "green",
+  "admission": {
+    "charge_seconds": 966.9464899579762,
+    "remaining_forecast_seconds": 1500.0,
+    "purpose_remaining_seconds": 2633.053510042024,
+    "global_remaining_seconds": 12309.410151625067,
+    "batch_exposure_seconds": 55.0,
+    "pin_path": ".planning/debug/d128-parent-source-pin-g03.json",
+    "pin_sha256": "c405ae4ef03cdbedd1b7922b315c3ef85ccbf399e113b93f5a02df2739ecd10d",
+    "authority_sha256": "6c97cf19162ad2e4f99b7e00df8154a8223dcce9078ef6b2c835b7c22d779829",
+    "variant": "green"
+  },
+  "tests_run": 10,
+  "failures": 0,
+  "errors": 2,
+  "failure_messages": [],
+  "error_messages": [
+    {
+      "test": "test_actual_admit_revalidates_pins_authority_boot_and_rolls_back (d128_tests.AdmissionTests.test_actual_admit_revalidates_pins_authority_boot_and_rolls_back)",
+      "message": "Traceback (most recent call last):\n  File \"$PROJECT_ROOT/tests/evidence/test_d128_seam.py\", line 105, in test_actual_admit_revalidates_pins_authority_boot_and_rolls_back\n    result = H.admit(root, \"pin.json\", pin_sha, \"green\", H.START + 1200.0, H.BOOT)\n  File \"$PROJECT_ROOT/scripts/evidence/d128_seam.py\", line 219, in admit\n    state[\"admissions\"].append(result)\n    ~~~~~^^^^^^^^^^^^^^\nKeyError: 'admissions'\n"
+    },
+    {
+      "test": "test_retirement_requires_completed_guarded_evidence (d128_tests.AdmissionTests.test_retirement_requires_completed_guarded_evidence)",
+      "message": "Traceback (most recent call last):\n  File \"$PROJECT_ROOT/tests/evidence/test_d128_seam.py\", line 159, in test_retirement_requires_completed_guarded_evidence\n    admission = H.admit(root, \"pin.json\", pin_sha, \"green\", H.START, H.BOOT)\n  File \"$PROJECT_ROOT/scripts/evidence/d128_seam.py\", line 219, in admit\n    state[\"admissions\"].append(result)\n    ~~~~~^^^^^^^^^^^^^^\nKeyError: 'admissions'\n"
+    }
+  ],
+  "process_denial_probes": 9,
+  "unexpected_process_requests": 0,
+  "elapsed_seconds": 0.08662391599500552,
+  "retained_synthetic_roots": [
+    "$SYNTHETIC_ROOT_1",
+    "$SYNTHETIC_ROOT_2",
+    "$SYNTHETIC_ROOT_3",
+    "$SYNTHETIC_ROOT_4",
+    "$SYNTHETIC_ROOT_5",
+    "$SYNTHETIC_ROOT_6",
+    "$SYNTHETIC_ROOT_7",
+    "$SYNTHETIC_ROOT_8",
+    "$SYNTHETIC_ROOT_9",
+    "$SYNTHETIC_ROOT_10",
+    "$SYNTHETIC_ROOT_11",
+    "$SYNTHETIC_ROOT_12",
+    "$SYNTHETIC_ROOT_13",
+    "$SYNTHETIC_ROOT_14",
+    "$SYNTHETIC_ROOT_15",
+    "$SYNTHETIC_ROOT_16"
+  ],
+  "raw_evidence_sha256": "4f106608b53834501b91f3ac39184eaf9cf366ee77a84c1fa3e615c0debf0035",
+  "redactions": "Project home path and ephemeral synthetic root paths only; raw bytes retained in ignored build/phase6/d128-seam/"
+}

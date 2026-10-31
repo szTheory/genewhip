@@ -15,6 +15,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "fixtures/independent-game"
 DEFAULT_LOCK = FIXTURE / "toolchain.lock"
 SHA = re.compile(r"^[0-9a-f]{64}$")
+CURRENT_KEYRING_SHA = "8013de59880f7a59f53b6bd207f4d2a408d67b84a82fa9cba1dbbf443428e2db"
 
 
 def reject(condition: bool, reason: str) -> None:
@@ -109,7 +110,7 @@ def validate_current_receipt(doc: dict, target: str, assembler_path: pathlib.Pat
     reject(sig.get("url") != "https://ftp.gnu.org/gnu/binutils/binutils-2.47.tar.bz2.sig", "current-host signature URL mismatch")
     reject(sig.get("sha256") != "133e31f4eedfe16cd47fa30a15ceef7a953cb8027766028d0a00d5b5a9e14a28", "current-host signature digest mismatch")
     reject(sig.get("keyring_url") != "https://ftp.gnu.org/gnu/gnu-keyring.gpg", "current-host keyring URL mismatch")
-    reject(sig.get("keyring_sha256") != "0fe55175b96a8ea1c4b670cc3fe11d56b341e4eff81b161ea49958ae550be6ca", "current-host keyring digest mismatch")
+    reject(sig.get("keyring_sha256") != CURRENT_KEYRING_SHA, "current-host keyring digest mismatch")
     reject(sig.get("primary_fingerprint") != "3A24BC1E8FB409FA9F14371813FCEF89DD9E3C4F" or sig.get("signing_fingerprint") != "3A24BC1E8FB409FA9F14371813FCEF89DD9E3C4F", "current-host signer identity mismatch")
     reject(sig.get("timestamp_unix") != 1785086752 or sig.get("outcome") != "GOODSIG and VALIDSIG; no expired, revoked, bad-signature, or missing-key status", "current-host signature outcome mismatch")
     reject(sig.get("release_announcement") != "https://sourceware.org/pipermail/binutils/2026-July/150520.html", "current-host release announcement mismatch")
@@ -229,6 +230,7 @@ def current_receipt_log_identity(doc: dict, receipt_bytes: bytes) -> dict:
 
 def self_test_current_receipt(lock: dict) -> int:
     record = copy.deepcopy(lock["assembler"])
+    record["signature"]["keyring_sha256"] = CURRENT_KEYRING_SHA
     target = "m68k-elf"
     payload = {"schema": "genewhip-current-host-toolchain-v1",
                "receipt_basis": "fresh source build; separate from immutable historical toolchain.lock",

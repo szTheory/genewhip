@@ -5,6 +5,12 @@
 /* The only core allocation sites. Counting is per-instance, never global. */
 static void *core_allocate(gw_machine *owner, size_t size)
 {
+#ifdef GW_TEST_HOOKS
+    if (owner && owner->fail_next_rom_allocation) {
+        owner->fail_next_rom_allocation = 0;
+        return NULL;
+    }
+#endif
     void *p = malloc(size);
 #ifdef GW_TEST_HOOKS
     if (p && owner) {
@@ -34,9 +40,18 @@ static void core_free(gw_machine *owner, void *p, size_t size)
 uint64_t gw_test_allocation_count(const gw_machine *m) { return m->allocations; }
 size_t gw_test_owned_bytes_current(const gw_machine *m) { return m ? m->owned_bytes_current : 0; }
 size_t gw_test_owned_bytes_peak(const gw_machine *m) { return m ? m->owned_bytes_peak : 0; }
+void gw_test_fail_next_rom_allocation(gw_machine *m) { if (m) m->fail_next_rom_allocation = 1; }
 #endif
 
 uint32_t gw_api_version(void) { return GW_API_VERSION; }
+
+static int reset_stack_frame_in_work_ram(uint32_t sp)
+{
+    /* A7 is 32 bits, but the MC68000 presents only A23..A0 to the bus.
+     * The six-byte initial exception frame is written below the reset A7. */
+    uint32_t frame = (sp - UINT32_C(6)) & UINT32_C(0xffffff);
+    return frame >= UINT32_C(0xe00000) && frame <= UINT32_C(0xfffffa);
+}
 
 gw_status gw_create(const gw_config *config, gw_machine **out)
 {
@@ -86,7 +101,7 @@ gw_status gw_load_rom(gw_machine *m, const void *bytes, size_t size)
     if (size < GW_MIN_ROM_SIZE || size > GW_MAX_ROM_SIZE || (size & 1u)) return GW_ERROR_ROM;
     sp = gw_be32(input);
     pc = gw_be32(input + 4);
-    if ((sp & 1u) || sp < UINT32_C(0xe00006) || sp > UINT32_C(0xfffffe) ||
+    if ((sp & 1u) || sp < UINT32_C(0xe00006) || !reset_stack_frame_in_work_ram(sp) ||
         (pc & 1u) || pc < 512 || pc > size - 2) return GW_ERROR_ROM;
     copy = core_allocate(m, size);
     if (!copy) return GW_ERROR_MEMORY;

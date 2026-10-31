@@ -6,11 +6,18 @@
 #include "input_log.h"
 #include "rom_file.h"
 #include "session.h"
+#include "route_controller.h"
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 #define GW_MAX_FIELD_ROW_BYTES (320u * 4u)
+#define GW_ROUTE_CAPTURE_AUDIO_MAX_BYTES (16u * 1024u * 1024u)
 
 static uint8_t rom_buffer[GW_MAX_ROM_SIZE];
 static gw_audio_write audio_trace[GW_AUDIO_TRACE_CAPACITY];
@@ -18,7 +25,9 @@ static gw_audio_write audio_trace[GW_AUDIO_TRACE_CAPACITY];
 static int usage(void)
 {
     fputs("usage: gw_headless ROM --fields N [--replay LOG] [--record LOG] [--port-device P1 P2]\n"
-          "                 [--dump-fields DIR] [--peek ADDRESS LENGTH]\n"
+          "                 [--route-plan FILE --route-report FILE]\n"
+          "                 [--route-instruction-probe PC [--route-probe-stack-before-a7] [--route-probe-only]]\n"
+          "                 [--dump-fields DIR [--capture-field N | --capture-attempt-tick A T]] [--peek ADDRESS LENGTH]\n"
           "                 [--audio-rate N] [--dump-audio FILE] [--dump-audio-trace FILE]\n"
           "                 [--dump-instruction-trace FILE]\n"
           "  devices: pad3 | none\n", stderr);
@@ -63,7 +72,7 @@ static int dump_audio_trace(const gw_machine *machine, const char *path)
     uint64_t dropped = 0;
     FILE *out;
     if (gw_get_audio_writes(machine, audio_trace, GW_AUDIO_TRACE_CAPACITY, &count, &dropped) != GW_OK) return 1;
-    out = fopen(path, "wb");
+    out = fopen(path, "wbx");
     if (!out) return 1;
     for (size_t i = 0; i < count; ++i) {
         const gw_audio_write *r = &audio_trace[i];
@@ -118,7 +127,7 @@ static int dump_instruction_trace(const gw_machine *machine, const char *path)
 /* Writes field-<sequence>.bin (height rows of width*4 bytes, pitch removed, each pixel
  * 0x00RRGGBB as four little-endian bytes) and field-<sequence>.json into an existing
  * directory. File names come from the integer sequence only. Returns 0 on success. */
-static int dump_field(const gw_session *session, const char *dir)
+static int dump_field(const gw_session *session, const char *dir, int exclusive)
 {
     gw_video_field field;
     const uint32_t *pixels = NULL;
@@ -126,9 +135,10 @@ static int dump_field(const gw_session *session, const char *dir)
     FILE *out;
     uint8_t row[GW_MAX_FIELD_ROW_BYTES];
     if (gw_session_field(session, &field, &pixels) != 0) return 1;
-    if (field.width * 4u > sizeof(row)) return 1;
+    if (!field.width || field.width > sizeof(row) / 4u ||
+        (exclusive && (field.width != 320u || field.height != 224u))) return 1;
     if (snprintf(path, sizeof(path), "%s/field-%llu.bin", dir, (unsigned long long)field.sequence) >= (int)sizeof(path)) return 1;
-    out = fopen(path, "wb");
+    out = fopen(path, exclusive ? "wbx" : "wb");
     if (!out) return 1;
     for (uint32_t y = 0; y < field.height; ++y) {
         const uint32_t *src = (const uint32_t *)((const uint8_t *)pixels + (size_t)y * field.pitch_bytes);
@@ -142,13 +152,117 @@ static int dump_field(const gw_session *session, const char *dir)
     }
     if (fclose(out) != 0) return 1;
     if (snprintf(path, sizeof(path), "%s/field-%llu.json", dir, (unsigned long long)field.sequence) >= (int)sizeof(path)) return 1;
-    out = fopen(path, "wb");
+    out = fopen(path, exclusive ? "wbx" : "wb");
     if (!out) return 1;
-    fprintf(out, "{\"sequence\":%llu,\"width\":%u,\"height\":%u,\"row_bytes\":%u,"
+    if (fprintf(out, "{\"sequence\":%llu,\"width\":%u,\"height\":%u,\"row_bytes\":%u,"
             "\"pixel\":\"uint32 0x00RRGGBB little-endian\",\"end_tick\":%llu}\n",
             (unsigned long long)field.sequence, (unsigned)field.width, (unsigned)field.height,
-            (unsigned)(field.width * 4u), (unsigned long long)field.end_tick);
+            (unsigned)(field.width * 4u), (unsigned long long)field.end_tick) < 0) { (void)fclose(out); return 1; }
     return fclose(out) != 0;
+}
+
+static int route_capture_directory_ready(const char *dir)
+{
+    struct stat info;
+    DIR *directory;
+    struct dirent *entry;
+#ifndef _WIN32
+    if (lstat(dir, &info) != 0 || !S_ISDIR(info.st_mode) || S_ISLNK(info.st_mode) || info.st_uid != geteuid()) return 0;
+#else
+    if (stat(dir, &info) != 0 || !S_ISDIR(info.st_mode)) return 0;
+#endif
+    directory = opendir(dir);
+    if (!directory) return 0;
+    while ((entry = readdir(directory)) != NULL) {
+        if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..")) {
+            (void)closedir(directory);
+            return 0;
+        }
+    }
+    if (closedir(directory) != 0) return 0;
+    return 1;
+}
+
+typedef struct route_capture {
+    FILE *audio_out;
+    const char *field_dir;
+    unsigned long long field_sequence;
+    unsigned long long source_attempt;
+    unsigned long long source_tick;
+    uint64_t audio_bytes;
+    int captured;
+    const char *capture_identity;
+} route_capture;
+
+static int route_capture_field(void *context, const gw_session *session)
+{
+    route_capture *capture = (route_capture *)context;
+    if (gw_session_print_field(session, stdout) != 0) return 1;
+    if (capture->field_dir) {
+        uint32_t observed_attempt = 0, observed_tick = 0;
+        int selected = !capture->captured && capture->field_sequence && session->fields == capture->field_sequence;
+        if (capture->source_attempt) {
+            uint8_t attempt[2], tick[2];
+            if (gw_peek_memory(session->machine, 0x00ff140e, attempt, sizeof(attempt)) != GW_OK ||
+                gw_peek_memory(session->machine, 0x00ff1410, tick, sizeof(tick)) != GW_OK) return 1;
+            observed_attempt = (uint32_t)((uint16_t)attempt[0] << 8 | attempt[1]);
+            observed_tick = (uint32_t)((uint16_t)tick[0] << 8 | tick[1]);
+            selected = !capture->captured && observed_attempt == capture->source_attempt && observed_tick >= capture->source_tick;
+        }
+        if (selected) {
+            gw_video_field field;
+            const uint32_t *pixels = NULL;
+            uint8_t actor_x[2], actor_y[2], tank_p1x[2], tank_p1y[2], tank_p2x[2], tank_p2y[2];
+            uint32_t actor_x_px = 0, actor_y_px = 0;
+            uint32_t p1x = 0, p1y = 0, p2x = 0, p2y = 0;
+            char path[4096];
+            FILE *metadata;
+            if (!route_capture_directory_ready(capture->field_dir) || dump_field(session, capture->field_dir, 1) != 0 ||
+                gw_session_field(session, &field, &pixels) != 0) return 1;
+            (void)pixels;
+            if (capture->source_attempt) {
+                if (gw_peek_memory(session->machine, 0x00ff18c5, actor_x, sizeof(actor_x)) != GW_OK ||
+                    gw_peek_memory(session->machine, 0x00ff18c9, actor_y, sizeof(actor_y)) != GW_OK) return 1;
+                actor_x_px = (uint32_t)actor_x[0] * 256u + actor_x[1];
+                actor_y_px = (uint32_t)actor_y[0] * 256u + actor_y[1];
+            } else {
+                if (gw_peek_memory(session->machine, 0x00ff042c, tank_p1x, sizeof(tank_p1x)) != GW_OK ||
+                    gw_peek_memory(session->machine, 0x00ff042e, tank_p1y, sizeof(tank_p1y)) != GW_OK ||
+                    gw_peek_memory(session->machine, 0x00ff0438, tank_p2x, sizeof(tank_p2x)) != GW_OK ||
+                    gw_peek_memory(session->machine, 0x00ff043a, tank_p2y, sizeof(tank_p2y)) != GW_OK) return 1;
+                p1x = (uint32_t)tank_p1x[0] * 256u + tank_p1x[1];
+                p1y = (uint32_t)tank_p1y[0] * 256u + tank_p1y[1];
+                p2x = (uint32_t)tank_p2x[0] * 256u + tank_p2x[1];
+                p2y = (uint32_t)tank_p2y[0] * 256u + tank_p2y[1];
+            }
+            if (snprintf(path, sizeof(path), "%s/route-capture.json", capture->field_dir) >= (int)sizeof(path)) return 1;
+            metadata = fopen(path, "wbx");
+            if (!metadata) return 1;
+            if (capture->source_attempt) {
+                if (fprintf(metadata, "{\"schema\":\"genewhip-phase6-route-capture-v1\",\"candidate_sha256\":\"%s\",\"field_sequence\":%llu,\"field\":%llu,\"attempt\":%u,\"source_tick\":%u,\"actor_x_px\":%u,\"actor_y_px\":%u}\n",
+                    capture->capture_identity ? capture->capture_identity : "", (unsigned long long)field.sequence,
+                    (unsigned long long)session->fields, observed_attempt, observed_tick, actor_x_px, actor_y_px) < 0) {
+                    (void)fclose(metadata); return 1;
+                }
+            } else if (fprintf(metadata, "{\"schema\":\"genewhip-phase6-route-capture-v1\",\"candidate_sha256\":\"%s\",\"field_sequence\":%llu,\"field\":%llu,\"p1_x\":%u,\"p1_y\":%u,\"p2_x\":%u,\"p2_y\":%u}\n",
+                    capture->capture_identity ? capture->capture_identity : "", (unsigned long long)field.sequence,
+                    (unsigned long long)session->fields, p1x, p1y, p2x, p2y) < 0) {
+                (void)fclose(metadata); return 1;
+            }
+            if (fclose(metadata) != 0) return 1;
+            capture->captured = 1;
+        }
+    }
+    if (capture->audio_out) {
+        const int16_t *frames = NULL;
+        uint32_t count = 0;
+        gw_audio_read_result result;
+        if (gw_session_audio(session, &frames, &count, &result) != 0 ||
+            (uint64_t)count * 4u > GW_ROUTE_CAPTURE_AUDIO_MAX_BYTES - capture->audio_bytes ||
+            dump_audio_frames(capture->audio_out, frames, count) != 0) return 1;
+        capture->audio_bytes += (uint64_t)count * 4u;
+    }
+    return 0;
 }
 
 static int parse_device(const char *text, uint32_t *device)
@@ -167,7 +281,18 @@ int main(int argc, char **argv)
     gw_input_log log;
     const char *rom_path = NULL, *replay_path = NULL, *record_path = NULL, *reason = NULL, *dump_dir = NULL;
     const char *dump_audio_path = NULL, *dump_trace_path = NULL, *dump_instruction_path = NULL;
+    const char *route_plan_path = NULL, *route_report_path = NULL;
+    unsigned long long route_probe_pc = 0;
+    unsigned long long route_stop_horizon = 308;
+    int route_instruction_probe = 0;
+    int route_probe_only = 0;
+    int route_probe_stack_before_a7 = 0;
+    gw_session_route_plan route_plan = {0};
+    FILE *route_report = NULL;
     FILE *audio_out = NULL;
+    route_capture capture = {NULL, NULL, 0, 0, 0, 0, 0, NULL};
+    const char *capture_identity = NULL;
+    unsigned long long capture_field_sequence = 0, capture_attempt = 0, capture_tick = 0;
     unsigned long long fields = 0, peek_address = 0, peek_length = 0;
     int have_peek = 0;
     size_t rom_size = 0;
@@ -186,6 +311,18 @@ int main(int argc, char **argv)
             record_path = argv[++i];
         } else if (!strcmp(argv[i], "--dump-fields") && i + 1 < argc) {
             dump_dir = argv[++i];
+        } else if (!strcmp(argv[i], "--capture-field") && i + 1 < argc) {
+            if (!parse_count(argv[++i], UINT32_MAX, &capture_field_sequence) || !capture_field_sequence) return usage();
+        } else if (!strcmp(argv[i], "--capture-attempt-tick") && i + 2 < argc) {
+            if (!parse_count(argv[++i], UINT16_MAX, &capture_attempt) || !capture_attempt ||
+                !parse_count(argv[++i], UINT16_MAX, &capture_tick)) return usage();
+        } else if (!strcmp(argv[i], "--capture-identity") && i + 1 < argc) {
+            capture_identity = argv[++i];
+            if (strlen(capture_identity) != 64u) return usage();
+            for (size_t n = 0; n < 64u; ++n) {
+                const char c = capture_identity[n];
+                if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) return usage();
+            }
         } else if (!strcmp(argv[i], "--peek") && i + 2 < argc) {
             char *end = NULL;
             peek_address = strtoull(argv[i + 1], &end, 0);
@@ -206,6 +343,20 @@ int main(int argc, char **argv)
         } else if (!strcmp(argv[i], "--dump-instruction-trace") && i + 1 < argc) {
             dump_instruction_path = argv[++i];
             config.diagnostics = 1;
+        } else if (!strcmp(argv[i], "--route-probe-only")) {
+            route_probe_only = 1;
+        } else if (!strcmp(argv[i], "--route-probe-stack-before-a7")) {
+            route_probe_stack_before_a7 = 1;
+        } else if (!strcmp(argv[i], "--route-stop-horizon") && i + 1 < argc) {
+            if (!parse_count(argv[++i], 308, &route_stop_horizon) || !route_stop_horizon) return usage();
+        } else if (!strcmp(argv[i], "--route-instruction-probe") && i + 1 < argc) {
+            if (!parse_count(argv[++i], 0xffffffu, &route_probe_pc)) return usage();
+            route_instruction_probe = 1;
+        } else if (!strcmp(argv[i], "--route-plan") && i + 1 < argc) {
+            route_plan_path = argv[++i];
+            config.diagnostics = 1;
+        } else if (!strcmp(argv[i], "--route-report") && i + 1 < argc) {
+            route_report_path = argv[++i];
         } else if (!strcmp(argv[i], "--port-device") && i + 2 < argc) {
             if (!parse_device(argv[i + 1], &config.port_device[0]) ||
                 !parse_device(argv[i + 2], &config.port_device[1])) return usage();
@@ -218,7 +369,27 @@ int main(int argc, char **argv)
             return usage();
         }
     }
-    if (!rom_path || !have_fields || (replay_path && record_path)) return usage();
+    if (!rom_path || (!have_fields && !route_plan_path) || (replay_path && record_path) ||
+        (route_probe_only && (!route_instruction_probe || !route_plan_path)) ||
+        /* Stack observation decorates the first probe pair in either a full
+         * capture or a prefix. Only --route-probe-only changes termination. */
+        (route_probe_stack_before_a7 && (!route_instruction_probe || !route_plan_path)) ||
+        ((route_plan_path == NULL) != (route_report_path == NULL)) || (route_plan_path && (record_path || replay_path)) ||
+        ((capture_field_sequence || capture_attempt || capture_tick) && (!dump_dir || !route_plan_path)) ||
+        ((capture_field_sequence && capture_attempt) || (!capture_attempt && capture_tick) || (capture_attempt && !capture_tick)) ||
+        ((capture_field_sequence || capture_attempt) &&
+         (!capture_identity || !dump_audio_path || !config.audio_rate_hz)) ||
+        (route_plan_path && dump_dir && !capture_field_sequence && !capture_attempt)) return usage();
+    if (route_plan_path && gw_session_route_load(route_plan_path, &route_plan) != 0) {
+        fputs("REJECT: route-plan\n", stderr);
+        return 1;
+    }
+    if (route_probe_only && !route_plan.controller) {
+        gw_session_route_plan_free(&route_plan);return usage();
+    }
+    if (route_probe_stack_before_a7 && !route_plan.controller) {
+        gw_session_route_plan_free(&route_plan);return usage();
+    }
 
     if (gw_read_rom_file(rom_path, rom_buffer, sizeof(rom_buffer), &rom_size, &reason)) {
         fprintf(stderr, "REJECT: %s\n", reason);
@@ -239,7 +410,7 @@ int main(int argc, char **argv)
     if (replay_path) (void)gw_session_attach_log(&session, &log, GW_SESSION_REPLAY);
     else if (record_path) (void)gw_session_attach_log(&session, &log, GW_SESSION_RECORD);
     if (dump_audio_path) {
-        audio_out = fopen(dump_audio_path, "wb");
+        audio_out = fopen(dump_audio_path, route_plan_path ? "wbx" : "wb");
         if (!audio_out) { fputs("ERROR: could not write audio dump\n", stderr); exit_code = 1; }
     }
     if (!exit_code && dump_trace_path && gw_configure_audio_trace(session.machine, GW_AUDIO_TRACE_CAPACITY) != GW_OK) {
@@ -247,7 +418,66 @@ int main(int argc, char **argv)
         exit_code = 1;
     }
 
-    for (unsigned long long n = 0; !exit_code && n < fields; ++n) {
+    if (route_plan_path) {
+        session.route_instruction_probe = route_instruction_probe;
+        session.route_probe_only = route_probe_only;
+        session.route_probe_stack_before_a7 = route_probe_stack_before_a7;
+        session.route_stop_horizon = (uint32_t)route_stop_horizon;
+        session.route_probe_pc = (uint32_t)route_probe_pc;
+        route_report = fopen(route_report_path, (capture_field_sequence || capture_attempt) ? "wbx" : "wb");
+        if (!route_report) { fputs("ERROR: could not write route report\n", stderr); exit_code = 1; }
+        if (!exit_code && route_plan.controller) {
+            capture.audio_out = audio_out;
+            capture.field_dir = dump_dir;
+            capture.field_sequence = capture_field_sequence;
+            capture.source_attempt = capture_attempt;
+            capture.source_tick = capture_tick;
+            capture.capture_identity = capture_identity;
+            if (gw_route_controller_run(&session, route_plan.controller, route_report,
+                NULL, NULL, route_capture_field, &capture, config.audio_rate_hz != 0) != 0) exit_code = 1;
+            if ((capture_field_sequence || capture_attempt) && (!capture.captured || !capture.audio_bytes)) {
+                fputs("ERROR: selected route capture or enabled PCM is missing\n", stderr);
+                exit_code = 1;
+            }
+            if (fclose(route_report) != 0) exit_code = 1;
+            route_report = NULL;
+        } else {
+        if (!exit_code && fputs("{\"schema\":\"genewhip-phase6-tracer-v1\",\"observations\":[", route_report) == EOF) exit_code = 1;
+        for (size_t n = 0; !exit_code && n < route_plan.operation_count; ++n) {
+            gw_session_route_op *op = &route_plan.operations[n];
+            uint64_t instructions = 0;
+            uint64_t observations_before = session.route_observation_count;
+            int route_status = gw_session_route_observe(&session, &route_plan, op,
+                NULL, NULL, &instructions);
+            if (route_status != 0) {
+                fprintf(stderr, "ERROR: route observation %zu stopped (status %d tick %llu pc %u opcode %u stop %u d0 %u)\n",
+                    n, route_status, (unsigned long long)session.tick, session.instruction_address,
+                    session.opcode, session.stop_reason, session.route_last_d0);
+                exit_code = 1;
+                break;
+            }
+            route_status = gw_session_route_dispatch(&session, op->port, op->mask, op->dispatch_tick);
+            if (route_status != 0) {
+                fprintf(stderr, "ERROR: route dispatch %zu failed (status %d)\n", n, route_status);
+                exit_code = 1;
+                break;
+            }
+            if (fprintf(route_report, "%s{\"operation\":%zu,\"tick\":%llu,\"instructions\":%llu,\"observations\":%llu,"
+                "\"address\":%u,\"value\":%u,\"port\":%u,\"mask\":%u}",
+                n ? "," : "", n, (unsigned long long)session.tick,
+                (unsigned long long)instructions,
+                (unsigned long long)(session.route_observation_count - observations_before),
+                op->address, op->value, op->port, op->mask) < 0) exit_code = 1;
+        }
+        if (route_report) {
+            if (fprintf(route_report, "],\"queue_high_water\":%u}\n", session.route_queue_high_water) < 0)
+                exit_code = 1;
+            if (fclose(route_report) != 0) exit_code = 1;
+            route_report = NULL;
+        }
+        }
+    }
+    for (unsigned long long n = 0; !route_plan_path && !exit_code && n < fields; ++n) {
         status = gw_session_step_field(&session);
         if (status != 0) {
             fprintf(stderr, "ERROR: core rejected a run request (status %d)\n", status);
@@ -255,7 +485,7 @@ int main(int argc, char **argv)
             break;
         }
         if (gw_session_print_field(&session, stdout) != 0) { exit_code = 1; break; }
-        if (dump_dir && dump_field(&session, dump_dir) != 0) {
+        if (dump_dir && dump_field(&session, dump_dir, 0) != 0) {
             fputs("ERROR: could not write the field dump\n", stderr);
             exit_code = 1;
             break;
@@ -276,6 +506,7 @@ int main(int argc, char **argv)
                    : gw_session_print_final(&session, stdout)) != 0) exit_code = 1;
     if (dump_audio_path && gw_session_print_audio_summary(&session, stdout) != 0) exit_code = 1;
     if (audio_out && fclose(audio_out) != 0) exit_code = 1;
+    gw_session_route_plan_free(&route_plan);
     if (dump_trace_path && dump_audio_trace(session.machine, dump_trace_path) != 0) {
         fputs("ERROR: could not write audio trace\n", stderr);
         exit_code = 1;

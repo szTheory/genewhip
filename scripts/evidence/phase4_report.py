@@ -702,8 +702,8 @@ def validate_host_sessions(evidence, expected_revision=None, expected_identity=N
     expected_identity = expected_identity or {}
     fixture_identities = host_fixture_identities()
     control_sha = sha(HOST_CONTROLS)
-    all_ids = set()
     for mode in ("software", "live"):
+        all_ids = set()
         report = evidence.get(mode)
         if not isinstance(report, dict) or report.get("schema") != HOST_SCHEMA or report.get("version") != 1:
             problems.append(("desktop-host-schema", mode)); continue
@@ -732,7 +732,7 @@ def validate_host_sessions(evidence, expected_revision=None, expected_identity=N
             problems.append(("desktop-host-counts", mode))
         if mode == "live" and report.get("outcome") == "skipped" and not runs:
             continue
-        expected_modes = (("live",) if mode == "live" else
+        expected_modes = (("live", "replace-drop") if mode == "live" else
                           ("software-dummy", "software-disk", "missing-audio-negative", "replace-drop"))
         expected_ids = {fixture + "-" + run_mode for fixture in fixture_identities for run_mode in expected_modes}
         actual_ids = {row.get("id") for row in runs if isinstance(row, dict)}
@@ -740,6 +740,9 @@ def validate_host_sessions(evidence, expected_revision=None, expected_identity=N
             problems.append(("desktop-host-roster", mode))
         if report.get("outcome") == "pass" and any(row.get("outcome") == "fail" for row in runs):
             problems.append(("desktop-host-outcome", mode + " contains failed run"))
+        if mode == "live" and report.get("outcome") == "pass" and any(
+                isinstance(row, dict) and row.get("outcome") != "pass" for row in runs):
+            problems.append(("desktop-host-outcome", "live pass requires every run to pass"))
         host = report.get("host")
         if not isinstance(host, dict) or not host.get("video_driver") or not host.get("audio_backend_requested") or \
                 not isinstance(host.get("audio_rate_hz"), int) or not isinstance(host.get("audio_queue_policy"), dict):
@@ -789,8 +792,12 @@ def validate_host_sessions(evidence, expected_revision=None, expected_identity=N
                 if stats.get("stats_version") != 2:
                     problems.append(("desktop-host-stats-version", str(row_id)))
                 if row.get("elapsed_exposure_ns", 0) <= 0 or not isinstance(settings, dict) or \
-                        settings.get("video_driver") != "dummy" or settings.get("audio_backend_requested") != "disk":
+                        settings.get("video_driver") != ("cocoa" if mode == "live" else "dummy") or \
+                        settings.get("audio_backend_requested") != ("coreaudio" if mode == "live" else "disk"):
                     problems.append(("desktop-host-setup", str(row_id)))
+                if mode == "live" and not _valid_host_display_identity(
+                        settings.get("display_identity") if isinstance(settings, dict) else None):
+                    problems.append(("desktop-host-capability", str(row_id)))
                 if "present_errors" not in stats or not isinstance(stats.get("present_errors"), int) or \
                         stats.get("present_errors") != 0 or stats.get("presentation_error") != 0 or \
                         stats.get("present_calls", 0) != stats.get("present_successes", 0) + stats.get("present_errors", 0) or \
@@ -1034,7 +1041,7 @@ def validate_safety_contracts(evidence, expected_revision=None):
         if not isinstance(summary, dict):
             problems.append(("safety-summary-contract", name)); continue
         expected_summary = {"mode": mode, "seed": "47573105", "cases": 16, "safety_pass": 16,
-                            "audio_pass": 256, "negative_controls": 6,
+                            "audio_pass": 256, "negative_controls": 12,
                             "steps_per_case": 8, "tick_budget": 180000,
                             "output_cap_frames": 128,
                             "allocation_instrumented": instrumented,
