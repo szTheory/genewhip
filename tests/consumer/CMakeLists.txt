@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 project(GenewhipConsumer LANGUAGES C CXX)
-find_package(Genewhip 0.1.0 EXACT CONFIG REQUIRED)
+find_package(Genewhip 0.2.0 EXACT CONFIG REQUIRED)
 include(CTest)
 add_executable(consumer main.c)
 target_link_libraries(consumer PRIVATE Genewhip::core)

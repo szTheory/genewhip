@@ -1,0 +1,627 @@
+{
+  "build_configuration_sha256": "24055065bbc72ed81ad8f873930764e9024b1a8c0970af2e4441778fbd876443",
+  "build_entrypoint": {
+    "path": "fixtures/phase5-a/source-overrides/reviewed-build.sh",
+    "sha256": "2272f1fa3fdb9faae4386c563099631a87b0a7fa8e727c5ba202538abc82ee74",
+    "source_revision": "0e04e1c2552fe174ecb3051adf270a65b2b2c819"
+  },
+  "build_evidence": {
+    "comparison": {
+      "raw_outputs": [
+        {
+          "bytes": 524288,
+          "ordinal": 1,
+          "sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723"
+        },
+        {
+          "bytes": 524288,
+          "ordinal": 2,
+          "sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723"
+        }
+      ],
+      "status": "byte-identical",
+      "variation": null
+    },
+    "counters": {
+      "build_environment_corrections": 1,
+      "full_screens": 1,
+      "reference_harness_corrections": 0,
+      "rom_build_invocations": 2,
+      "route_authoring_corrections": 0
+    },
+    "receipt_sha256": "7b2462ab40b2d94236e8b2ebaebb9798b9001cbada922b214a80414cb4bf7835",
+    "summary_path": "evidence/phase5-tank-build-summary.json",
+    "summary_sha256": "7377d5ef9021e9212060395b4a5dbde10296ca1fa02998a6cfa6c4af98d6d18a"
+  },
+  "build_image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+  "build_image_id": "sha256:a32ce20981559a42da0d7f21a56102ffc800c350f00156638dc9dcb26d09850e",
+  "build_makefile": {
+    "path": "fixtures/phase5-a/source-overrides/Makefile",
+    "sha256": "84a878d80da35d983699931c6944acd509d2f066d481e1236fe6bea5384d7deb",
+    "source_revision": "0e04e1c2552fe174ecb3051adf270a65b2b2c819"
+  },
+  "compiler_libraries": [
+    {
+      "category": "compiler_libraries",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "GPL-3.0-or-later WITH GCC-exception-3.1",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/usr/lib/gcc/m68k-elf/13.2.0/libgcc.a",
+      "sha256": "bcabed8e046dbfa4a99658c25f15549f53d4735ed358e94aea5a7c429adb9864",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/COPYING.RUNTIME"
+    },
+    {
+      "category": "compiler_libraries",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "GCC Runtime Library Exception3.1",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/usr/share/licenses/gcc/COPYING.RUNTIME",
+      "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/COPYING.RUNTIME"
+    }
+  ],
+  "execution": {
+    "build_invocations_during_promotion": 0,
+    "rom_build_invocations_total": 2,
+    "validate_only_consumes_rom_build": false,
+    "verify_reproducible_reuses_retained_pair": true
+  },
+  "linked_member_inventory": [
+    {
+      "MegaWiFi_members": 0,
+      "archive_members": [
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "bmp.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "bmp_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "dma.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "dma_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_dpcm2.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_null.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_pcm.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_pcm4.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_xgm.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_xgm2.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "error_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "joy.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "kdebug.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "libres.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "maths.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "memory.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "memory_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "pal.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "pool.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "psg.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "smp_null.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "smp_null_dpcm.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "snd_dpcm2.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "snd_pcm.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "snd_pcm4.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "sound.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "sprite_eng.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "sram.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "string.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "sys.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "sys_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tab_cnv.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tab_log10.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tab_sqrt.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tab_vol.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "task.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "timer.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tools.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tools_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "types.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vdp.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vdp_bg.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vdp_spr.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vdp_tile.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vdp_tile_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vram.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "xgm.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "xgm2.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "ym2612.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "z80_ctrl.c.o"
+        },
+        {
+          "archive": "/usr/bin/../lib/gcc/m68k-elf/13.2.0/libgcc.a",
+          "member": "_divsi3.o"
+        },
+        {
+          "archive": "/usr/bin/../lib/gcc/m68k-elf/13.2.0/libgcc.a",
+          "member": "_modsi3.o"
+        },
+        {
+          "archive": "/usr/bin/../lib/gcc/m68k-elf/13.2.0/libgcc.a",
+          "member": "_mulsi3.o"
+        },
+        {
+          "archive": "/usr/bin/../lib/gcc/m68k-elf/13.2.0/libgcc.a",
+          "member": "_udivsi3.o"
+        },
+        {
+          "archive": "/usr/bin/../lib/gcc/m68k-elf/13.2.0/libgcc.a",
+          "member": "_umodsi3.o"
+        }
+      ],
+      "ordinal": 1
+    },
+    {
+      "MegaWiFi_members": 0,
+      "archive_members": [
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "bmp.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "bmp_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "dma.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "dma_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_dpcm2.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_null.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_pcm.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_pcm4.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_xgm.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_xgm2.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "error_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "joy.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "kdebug.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "libres.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "maths.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "memory.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "memory_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "pal.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "pool.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "psg.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "smp_null.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "smp_null_dpcm.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "snd_dpcm2.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "snd_pcm.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "snd_pcm4.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "sound.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "sprite_eng.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "sram.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "string.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "sys.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "sys_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tab_cnv.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tab_log10.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tab_sqrt.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tab_vol.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "task.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "timer.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tools.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tools_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "types.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vdp.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vdp_bg.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vdp_spr.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vdp_tile.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vdp_tile_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vram.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "xgm.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "xgm2.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "ym2612.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "z80_ctrl.c.o"
+        },
+        {
+          "archive": "/usr/bin/../lib/gcc/m68k-elf/13.2.0/libgcc.a",
+          "member": "_divsi3.o"
+        },
+        {
+          "archive": "/usr/bin/../lib/gcc/m68k-elf/13.2.0/libgcc.a",
+          "member": "_modsi3.o"
+        },
+        {
+          "archive": "/usr/bin/../lib/gcc/m68k-elf/13.2.0/libgcc.a",
+          "member": "_mulsi3.o"
+        },
+        {
+          "archive": "/usr/bin/../lib/gcc/m68k-elf/13.2.0/libgcc.a",
+          "member": "_udivsi3.o"
+        },
+        {
+          "archive": "/usr/bin/../lib/gcc/m68k-elf/13.2.0/libgcc.a",
+          "member": "_umodsi3.o"
+        }
+      ],
+      "ordinal": 2
+    }
+  ],
+  "promotion_validation_wrapper": {
+    "path": "fixtures/phase5-a/build.sh",
+    "purpose": "validate-only and retained-build-pair checks; does not invoke the source build entrypoint",
+    "sha256": "d0fa3e6bf7cec9601ab4607f2eb1e3418b309c2ebfd170f6e0813aebca8ec375"
+  },
+  "runtime_input_file_count": 178,
+  "runtime_input_mismatches": 0,
+  "runtime_library": {
+    "category": "runtime_objects",
+    "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+    "license": "SGDK MIT; MD Debugger MIT; MiniMusic zlib; applicable GCC Runtime Library Exception",
+    "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+    "origin": "image",
+    "path": "/sgdk/lib/libmd.a",
+    "sha256": "38d43d1fb6ea71a6530cb43e1ece8cb4493e61e7b91affbb21069d9693cc5eed",
+    "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+    "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/license.txt"
+  },
+  "schema": "genewhip-phase5-build-lock-v1",
+  "source_archive_sha256": "0751013a99631e08b0309bfde06c8ff578abeda0113c3b208aaf81951a1e6753",
+  "source_revision": "eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+  "title_id": "tank-battle",
+  "toolchain_source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+  "toolchain_tools": [
+    {
+      "category": "build_tools",
+      "license": "MIT",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "workspace",
+      "path": "Makefile",
+      "sha256": "84a878d80da35d983699931c6944acd509d2f066d481e1236fe6bea5384d7deb",
+      "source_revision": "0e04e1c2552fe174ecb3051adf270a65b2b2c819",
+      "terms_source": "https://github.com/szTheory/genewhip/blob/0e04e1c2552fe174ecb3051adf270a65b2b2c819/LICENSE"
+    },
+    {
+      "category": "build_tools",
+      "license": "MIT",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "workspace",
+      "path": "build.sh",
+      "sha256": "2272f1fa3fdb9faae4386c563099631a87b0a7fa8e727c5ba202538abc82ee74",
+      "source_revision": "0e04e1c2552fe174ecb3051adf270a65b2b2c819",
+      "terms_source": "https://github.com/szTheory/genewhip/blob/0e04e1c2552fe174ecb3051adf270a65b2b2c819/LICENSE"
+    },
+    {
+      "category": "build_tools",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "GPL-3.0-or-later; tool stays local",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/usr/bin/m68k-elf-gcc",
+      "sha256": "722a5da665ce83068e3ff63a851a3831cf32c9e5552837210023d429365fa803",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/COPYING.RUNTIME"
+    },
+    {
+      "category": "build_tools",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "GNU Binutils GPL; tool stays local",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/usr/bin/m68k-elf-as",
+      "sha256": "1b741afa87b7cee886afac46d4a722a72a83797fffae1b698d07818982c83657",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/COPYING.RUNTIME"
+    },
+    {
+      "category": "build_tools",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "GNU Binutils GPL; tool stays local",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/usr/bin/m68k-elf-ld",
+      "sha256": "798d8e8ad4140c8927b30eccf498034b5ac87e2477654bc4624731f53dd0f56b",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/COPYING.RUNTIME"
+    },
+    {
+      "category": "build_tools",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "GNU Binutils GPL; tool stays local",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/usr/bin/m68k-elf-objcopy",
+      "sha256": "9b565b9722dd67deb2fc0e41d1afbb724f05baed3cd9c4a00152e8d7628ed623",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/COPYING.RUNTIME"
+    },
+    {
+      "category": "build_tools",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "GPL-2.0-only WITH Classpath-exception-2.0; OpenJDK11.0.24 tool stays local",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/opt/jre-minimal/bin/java",
+      "sha256": "f289ea1e36550a8cac220bfbd68d2d1a33aa86396a586b2ffa7942d3af8bc41f",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://openjdk.org/legal/gplv2+ce.html"
+    }
+  ]
+}

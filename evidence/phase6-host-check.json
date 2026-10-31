@@ -1,0 +1,216 @@
+{
+  "admitted_title_launches": 1,
+  "canonical_qualification_launches": 0,
+  "launch_accounting": {
+    "admitted_rom_negative": 1,
+    "canonical_qualification": 0
+  },
+  "mutations": [
+    {
+      "actual_reason": "host-roster",
+      "expected_reason": "host-roster",
+      "id": "missing-case",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-process",
+      "expected_reason": "host-process",
+      "id": "failed-host-process",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-process",
+      "expected_reason": "host-process",
+      "id": "unconfirmed-host-cleanup",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-process-binding-missing",
+      "expected_reason": "host-process-binding-missing",
+      "id": "missing-host-process-receipt",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-process",
+      "expected_reason": "host-process",
+      "id": "failed-control-process",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-renderer",
+      "expected_reason": "host-renderer",
+      "id": "video-corruption",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-native-capability",
+      "expected_reason": "host-native-capability",
+      "id": "native-false-capability",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-identity",
+      "expected_reason": "host-identity",
+      "id": "stale-source",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-backend",
+      "expected_reason": "host-backend",
+      "id": "missing-backend",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-controls",
+      "expected_reason": "host-controls",
+      "id": "missing-control-roster",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-map",
+      "expected_reason": "host-map",
+      "id": "stale-delivery-map",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-core-observation",
+      "expected_reason": "host-core-observation",
+      "id": "wrong-headless-rom-identity",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-raw-output",
+      "expected_reason": "host-raw-output",
+      "id": "missing-renderer-media",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-audio",
+      "expected_reason": "host-audio",
+      "id": "stale-device-counter-receipt",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-process",
+      "expected_reason": "host-process",
+      "id": "boolean-process-wall",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-process-binding",
+      "expected_reason": "host-process-binding",
+      "id": "unbound-extra-process",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-input",
+      "expected_reason": "host-input",
+      "id": "actual-host-handler-input-bytes",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-audio",
+      "expected_reason": "host-audio",
+      "id": "actual-device-audio-activity",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-renderer",
+      "expected_reason": "host-renderer",
+      "id": "actual-renderer-readback-bytes",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-audio",
+      "expected_reason": "host-audio",
+      "id": "actual-submitted-audio-bytes",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-core-observation",
+      "expected_reason": "host-core-observation",
+      "id": "unsupported-core-status",
+      "rejected": true
+    },
+    {
+      "actual_reason": "host-input",
+      "consumer": "scripts/evidence/phase6_routes.py::validate_host_input_observations",
+      "expected_reason": "host-input",
+      "first_core_input": {
+        "active_ticks": 1,
+        "desired": 8,
+        "effective": 0,
+        "field": 24,
+        "machine_tick": 21505956,
+        "port": 0
+      },
+      "first_sdl_input": {
+        "effective_mask": 0,
+        "gamepad_id": 3,
+        "handler": "SDL_Gamepad/sample_port",
+        "joystick_mask": 0,
+        "port": 0,
+        "requested_mask": 8
+      },
+      "id": "real-sdl-virtual-handler-suppression",
+      "native_status": 0,
+      "process": {
+        "bound_violation": false,
+        "client": "desktop",
+        "pgid": 78579,
+        "pid": 78579,
+        "process_group_cleanup": "confirmed",
+        "report_bytes": 8139,
+        "report_schema": "genewhip-route-native-v1",
+        "report_status": 0,
+        "return_code": 1,
+        "status": "completed",
+        "stderr_bytes": 416,
+        "stdout_bytes": 1620,
+        "wall_seconds": 0.9581486668903381
+      },
+      "raw_outputs": {
+        "audio_device": {
+          "path": "build/phase6/evidence/phase6-sdl-host-fault-9ly4tfom/suppressed-input-short-route/sdlaudio.raw",
+          "sha256": "15c89ef7ae946463bd50c3a94ff591243a63083d696998ac41e80278f7e47f22"
+        },
+        "host": {
+          "path": "build/phase6/evidence/phase6-sdl-host-fault-9ly4tfom/suppressed-input-short-route/host.json",
+          "sha256": "9fdb17f34bee4290d98cf50758111d75e5e3b8e77eb8c6f75395797e3a515587"
+        },
+        "native": {
+          "path": "build/phase6/evidence/phase6-sdl-host-fault-9ly4tfom/suppressed-input-short-route/native.json",
+          "sha256": "dedccb48186e9a9f8652ccaed686d22a06792a01ade6dc3d3e867b793e3e9380"
+        },
+        "plan": {
+          "path": "build/phase6/evidence/phase6-sdl-host-fault-9ly4tfom/suppressed-input-short-route/short.gwrc",
+          "sha256": "0aa38e61426f2e50f922dcc80c050164328ab8d253e252a3f47a9af6b2e812a9"
+        }
+      },
+      "rejected": true,
+      "short_plan_sha256": "0aa38e61426f2e50f922dcc80c050164328ab8d253e252a3f47a9af6b2e812a9",
+      "streams": {
+        "stderr": {
+          "observed_bytes": 416,
+          "retained_bytes": 416,
+          "sha256": "4f6ccb4afd11224c635289d0e13e543b3c352d469f1f812a8bc96ac307e28758",
+          "truncated": false
+        },
+        "stdout": {
+          "observed_bytes": 1620,
+          "retained_bytes": 1620,
+          "sha256": "f2d1a328c88cb548a775157d03c7f3af5c994364ae389599b300ca024fa83c60",
+          "truncated": false
+        }
+      },
+      "work_directory": "build/phase6/evidence/phase6-sdl-host-fault-9ly4tfom/suppressed-input-short-route"
+    }
+  ],
+  "outcome": "pass",
+  "production_consumer": "scripts/evidence/phase6_routes.py::validate_host_report",
+  "resources": {
+    "owned_fault_bytes": 15528433,
+    "owned_fault_directory": "build/phase6/evidence/phase6-sdl-host-fault-9ly4tfom"
+  },
+  "schema": "genewhip-phase6-host-check-v1"
+}

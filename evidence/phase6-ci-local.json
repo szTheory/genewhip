@@ -1,0 +1,36 @@
+{
+  "candidate_sha256": "88b4cc0bb53f89b2b07e7fd27b8d2894b18dce54073cc8028bed3439f1bc1139",
+  "checks": [
+    "reader-metadata-refresh",
+    "three-variant-safety",
+    "core-32-semantic-controls",
+    "phase6-media-ctest",
+    "phase6-route-self-test",
+    "current-host-22-controls-offline"
+  ],
+  "new_admitted_title_launches": 0,
+  "proofs": {
+    "core_check": {
+      "path": "build/phase6/evidence/phase6-core-check.json",
+      "sha256": "3810f7e3e6b0df0649aecc46eab407e559db2b842bbc2eb14b0d1e19d5636b53"
+    },
+    "host_check_offline": {
+      "path": "build/phase6/evidence/phase6-host-check-offline.json",
+      "sha256": "adb7472cc9d6baa845ecbc9500c1f5aa43fa7d8b2c366978323e3a69145cde15"
+    },
+    "reader_refresh": {
+      "path": "build/phase6/evidence/phase6-reader-refresh.json",
+      "sha256": "d72107ad5fb6d365d93b6ebbf4cdb93bb1307c81c893f4b9b5583cf30ce8a48b"
+    },
+    "safety": {
+      "path": "evidence/phase6-safety.json",
+      "sha256": "a9f3aac6f064c370b96e932794c45464878f1729aa45999979d9ecd410f32fff"
+    }
+  },
+  "reader_reconciliation": {
+    "path": "build/phase6/evidence/parent53-close-history/close-mutant-correction.json",
+    "sha256": "1da29247c56509d4f8a3ce5fa9fb6a81926071425ea9c2aac0b4276505715c92"
+  },
+  "schema": "genewhip-phase6-local-ci-v1",
+  "status": "pass"
+}

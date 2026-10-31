@@ -20,6 +20,8 @@ extern "C" {
 #define GW_SESSION_CATCHUP_FIELDS 4
 #define GW_SESSION_PAUSED (-1)
 #define GW_SESSION_AUDIO_FRAMES GW_AUDIO_QUEUE_FRAMES
+#define GW_SESSION_ROUTE_MAX_OPS 4096u
+#define GW_SESSION_ROUTE_EVENT_CAPACITY 64u
 
 /* Host keys the session understands; the desktop runner translates scancodes. */
 typedef enum gw_host_key {
@@ -47,13 +49,57 @@ typedef struct gw_session {
     uint32_t instruction_address;
     uint32_t opcode;
     uint32_t fault_address;
+    uint32_t route_last_d0;
+    uint32_t route_probe_pc; /* Private instruction-observation target, not guest state. */
+    int route_instruction_probe;
+    int route_probe_only;
+    int route_probe_stack_before_a7; /* Opt-in private four-byte before-A7 observation. */
+    uint32_t route_stop_horizon; /* 1..308 ticks, private reference/optimized tool step. */
+    uint32_t route_pending_events;
+    uint32_t route_queue_high_water;
+    uint64_t route_event_ticks[GW_SESSION_ROUTE_EVENT_CAPACITY];
+    uint64_t route_observation_count;
     int16_t audio_frames[GW_SESSION_AUDIO_FRAMES][2];
     uint32_t audio_count;
     gw_audio_read_result audio_last;
     uint64_t audio_hash;
+    int route_disable_audio_hash; /* Tool-private: retain PCM bytes without observer hashing. */
     uint64_t audio_total_frames;
     int audio_complete;
 } gw_session;
+
+/* Tool-private, bounded source-step route operation. A memory word is observed
+ * after each completed instruction; the requested pad state is then stamped
+ * at that boundary for the following instruction. */
+typedef struct gw_session_route_op {
+    uint8_t type;
+    uint8_t port;
+    uint16_t span_count;
+    uint32_t address; /* First span, retained for the bounded tracer receipt. */
+    uint16_t value;   /* First span's expected word when its length is two. */
+    uint32_t mask;
+    uint64_t instruction_limit;
+    uint64_t dispatch_tick;
+    size_t span_offset;
+} gw_session_route_op;
+
+typedef struct gw_session_route_plan {
+    uint8_t *bytes;
+    size_t byte_count;
+    gw_session_route_op *operations;
+    size_t operation_count;
+    struct gw_route_controller *controller;
+} gw_session_route_plan;
+
+typedef struct gw_session_route_observation {
+    uint64_t tick;
+    uint64_t instructions;
+    uint16_t value;
+    uint8_t port;
+    uint8_t reserved;
+    uint32_t mask;
+} gw_session_route_observation;
+typedef int (*gw_session_route_field_callback)(void *context, const gw_session *session);
 
 /* Creates the machine from the caller's configuration and loads the ROM bytes
  * (copied by the core). On failure the session holds no machine. */
@@ -75,6 +121,12 @@ int gw_session_attach_log(gw_session *session, gw_input_log *log, int mode);
 int gw_session_replace_rom(gw_session *session, const uint8_t *rom, size_t size);
 /* Runs the machine to the next field target. Does nothing while paused. */
 int gw_session_step_field(gw_session *session);
+int gw_session_route_observe(gw_session *session, const gw_session_route_plan *plan,
+    const gw_session_route_op *operation, gw_session_route_field_callback field_callback,
+    void *context, uint64_t *instructions);
+int gw_session_route_dispatch(gw_session *session, unsigned port, uint32_t full_mask, uint64_t tick);
+int gw_session_route_load(const char *path, gw_session_route_plan *plan);
+void gw_session_route_plan_free(gw_session_route_plan *plan);
 void gw_session_set_paused(gw_session *session, int paused);
 /* Console reset applied immediately, between field steps, at the machine tick
  * reached. It also clears a sticky unsupported stop. A recording stamps it with

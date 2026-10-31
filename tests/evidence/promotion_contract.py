@@ -230,8 +230,9 @@ class PromotionContract(unittest.TestCase):
                          r"      attestations: read\n      contents: write\n")
         self.assertNotRegex(workflow, r"(?im)^\s+administration:\s*(?:read|write)\b")
         self.assertIn("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}", workflow)
-        self.assertIn('AUTHORIZED_RECOVERY_RELEASE_ID: "420400458"', workflow)
+        self.assertIn("AUTHORIZED_RECOVERY_RELEASE_ID: ${{ inputs.release_version == '0.1.0' && '420400458' || '0' }}", workflow)
         self.assertIn('--authorized-recovery-release-id "$AUTHORIZED_RECOVERY_RELEASE_ID"', workflow)
+        self.assertIn('--release-version "$RELEASE_VERSION"', workflow)
         self.assertNotRegex(workflow, r"(?i)(PERSONAL_ACCESS_TOKEN|APP_PRIVATE_KEY|APP_ID)")
 
     def test_workflow_permission_parser_is_scoped_to_promote_job(self):

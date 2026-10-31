@@ -6,6 +6,7 @@
 
 #define GW_Z80_BUSREQ_ADDRESS UINT32_C(0x00a11100)
 #define GW_Z80_RESET_ADDRESS UINT32_C(0x00a11200)
+#define GW_Z80_BANK_ADDRESS UINT32_C(0x00a06000)
 #define GW_Z80_WINDOW_ACCESS_TICKS (4u * GW_CPU_DIVIDER)
 #define GW_Z80_UNKNOWN_READ UINT8_C(0xff)
 /* Model-scoped one-Z80-T-state ROM-window wait; no primary source specifies
@@ -54,7 +55,8 @@ int gw_z80_bus_decodes(uint32_t address)
 {
     return (address >= UINT32_C(0x00a00000) && address <= UINT32_C(0x00a03fff)) ||
            (address >= UINT32_C(0x00a04000) && address <= UINT32_C(0x00a04003)) ||
-           address == GW_Z80_BUSREQ_ADDRESS || address == GW_Z80_RESET_ADDRESS;
+           address == GW_Z80_BUSREQ_ADDRESS || address == GW_Z80_RESET_ADDRESS ||
+           address == GW_Z80_BANK_ADDRESS;
 }
 
 void gw_z80_sync(gw_machine *m, uint64_t tick)
@@ -141,13 +143,19 @@ static int control_access(gw_machine *m,uint32_t address,unsigned size,int write
             }
         } else if (address==GW_Z80_RESET_ADDRESS) {
             if (!control) {
-                /* 03-FM-RESET-AMENDMENT.md and docs/audio.md Reset search record:
-                 * the approved programmer-manual coupling is implemented here;
-                 * exact VA3 reset fidelity remains classed unknown. */
-                gw_ym2612_reset_line(m, m->tick, 1);
-                z->reset_asserted=1; z->reset_pending=0; z->instruction_active=0; z->prefix=0;
-                arb_record(m,Z80_ARB_RESET_ASSERT,m->tick);
-            } else {
+                /* A low level cancels an as-yet-uncommitted release. Apply CPU
+                 * and FM reset effects only on the asserted transition. */
+                z->reset_pending=0;
+                if (!z->reset_asserted) {
+                    /* 03-FM-RESET-AMENDMENT.md and docs/audio.md Reset search
+                     * record: exact VA3 reset fidelity remains classed unknown. */
+                    gw_ym2612_reset_line(m, m->tick, 1);
+                    z->reset_asserted=1; z->instruction_active=0; z->prefix=0;
+                    arb_record(m,Z80_ARB_RESET_ASSERT,m->tick);
+                }
+            } else if (z->reset_asserted && !z->reset_pending) {
+                /* A repeated high level is not a new release edge. Preserve
+                 * an already selected edge while reset remains asserted. */
                 uint64_t edge=next_clock_edge(m->tick);
                 z->reset_pending=1; z->reset_tick=edge;
             }
@@ -164,6 +172,18 @@ unsupported:
 int gw_z80_bus_access(gw_machine *m,uint32_t address,unsigned size,int write,uint32_t *value)
 {
     (void)GW_Z80_WINDOW_ACCESS_TICKS;
+    if (address == GW_Z80_BANK_ADDRESS) {
+        /* Sega Technical Overview p.77 and MacDonald hardware notes v0.8
+         * sections2.1/2.3 identify this 68000 bank-register path. Reuse the
+         * existing serial state, ownership gate and outer bus timing. Reads,
+         * other widths and additional mirrors remain outside this model. */
+        if (size != 1 || !write) {
+            m->cpu.stop_reason=GW_STOP_UNSUPPORTED_ADDRESS;
+            m->cpu.fault_address=address;
+            return 0;
+        }
+        return !m->z80.busreq || gw_z80_mem_write(m,UINT16_C(0x6000),(uint8_t)*value,0);
+    }
     if (address>=UINT32_C(0x00a04000) && address<=UINT32_C(0x00a04003)) {
         if (size != 1) {
             m->cpu.stop_reason=GW_STOP_UNSUPPORTED_ADDRESS;

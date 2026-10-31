@@ -1,0 +1,31 @@
+{
+  "schema": "genewhip-movem-mutation-v1",
+  "method": "temporary exact source mutations; original restored in finally; target rebuilt each time",
+  "results": [
+    {
+      "mutant": "later-generation-base",
+      "return_code": 1,
+      "output": "FAIL: reversed mask/order and original MC68000 base value (line 54)\n",
+      "named_assertion": "original MC68000 base value",
+      "killed": true
+    },
+    {
+      "mutant": "wrong-register-order",
+      "return_code": 1,
+      "output": "FAIL: reversed mask/order and original MC68000 base value (line 54)\n",
+      "named_assertion": "reversed mask/order",
+      "killed": true
+    },
+    {
+      "mutant": "revert-dispatch",
+      "return_code": 1,
+      "output": "FAIL: observed MOVEM predecrement executes (line 50)\n",
+      "named_assertion": "observed MOVEM predecrement executes",
+      "killed": true
+    }
+  ],
+  "restored": {
+    "return_code": 0,
+    "output": "movem_contract: PASS (28 direction/size/EA forms; masks, generation, cycles, faults)\n"
+  }
+}
