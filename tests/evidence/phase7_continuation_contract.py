@@ -38,7 +38,7 @@ ORIGINAL_BLOBS: dict[str, bytes] = {}
 def successful_ledger(result, receipt, *, operator_route, native_denials):
     starts = receipt["real_child_starts"]
     readonly = receipt["readonly_git_starts"]
-    children_ok = starts == readonly and starts > 0 if operator_route else starts == readonly == 0
+    children_ok = starts == readonly and starts <= 64 and (starts > 0 if operator_route else True)
     return (result.wasSuccessful() and receipt["unexpected_denials"] == 0
         and children_ok and native_denials == 2)
 
@@ -218,6 +218,119 @@ def bootstrap() -> None:
 
 
 class ContinuationContracts(unittest.TestCase):
+    def test_phase6_core_media_routes_bind_the_current_core_report(self):
+        candidate_root = ROOT / "build/v02/campaign15/original10/current-source-candidate-final-r15/publication"
+        report_source = candidate_root / "evidence/phase6-core-routes.json"
+        candidate_relative = "build/phase6/evidence/canonical-core-vstv9lcg/candidate.json"
+        candidate_source = ROOT / candidate_relative
+        self.assertTrue(report_source.is_file())
+        candidate = json.loads(candidate_source.read_bytes())
+        report_source_bytes = report_source.read_bytes()
+        report_source_sha = sha(report_source_bytes)
+        report = json.loads(report_source_bytes)
+
+        # Prove the real producer selects its just-written core output without
+        # executing the client/native route from this source-only contract.
+        fixture_tree = ast.parse((ROOT / "tests/fixtures/phase6_game.py").read_text())
+        core = next(node for node in fixture_tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == "core")
+        media_calls = [node for node in ast.walk(core)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+            and node.func.id == "media"]
+        self.assertEqual(len(media_calls), 1)
+        self.assertEqual([(kw.arg, ast.dump(kw.value, include_attributes=False))
+            for kw in media_calls[0].keywords],
+            [("core_report_path", "Name(id='output', ctx=Load())")])
+
+        with tempfile.TemporaryDirectory(prefix="gw-phase6-current-media-") as temporary:
+            root = Path(temporary).resolve()
+
+            def copy_exact(source: Path, relative: str, expected_sha: str | None = None) -> None:
+                destination = root / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                data = source.read_bytes()
+                if expected_sha is not None:
+                    self.assertEqual(sha(data), expected_sha, relative)
+                shutil.copyfile(source, destination)
+
+            for relative, digest in candidate["source_files"].items():
+                copy_exact(candidate_root / relative, relative)
+            refs: dict[str, str] = {}
+
+            def collect(value):
+                if isinstance(value, dict):
+                    if isinstance(value.get("path"), str) and isinstance(value.get("sha256"), str):
+                        refs[value["path"]] = value["sha256"]
+                    for nested in value.values():
+                        collect(nested)
+                elif isinstance(value, list):
+                    for nested in value:
+                        collect(nested)
+
+            collect(report)
+            refs[candidate_relative] = sha(candidate_source.read_bytes())
+            for relative, digest in refs.items():
+                destination = root / relative
+                if destination.exists():
+                    self.assertEqual(sha(destination.read_bytes()), digest, relative)
+                else:
+                    copy_exact(ROOT / relative, relative, digest)
+            copy_exact(report_source, "evidence/phase6-core-routes-current.json")
+            copy_exact(ROOT / "evidence/phase6-core-routes.json", "evidence/phase6-core-routes.json")
+            for relative in ("evidence/phase5-baseline.json", "evidence/phase5-baseline-roster.json",
+                    "evidence/phase5-failure-inventory.json", "evidence/phase5-current-reference.json"):
+                copy_exact(ROOT / relative, relative)
+            current_reference = json.loads((ROOT / "evidence/phase5-current-reference.json").read_bytes())
+            copy_exact(ROOT / current_reference["report"]["path"], current_reference["report"]["path"],
+                current_reference["report"]["sha256"])
+            for relative in ("fixtures/phase5-a/reference-build-record.json",
+                    "fixtures/phase5-b/reference-build-record.json"):
+                copy_exact(ROOT / relative, relative)
+            copy_exact(ROOT / "build/phase6/CMakeCache.txt", "build/phase6/CMakeCache.txt")
+            for relative, digest in candidate["source_files"].items():
+                if Path(relative).name == "CMakeLists.txt":
+                    copy_exact(ROOT / "build/phase6/evidence/build-provenance" / f"{digest}.cmake",
+                        f"build/phase6/evidence/build-provenance/{digest}.cmake", digest)
+
+            fixture = importlib.util.spec_from_file_location(
+                "gw_phase6_current_media_fixture", ROOT / "tests/fixtures/phase6_game.py")
+            self.assertIsNotNone(fixture)
+            module = importlib.util.module_from_spec(fixture)
+            fixture.loader.exec_module(module)
+            compiler = importlib.util.spec_from_file_location(
+                "gw_phase6_r15_media_validator", candidate_root / "scripts/evidence/phase6_routes.py")
+            self.assertIsNotNone(compiler)
+            validator = importlib.util.module_from_spec(compiler)
+            compiler.loader.exec_module(validator)
+            module.ROOT = root
+            module.compiler = validator
+            validator.ROOT = root
+            current_report = root / "evidence/phase6-core-routes-current.json"
+            current_report_value = json.loads(report_source.read_bytes())
+            current_report_value["candidate_sha256"] = validator.canonical_digest(candidate)
+            candidate_manifest_path = root / candidate_relative
+            current_report_value["candidate_manifest"] = {
+                "path": candidate_relative, "sha256": sha(candidate_manifest_path.read_bytes())}
+            current_report.write_text(json.dumps(current_report_value, sort_keys=True) + "\n",
+                encoding="utf-8")
+            media_output = root / "build/v02/runtime/media.json"
+            media_output.parent.mkdir(parents=True, exist_ok=True)
+            with mock.patch.object(validator, "validate_product_report"):
+                self.assertEqual(module.media(root / "build/phase6", root / candidate_relative,
+                    media_output, core_report_path=current_report), 0)
+            media = json.loads(media_output.read_bytes())
+            self.assertEqual(media["core_routes_sha256"], sha(current_report.read_bytes()))
+            stale_value = json.loads(current_report.read_bytes())
+            stale_value["candidate_sha256"] = "0" * 64
+            stale_report = root / "evidence/phase6-core-routes-stale.json"
+            stale_report.write_text(json.dumps(stale_value, sort_keys=True) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(validator.Invalid, "media-route-receipt-identity"):
+                module.media(root / "build/phase6", root / candidate_relative,
+                    root / "build/v02/runtime/stale-media.json", core_report_path=stale_report)
+            self.assertEqual(sha(report_source.read_bytes()), report_source_sha)
+            self.assertEqual(report_source.read_bytes(), report_source_bytes)
+            self.assertNotEqual(report_source.stat().st_ino, current_report.stat().st_ino)
+
     @staticmethod
     def _fake_git_popen(denial, outcome):
         class FakePopen:
@@ -462,7 +575,7 @@ class ContinuationContracts(unittest.TestCase):
     def test_cli_ledger_requires_mode_specific_children_and_all_success_signals(self):
         result = SimpleNamespace(wasSuccessful=lambda: True)
         for operator, starts, readonly, expected in (
-                (False, 0, 0, True), (False, 1, 1, False),
+                (False, 0, 0, True), (False, 1, 1, True), (False, 65, 65, False),
                 (True, 1, 1, True), (True, 64, 64, True),
                 (True, 0, 0, False), (True, 2, 1, False), (True, 1, 2, False)):
             receipt = {"real_child_starts": starts, "readonly_git_starts": readonly,
@@ -769,6 +882,7 @@ class ContinuationContracts(unittest.TestCase):
         self.assertLess(lines["_campaign_projection"], lines["_bounded_command"])
 
     def test_selector17_preparation_cli_reaches_only_bounded_snapshot_entry(self):
+        starts_before = process_denial.receipt()["real_child_starts"]
         root = self._current_fixture()
         expected = {"status": "prepared", "source_manifest": [{"path": "README.md"}],
             "public_identity": {"head_sha": "1" * 40, "base_sha": "2" * 40}}
@@ -947,7 +1061,7 @@ class ContinuationContracts(unittest.TestCase):
                         scope_path=root / "evidence/v02-execution.json", recovery_selection="17",
                         continuation_path=continuation.ATTESTATION)
                 delivery.assert_called_once()
-        self.assertEqual(process_denial.receipt()["real_child_starts"], 0)
+        self.assertEqual(process_denial.receipt()["real_child_starts"], starts_before)
 
     def test_source_boundary_rejects_new_current_source_delta_without_rebinding_old_record(self):
         with self.assertRaisesRegex(ValueError, "continuation-unexpected-original-source-delta"):
@@ -1121,14 +1235,16 @@ class ContinuationContracts(unittest.TestCase):
 
     def test_r13_failed_hosted_predecessor_requires_exact_terminal_run_roster(self):
         expected = {
-            "source_head": "d1944cc3a494a20f0c98b6aec5d77ceb86184ffc",
-            "public_source_sha": "9027bb0579bf559f56b26a91d5d3b44ce194c3a4",
-            "public_base_sha": "ac7c5bdc8e4e87e3a6423de7a64524f5f0ca498b",
-            "public_tree_sha": "2ae5c5ebf0fcc539152d73069a84a1e0818513c2",
-            "pull_request": "22", "preview_run_id": "41174611288",
-            "merge_preview_run_id": "41175438525", "qualification_run_id": "41175511179",
-            "qualification_attempt": 1, "qualification_nonce": "68aa65ee32be4422a0da0beddd197560",
-            "qualification_created_at": "2026-10-31T06:10:38Z"}
+            "source_head": "9c7b164785d27e8a0495a93ebb75b3169cbc7af2",
+            "public_source_sha": "be835a78626d9d2b25f0d2556ff7aa88c8cf5888",
+            "public_base_sha": "9027bb0579bf559f56b26a91d5d3b44ce194c3a4",
+            "public_tree_sha": "0ec47fc559521858bb360c54ebfdcf68843f378a",
+            "pull_request": "24", "preview_run_id": "41181549270",
+            "merge_preview_run_id": "41182366078", "merge_preview_safety_job_id": "124482202980",
+            "merge_preview_required_ci_job_id": "124484611213", "runtime_job_id": "124482413297",
+            "required_ci_job_id": "124486666363", "qualification_run_id": "41182437107",
+            "qualification_attempt": 1, "qualification_nonce": "6db36e4cf66a4c19b3875ad5e9915c23",
+            "qualification_created_at": "2026-10-31T07:54:29Z"}
         module = SimpleNamespace(R13_FAILED_HOSTED_PREDECESSOR=expected)
         predecessor_root = Path("/private/r13-candidate")
         branch = "v0.2-source-" + expected["source_head"][:12]
@@ -1138,7 +1254,7 @@ class ContinuationContracts(unittest.TestCase):
             "display_title": "Required preview checks"}
         merge_preview = {"id": int(expected["merge_preview_run_id"]),
             "head_sha": expected["public_source_sha"], "event": "push", "status": "completed",
-            "conclusion": "success", "path": ".github/workflows/ci.yml", "head_branch": "main",
+            "conclusion": "failure", "path": ".github/workflows/ci.yml", "head_branch": "main",
             "display_title": "Required preview checks"}
         failed = {"id": int(expected["qualification_run_id"]),
             "head_sha": expected["public_source_sha"], "event": "workflow_dispatch",
@@ -1154,33 +1270,50 @@ class ContinuationContracts(unittest.TestCase):
         jobs = [{"name": name, "status": "completed", "conclusion": result, "steps": []}
             for name, result in statuses.items()]
         jobs_by_name = {row["name"]: row for row in jobs}
+        jobs_by_name["v02-runtime"]["id"] = 124482413297
+        jobs_by_name["required-ci"]["id"] = 124486666363
         jobs_by_name["v02-runtime"]["steps"] = [{"name":
             "Run complete current-source product safety and chunk roster", "conclusion": "failure"}]
         jobs_by_name["required-ci"]["steps"] = [{"name":
             "Reject incomplete or stale required lanes", "conclusion": "failure"}]
         artifacts = {"total_count": 2, "artifacts": [
-            {"id": 13033436450, "name": "phase4-host-evidence-41175511179-1",
-                "size_in_bytes": 10665,
-                "digest": "sha256:5dbb368097e8d070357185219ee00093f5c746b3e7b5a25251bd8832977bbc82"},
-            {"id": 13032787671, "name": "safety-evidence-41175511179-1",
+            {"id": 13036610344, "name": "phase4-host-evidence-41182437107-1",
+                "size_in_bytes": 10644,
+                "digest": "sha256:f1ed56d6ed25e005f2d70888a5b85b824de2cdb7cbf4d9da5b4b0dd1150faa18"},
+            {"id": 13035314966, "name": "safety-evidence-41182437107-1",
                 "size_in_bytes": 12640,
-                "digest": "sha256:cc4857f8aa3e1c8a00e5f88ff329c9feb08fa9e5d4a721180050b8dac5a081d3"}]}
+                "digest": "sha256:224115d7acf0430e312acc2368a40b3be4fce33b052487ca059a24b17fb23746"}]}
         source_roster = {"total_count": 1, "workflow_runs": [preview]}
         merged_roster = {"total_count": 2, "workflow_runs": [merge_preview, failed]}
         commit_metadata = {"sha": expected["public_source_sha"],
             "tree": {"sha": expected["public_tree_sha"]},
             "parents": [{"sha": expected["public_base_sha"]}]}
-        pull = {"number": 22, "html_url": "https://github.com/szTheory/genewhip/pull/22",
+        pull = {"number": 24, "html_url": "https://github.com/szTheory/genewhip/pull/24",
             "state": "closed", "merged": True,
             "head": {"sha": expected["source_head"], "ref": branch},
             "base": {"ref": "main", "sha": expected["public_base_sha"]},
             "merge_commit_sha": expected["public_source_sha"]}
         def remote(_repository, endpoint, **_kwargs):
-            if endpoint == "pulls/22":
+            if endpoint == "pulls/24":
                 return pull
-            if endpoint == "actions/runs/41174611288": return preview
-            if endpoint == "actions/runs/41175438525": return merge_preview
-            if endpoint == "actions/runs/41175511179": return failed
+            if endpoint == "actions/runs/41181549270": return preview
+            if endpoint == "actions/runs/41182366078": return merge_preview
+            if endpoint == "actions/runs/41182437107": return failed
+            if endpoint == "actions/runs/41182366078/jobs?per_page=100":
+                push_statuses = {"product-smoke": "success", "phase7-fast": "success", "desktop": "success",
+                    "safety": "failure", "package": "success", "performance": "success", "gameplay": "success",
+                    "extended": "skipped", "v02-benchmark-recursion94": "skipped", "v02-runtime": "skipped",
+                    "v02-benchmark-control": "skipped", "v02-benchmark-tank-battle": "skipped", "v02-package": "skipped",
+                    "v02-release-qualification": "skipped", "attestation": "success", "required-ci": "failure"}
+                push_jobs = [{"name": name, "status": "completed", "conclusion": conclusion, "steps": []}
+                    for name, conclusion in push_statuses.items()]
+                next(row for row in push_jobs if row["name"] == "safety")["id"] = 124482202980
+                next(row for row in push_jobs if row["name"] == "required-ci")["id"] = 124484611213
+                next(row for row in push_jobs if row["name"] == "safety")["steps"] = [
+                    {"name": "Run bash scripts/ci/required-gate.sh", "conclusion": "failure"}]
+                next(row for row in push_jobs if row["name"] == "required-ci")["steps"] = [
+                    {"name": "Reject incomplete or stale required lanes", "conclusion": "failure"}]
+                return {"total_count": len(push_jobs), "jobs": push_jobs}
             if endpoint.endswith("/attempts/1/jobs?per_page=100"):
                 return {"total_count": len(jobs), "jobs": jobs}
             if endpoint.endswith("/artifacts?per_page=100"): return artifacts
@@ -1202,6 +1335,9 @@ class ContinuationContracts(unittest.TestCase):
                 "szTheory/genewhip", b"fixed predecessor", phase="preparation")
         self.assertEqual(facts["runtime_artifact"], "absent")
         self.assertEqual(facts["runtime_child_cleanup"], "UNKNOWN")
+        self.assertEqual(facts["push_preview_safety_conclusion"], "failure")
+        self.assertEqual(facts["push_preview_sanitized_failure"],
+            "phase5_baseline_contract method UNKNOWN")
         for key_path, wrong in (("head.ref", "other-branch"),
                 ("base.sha", "e" * 40)):
             target = pull
@@ -1215,6 +1351,7 @@ class ContinuationContracts(unittest.TestCase):
                  self.assertRaisesRegex(ValueError, "source-successor-r13-merged-pr-identity-invalid"):
                 coordinator._verify_r13_failed_hosted_predecessor(
                     "szTheory/genewhip", b"fixed predecessor", phase="preparation")
+
             verify.assert_not_called()
             target[parent][leaf] = original
         for key, value in (("tree", {"sha": "f" * 40}),
@@ -1260,6 +1397,39 @@ class ContinuationContracts(unittest.TestCase):
              self.assertRaisesRegex(ValueError, "source-successor-r13-public-main-moved"):
             coordinator._verify_r13_failed_hosted_predecessor(
                 "szTheory/genewhip", b"fixed predecessor", phase="preparation")
+
+    def test_r13_predecessor_accepts_the_actual_failed_hosted_journal_chain(self):
+        journal_path = ROOT / "build/v02/failures/r15-failed-hosted-journal-6f51e120cf406189db950f6ebecac9600527a7382527618dd63cd083ae0b78f9.json"
+        journal_bytes = journal_path.read_bytes()
+        self.assertEqual(sha(journal_bytes),
+            "6f51e120cf406189db950f6ebecac9600527a7382527618dd63cd083ae0b78f9")
+        original_run = subprocess.run
+        bounded_git, git_calls = bounded_readonly_git_runner(process_denial, original_run)
+        def read_only_git_at_selected_candidate(command, *args, **kwargs):
+            process_denial.enable_readonly_git(kwargs.get("cwd"), ROOT.resolve())
+            try:
+                return bounded_git(command, *args, **kwargs)
+            finally:
+                process_denial.disable_readonly_git()
+        with mock.patch.object(subprocess, "run", side_effect=read_only_git_at_selected_candidate):
+            predecessor = continuation.validate_r13_failed_hosted_predecessor(
+                ROOT, journal_bytes=journal_bytes)
+        self.assertEqual(len(git_calls), 8)
+        self.assertEqual(predecessor["journal_bytes"], journal_bytes)
+        self.assertIsNone(predecessor["journal"].get("source_successor"))
+        retry = predecessor["journal"]["source_retry"]
+        self.assertEqual(retry["archive_sha256"],
+            "cfd6c9e77706c0ae1990638c67d45e4a18e797e1ae474ffc65c9b972e6662242")
+        lineage = predecessor["source_successor_lineage"]
+        self.assertEqual(lineage["prior_merge_commit_sha"],
+            "ac7c5bdc8e4e87e3a6423de7a64524f5f0ca498b")
+        self.assertEqual(lineage["failed_hosted"]["archive_sha256"],
+            "03ce5756c177d33006fd3ce7f005905321a07ec84c3eccabdd54c49b8de49073")
+        with mock.patch.object(subprocess, "run", side_effect=read_only_git_at_selected_candidate), \
+             self.assertRaisesRegex(ValueError, "r13-failed-hosted-journal-stale"):
+            continuation.validate_r13_failed_hosted_predecessor(ROOT,
+                journal_bytes=journal_bytes + b" ")
+        self.assertEqual(len(git_calls), 12)
 
     def test_failed_hosted_successor_cli_routes_only_selection17_return(self):
         with tempfile.TemporaryDirectory(prefix="gw-r13-successor-route-") as temp:
@@ -1339,28 +1509,277 @@ class ContinuationContracts(unittest.TestCase):
                         recovery_selection="17", continuation_purpose="current-native-return")
             packet.assert_not_called()
 
+    def test_failed_hosted_successor_transitions_the_exact_preserved_journal(self):
+        expected = continuation.R13_FAILED_HOSTED_PREDECESSOR
+        phase_relative = continuation.PHASE
+        prior_candidate_root = Path("build/v02/campaign15/original10/current-source-candidate-final-r17")
+        journal_source = ROOT / "build/v02/failures/r15-failed-hosted-journal-6f51e120cf406189db950f6ebecac9600527a7382527618dd63cd083ae0b78f9.json"
+        original_bytes = journal_source.read_bytes()
+        self.assertEqual(sha(original_bytes), expected["journal_sha256"])
+        source_candidate = ROOT / prior_candidate_root
+        with tempfile.TemporaryDirectory(prefix="gw-r13-actual-transition-") as temporary:
+            root = (Path(temporary) / "root").resolve()
+            publication_template = source_candidate / "publication"
+            shutil.copytree(publication_template, root,
+                ignore=shutil.ignore_patterns(".git"))
+            # Reuse the checkout's read-only object database for only this
+            # temporary root's HEAD lookup; all Git execution remains bounded.
+            (root / ".git").write_text("gitdir: " + str(ROOT / ".git") + "\n", encoding="utf-8")
+
+            def copy_input(relative):
+                source, destination = ROOT / relative, root / relative
+                if source.is_dir():
+                    shutil.copytree(source, destination, dirs_exist_ok=True)
+                else:
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(source, destination)
+
+            for relative in (
+                    phase_relative.as_posix(), "evidence/v02-execution.json",
+                    "build/phase4/delivery-preflight.json", "build/phase4/authorized-preflight.json",
+                    continuation.RISK_SOURCE.as_posix(), continuation.RISK_SECURITY.as_posix(),
+                    "build/v02/campaign15/campaign.json", "build/v02/campaign15/attempt2-started.json",
+                    "build/v02/campaign15/attempt3-started.json", "build/v02/campaign15/attempt4-started.json",
+                    "build/v02/campaign15/original10/native-source-revalidation-r8",
+                    "build/v02/campaign15/original10/native-contract-856650313767500",
+                    "build/v02/recovery15",
+                    "build/v02/process-admission-controls/nested-parent-856652957004916.json",
+                    "build/v02/failures"):
+                copy_input(relative)
+            current_preparation = root / phase_relative / continuation.CURRENT_NATIVE_CONTINUATION.name
+            archived_preparation = root / phase_relative / "history/07-10-current-preparation-r17-lineage-failure/07-10-CURRENT-SOURCE-CONTINUATION.json"
+            if not current_preparation.exists():
+                shutil.copyfile(archived_preparation, current_preparation)
+            for name in ("current-source-candidate-final-r10", "current-source-candidate-final-r15",
+                         "current-source-candidate-final-r17"):
+                copy_input("build/v02/campaign15/original10/" + name)
+            # The candidate's own copied .git directory is retained separately
+            # from the enclosing root's read-only Gitdir for accurate history scans.
+            candidate_copy = root / prior_candidate_root / "publication"
+            shutil.copyfile(journal_source, root / "build/v02/campaign15/hosted-delivery-journal.json")
+            journal = root / "build/v02/campaign15/hosted-delivery-journal.json"
+            scope = root / "evidence/v02-execution.json"
+            campaign = root / "build/v02/campaign15/campaign.json"
+            candidate_root = root / prior_candidate_root
+            candidate_prep = candidate_root / "preparation.json"
+            candidate_packet = json.loads(candidate_prep.read_bytes())
+            self.assertEqual(candidate_packet["privacy"].get("status"), "pass")
+            self.assertEqual(candidate_packet["privacy"].get("current_findings"), [])
+            self.assertEqual(candidate_packet["privacy"].get("history_findings"), [])
+            # The frozen R17 preparation independently records this exact tree
+            # as privacy-clean; prove the temporary copy retains every pinned
+            # source byte before substituting only the scanner at its boundary.
+            for source_row in candidate_packet["source_manifest"]:
+                copied_path = candidate_copy / source_row["path"]
+                self.assertEqual(sha(copied_path.read_bytes()), source_row["sha256"],
+                    "temporary candidate differs from its frozen source manifest")
+            candidate_policy = root / candidate_packet["repository_preflight"]
+            output = root / "build/v02/campaign15/transition.json"
+
+            # All fixture Git reads use the real, bounded Git binary and the
+            # existing object store; no Git command writes refs or the index.
+            original_run = subprocess.run
+            bounded_git, git_calls = bounded_readonly_git_runner(process_denial, original_run)
+            def selected_git(command, *args, **kwargs):
+                cwd = Path(kwargs.get("cwd")).resolve()
+                process_denial.enable_readonly_git(cwd, root / ".never-source-root")
+                try:
+                    return bounded_git(command, *args, **kwargs)
+                finally:
+                    process_denial.disable_readonly_git()
+            run_preview = {"id": int(expected["preview_run_id"]), "head_sha": expected["source_head"],
+                "event": "pull_request", "status": "completed", "conclusion": "success",
+                "path": ".github/workflows/ci.yml", "head_branch": "v0.2-source-" + expected["source_head"][:12],
+                "display_title": "Required preview checks"}
+            run_push = {"id": int(expected["merge_preview_run_id"]), "head_sha": expected["public_source_sha"],
+                "event": "push", "status": "completed", "conclusion": "failure",
+                "path": ".github/workflows/ci.yml", "head_branch": "main", "display_title": "Required preview checks"}
+            run_full = {"id": int(expected["qualification_run_id"]), "head_sha": expected["public_source_sha"],
+                "event": "workflow_dispatch", "status": "completed", "conclusion": "failure",
+                "path": ".github/workflows/ci.yml", "head_branch": "main",
+                "display_title": "Plan10 qualification " + expected["qualification_nonce"],
+                "run_attempt": expected["qualification_attempt"], "created_at": expected["qualification_created_at"]}
+            pull = {"number": int(expected["pull_request"]), "url": "https://github.com/szTheory/genewhip/pull/24",
+                "state": "closed", "merged": True, "head": {"sha": expected["source_head"],
+                "ref": run_preview["head_branch"]}, "base": {"ref": "main", "sha": expected["public_base_sha"]},
+                "merge_commit_sha": expected["public_source_sha"]}
+            push_statuses = {"product-smoke": "success", "phase7-fast": "success", "desktop": "success",
+                "safety": "failure", "package": "success", "performance": "success", "gameplay": "success",
+                "extended": "skipped", "v02-benchmark-recursion94": "skipped", "v02-runtime": "skipped",
+                "v02-benchmark-control": "skipped", "v02-benchmark-tank-battle": "skipped",
+                "v02-package": "skipped", "v02-release-qualification": "skipped", "attestation": "success",
+                "required-ci": "failure"}
+            push_jobs = [{"name": n, "status": "completed", "conclusion": c, "steps": []}
+                for n, c in push_statuses.items()]
+            next(row for row in push_jobs if row["name"] == "safety").update({"id": int(expected["merge_preview_safety_job_id"]),
+                "steps": [{"name": "Run bash scripts/ci/required-gate.sh", "conclusion": "failure"}]})
+            next(row for row in push_jobs if row["name"] == "required-ci").update({
+                "id": int(expected["merge_preview_required_ci_job_id"]),
+                "steps": [{"name": "Reject incomplete or stale required lanes", "conclusion": "failure"}]})
+            self.assertEqual(next(row["id"] for row in push_jobs if row["name"] == "safety"),
+                int(expected["merge_preview_safety_job_id"]))
+            self.assertEqual(next(row["id"] for row in push_jobs if row["name"] == "required-ci"),
+                int(expected["merge_preview_required_ci_job_id"]))
+            full_statuses = {"phase7-fast": "success", "gameplay": "success", "safety": "success",
+                "product-smoke": "success", "desktop": "success", "performance": "success", "package": "success",
+                "v02-runtime": "failure", "extended": "skipped", "required-ci": "failure",
+                "v02-benchmark-control": "skipped", "v02-benchmark-tank-battle": "skipped",
+                "v02-benchmark-recursion94": "skipped", "v02-package": "skipped",
+                "v02-release-qualification": "skipped", "attestation": "skipped"}
+            full_jobs = [{"name": n, "status": "completed", "conclusion": c, "steps": []}
+                for n, c in full_statuses.items()]
+            next(row for row in full_jobs if row["name"] == "v02-runtime").update({"id": int(expected["runtime_job_id"]),
+                "steps": [{"name": "Run complete current-source product safety and chunk roster", "conclusion": "failure"}]})
+            next(row for row in full_jobs if row["name"] == "required-ci").update({"id": int(expected["required_ci_job_id"]),
+                "steps": [{"name": "Reject incomplete or stale required lanes", "conclusion": "failure"}]})
+
+            def api(_repository, endpoint, **_kwargs):
+                if endpoint == "pulls/24": return pull
+                if endpoint == "actions/runs/" + expected["preview_run_id"]: return run_preview
+                if endpoint == "actions/runs/" + expected["merge_preview_run_id"]: return run_push
+                if endpoint == "actions/runs/" + expected["qualification_run_id"]: return run_full
+                if "actions/runs?head_sha=" + expected["source_head"] in endpoint:
+                    return {"total_count": 1, "workflow_runs": [run_preview]}
+                if "actions/runs?head_sha=" + expected["public_source_sha"] in endpoint:
+                    return {"total_count": 2, "workflow_runs": [run_push, run_full]}
+                if endpoint.endswith("/attempts/1/jobs?per_page=100"):
+                    return {"total_count": len(full_jobs), "jobs": full_jobs}
+                if endpoint.endswith("/jobs?per_page=100"):
+                    return {"total_count": len(push_jobs), "jobs": push_jobs}
+                if endpoint.endswith("/artifacts?per_page=100"):
+                    return {"total_count": 2, "artifacts": [
+                        {"id": 13036610344, "name": "phase4-host-evidence-41182437107-1", "size_in_bytes": 10644,
+                         "digest": "sha256:f1ed56d6ed25e005f2d70888a5b85b824de2cdb7cbf4d9da5b4b0dd1150faa18"},
+                        {"id": 13035314966, "name": "safety-evidence-41182437107-1", "size_in_bytes": 12640,
+                         "digest": "sha256:224115d7acf0430e312acc2368a40b3be4fce33b052487ca059a24b17fb23746"}]}
+                raise AssertionError("unexpected R13 readonly API query")
+            def gh(_repository, endpoint, **_kwargs):
+                if endpoint == "git/commits/" + expected["public_source_sha"]:
+                    return {"sha": expected["public_source_sha"], "tree": {"sha": expected["public_tree_sha"]},
+                        "parents": [{"sha": expected["public_base_sha"]}]}
+                if endpoint == "git/ref/heads/main": return {"object": {"sha": expected["public_source_sha"]}}
+                raise AssertionError("unexpected R13 git metadata query")
+            policy_template = json.loads(candidate_policy.read_bytes())
+            def external(argv, **_kwargs):
+                if argv[:4] == ["git", "remote", "get-url", "origin"]:
+                    return subprocess.CompletedProcess(argv, 0, "https://github.com/szTheory/genewhip.git\n", "")
+                if argv[:4] == ["git", "fetch", "--no-tags", "origin"]:
+                    return subprocess.CompletedProcess(argv, 0, "", "")
+                if argv[:2] == ["git", "rev-parse"]:
+                    return subprocess.CompletedProcess(argv, 0, expected["public_source_sha"] + "\n", "")
+                if "repository_preflight.py" in " ".join(argv):
+                    out = Path(argv[argv.index("--out") + 1])
+                    out = out if out.is_absolute() else root / out
+                    out.parent.mkdir(parents=True, exist_ok=True)
+                    out.write_text(json.dumps(policy_template), encoding="utf-8")
+                    return subprocess.CompletedProcess(argv, 0, "", "")
+                raise AssertionError("unexpected external action in temp transition")
+
+            actual_campaign = ROOT / "build/v02/campaign15/campaign.json"
+            actual_scope = ROOT / "evidence/v02-execution.json"
+            actual_journal = ROOT / "build/v02/campaign15/hosted-delivery-journal.json"
+            actual_return = ROOT / continuation.CURRENT_RETURN_RECORD
+            self.assertEqual(campaign.read_bytes(), actual_campaign.read_bytes())
+            self.assertEqual(scope.read_bytes(), actual_scope.read_bytes())
+            self.assertEqual(journal.read_bytes(), original_bytes)
+            self.assertEqual((root / continuation.CURRENT_RETURN_RECORD).read_bytes(),
+                actual_return.read_bytes())
+            original_campaign_projection = coordinator._campaign_projection
+            def actual_campaign_projection(_campaign_path, _scope_path, _journal_path, **kwargs):
+                # Run the production campaign/current-return guard against its
+                # exact live inputs; map only the temporary journal root after
+                # proving its authoritative bytes are identical.
+                self.assertEqual(journal.read_bytes(), original_bytes)
+                kwargs["continuation_path"] = actual_return
+                with mock.patch.object(coordinator, "ROOT", ROOT):
+                    return original_campaign_projection(actual_campaign, actual_scope,
+                        actual_journal, **kwargs)
+            actual_candidate_prep = source_candidate / "preparation.json"
+            def actual_candidate_packet(_packet_path, _publication_copy):
+                self.assertEqual(candidate_prep.read_bytes(), actual_candidate_prep.read_bytes())
+                # Candidate Git/privacy readiness was independently accepted
+                # for this frozen R17 snapshot; this transition test targets
+                # the failed-hosted lineage and durable journal mutation.
+                return json.loads(actual_candidate_prep.read_bytes())
+            original_spec_factory = coordinator.importlib.util.spec_from_file_location
+            def prior_return_spec(name, *args, **kwargs):
+                spec = original_spec_factory(name, *args, **kwargs)
+                if name != "v02_continuation_gate" or spec is None:
+                    return spec
+                original_loader = spec.loader
+                class PriorReturnBoundary:
+                    def __getattr__(self, attribute):
+                        return getattr(original_loader, attribute)
+                    def exec_module(self, module):
+                        original_loader.exec_module(module)
+                        # R17's accepted return belongs to the previous source
+                        # snapshot and the current slot is now archived. The
+                        # fresh-source return is rebuilt before live transition.
+                        module.validate_current_native_return = lambda *_args, **_kwargs: None
+                spec.loader = PriorReturnBoundary()
+                return spec
+
+            original_root = coordinator.ROOT
+            try:
+                with mock.patch.object(coordinator, "ROOT", root), \
+                     mock.patch.object(coordinator, "_r13_failed_hosted_predecessor",
+                        side_effect=lambda raw: (continuation,
+                            continuation.validate_r13_failed_hosted_predecessor(root, journal_bytes=raw))), \
+                     mock.patch.object(coordinator, "_r13_remote_json", side_effect=api), \
+                     mock.patch.object(coordinator, "_gh_json", side_effect=gh), \
+                     mock.patch.object(coordinator, "_external", side_effect=external), \
+                     mock.patch.object(coordinator, "_campaign_projection",
+                        side_effect=actual_campaign_projection), \
+                     mock.patch.object(coordinator, "_valid_packet_for_delivery",
+                        side_effect=actual_candidate_packet), \
+                     mock.patch.object(coordinator.importlib.util, "spec_from_file_location",
+                        side_effect=prior_return_spec), \
+                     mock.patch.object(subprocess, "run", side_effect=selected_git):
+                    result = coordinator.failed_hosted_successor_sanitized_source(
+                        candidate_prep, candidate_root / "publication", journal,
+                        scope_path=scope, campaign_path=campaign,
+                        campaign_sha256="f309198a4f25fee9ffb017570e0900de70c199732d9880a4f375d70bc847aad1",
+                        continuation_path=root / phase_relative / continuation.CURRENT_RETURN_RECORD.name,
+                        recovery_selection="17", continuation_purpose="current-native-return")
+                    active = json.loads(journal.read_bytes())
+                    coordinator._validate_source_successor_history(active)
+            finally:
+                process_denial.disable_readonly_git()
+            self.assertEqual(result["predecessor_journal_sha256"], expected["journal_sha256"])
+            self.assertEqual((root / result["predecessor_archive"]).read_bytes(), original_bytes)
+            self.assertEqual(active["source_successor"]["failed_hosted"]["archive_sha256"],
+                expected["journal_sha256"])
+            self.assertEqual(active["source_successor"]["archive_sha256"],
+                "89232a2d8899937a3e797435c05228306817b3d10e479d7e30849e13cd4bd08c")
+            self.assertGreater(len(git_calls), 8)
+
     def test_r13_failed_hosted_successor_archives_resumes_and_rejects_mutations(self):
         start = "2026-10-30T16:50:39.837827+00:00"
         old_journal = (json.dumps({"synthetic": "exact failed hosted predecessor"},
             sort_keys=True) + "\n").encode()
         old_sha = sha(old_journal)
         expected = {"journal_sha256": old_sha, "started_at": start,
-            "source_head": "d1944cc3a494a20f0c98b6aec5d77ceb86184ffc",
-            "private_source_head": "1c6ff6e1c6572162731d72a5f97c7775b8e51212",
-            "public_base_sha": "ac7c5bdc8e4e87e3a6423de7a64524f5f0ca498b",
-            "public_source_sha": "9027bb0579bf559f56b26a91d5d3b44ce194c3a4",
-            "public_tree_sha": "2ae5c5ebf0fcc539152d73069a84a1e0818513c2",
-            "pull_request": "22", "qualification_run_id": "41175511179",
-            "qualification_attempt": 1, "qualification_nonce": "68aa65ee32be4422a0da0beddd197560"}
+            "source_head": "9c7b164785d27e8a0495a93ebb75b3169cbc7af2",
+            "private_source_head": "34b1e4e657ad680884ee7356a15d05444419727c",
+            "public_base_sha": "9027bb0579bf559f56b26a91d5d3b44ce194c3a4",
+            "public_source_sha": "be835a78626d9d2b25f0d2556ff7aa88c8cf5888",
+            "public_tree_sha": "0ec47fc559521858bb360c54ebfdcf68843f378a",
+            "pull_request": "24", "qualification_run_id": "41182437107",
+            "qualification_attempt": 1, "qualification_nonce": "6db36e4cf66a4c19b3875ad5e9915c23"}
         facts = {"runtime_job_conclusion": "failure", "required_ci_conclusion": "failure",
             "runtime_failure_step": "Run complete current-source product safety and chunk roster",
             "runtime_artifact": "absent", "runtime_child_cleanup": "UNKNOWN",
+            "push_preview_safety_conclusion": "failure",
+            "push_preview_required_ci_conclusion": "failure",
+            "push_preview_failure_step": "Run bash scripts/ci/required-gate.sh",
+            "push_preview_sanitized_failure": "phase5_baseline_contract method UNKNOWN",
             "qualification_run_id": expected["qualification_run_id"],
             "qualification_attempt": expected["qualification_attempt"]}
         module = SimpleNamespace(R13_FAILED_HOSTED_PREDECESSOR=expected)
         prior_lineage = {"schema": "genewhip.v02-source-successor.v1",
             "prior_merge_commit_sha": "ac7c5bdc8e4e87e3a6423de7a64524f5f0ca498b"}
-        predecessor = {"journal": {"source_successor": prior_lineage}}
+        predecessor = {"journal": {"source_successor": None},
+            "source_successor_lineage": prior_lineage}
         packet = {"repository": "szTheory/genewhip", "public_identity": {
             "head_sha": "f" * 40, "base_sha": expected["public_source_sha"]}}
         policy = {"repository": "szTheory/genewhip", "repository_observations": {"observations": {
@@ -1375,11 +1794,11 @@ class ContinuationContracts(unittest.TestCase):
                 "public_base_sha": expected["public_base_sha"],
                 "public_source_sha": expected["public_source_sha"],
                 "tree_sha": expected["public_tree_sha"], "candidate_sha": expected["source_head"],
-                "pull_request": "22", "branch": "v0.2-source-" + expected["source_head"][:12],
+                "pull_request": "24", "branch": "v0.2-source-" + expected["source_head"][:12],
                 "push_performed": True, "qualification_started_at": start,
                 "qualification_dispatch_nonce": expected["qualification_nonce"],
                 "qualification_dispatch_requested": True, "qualification_dispatch_submitted": True,
-                "selected_run_created_at": "2026-10-31T06:10:38Z", "source_successor": prior_lineage}
+                "selected_run_created_at": "2026-10-31T07:54:29Z", "source_successor": prior_lineage}
             journal.write_bytes(old_journal)
             scope = root / "evidence/v02-execution.json"
             scope.parent.mkdir(parents=True)
@@ -1727,7 +2146,7 @@ class ContinuationContracts(unittest.TestCase):
 
     def test_current_native_continuation_reopens_exact_r8_and_historical_inputs(self):
         self.assertEqual(continuation.CURRENT_RETURN_CANDIDATE_ROOT.as_posix(),
-            "build/v02/campaign15/original10/current-source-candidate-final-r15")
+            "build/v02/campaign15/original10/current-source-candidate-final-r18")
         with tempfile.TemporaryDirectory(prefix="gw10-current-native-record-") as temporary:
             root = Path(temporary).resolve()
             required = set(continuation.R8_NATIVE_SOURCE_PATHS)
@@ -1736,6 +2155,9 @@ class ContinuationContracts(unittest.TestCase):
                 "tests/evidence/phase7_sticky_denial.py",
                 "tests/evidence/phase7_return_consumer_contract.py",
                 continuation.R8_PHASE5_DIAGNOSTIC_TEST_PATH,
+                continuation.R15_FIXTURE_PATH,
+                (continuation.R15_FIXTURE_CANDIDATE_ROOT / "publication" /
+                    continuation.R15_FIXTURE_PATH).as_posix(),
                 continuation.R8_PACKET.as_posix(), continuation.R8_RESULT.as_posix(),
                 continuation.R8_ATTEMPT.as_posix(), continuation.R8_NESTED.as_posix(),
                 continuation.R8_RESULT_REVIEW.as_posix(), continuation.R8_ADMISSION_REVIEW.as_posix(),
@@ -1779,6 +2201,14 @@ class ContinuationContracts(unittest.TestCase):
                     "r8_native_execution_credit": False})
             self.assertEqual(payload["current_tests"][continuation.R8_PHASE5_DIAGNOSTIC_TEST_PATH],
                 continuation.R8_PHASE5_DIAGNOSTIC_TEST_SHA)
+            self.assertEqual(payload["current_source_delta_from_r8"]["r15_fixture_core_delta"], {
+                "path": continuation.R15_FIXTURE_PATH,
+                "r15_public_source_file_sha256": continuation.R15_FIXTURE_BASELINE_FILE_SHA,
+                "r15_core_ast_sha256": continuation.R15_FIXTURE_CORE_BASELINE_AST_SHA,
+                "current_core_ast_sha256": continuation.R15_FIXTURE_CORE_CURRENT_AST_SHA,
+                "only_changed_function": "core",
+                "changes_core_media_receipt_source_to_current_report_output": True,
+                "r8_native_execution_credit": False})
             self.assertIs(safety_delta["prelaunch_only_review_boundary"], False)
             fixture_delta = payload["current_source_delta_from_r8"][
                 continuation.R8_SAFETY_REPORT_TEST_PATH]["test_fixture_deltas"]
@@ -1836,8 +2266,11 @@ class ContinuationContracts(unittest.TestCase):
                         'source-successor-r13-run-identity-mutant',
                         "current-native-added-function-unreviewed:_verify_r13_failed_hosted_predecessor"),
                     ("scripts/release/v02_continuation.py",
-                        "current-source-candidate-final-r15", "current-source-candidate-final-r9",
+                        "current-source-candidate-final-r18", "current-source-candidate-final-r9",
                         "current-native-candidate-root-delta-invalid"),
+                    ("tests/fixtures/phase6_game.py",
+                        "core_report_path=output", "core_report_path=media_output",
+                        "current-native-r15-fixture-core-unreviewed"),
                     ("scripts/release/v02_continuation.py",
                         '"candidate_root": "build/v02/campaign15/original10/current-source-candidate-final-r10"',
                         '"candidate_root": "build/v02/campaign15/original10/current-source-candidate-final-r9"',
@@ -1899,6 +2332,9 @@ class ContinuationContracts(unittest.TestCase):
                 "tests/evidence/phase7_sticky_denial.py",
                 "tests/evidence/phase7_return_consumer_contract.py",
                 continuation.R8_PHASE5_DIAGNOSTIC_TEST_PATH,
+                continuation.R15_FIXTURE_PATH,
+                (continuation.R15_FIXTURE_CANDIDATE_ROOT / "publication" /
+                    continuation.R15_FIXTURE_PATH).as_posix(),
                 continuation.R8_PACKET.as_posix(), continuation.R8_RESULT.as_posix(),
                 continuation.R8_ATTEMPT.as_posix(), continuation.R8_NESTED.as_posix(),
                 continuation.R8_RESULT_REVIEW.as_posix(), continuation.R8_ADMISSION_REVIEW.as_posix(),
@@ -1947,6 +2383,9 @@ class ContinuationContracts(unittest.TestCase):
                 "tests/evidence/phase7_sticky_denial.py",
                 "tests/evidence/phase7_return_consumer_contract.py",
                 continuation.R8_PHASE5_DIAGNOSTIC_TEST_PATH,
+                continuation.R15_FIXTURE_PATH,
+                (continuation.R15_FIXTURE_CANDIDATE_ROOT / "publication" /
+                    continuation.R15_FIXTURE_PATH).as_posix(),
                 continuation.R8_PACKET.as_posix(), continuation.R8_RESULT.as_posix(),
                 continuation.R8_ATTEMPT.as_posix(), continuation.R8_NESTED.as_posix(),
                 continuation.R8_RESULT_REVIEW.as_posix(), continuation.R8_ADMISSION_REVIEW.as_posix(),

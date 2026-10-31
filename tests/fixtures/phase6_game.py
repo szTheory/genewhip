@@ -1845,7 +1845,7 @@ def core(build,map_path,candidate_path,output,resume_batch=None):
         report["outcomes"]={"status":"pass","reason":None};persist()
         compiler.validate_product_report(report,candidate)
         media_output=(ROOT/"build/v02/runtime/media-report.json") if _EXECUTION_SCOPE is not None else ROOT/"evidence/phase6-media.json"
-        media(build,candidate_path,media_output)
+        media(build,candidate_path,media_output,core_report_path=output)
         return 0
     except BaseException as error:
         report["outcomes"]={"status":"fail","reason":f"{type(error).__name__}: {error}"};persist()
