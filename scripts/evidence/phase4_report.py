@@ -103,7 +103,22 @@ SAFE_CTEST_DIAGNOSTIC_METHODS = frozenset({
 })
 SAFE_CTEST_DIAGNOSTIC_PREFIX = "GENEWHIP_TEST_RESULT:"
 SAFE_CTEST_DIAGNOSTIC = re.compile(
-    r"^GENEWHIP_TEST_RESULT:([A-Za-z][A-Za-z0-9_]*\.test_[A-Za-z0-9_]+):(failure|error)$")
+    r"^GENEWHIP_TEST_RESULT:([A-Za-z][A-Za-z0-9_]*\.test_[A-Za-z0-9_]+):(failure|error)"
+    r"(?::(AssertionError|PermissionError|FileNotFoundError|TimeoutExpired|OSError|RuntimeError|ValueError|TypeError|KeyError|IndexError|other)"
+    r":(confirmed|unconfirmed|missing):(phase7-capture-byte-limit|phase7-json-byte-limit|phase7-retained-byte-limit|"
+    r"phase7-rss-byte-limit|phase7-rss-observation-unavailable|phase7-scratch-byte-limit|phase7-scratch-root-invalid|"
+    r"phase7-scratch-tree-unsafe|phase7-stdout-stderr-byte-limit|phase7-wall-timeout|none|other|unspecified-bound-violation)"
+    r":(group-inactive|group-leader-reap-unconfirmed|group-leader-wait-unconfirmed|"
+    r"group-observer-cleanup-unconfirmed|group-status-budget-exhausted|group-reported-active|"
+    r"cleanup-permission-denied|group-cleanup-os-error|group-signal-permission-denied|"
+    r"group-signal-visible|group-status-unavailable|"
+    r"cleanup-unclassified|not-observed|missing|other)"
+    r":(group-inactive|group-leader-reap-unconfirmed|group-leader-wait-unconfirmed|"
+    r"group-observer-cleanup-unconfirmed|group-status-budget-exhausted|group-reported-active|"
+    r"cleanup-permission-denied|group-cleanup-os-error|group-signal-permission-denied|"
+    r"group-signal-visible|group-status-unavailable|"
+    r"cleanup-unclassified|not-observed|missing|other)"
+    r":(0|[1-9]|1[0-6]|other))?$")
 HOST_SCHEMA = "genewhip-phase4-host-sessions"
 HOST_CONTROLS = ROOT / "fixtures/independent-game-v2/host-controls.json"
 HOST_HEX = re.compile(r"^[0-9a-f]{64}$")
@@ -278,12 +293,16 @@ def sanitize_ctest_junit(source, destination):
                 match = SAFE_CTEST_DIAGNOSTIC.fullmatch(line)
                 if not match or match.group(1) not in SAFE_CTEST_DIAGNOSTIC_METHODS:
                     raise ValueError("safety-ctest-diagnostic-invalid")
-                diagnostics.add((match.group(1), match.group(2)))
+                diagnostics.add(match.groups())
         if diagnostics:
             safe_output = ET.SubElement(safe_case, "system-out")
             safe_output.text = "\n".join(
-                f"GENEWHIP_SAFE_TEST_RESULT:{method}:{kind}"
-                for method, kind in sorted(diagnostics))
+                f"GENEWHIP_SAFE_TEST_RESULT:{method}:{kind}" +
+                (f";exception={exception};cleanup={cleanup};bound={bound};"
+                 f"cleanup_reason={reason};status_observation={status};cleanup_queries={attempts}" if exception else "")
+                for method, kind, exception, cleanup, bound, reason, status, attempts in
+                 sorted(diagnostics, key=lambda row: tuple(
+                     (0, "") if value is None else (1, str(value)) for value in row)))
     payload = ET.tostring(root, encoding="utf-8", xml_declaration=True) + b"\n"
     if PERSONAL_HOME_PATH.search(payload):
         raise ValueError("safety-ctest-personal-path")
@@ -325,11 +344,36 @@ def summarize_sanitized_ctest_failures(source):
                 if not line.startswith("GENEWHIP_SAFE_TEST_RESULT:"):
                     continue
                 match = re.fullmatch(
-                    r"GENEWHIP_SAFE_TEST_RESULT:([A-Za-z][A-Za-z0-9_]*\.test_[A-Za-z0-9_]+):(failure|error)",
+                    r"GENEWHIP_SAFE_TEST_RESULT:([A-Za-z][A-Za-z0-9_]*\.test_[A-Za-z0-9_]+):(failure|error)"
+                    r"(?:;exception=(AssertionError|PermissionError|FileNotFoundError|TimeoutExpired|OSError|RuntimeError|ValueError|TypeError|KeyError|IndexError|other)"
+                    r";cleanup=(confirmed|unconfirmed|missing);bound=(phase7-capture-byte-limit|phase7-json-byte-limit|"
+                    r"phase7-retained-byte-limit|phase7-rss-byte-limit|phase7-rss-observation-unavailable|"
+                    r"phase7-scratch-byte-limit|phase7-scratch-root-invalid|phase7-scratch-tree-unsafe|"
+                    r"phase7-stdout-stderr-byte-limit|phase7-wall-timeout|none|other|unspecified-bound-violation);cleanup_reason="
+                    r"(group-inactive|group-observer-cleanup-unconfirmed|group-status-budget-exhausted|"
+                    r"group-leader-reap-unconfirmed|group-leader-wait-unconfirmed|group-reported-active|"
+                    r"cleanup-permission-denied|group-cleanup-os-error|group-signal-permission-denied|"
+                    r"group-signal-visible|"
+                    r"group-status-unavailable|cleanup-unclassified|not-observed|missing|other);status_observation="
+                    r"(group-inactive|group-observer-cleanup-unconfirmed|group-status-budget-exhausted|"
+                    r"group-leader-reap-unconfirmed|group-leader-wait-unconfirmed|group-reported-active|"
+                    r"cleanup-permission-denied|group-cleanup-os-error|group-signal-permission-denied|"
+                    r"group-signal-visible|"
+                    r"group-status-unavailable|cleanup-unclassified|not-observed|missing|other);"
+                    r"cleanup_queries=(0|[1-9]|1[0-6]|other))?",
                     line)
                 if not match or match.group(1) not in SAFE_CTEST_DIAGNOSTIC_METHODS:
                     raise ValueError("safety-ctest-diagnostic-invalid")
-                output.append(f"CTest subtest failure: {match.group(1)} [{match.group(2)}]")
+                if match.group(3):
+                    if (match.group(2) == "failure") != (match.group(3) == "AssertionError"):
+                        raise ValueError("safety-ctest-diagnostic-invalid")
+                    output.append(
+                        f"CTest subtest failure: {match.group(1)} [{match.group(2)}; "
+                        f"exception={match.group(3)}; cleanup={match.group(4)}; bound={match.group(5)}; "
+                        f"cleanup_reason={match.group(6)}; status_observation={match.group(7)}; "
+                        f"cleanup_queries={match.group(8)}]")
+                else:
+                    output.append(f"CTest subtest failure: {match.group(1)} [{match.group(2)}]")
     return sorted(set(output))
 
 

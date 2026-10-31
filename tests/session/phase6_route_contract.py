@@ -32,6 +32,13 @@ MAX_REPORT_BYTES = 8 * 1024 * 1024
 MAX_TRACE_BYTES = 16 * 1024 * 1024
 MAX_TRACE_ROWS = 100000
 DARWIN_RSS_MAX_PIDS = 4096
+SAFE_CLEANUP_REASONS = frozenset({
+    "group-inactive", "group-observer-cleanup-unconfirmed", "group-status-budget-exhausted",
+    "group-cleanup-os-error", "cleanup-permission-denied",
+    "group-leader-reap-unconfirmed", "group-leader-wait-unconfirmed",
+    "group-reported-active", "group-signal-permission-denied", "group-signal-visible",
+    "group-status-unavailable", "cleanup-unclassified", "not-observed",
+})
 BASELINE_SHA256 = "e044daa65a617d3a1e3cd32a877bf40c2f9b3fad21fef1241f6335e4d7516209"
 PLAN_START_STATE_COMMIT = "89784ff3e240c56a584e6d7f830030cb818bc20d"
 HOST_PROCESS_CONTEXT = "host-cleanup-v1"
@@ -852,6 +859,8 @@ def _run_client_owned(client: pathlib.Path, command: list[str], runs: list[dict[
             cleanup_status_budget = {
                 "remaining": _DARWIN_CLEANUP_MAX_STATUS_QUERIES,
                 "attempted": 0,
+                "last_reason": "cleanup-unclassified",
+                "status_reason": "not-observed",
             }
 
             def terminate_group() -> bool:
@@ -867,12 +876,13 @@ def _run_client_owned(client: pathlib.Path, command: list[str], runs: list[dict[
                     else:
                         terminated = _terminate_process_group(process, grace_seconds=grace)
                     cleanup_confirmed = terminated and cleanup_confirmed
-                except (PermissionError, OSError) as error:
+                except PermissionError as error:
                     # Keep the exact launch identity and cleanup failure visible.
                     # Kill/reap only the direct child here; descendants remain an
                     # explicit containment failure for the caller to reconcile.
                     cleanup_confirmed = False
-                    bound_violation = bound_violation or "process-group-signal-permission-denied"
+                    bound_violation = bound_violation or "process-group-cleanup-permission-denied"
+                    cleanup_status_budget["last_reason"] = "cleanup-permission-denied"
                     process_entry["cleanup_error"] = f"{type(error).__name__}: {error}"
                     try:
                         process.terminate()
@@ -887,7 +897,34 @@ def _run_client_owned(client: pathlib.Path, command: list[str], runs: list[dict[
                             process_entry["direct_child_cleanup_error"] = f"{type(direct_error).__name__}: {direct_error}"
                     except OSError as direct_error:
                         process_entry["direct_child_cleanup_error"] = f"{type(direct_error).__name__}: {direct_error}"
+                except OSError as error:
+                    cleanup_confirmed = False
+                    bound_violation = bound_violation or "process-group-cleanup-os-error"
+                    cleanup_status_budget["last_reason"] = "group-cleanup-os-error"
+                    try:
+                        process.terminate()
+                        process.wait(timeout=2)
+                    except ProcessLookupError:
+                        pass
+                    except subprocess.TimeoutExpired:
+                        try:
+                            process.kill()
+                            process.wait(timeout=2)
+                        except (OSError, subprocess.TimeoutExpired) as direct_error:
+                            process_entry["direct_child_cleanup_error"] = f"{type(direct_error).__name__}: {direct_error}"
+                    except OSError as direct_error:
+                        process_entry["direct_child_cleanup_error"] = f"{type(direct_error).__name__}: {direct_error}"
                 process_entry["process_group_cleanup"] = "confirmed" if cleanup_confirmed else "unconfirmed"
+                if not cleanup_confirmed:
+                    reason = cleanup_status_budget.get("last_reason")
+                    process_entry["cleanup_reason"] = (
+                        reason if reason in SAFE_CLEANUP_REASONS else "cleanup-unclassified")
+                    process_entry["cleanup_observation_attempts"] = min(
+                        _DARWIN_CLEANUP_MAX_STATUS_QUERIES,
+                        max(0, int(cleanup_status_budget.get("attempted", 0))))
+                    status_reason = cleanup_status_budget.get("status_reason")
+                    process_entry["cleanup_status_observation"] = (
+                        status_reason if status_reason in SAFE_CLEANUP_REASONS else "cleanup-unclassified")
                 return cleanup_confirmed
 
             def inspect_outputs() -> None:
@@ -1246,6 +1283,7 @@ def _terminate_process_group(process: subprocess.Popen[bytes], *, grace_seconds:
             try:
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
+                status_budget["last_reason"] = "group-leader-wait-unconfirmed"
                 return False
             return not _group_exists_with_budget(process.pid, status_budget)
         grace_deadline = time.monotonic() + (0.25 if grace_seconds is None else grace_seconds)
@@ -1266,10 +1304,12 @@ def _terminate_process_group(process: subprocess.Popen[bytes], *, grace_seconds:
         try:
             process.wait(timeout=5)
         except subprocess.TimeoutExpired:
+            status_budget["last_reason"] = "group-leader-wait-unconfirmed"
             process.kill()
             try:
                 process.wait(timeout=2)
             except subprocess.TimeoutExpired:
+                status_budget["last_reason"] = "group-leader-reap-unconfirmed"
                 return False
         return not _group_exists_with_budget(process.pid, status_budget)
     else:
@@ -1277,6 +1317,8 @@ def _terminate_process_group(process: subprocess.Popen[bytes], *, grace_seconds:
         try:
             process.wait(timeout=2)
         except subprocess.TimeoutExpired:
+            if status_budget is not None:
+                status_budget["last_reason"] = "group-leader-reap-unconfirmed"
             return False
         # Killing the direct child does not prove descendants were contained.
         return False
@@ -1307,14 +1349,19 @@ def _process_group_exists(group_id: int, *, status_budget: dict[str, int] | None
         # If the OS query is unavailable, retain the conservative signal probe.
         if status_budget is None:
             status_budget = {"remaining": _DARWIN_CLEANUP_MAX_STATUS_QUERIES,
-                             "attempted": 0, "absent_observed": False}
+                             "attempted": 0, "absent_observed": False,
+                             "status_reason": "not-observed"}
         else:
             # The private threaded counter is still a boundary input: clamp it
             # so a reset or malformed caller cannot enlarge the policy.
             status_budget["remaining"] = min(
                 _DARWIN_CLEANUP_MAX_STATUS_QUERIES,
                 max(0, int(status_budget.get("remaining", 0))))
+        status_budget.setdefault("last_reason", "cleanup-unclassified")
         if status_budget["remaining"] <= 0:
+            status_budget["last_reason"] = (
+                "group-inactive" if status_budget.get("absent_observed", False)
+                else "group-status-budget-exhausted")
             return not bool(status_budget.get("absent_observed", False))
         # A new attempt supersedes earlier absence, even if it fails to start
         # or cannot establish a usable status observation.
@@ -1324,18 +1371,31 @@ def _process_group_exists(group_id: int, *, status_budget: dict[str, int] | None
         states, cleanup_ok = _darwin_status_states(group_id)
         if not cleanup_ok:
             # An uncertain status child must never turn into an absent group.
+            status_budget["status_reason"] = "group-observer-cleanup-unconfirmed"
+            status_budget["last_reason"] = "group-observer-cleanup-unconfirmed"
             return True
+        if states is None:
+            status_budget["status_reason"] = "group-status-unavailable"
+            status_budget["last_reason"] = "group-status-unavailable"
         if states is not None:
             exists = any(not state.startswith("Z") for state in states)
+            status_budget["status_reason"] = "group-reported-active" if exists else "group-inactive"
             if not exists:
                 status_budget["absent_observed"] = True
+            status_budget["last_reason"] = "group-reported-active" if exists else "group-inactive"
             return exists
     try:
         os.killpg(group_id, 0)
+        if status_budget is not None:
+            status_budget["last_reason"] = "group-signal-visible"
         return True
     except ProcessLookupError:
+        if status_budget is not None:
+            status_budget["last_reason"] = "group-inactive"
         return False
     except PermissionError:
+        if status_budget is not None:
+            status_budget["last_reason"] = "group-signal-permission-denied"
         return True
 
 
@@ -2046,6 +2106,66 @@ SAFE_FAILURE_DIAGNOSTIC_METHODS = frozenset(
     for case in (NativeParserContract, RepairLedgerContract, MediaConsumerContract)
     for name in unittest.defaultTestLoader.getTestCaseNames(case)
 )
+SAFE_EXCEPTION_CATEGORIES = frozenset({
+    "AssertionError", "PermissionError", "FileNotFoundError", "TimeoutExpired",
+    "OSError", "RuntimeError", "ValueError", "TypeError", "KeyError", "IndexError", "other",
+})
+SAFE_BOUND_CATEGORIES = frozenset({
+    "phase7-capture-byte-limit", "phase7-json-byte-limit", "phase7-retained-byte-limit",
+    "phase7-rss-byte-limit", "phase7-rss-observation-unavailable", "phase7-scratch-byte-limit",
+    "phase7-scratch-root-invalid", "phase7-scratch-tree-unsafe", "phase7-stdout-stderr-byte-limit",
+    "phase7-wall-timeout", "none", "other", "unspecified-bound-violation",
+})
+SAFE_CLEANUP_CATEGORIES = frozenset({"confirmed", "unconfirmed", "missing"})
+SAFE_CLEANUP_REASON_CATEGORIES = SAFE_CLEANUP_REASONS | frozenset({"missing", "other"})
+SAFE_CLEANUP_ATTEMPTS = frozenset(str(value) for value in range(17)) | frozenset({"other"})
+
+
+class SafeDiagnosticTextTestResult(unittest.TextTestResult):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.safe_exception_by_test = {}
+        self.safe_cleanup_by_test = {}
+        self._runs_at_test_start = {}
+
+    def startTest(self, test):
+        runs = getattr(test, "runs", None)
+        self._runs_at_test_start[id(test)] = (runs, len(runs) if isinstance(runs, list) else 0)
+        super().startTest(test)
+
+    def _snapshot_cleanup(self, test):
+        runs = getattr(test, "runs", None)
+        previous, start = self._runs_at_test_start.get(id(test), (None, 0))
+        if not isinstance(runs, list):
+            row = {}
+        else:
+            first_new = start if runs is previous else 0
+            row = runs[-1] if len(runs) > first_new and isinstance(runs[-1], dict) else {}
+        cleanup = row.get("process_group_cleanup")
+        cleanup = cleanup if cleanup in SAFE_CLEANUP_CATEGORIES else "missing"
+        bound = row.get("bound_violation_reason")
+        bound = (bound if bound in SAFE_BOUND_CATEGORIES else
+                 ("other" if bound else ("unspecified-bound-violation"
+                  if row.get("bound_violation") is True else "none")))
+        reason = row.get("cleanup_reason")
+        reason = reason if reason in SAFE_CLEANUP_REASON_CATEGORIES else ("other" if reason else "missing")
+        status = row.get("cleanup_status_observation")
+        status = status if status in SAFE_CLEANUP_REASON_CATEGORIES else ("other" if status else "missing")
+        attempts = row.get("cleanup_observation_attempts", 0)
+        attempts = str(attempts) if type(attempts) is int and 0 <= attempts <= 16 else "other"
+        self.safe_cleanup_by_test[id(test)] = (cleanup, bound, reason, status, attempts)
+
+    def addFailure(self, test, err):
+        self.safe_exception_by_test[id(test)] = "AssertionError"
+        self._snapshot_cleanup(test)
+        super().addFailure(test, err)
+
+    def addError(self, test, err):
+        error_type = err[0] if isinstance(err, tuple) and err else None
+        name = getattr(error_type, "__name__", "")
+        self.safe_exception_by_test[id(test)] = name if name in SAFE_EXCEPTION_CATEGORIES else "other"
+        self._snapshot_cleanup(test)
+        super().addError(test, err)
 
 
 def _emit_safe_failure_diagnostics(result):
@@ -2053,7 +2173,13 @@ def _emit_safe_failure_diagnostics(result):
         for test, _ in rows:
             method = f"{test.__class__.__name__}.{test._testMethodName}"
             if method in SAFE_FAILURE_DIAGNOSTIC_METHODS:
-                print(f"GENEWHIP_TEST_RESULT:{method}:{kind}", file=sys.stderr)
+                exception = getattr(result, "safe_exception_by_test", {}).get(id(test), "other")
+                cleanup, bound, reason, status_observation, attempts = getattr(
+                    result, "safe_cleanup_by_test", {}).get(
+                        id(test), ("missing", "none", "missing", "missing", "0"))
+                print(f"GENEWHIP_TEST_RESULT:{method}:{kind}:{exception}:{cleanup}:{bound}:"
+                      f"{reason}:{status_observation}:{attempts}",
+                      file=sys.stderr)
 
 
 def main() -> int:
@@ -2070,7 +2196,7 @@ def main() -> int:
     if args.media_contract:
         MediaConsumerContract.build = args.build.resolve()
         suite = unittest.defaultTestLoader.loadTestsFromTestCase(MediaConsumerContract)
-        result = unittest.TextTestRunner(verbosity=2).run(suite)
+        result = unittest.TextTestRunner(verbosity=2, resultclass=SafeDiagnosticTextTestResult).run(suite)
         _emit_safe_failure_diagnostics(result)
         return 0 if result.wasSuccessful() else 1
     if args.probe_load or args.probe_movem:
@@ -2100,7 +2226,7 @@ def main() -> int:
         suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(RepairLedgerContract))
         MediaConsumerContract.build = build
         suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(MediaConsumerContract))
-        result = unittest.TextTestRunner(verbosity=2).run(suite)
+        result = unittest.TextTestRunner(verbosity=2, resultclass=SafeDiagnosticTextTestResult).run(suite)
         _emit_safe_failure_diagnostics(result)
         return 0 if result.wasSuccessful() else 1
     if not args.tracer:
