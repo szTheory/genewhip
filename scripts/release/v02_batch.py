@@ -74,11 +74,190 @@ FIRST_PARTY_CLEANUP_CONTROL_SOURCE_PATHS = {
     ".github/workflows/ci.yml",
     "tests/evidence/phase7_process_admission_contract.py",
 }
+NATIVE_HOST_RUNTIME_CASE = "runtime/native/recursion94/withhold-first-plate"
+NATIVE_HOST_RUNTIME_PROFILE = "native-host-runtime"
+NATIVE_CASE_PREPARATION = "prepare/native/recursion94/withhold-first-plate"
+NATIVE_CASE_PREPARATION_PATHS = {
+    ".github/workflows/ci.yml", "scripts/evidence/v02_run.py",
+    "scripts/release/v02_qualification.py", "scripts/release/v02_batch.py",
+    "tests/evidence/phase7_fresh_batch_contract.py",
+    "tests/evidence/v02_qualification_contract.py",
+    "tests/evidence/phase7_native_diagnostic_contract.py",
+    "tests/evidence/phase7_diagnostic_contract.py",
+}
+
+
+def native_diagnostic_plan() -> dict[str, Any]:
+    return {"case": "recursion94-withhold-first-plate", "workloads": [
+        {"name": "input-contract", "wall_seconds": 30},
+        {"name": "headless-reference", "wall_seconds": 600},
+        {"name": "native-sdl-comparison", "wall_seconds": 600}],
+        "outer_wall_seconds": 1800, "job_wall_seconds": 2700,
+        "qualification_accepted": False, "stop_after_result": True}
+
+
+def _validate_assessed_preview(root: Path, expected_root: str, packet_ref: Any,
+        reviews: Any, journal: dict[str, Any], failure: dict[str, Any],
+        *, review_payload_sha: str | None = None) -> dict[str, Any]:
+    """Reopen one successful diagnostic PR and its distinct intentional stop."""
+    label = "native-diagnostic-assessed-preview-invalid"
+    if (not isinstance(packet_ref, dict)
+            or not isinstance(packet_ref.get("path"), str)
+            or not packet_ref["path"].startswith(expected_root + "/ci-failure/")):
+        raise ValueError(label)
+    packet, _ = _read_reference(root, packet_ref, label=label)
+    table, gh = packet.get("source_and_candidate"), packet.get("github")
+    if (packet.get("qualification_credit") is not False
+            or packet.get("disposition") != "diagnostic-preview-green-assessment-required"
+            or not isinstance(table, dict) or not isinstance(gh, dict)):
+        raise ValueError(label)
+    values = {}
+    for key, filename in (("source_admission", "source-admission.json"),
+                          ("public_admission", "public-admission.json")):
+        path = table.get(key + "_path")
+        if path != expected_root + "/" + filename:
+            raise ValueError(label)
+        values[key], _ = _read_reference(root, {"path": path,
+            "sha256": table.get(key + "_sha256")}, label=label)
+    source, public = values["source_admission"], values["public_admission"]
+    candidate = public.get("candidate")
+    if (not isinstance(candidate, dict) or public.get("disposition") != "bounded-diagnostic-followup"
+            or source.get("source_head") != table.get("private_source_head")
+            or public.get("source_head") != source.get("source_head")
+            or public.get("source_payload_sha256") != source.get("source_payload_sha256")):
+        raise ValueError(label)
+    delivery_meta = packet.get("hosted_source_delivery")
+    if not isinstance(delivery_meta, dict):
+        raise ValueError(label)
+    documents = {}
+    for key, filename in (("source_delivery", "source-delivery.json"),
+                           ("journal", "hosted-delivery-journal.json"),
+                           ("failure_latch", FAILURE_FILENAME)):
+        if delivery_meta.get(key + "_path") != expected_root + "/" + filename:
+            raise ValueError(label)
+        documents[key], _ = _read_reference(root, {"path": delivery_meta[key + "_path"],
+            "sha256": delivery_meta.get(key + "_sha256")}, label=label)
+    if (documents["journal"] != journal or documents["failure_latch"] != failure
+            or documents["source_delivery"].get("status") != "diagnostic-ci-complete"
+            or documents["source_delivery"].get("diagnostic_only") is not True
+            or documents["source_delivery"].get("assessment_required") is not True
+            or documents["source_delivery"].get("merge_attempted") is not False
+            or documents["source_delivery"].get("candidate_sha") != candidate.get("public_head")):
+        raise ValueError(label)
+    for field, key in (("public_head", "candidate_head"), ("public_base", "public_base"),
+                       ("public_tree", "public_tree"), ("source_manifest_sha256", "manifest_sha256"),
+                       ("preparation_sha256", "preparation_sha256"),
+                       ("candidate_payload_sha256", "candidate_review_payload_sha256")):
+        if candidate.get(field) != table.get(key):
+            raise ValueError(label)
+    _, prep_bytes = _read_reference(root, {"path": candidate.get("preparation_path"),
+        "sha256": candidate.get("preparation_sha256")}, label=label, cap=MAX_CANDIDATE_BYTES)
+    if _digest(prep_bytes) != table["preparation_sha256"]:
+        raise ValueError(label)
+    jobs = gh.get("jobs")
+    if (not isinstance(jobs, list) or len(jobs) != 16
+            or not all(isinstance(row, dict) and type(row.get("id")) is int
+                       and row["id"] > 0 and row.get("status") == "completed" for row in jobs)):
+        raise ValueError(label)
+    by_name = {row.get("name"): row for row in jobs}
+    if (set(by_name) != PREVIEW_REQUIRED_LANES | PREVIEW_CONDITIONAL_SKIPS
+            or len({row["id"] for row in jobs}) != 16
+            or any(by_name[name].get("conclusion") != "success" for name in PREVIEW_REQUIRED_LANES)
+            or any(by_name[name].get("conclusion") != "skipped" for name in PREVIEW_CONDITIONAL_SKIPS)):
+        raise ValueError(label)
+    run = gh.get("workflow_run")
+    if (not isinstance(run, dict) or type(run.get("id")) is not int or run["id"] <= 0
+            or run.get("event") != "pull_request" or run.get("status") != "completed"
+            or run.get("conclusion") != "success" or run.get("workflow_path") != ".github/workflows/ci.yml"
+            or gh.get("repository") != "szTheory/genewhip" or gh.get("merged") is not False
+            or gh.get("pull_request_state") != "open"
+            or gh.get("head_sha") != candidate["public_head"]
+            or gh.get("base_sha") != candidate["public_base"]):
+        raise ValueError(label)
+    if (journal.get("repository") != "szTheory/genewhip"
+            or journal.get("source_head") != candidate["public_head"]
+            or journal.get("public_base_sha") != candidate["public_base"]
+            or journal.get("started_at") != source.get("started_at")
+            or journal.get("diagnostic_only") is not True
+            or journal.get("diagnostic_ci_status") != "passed"
+            or journal.get("assessment_required") is not True
+            or journal.get("merge_attempted") is not False
+            or journal.get("pull_request") != str(gh.get("pull_request"))
+            or any(key.startswith("qualification_dispatch") for key in journal)
+            or failure.get("authorization_sha256") != AUTH_SHA256
+            or failure.get("stage") != "preview-ci"
+            or failure.get("reason") != "diagnostic-ci-complete-assessment-required"):
+        raise ValueError(label)
+    if not isinstance(reviews, dict) or set(reviews) != set(SOURCE_ROLES):
+        raise ValueError(label)
+    payload_sha = review_payload_sha or _digest(_canonical(packet))
+    for key, role in SOURCE_ROLES.items():
+        _check_review(root, reviews[key], role=role, payload_sha256=payload_sha)
+        raw = _read_regular(_path(root, _safe_relative(reviews[key]["path"], label)),
+                            cap=MAX_REVIEW_BYTES, label=label)
+        if _frontmatter(raw).get("source_head") != source["source_head"]:
+            raise ValueError(label)
+    return public
+
+
+def _validate_native_readiness(root: Path, batch_root: Path, admission: dict[str, Any],
+        admission_sha: str, path: Path, expected_sha: str) -> dict[str, Any]:
+    label = "native-diagnostic-readiness-invalid"
+    if path.is_symlink() or path.resolve(strict=False) != batch_root / "native-diagnostic-readiness.json":
+        raise ValueError(label)
+    data = _read_regular(path, cap=MAX_ADMISSION_BYTES, label=label)
+    if _digest(data) != expected_sha:
+        raise ValueError(label)
+    ready = _json_object(data, label)
+    required = {"schema", "diagnostic_only", "qualification_accepted", "plan", "started_at",
+        "source_head", "candidate_head", "public_admission", "diagnostic_assessment", "assessment_reviews"}
+    if (set(ready) != required or ready.get("schema") != "genewhip.phase7-native-diagnostic-readiness.v1"
+            or ready.get("diagnostic_only") is not True or ready.get("qualification_accepted") is not False
+            or _canonical(ready.get("plan")) != _canonical(native_diagnostic_plan())
+            or ready.get("started_at") != admission.get("started_at")
+            or ready.get("source_head") != admission.get("source_head")
+            or ready.get("candidate_head") != admission.get("candidate", {}).get("public_head")
+            or ready.get("public_admission") != {"path": (batch_root / "public-admission.json").relative_to(root).as_posix(),
+                "sha256": admission_sha}
+            or admission.get("disposition") != "bounded-diagnostic-followup"):
+        raise ValueError(label)
+    repair, _ = _read_reference(root, admission["predecessor"]["repair_evidence"], label=label)
+    if repair.get("diagnostic_case") != NATIVE_CASE_PREPARATION:
+        raise ValueError(label)
+    journal = _json_object(_read_regular(batch_root / "hosted-delivery-journal.json",
+                                       cap=MAX_ADMISSION_BYTES, label=label), label)
+    failure = _json_object(_read_regular(batch_root / FAILURE_FILENAME, cap=MAX_AUTH_BYTES, label=label), label)
+    payload = {key: value for key, value in ready.items() if key != "assessment_reviews"}
+    public = _validate_assessed_preview(root, batch_root.relative_to(root).as_posix(),
+        ready["diagnostic_assessment"], ready["assessment_reviews"], journal, failure,
+        review_payload_sha=_digest(_canonical(payload)))
+    if public != admission:
+        raise ValueError(label)
+    return ready
+NATIVE_HOST_RUNTIME_SOURCE_PATHS = {
+    "scripts/release/v02_qualification.py",
+    "tests/evidence/v02_qualification_contract.py",
+    "scripts/evidence/v02_run.py",
+    "tests/desktop/phase6_routes.py",
+    "tests/evidence/phase7_host_failure_diagnostic_contract.py",
+    "scripts/release/v02_batch.py",
+    "tests/evidence/phase7_fresh_batch_contract.py",
+}
 PREVIEW_REQUIRED_LANES = {"safety", "gameplay", "desktop", "package", "performance",
     "product-smoke", "phase7-fast", "required-ci"}
 PREVIEW_CONDITIONAL_SKIPS = {"v02-runtime", "extended", "v02-benchmark-control",
     "v02-benchmark-recursion94", "v02-benchmark-tank-battle", "v02-package",
     "v02-release-qualification", "attestation"}
+NATIVE_HOST_RUNTIME_JOBS = (PREVIEW_REQUIRED_LANES | PREVIEW_CONDITIONAL_SKIPS)
+NATIVE_HOST_RUNTIME_OUTCOMES = {
+    "phase7-fast": "success", "gameplay": "success", "performance": "success",
+    "package": "success", "safety": "success", "desktop": "success",
+    "product-smoke": "success", "v02-runtime": "failure", "required-ci": "failure",
+    "extended": "skipped", "v02-benchmark-recursion94": "skipped",
+    "v02-benchmark-control": "skipped", "v02-benchmark-tank-battle": "skipped",
+    "v02-package": "skipped", "v02-release-qualification": "skipped",
+    "attestation": "skipped",
+}
 
 
 def _canonical(value: Any) -> bytes:
@@ -391,6 +570,246 @@ def _validate_first_party_cleanup_control_artifacts(root: Path, *, expected_root
         raise ValueError(label)
 
 
+def _validate_native_host_runtime_artifacts(root: Path, *, expected_root: str,
+        terminal: dict[str, Any], repair: dict[str, Any], journal: dict[str, Any],
+        source_delivery: dict[str, Any], failure: dict[str, Any]) -> None:
+    """Bind one exact failed full-run case without resolving outer cleanup/cause."""
+    label = "fresh-batch-native-host-runtime-evidence-invalid"
+    run_id = terminal.get("workflow_run_id")
+    if type(run_id) is not int or run_id <= 0:
+        raise ValueError(label)
+    run_dir = f"{expected_root}/terminal-record-{run_id}"
+    paths = {
+        "terminal_packet": f"{run_dir}/terminal-packet.json",
+        "qualification_run_snapshot": f"{run_dir}/run.json",
+        "qualification_jobs_snapshot": f"{run_dir}/jobs.json",
+        "hosted_log": f"{run_dir}/v02-runtime-job.log",
+        "source_delivery": f"{expected_root}/source-delivery.json",
+        "hosted_delivery_journal": f"{expected_root}/hosted-delivery-journal.json",
+    }
+    values: dict[str, Any] = {}
+    raw_by_key: dict[str, bytes] = {}
+    for key, expected_path in paths.items():
+        reference = terminal.get(key)
+        if (not isinstance(reference, dict) or set(reference) != {"path", "sha256"}
+                or reference.get("path") != expected_path):
+            raise ValueError(label)
+        raw = _read_regular(_path(root, _safe_relative(expected_path, label)),
+                            cap=MAX_ADMISSION_BYTES, label=label)
+        if not isinstance(reference.get("sha256"), str) or _digest(raw) != reference["sha256"]:
+            raise ValueError(label)
+        raw_by_key[key] = raw
+        if key != "hosted_log":
+            if key == "qualification_jobs_snapshot":
+                try:
+                    parsed = json.loads(raw)
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    raise ValueError(label) from None
+                if not isinstance(parsed, list):
+                    raise ValueError(label)
+                values[key] = parsed
+            else:
+                values[key] = _json_object(raw, label)
+
+    run = values["qualification_run_snapshot"]
+    snapshot_jobs = values["qualification_jobs_snapshot"]
+    packet = values["terminal_packet"]
+    if (terminal.get("qualification_run") != run
+            or terminal.get("qualification_jobs") != snapshot_jobs
+            or not isinstance(snapshot_jobs, list)
+            or not isinstance(terminal.get("jobs"), list)):
+        raise ValueError(label)
+    if (repair.get("diagnostic_profile") != NATIVE_HOST_RUNTIME_PROFILE
+            or repair.get("diagnostic_case") != NATIVE_HOST_RUNTIME_CASE
+            or repair.get("diagnostic_only") is not True
+            or repair.get("live_retry_authorized") is not False
+            or repair.get("safety_job_failed") is not False
+            or repair.get("had_safety_job_failure") is not False
+            or repair.get("full_qualification_dispatched") is not True
+            or repair.get("qualification_accepted") is not False
+            or repair.get("unknown_high_findings") is not False
+            or repair.get("hosted_cleanup_outcome") != "unknown"
+            or repair.get("outer_runtime_cleanup") != "unknown"
+            or repair.get("inner_row_cleanup") != "confirmed"
+            or repair.get("inner_row_bound") != "none"
+            or type(repair.get("batch_return")) is not int
+            or repair.get("batch_return") != 1
+            or repair.get("desktop_child_return") != "unknown"
+            or repair.get("original_failure_cause") != "unknown"):
+        raise ValueError(label)
+    nonce = journal.get("qualification_dispatch_nonce")
+    repository = run.get("repository")
+    head_repository = run.get("head_repository")
+    if (run.get("id") != run_id or run.get("event") != "workflow_dispatch"
+            or run.get("status") != "completed" or run.get("conclusion") != "failure"
+            or run.get("path") != ".github/workflows/ci.yml"
+            or run.get("head_branch") != "main"
+            or run.get("name") != f"Plan10 qualification {nonce}"
+            or run.get("head_sha") != journal.get("public_source_sha")
+            or run.get("created_at") != journal.get("selected_run_created_at")
+            or type(run.get("run_attempt")) is not int or run.get("run_attempt") <= 0
+            or run.get("run_attempt") != terminal.get("run_attempt")
+            or run.get("display_title") != f"Plan10 qualification {nonce}"
+            or not isinstance(repository, dict)
+            or repository.get("full_name") != "szTheory/genewhip"
+            or repository.get("private") is not False
+            or not isinstance(repository.get("owner"), dict)
+            or repository["owner"].get("login") != "szTheory"
+            or not isinstance(head_repository, dict)
+            or head_repository.get("full_name") != "szTheory/genewhip"
+            or head_repository.get("private") is not False
+            or not isinstance(run.get("head_commit"), dict)
+            or run["head_commit"].get("id") != journal.get("public_source_sha")
+            or run["head_commit"].get("tree_id") != journal.get("tree_sha")):
+        raise ValueError(label)
+    if (terminal.get("event") != "workflow_dispatch"
+            or terminal.get("run_status") != "completed"
+            or terminal.get("run_conclusion") != "failure"
+            or terminal.get("head_sha") != journal.get("public_source_sha")
+            or terminal.get("created_at") != run.get("created_at")
+            or terminal.get("qualification_dispatch_nonce") != nonce
+            or terminal.get("started_at") != journal.get("started_at")
+            or terminal.get("attempt_root") != expected_root):
+        raise ValueError(label)
+    rows = terminal["jobs"]
+    names = [row.get("name") for row in rows if isinstance(row, dict)]
+    snapshot_names = [row.get("name") for row in snapshot_jobs if isinstance(row, dict)]
+    by_name = {row.get("name"): row for row in rows if isinstance(row, dict)}
+    normalized_snapshot = [{key: row.get(key) for key in ("id", "name", "status", "conclusion")}
+                           for row in snapshot_jobs if isinstance(row, dict)]
+    packet_jobs = packet.get("jobs") if isinstance(packet, dict) else None
+    raw_jobs_by_name = {row.get("name"): row for row in snapshot_jobs if isinstance(row, dict)}
+    packet_jobs_by_name = {row.get("name"): row for row in packet_jobs
+                           if isinstance(row, dict)} if isinstance(packet_jobs, list) else {}
+    failed_steps_by_name: dict[str, list[str]] = {}
+    for name in NATIVE_HOST_RUNTIME_JOBS:
+        steps = raw_jobs_by_name.get(name, {}).get("steps")
+        if steps is None:
+            steps = []
+        if not isinstance(steps, list):
+            raise ValueError(label)
+        failed_steps_by_name[name] = [step.get("name") for step in steps
+            if isinstance(step, dict) and step.get("conclusion") == "failure"]
+    if (len(rows) != 16 or len(names) != 16 or len(set(names)) != 16
+            or set(names) != NATIVE_HOST_RUNTIME_JOBS
+            or len(snapshot_jobs) != 16 or len(snapshot_names) != 16
+            or len(set(snapshot_names)) != 16 or set(snapshot_names) != NATIVE_HOST_RUNTIME_JOBS
+            or normalized_snapshot != rows
+            or not isinstance(packet_jobs, list) or len(packet_jobs) != 16
+            or len(packet_jobs_by_name) != 16 or set(packet_jobs_by_name) != NATIVE_HOST_RUNTIME_JOBS
+            or {name: by_name[name].get("conclusion") for name in NATIVE_HOST_RUNTIME_JOBS}
+                != NATIVE_HOST_RUNTIME_OUTCOMES
+            or any(by_name[name].get("status") != "completed"
+                or type(by_name[name].get("id")) is not int or by_name[name]["id"] <= 0
+                for name in NATIVE_HOST_RUNTIME_JOBS)
+            or len({by_name[name]["id"] for name in NATIVE_HOST_RUNTIME_JOBS}) != 16
+            or any(any(packet_jobs_by_name[name].get(key) != by_name[name].get(key)
+                    for key in ("id", "name", "status", "conclusion"))
+                or packet_jobs_by_name[name].get("failed_steps") != failed_steps_by_name[name]
+                for name in NATIVE_HOST_RUNTIME_JOBS)):
+        raise ValueError(label)
+    runtime_job = by_name["v02-runtime"]
+    packet_failure = packet.get("runtime_failure")
+    coordinator_terminal = packet.get("coordinator_terminal")
+    if (not isinstance(packet_failure, dict) or not isinstance(coordinator_terminal, dict)
+            or coordinator_terminal.get("exit_code") != 1
+            or coordinator_terminal.get("failure_record_reason") != "fresh-batch-qualification-failed"
+            or coordinator_terminal.get("failure_record_stage") != "qualification"
+            or runtime_job.get("id") != packet_failure.get("job_id")
+            or packet_jobs_by_name["v02-runtime"].get("failed_steps") != [
+                "Run complete current-source product safety and chunk roster"]
+            or packet_jobs_by_name["required-ci"].get("failed_steps") != [
+                "Reject incomplete or stale required lanes"]
+            or packet.get("workflow_run") != {key: run.get(key) for key in (
+                "id", "name", "event", "status", "conclusion", "created_at",
+                "head_sha", "path", "run_attempt", "display_title", "html_url")}
+            or packet.get("job_totals") != {"conclusions": {
+                "failure": 2, "skipped": 7, "success": 7}, "total": 16}
+            or packet.get("attempt_root") != expected_root
+            or packet.get("nonce") != nonce
+            or packet.get("source_commit") != journal.get("public_source_sha")
+            or packet.get("public_tree") != journal.get("tree_sha")
+            or packet.get("qualification_state") !=
+                "failed/nonqualifying; no acceptance, inventory, or release claim"):
+        raise ValueError(label)
+    safe_line = ("REJECT: qualification-child-failed:runtime:1:BLOCKED: "
+        "phase7-host-batch-failed:backend=native;report=fail;"
+        "case=recursion94/withhold-first-plate;row=fail;return=1;"
+        "cleanup=confirmed;bound=none;cleanup_reason=missing;"
+        "status_observation=missing;cleanup_queries=other")
+    log_bytes = raw_by_key["hosted_log"]
+    if (not isinstance(packet_failure, dict)
+            or packet_failure.get("bounded_failure_line") != safe_line
+            or packet_failure.get("cause_limit") !=
+                "Retained hosted log has no underlying assertion/test traceback; do not infer cause."
+            or packet_failure.get("failed_step") !=
+                "Run complete current-source product safety and chunk roster"
+            or packet_failure.get("job_id") != runtime_job["id"]
+            or packet_failure.get("log") != {"bytes": len(log_bytes), "path": paths["hosted_log"],
+                "sha256": terminal["hosted_log"]["sha256"]}
+            or safe_line.encode("utf-8") not in log_bytes):
+        raise ValueError(label)
+    pr = terminal.get("pull_request")
+    if (not isinstance(pr, dict)
+            or terminal.get("diagnostic_profile") != NATIVE_HOST_RUNTIME_PROFILE
+            or terminal.get("owning_case") != NATIVE_HOST_RUNTIME_CASE
+            or terminal.get("failed_lane") != "v02-runtime"
+            or terminal.get("inner_row_cleanup") != "confirmed"
+            or terminal.get("inner_row_bound") != "none"
+            or type(terminal.get("batch_return")) is not int
+            or terminal.get("batch_return") != 1
+            or terminal.get("outer_runtime_cleanup") != "unknown"
+            or terminal.get("hosted_cleanup_outcome") != "unknown"
+            or terminal.get("desktop_child_return") != "unknown"
+            or terminal.get("original_failure_cause") != "unknown"
+            or terminal.get("local_monitor_safety_issue") is not False
+            or terminal.get("local_monitor_cleanup") != "confirmed"
+            or terminal.get("safety_job_failed") is not False
+            or terminal.get("qualification_accepted") is not False
+            or terminal.get("full_qualification_dispatched") is not True
+            or terminal.get("merge_attempted") is not True
+            or pr.get("merged") is not True or pr.get("state") != "closed"
+            or type(pr.get("number")) is not int or pr["number"] <= 0):
+        raise ValueError(label)
+    packet_pr = packet.get("pull_request")
+    if (not isinstance(packet_pr, dict)
+            or any(packet_pr.get(key) != pr.get(key) for key in
+                ("number", "state", "merged", "head_sha", "base_sha", "merge_commit_sha"))):
+        raise ValueError(label)
+    if (journal.get("schema") != "genewhip.v02-delivery-journal.v1"
+            or journal.get("repository") != "szTheory/genewhip"
+            or journal.get("source_head") != pr.get("head_sha")
+            or journal.get("public_base_sha") != pr.get("base_sha")
+            or journal.get("public_source_sha") != pr.get("merge_commit_sha")
+            or journal.get("started_at") != terminal.get("started_at")
+            or journal.get("qualification_started_at") != journal.get("started_at")
+            or journal.get("qualification_dispatch_requested") is not True
+            or journal.get("qualification_dispatch_submitted") is not True
+            or journal.get("qualification_dispatch_nonce") != terminal.get("qualification_dispatch_nonce")
+            or journal.get("public_source_sha") != terminal.get("head_sha")
+            or journal.get("tree_sha") != packet.get("public_tree")
+            or journal.get("pull_request") != str(pr.get("number"))
+            or journal.get("merge_parents") != [journal.get("public_base_sha")]
+            or journal.get("merge_strategy") != "squash"):
+        raise ValueError(label)
+    if (source_delivery.get("status") != "merged"
+            or source_delivery.get("schema") != "genewhip.v02-public-source-delivery.v1"
+            or source_delivery.get("public_source_sha") != journal.get("public_source_sha")
+            or source_delivery.get("public_base_sha") != journal.get("public_base_sha")
+            or source_delivery.get("candidate_sha") != journal.get("candidate_sha")
+            or source_delivery.get("tree_sha") != journal.get("tree_sha")
+            or source_delivery.get("pull_request") != journal.get("pull_request")
+            or source_delivery.get("merge_parents") != journal.get("merge_parents")
+            or source_delivery.get("merge_strategy") != journal.get("merge_strategy")):
+        raise ValueError(label)
+    if (failure.get("schema") != "genewhip.phase7-fresh-batch-failure.v1"
+            or failure.get("authorization_sha256") != AUTH_SHA256
+            or failure.get("stage") != "qualification"
+            or failure.get("reason") != "fresh-batch-qualification-failed"
+            or failure.get("observed_at") != coordinator_terminal.get("failure_record_observed_at")):
+        raise ValueError(label)
+
+
 def _validate_current_target_reconciliation(root: Path, *, expected_root: str,
                                             cleanup: Any, failure: Any) -> None:
     label = "fresh-batch-current-target-reconciliation-invalid"
@@ -570,7 +989,9 @@ def _validate_predecessor(root: Path, authorization: dict[str, Any], *,
                 and all(isinstance(row, dict) and row.get("status") == "completed"
                     and row.get("conclusion") in ("success", "failure", "cancelled", "skipped")
                     for row in jobs))
-            event = ("pull_request" if isinstance(value.get("pull_request"), dict)
+            diagnostic_case = value.get("owning_case")
+            event = (value.get("event") if diagnostic_case == NATIVE_HOST_RUNTIME_CASE
+                     else "pull_request" if isinstance(value.get("pull_request"), dict)
                      else value.get("event"))
             expected_jobs = PREVIEW_REQUIRED_LANES | PREVIEW_CONDITIONAL_SKIPS
             if event == "push":
@@ -579,9 +1000,14 @@ def _validate_predecessor(root: Path, authorization: dict[str, Any], *,
             by_name = {row.get("name"): row for row in jobs
                        if isinstance(row, dict) and isinstance(row.get("name"), str)} \
                 if isinstance(jobs, list) else {}
-            roster_valid = (event in ("pull_request", "push")
+            if diagnostic and diagnostic_case == NATIVE_HOST_RUNTIME_CASE:
+                roster_valid = (event == "workflow_dispatch"
+                    and isinstance(jobs, list) and len(by_name) == 16
+                    and set(by_name) == NATIVE_HOST_RUNTIME_JOBS)
+            else:
+                roster_valid = (event in ("pull_request", "push")
                 and len(by_name) == len(jobs) if isinstance(jobs, list) else False)
-            if not no_ci:
+            if not no_ci and not (diagnostic and diagnostic_case == NATIVE_HOST_RUNTIME_CASE):
                 roster_valid = (roster_valid and set(by_name) == expected_jobs
                     and all(by_name[name].get("conclusion") in
                         ("success", "failure", "cancelled") for name in PREVIEW_REQUIRED_LANES)
@@ -679,6 +1105,45 @@ def _validate_predecessor(root: Path, authorization: dict[str, Any], *,
                             or value.get("observer_failure_stage") != "unknown"
                             or value.get("cleanup_signal_phase") != "unknown"):
                         raise ValueError("fresh-batch-predecessor-diagnostic-classification-invalid")
+                elif diagnostic_case == NATIVE_HOST_RUNTIME_CASE:
+                    diagnostic_profile = NATIVE_HOST_RUNTIME_PROFILE
+                    if (not roster_valid or not jobs_terminal or event != "workflow_dispatch"
+                            or value.get("failed_lane") != "v02-runtime"
+                            or value.get("diagnostic_profile") != NATIVE_HOST_RUNTIME_PROFILE
+                            or value.get("hosted_cleanup_outcome") != "unknown"
+                            or value.get("outer_runtime_cleanup") != "unknown"
+                            or value.get("desktop_child_return") != "unknown"
+                            or value.get("original_failure_cause") != "unknown"
+                            or value.get("local_monitor_safety_issue") is not False
+                            or value.get("local_monitor_cleanup") != "confirmed"
+                            or value.get("inner_row_cleanup") != "confirmed"
+                            or value.get("inner_row_bound") != "none"
+                            or type(value.get("batch_return")) is not int
+                            or value.get("batch_return") != 1
+                            or value.get("safety_job_failed") is not False
+                            or value.get("qualification_accepted") is not False
+                            or value.get("full_qualification_dispatched") is not True
+                            or value.get("merge_attempted") is not True
+                            or not isinstance(pull_request, dict)
+                            or pull_request.get("merged") is not True
+                            or pull_request.get("state") != "closed"
+                            or any(by_name[name].get("conclusion") != expected
+                                for name, expected in NATIVE_HOST_RUNTIME_OUTCOMES.items())):
+                        raise ValueError("fresh-batch-predecessor-diagnostic-classification-invalid")
+                elif diagnostic_case == NATIVE_CASE_PREPARATION:
+                    diagnostic_profile = "native-case-preparation"
+                    if (not roster_valid or not jobs_terminal or event != "pull_request"
+                            or value.get("hosted_cleanup_outcome") != "unknown"
+                            or value.get("original_failure_cause") != "unknown"
+                            or value.get("local_monitor_safety_issue") is not False
+                            or value.get("safety_job_failed") is not False
+                            or value.get("qualification_accepted") is not False
+                            or value.get("full_qualification_dispatched") is not False
+                            or not isinstance(pull_request, dict)
+                            or pull_request.get("merged") is not False or pull_request.get("state") != "open"
+                            or any(by_name[name].get("conclusion") != "success" for name in PREVIEW_REQUIRED_LANES)
+                            or any(by_name[name].get("conclusion") != "skipped" for name in PREVIEW_CONDITIONAL_SKIPS)):
+                        raise ValueError("fresh-batch-predecessor-diagnostic-classification-invalid")
                 else:
                     raise ValueError("fresh-batch-predecessor-diagnostic-classification-invalid")
             if (not (no_ci or jobs_terminal)
@@ -747,6 +1212,24 @@ def _validate_predecessor(root: Path, authorization: dict[str, Any], *,
                         or value.get("hosted_cleanup_outcome") != "unknown"
                         or value.get("qualification_accepted") is not False
                         or value.get("unknown_high_findings") is not False)
+                elif diagnostic_profile == NATIVE_HOST_RUNTIME_PROFILE:
+                    profile_invalid = (value.get("diagnostic_case") != NATIVE_HOST_RUNTIME_CASE
+                        or value.get("diagnostic_profile") != NATIVE_HOST_RUNTIME_PROFILE
+                        or value.get("safety_job_failed") is not False
+                        or value.get("had_safety_job_failure") is not False
+                        or value.get("full_qualification_dispatched") is not True
+                        or value.get("outer_runtime_cleanup") != "unknown"
+                        or value.get("inner_row_cleanup") != "confirmed"
+                        or value.get("inner_row_bound") != "none"
+                        or type(value.get("batch_return")) is not int
+                        or value.get("batch_return") != 1
+                        or value.get("desktop_child_return") != "unknown"
+                        or value.get("original_failure_cause") != "unknown")
+                elif diagnostic_profile == "native-case-preparation":
+                    profile_invalid = (value.get("diagnostic_case") != NATIVE_CASE_PREPARATION
+                        or value.get("safety_job_failed") is not False
+                        or value.get("full_qualification_dispatched") is not False
+                        or value.get("original_failure_cause") != "unknown")
                 else:
                     profile_invalid = True
                 if common_diagnostic_invalid or profile_invalid:
@@ -791,6 +1274,20 @@ def _validate_predecessor(root: Path, authorization: dict[str, Any], *,
             raise ValueError("fresh-batch-predecessor-diagnostic-classification-invalid")
         _validate_first_party_cleanup_control_artifacts(root, expected_root=expected_root,
             terminal=terminal_value, repair=repair_value, journal=journal_value)
+    if diagnostic_profile == NATIVE_HOST_RUNTIME_PROFILE:
+        if not all(isinstance(value, dict) for value in
+                   (terminal_value, repair_value, journal_value)):
+            raise ValueError("fresh-batch-predecessor-diagnostic-classification-invalid")
+        delivery_value, _ = _read_reference(root, terminal_value.get("source_delivery"),
+            label="fresh-batch-native-host-runtime-evidence-invalid")
+        _validate_native_host_runtime_artifacts(root, expected_root=expected_root,
+            terminal=terminal_value, repair=repair_value, journal=journal_value,
+            source_delivery=delivery_value, failure=failure_value)
+    if diagnostic_profile == "native-case-preparation":
+        if not all(isinstance(value, dict) for value in (repair_value, journal_value, failure_value)):
+            raise ValueError("native-diagnostic-assessed-preview-invalid")
+        _validate_assessed_preview(root, expected_root, repair_value.get("diagnostic_assessment"),
+            repair_value.get("assessment_reviews"), journal_value, failure_value)
     if (isinstance(terminal_value, dict)
             and terminal_value.get("ci_dispatch_state") == "not-dispatched"
             and (not isinstance(repair_value, dict)
@@ -1026,7 +1523,9 @@ def validate_batch(root: Path, authorization_path: Path, authorization_sha256: s
                    scope_path: Path, journal_path: Path, publication_copy: Path,
                    preflight_path: Path, output_path: Path,
                    source_is_ancestor: Callable[[str, str], bool],
-                   expected_source_paths: set[str]) -> dict[str, Any]:
+                   expected_source_paths: set[str],
+                   diagnostic_readiness_path: Path | None = None,
+                   diagnostic_readiness_sha256: str | None = None) -> dict[str, Any]:
     """Validate fixed authority and a review-bound source/candidate before effects.
 
     Admission JSON schema fields:
@@ -1056,8 +1555,13 @@ def validate_batch(root: Path, authorization_path: Path, authorization_sha256: s
     expected_output = output_path if output_path.is_absolute() else root / output_path
     expected_admission = batch_root / (
         "source-admission.json" if stage == "source-preparation" else "public-admission.json")
-    if stage not in ("source-preparation", "public-effects"):
+    diagnostic_effects = stage == "native-diagnostic"
+    if stage not in ("source-preparation", "public-effects", "native-diagnostic"):
         raise ValueError("fresh-batch-stage-invalid")
+    if diagnostic_effects != (diagnostic_readiness_path is not None and diagnostic_readiness_sha256 is not None):
+        raise ValueError("native-diagnostic-readiness-required")
+    if not diagnostic_effects and (diagnostic_readiness_path is not None or diagnostic_readiness_sha256 is not None):
+        raise ValueError("native-diagnostic-readiness-route-invalid")
     if (authorization_path.is_symlink() or authorization_path.resolve(strict=False) != expected_auth
             or authorization_sha256 != AUTH_SHA256):
         raise ValueError("fresh-batch-authorization-path-or-pin-invalid")
@@ -1081,8 +1585,12 @@ def validate_batch(root: Path, authorization_path: Path, authorization_sha256: s
         raise ValueError("fresh-batch-admission-path-invalid")
     expected_output_resolved = output_resolved
     protected_inputs = (expected_admission, expected_auth, expected_scope, expected_journal)
-    if stage == "public-effects":
+    if stage in ("public-effects", "native-diagnostic"):
         protected_inputs += (preflight_resolved,)
+    if diagnostic_effects:
+        protected_inputs += (diagnostic_readiness_path,)
+        if output_resolved != batch_root / "native-diagnostic/result.json":
+            raise ValueError("native-diagnostic-output-layout-invalid")
     if (_paths_overlap(expected_output_resolved, publication_resolved)
             or any(_paths_overlap(expected_output_resolved, protected) for protected in protected_inputs)
             or any(_paths_overlap(publication_resolved, protected) for protected in protected_inputs)):
@@ -1090,7 +1598,9 @@ def validate_batch(root: Path, authorization_path: Path, authorization_sha256: s
     if expected_output_resolved.exists():
         raise ValueError("fresh-batch-output-already-exists")
     failure_path = batch_root / FAILURE_FILENAME
-    if failure_path.exists() or failure_path.is_symlink():
+    if diagnostic_effects and (not failure_path.is_file() or failure_path.is_symlink()):
+        raise ValueError("native-diagnostic-assessment-stop-required")
+    if not diagnostic_effects and (failure_path.exists() or failure_path.is_symlink()):
         raise ValueError("fresh-batch-terminal-failure-present")
     auth_bytes = _read_regular(expected_auth, cap=MAX_AUTH_BYTES,
                                label="fresh-batch-authorization-invalid")
@@ -1167,10 +1677,11 @@ def validate_batch(root: Path, authorization_path: Path, authorization_sha256: s
         "scope_path", "scope_sha256", "batch_root", "attempt_index", "attempt_root",
         "predecessor", "disposition", "started_at", "source_head", "source_pins",
         "source_payload_sha256", "source_reviews"}
-    if stage == "public-effects":
+    if stage in ("public-effects", "native-diagnostic"):
         expected_admission_keys.add("candidate")
     if (set(admission) != expected_admission_keys
-            or admission.get("schema") != SCHEMA or admission.get("status") != stage
+            or admission.get("schema") != SCHEMA
+            or admission.get("status") != ("public-effects" if diagnostic_effects else stage)
             or admission.get("authorization_path") != AUTH_PATH.as_posix()
             or admission.get("authorization_sha256") != AUTH_SHA256
             or admission.get("scope_path") != SCOPE_PATH.as_posix()
@@ -1232,16 +1743,24 @@ def validate_batch(root: Path, authorization_path: Path, authorization_sha256: s
                     diagnostic_paths = RSS_DIAGNOSTIC_SOURCE_PATHS
                 elif diagnostic_case == FIRST_PARTY_CLEANUP_CONTROL_CASE:
                     diagnostic_paths = FIRST_PARTY_CLEANUP_CONTROL_SOURCE_PATHS
+                elif diagnostic_case == NATIVE_HOST_RUNTIME_CASE:
+                    diagnostic_paths = NATIVE_HOST_RUNTIME_SOURCE_PATHS
+                elif diagnostic_case == NATIVE_CASE_PREPARATION:
+                    diagnostic_paths = NATIVE_CASE_PREPARATION_PATHS
                 else:
                     raise ValueError("fresh-batch-diagnostic-classification-invalid")
                 if (not diagnostic_paths.issubset(pins)
                         or any(pins[name] == prior_pins.get(name) for name in diagnostic_paths)):
                     raise ValueError("fresh-batch-diagnostic-source-change-unproven")
+                if (diagnostic_case in (NATIVE_HOST_RUNTIME_CASE, NATIVE_CASE_PREPARATION)
+                        and {name for name, digest in pins.items()
+                             if prior_pins.get(name) != digest} != diagnostic_paths):
+                    raise ValueError("fresh-batch-diagnostic-source-change-unproven")
     elif predecessor_evidence.get("infrastructure_retry_reason") not in (
             "runner-transient", "observation-reconciliation"):
         raise ValueError("fresh-batch-infrastructure-retry-justification-required")
 
-    if stage == "public-effects":
+    if stage in ("public-effects", "native-diagnostic"):
         candidate = admission.get("candidate")
         if not isinstance(candidate, dict):
             raise ValueError("fresh-batch-candidate-admission-missing")
@@ -1297,6 +1816,12 @@ def validate_batch(root: Path, authorization_path: Path, authorization_sha256: s
         for key, role in CANDIDATE_ROLES.items():
             _check_review(root, candidate_reviews[key], role=role,
                           payload_sha256=candidate_payload_sha)
+    native_ready = None
+    if diagnostic_effects:
+        native_ready = _validate_native_readiness(root, batch_root, admission, admission_sha256,
+            diagnostic_readiness_path, diagnostic_readiness_sha256)
+        if (runtime_cutoff - current).total_seconds() < 2700:
+            raise ValueError("native-diagnostic-job-window-unavailable")
     claim_identity_sha = _predecessor_identity_sha256(predecessor)
     claim_path = _claim_successor(root, predecessor_sha256=claim_identity_sha,
         predecessor_record_sha256=predecessor_sha,
@@ -1308,7 +1833,8 @@ def validate_batch(root: Path, authorization_path: Path, authorization_sha256: s
             "started_at": started_at, "batch_root": batch_root,
             "attempt_index": attempt_index, "predecessor_sha256": predecessor_sha,
             "predecessor_identity_sha256": claim_identity_sha,
-            "source_payload_sha256": source_payload_sha, "successor_claim": claim_path}
+            "source_payload_sha256": source_payload_sha, "successor_claim": claim_path,
+            "native_diagnostic_readiness": native_ready}
 
 
 def require_output_under_batch(root: Path, value: Path, *, attempt_root: Path,
