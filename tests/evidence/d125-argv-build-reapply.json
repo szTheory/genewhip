@@ -1,0 +1,17 @@
+{
+  "command": [
+    "cmake",
+    "--build",
+    "build/phase6",
+    "--target",
+    "gw_headless",
+    "--parallel",
+    "2"
+  ],
+  "seconds": 0.09858404099941254,
+  "exit_code": 0,
+  "stdout": "[0/2] Re-checking globbed directories...\n[1/3] Building C object tools/session/CMakeFiles/gw_headless.dir/__/headless/main.c.o\n[2/3] Linking C executable tools/session/gw_headless\n",
+  "stderr": "",
+  "main_sha256": "c0c55a9b32d897e91d7bf7794ea0f4a2eeb1d047594f0743f9eea672fce38d75",
+  "client_sha256": "b23e16411ec9424ee3138430ac2d726bc6c67b3fa80ebe9be45b303e1ea980df"
+}
