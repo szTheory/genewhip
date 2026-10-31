@@ -1487,6 +1487,60 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
             self.assertEqual(command[command.index("--base-sha") + 1], "b"*40,
                 "selected base reached worker explicitly without ambient GitHub variables")
 
+    def test_hosted_source_clone_and_checkout_use_approved_large_file_cap(self):
+        from unittest import mock
+        module = load_module(self)
+        scope_bytes = (ROOT / "evidence/v02-execution.json").read_bytes()
+        scope = json.loads(scope_bytes)
+        approved_cap = scope["per_child_limits"]["max_binary_file_bytes"]
+        admitted_archive_size = 27_122_929
+        self.assertGreater(admitted_archive_size, 16 * 1024 * 1024)
+        self.assertLessEqual(admitted_archive_size, approved_cap)
+
+        with tempfile.TemporaryDirectory(prefix="gw-hosted-clone-file-cap-") as temp:
+            root = Path(temp)
+            (root / "evidence").mkdir()
+            (root / "evidence/v02-execution.json").write_bytes(scope_bytes)
+            hosted_root = root / "build/v02/hosted-source-fixture"
+            hosted_root.mkdir(parents=True)
+            observations = []
+
+            def bounded(command, *, file_size_limit_bytes=None, **_kwargs):
+                effective_limit = (file_size_limit_bytes if file_size_limit_bytes is not None
+                                   else 16 * 1024 * 1024)
+                observations.append((list(command), file_size_limit_bytes, effective_limit))
+                if admitted_archive_size > effective_limit:
+                    raise RuntimeError("synthetic-child-file-size-limit")
+                empty_sha = hashlib.sha256(b"").hexdigest()
+                return {"returncode": 0, "process_group_cleanup": "confirmed",
+                    "streams": {key: {"text": "", "sha256": empty_sha,
+                        "observed_bytes": 0, "retained_bytes": 0, "truncated": False}
+                        for key in ("stdout", "stderr")}}
+
+            with mock.patch.object(module, "ROOT", root), \
+                 mock.patch.dict(os.environ, {}, clear=True), \
+                 mock.patch.object(module, "_bounded_command", side_effect=bounded):
+                with self.assertRaisesRegex(ValueError,
+                        "hosted-delivery-command-unavailable:git"):
+                    module._external(["git", "clone", "https://github.com/szTheory/genewhip.git",
+                                      str(hosted_root)], phase="package",
+                        owned_roots=(hosted_root,))
+                self.assertEqual(observations[0][1], None,
+                    "legacy omitted override must retain the default file-size ceiling")
+
+                module._clone_hosted_source("szTheory/genewhip", "a" * 40,
+                                            hosted_root, scope)
+
+            self.assertEqual(len(observations), 3)
+            clone_command, clone_limit, clone_effective = observations[1]
+            checkout_command, checkout_limit, checkout_effective = observations[2]
+            self.assertEqual(clone_command[:3], ["git", "clone", "--no-tags"])
+            self.assertIn("--no-checkout", clone_command)
+            self.assertEqual(checkout_command[:4], ["git", "checkout", "--detach", "a" * 40])
+            self.assertEqual((clone_limit, checkout_limit), (approved_cap, approved_cap))
+            self.assertEqual((clone_effective, checkout_effective),
+                             (approved_cap, approved_cap))
+
     def test_external_monitors_actual_owned_download_root_and_cleans_process_group(self):
         require_process_context()
         import shutil

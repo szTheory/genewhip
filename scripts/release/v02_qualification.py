@@ -4098,6 +4098,24 @@ def _download_run_artifact(repository: str, run_id: str, run_attempt: str,
         raise ValueError("hosted-artifact-download-empty")
 
 
+def _clone_hosted_source(repository: str, source_sha: str, hosted_root: pathlib.Path,
+                         scope: dict[str, Any]) -> None:
+    """Clone and check out the pinned public source within the approved file-size cap."""
+    child_limits = scope.get("per_child_limits") if isinstance(scope, dict) else None
+    clone_file_limit = (child_limits.get("max_binary_file_bytes")
+                        if isinstance(child_limits, dict) else None)
+    if type(clone_file_limit) is not int or clone_file_limit <= 0:
+        raise ValueError("hosted-source-execution-scope-invalid")
+    owner, name = repository.split("/", 1)
+    remote = f"https://github.com/{owner}/{name}.git"
+    _external(["git", "clone", "--no-tags", "--no-checkout", remote, str(hosted_root)],
+              timeout=300, phase="package", owned_roots=(hosted_root,),
+              file_size_limit_bytes=clone_file_limit)
+    _external(["git", "checkout", "--detach", source_sha], cwd=hosted_root,
+              phase="package", owned_roots=(hosted_root,),
+              file_size_limit_bytes=clone_file_limit)
+
+
 def _verify_attestation(subject: pathlib.Path, repository: str, source_sha: str,
                         run_id: str, run_attempt: int, expected_sha256: str) -> dict[str, Any]:
     """Delegate signer, issuer and exact invocation checks to the publisher verifier."""
@@ -4219,13 +4237,8 @@ def run_hosted_qualification(packet_path: pathlib.Path, publication_copy: pathli
         if _git(hosted_root, "rev-parse", "HEAD") != source_sha:
             raise ValueError("hosted-source-checkout-collision")
     else:
-        owner, name = repository.split("/", 1)
-        remote = f"https://github.com/{owner}/{name}.git"
         hosted_root.mkdir(parents=True)
-        _external(["git", "clone", "--no-tags", "--no-checkout", remote, str(hosted_root)],
-                  timeout=300, phase="package", owned_roots=(hosted_root,))
-        _external(["git", "checkout", "--detach", source_sha], cwd=hosted_root,
-                  phase="package", owned_roots=(hosted_root,))
+        _clone_hosted_source(repository, source_sha, hosted_root, scope)
     if _git(hosted_root, "rev-parse", "HEAD") != source_sha or (hosted_root / ".planning").exists():
         raise ValueError("hosted-source-checkout-identity-invalid")
     install = _external([sys.executable, "-I", str(hosted_root / "scripts/release/v02_transfer.py"),
