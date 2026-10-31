@@ -15,6 +15,76 @@ from unittest.mock import patch
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
+class SmokeFailureDiagnosticContract(unittest.TestCase):
+    def test_smoke_failure_logs_only_safe_fields_after_persisting_current_receipt(self) -> None:
+        import importlib.util
+        import types
+        spec = importlib.util.spec_from_file_location("v02_smoke_failure_receipt",
+            ROOT / "scripts/evidence/v02_run.py")
+        runner = importlib.util.module_from_spec(spec); spec.loader.exec_module(runner)
+        private = "/private/example/secret-command"
+        rows = [
+            {"status": "failed", "process_group_cleanup": cleanup, "bound_violation": True,
+             "bound_violation_reason": "phase7-rss-observation-unavailable",
+             "rss_observation_reason": "task-info-unavailable", "rss_observation_errno": "esrch",
+             "rss_observation_result": "missing", "argv": [private], "stderr": private}
+            for cleanup in ("confirmed", "unconfirmed")]
+        rows += [{"status": private, "process_group_cleanup": private,
+            "bound_violation_reason": private, "rss_observation_reason": private,
+            "rss_observation_errno": [private], "rss_observation_result": {private: True}}, None]
+        with tempfile.TemporaryDirectory(prefix="gw-smoke-failure-receipt-", dir=ROOT / "build/v02") as directory:
+            for index, row in enumerate(rows):
+                work = pathlib.Path(directory) / str(index); work.mkdir()
+                captured = []
+                def fake_boundary(_client, _command, runs, **kwargs):
+                    if row is not None:
+                        runs.append(row)
+                    raise RuntimeError(private)
+                def emitted(message, **kwargs):
+                    # The receipt is complete before the summary leaves this boundary.
+                    persisted = json.loads((work / "process.json").read_text())
+                    captured.append((message, persisted))
+                boundary = types.SimpleNamespace(_run_client=fake_boundary)
+                with patch("builtins.print", side_effect=emitted), self.assertRaisesRegex(RuntimeError, private):
+                    runner._run_smoke_child(boundary, {}, [private], report=work / "native.json",
+                        timeout=1, cwd=work)
+                self.assertEqual(len(captured), 1)
+                message, persisted = captured[0]
+                self.assertEqual(persisted["processes"], [] if row is None else [row])
+                self.assertTrue(message.startswith("SMOKE_CHILD_FAILURE "))
+                self.assertNotIn(private, message)
+                summary = json.loads(message.split(" ", 1)[1])
+                if index < 2:
+                    self.assertEqual(summary["process_group_cleanup"], row["process_group_cleanup"])
+                    self.assertEqual(summary["rss_observation_errno"], "esrch")
+                    self.assertEqual(summary["rss_observation_result"], "missing")
+                else:
+                    self.assertTrue(all(value == "unavailable" for key, value in summary.items()
+                        if key != "schema"))
+            work = pathlib.Path(directory) / "success"; work.mkdir()
+            def successful(_client, _command, runs, **kwargs):
+                runs.append({"status": "completed", "bound_violation": False,
+                    "process_group_cleanup": "confirmed"})
+                return subprocess.CompletedProcess([private], 0)
+            with patch("builtins.print") as emitted:
+                result, receipt, _ = runner._run_smoke_child(types.SimpleNamespace(_run_client=successful),
+                    {}, [private], report=work / "native.json", timeout=1, cwd=work)
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(receipt["process_group_cleanup"], "confirmed")
+            emitted.assert_not_called()
+
+            work = pathlib.Path(directory) / "closed-log"; work.mkdir()
+            def failed(_client, _command, runs, **kwargs):
+                runs.append(rows[0])
+                raise RuntimeError("original-child-failure")
+            with patch("builtins.print", side_effect=BrokenPipeError("closed-log")), \
+                 self.assertRaisesRegex(RuntimeError, "original-child-failure"):
+                runner._run_smoke_child(types.SimpleNamespace(_run_client=failed), {}, [private],
+                    report=work / "native.json", timeout=1, cwd=work)
+            persisted = json.loads((work / "process.json").read_text())
+            self.assertEqual(persisted["processes"], [rows[0]])
+
+
 class Phase7ExecutionContract(unittest.TestCase):
     def test_active_scope_cmake_provenance_uses_the_consumer_build_root(self) -> None:
         import importlib.util
@@ -364,6 +434,7 @@ class Phase7ExecutionContract(unittest.TestCase):
                     routed["host"].append(backend)
                     output.write_text(json.dumps({"schema":"genewhip-phase6-host-v1", "backend":backend,
                         "status":"pass-diagnostic", "outcome":"pass", "runs":[]}))
+                    return 0
                 value.host_batch = fake_hosts
             elif pathlib.Path(key).name == "v02_matrix.py":
                 value.validate_host_report = lambda report, candidate: None
