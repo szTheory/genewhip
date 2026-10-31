@@ -364,6 +364,8 @@ class FreshBatchContracts(unittest.TestCase):
                  "scripts/evidence/phase4_report.py", "tests/evidence/phase4_report_contract.py"})
         elif diagnostic_case == BATCH.FIRST_PARTY_CLEANUP_CONTROL_CASE:
             diagnostic_paths = set(BATCH.FIRST_PARTY_CLEANUP_CONTROL_SOURCE_PATHS)
+        elif diagnostic_case == BATCH.NATIVE_HOST_RUNTIME_CASE:
+            diagnostic_paths = set(BATCH.NATIVE_HOST_RUNTIME_SOURCE_PATHS)
         else:
             diagnostic_paths = set(BATCH.RSS_DIAGNOSTIC_SOURCE_PATHS)
         self.source_paths = set(self.source_paths) | diagnostic_paths
@@ -534,6 +536,283 @@ class FreshBatchContracts(unittest.TestCase):
         second.mkdir()
         return second, predecessor, pins
 
+    def _native_host_runtime_successor(self):
+        second, predecessor, pins = self._diagnostic_successor(
+            BATCH.NATIVE_HOST_RUNTIME_CASE, BATCH.NATIVE_HOST_RUNTIME_PROFILE)
+        attempt_root = self.batch_root
+        public_base, public_head = "b" * 40, "c" * 40
+        nonce, run_id = "2b535a0debbb4f6cb380d84e7683c474", 41244409258
+        created = "2026-10-31T21:36:49Z"
+        job_outcomes = dict(BATCH.NATIVE_HOST_RUNTIME_OUTCOMES)
+        terminal_jobs = []
+        snapshot_jobs = []
+        for index, name in enumerate(sorted(job_outcomes)):
+            job_id = 124660000000 + index
+            outcome = job_outcomes[name]
+            failed_steps = (["Run complete current-source product safety and chunk roster"]
+                if name == "v02-runtime" else
+                ["Reject incomplete or stale required lanes"] if name == "required-ci" else [])
+            terminal_jobs.append({"id": job_id, "name": name, "status": "completed",
+                "conclusion": outcome})
+            snapshot_jobs.append({"id": job_id, "name": name, "status": "completed",
+                "conclusion": outcome, "run_id": run_id, "logs_url": None,
+                "steps": [{"name": step, "status": "completed", "conclusion": "failure"}
+                    for step in failed_steps] or [{"name": "Complete job", "status": "completed",
+                        "conclusion": "success"}]})
+        run = {"id": run_id, "event": "workflow_dispatch", "status": "completed",
+            "conclusion": "failure", "path": ".github/workflows/ci.yml",
+            "head_sha": public_head, "created_at": created, "run_attempt": 1,
+            "display_title": f"Plan10 qualification {nonce}",
+            "name": f"Plan10 qualification {nonce}",
+            "head_branch": "main",
+            "html_url": f"https://github.com/szTheory/genewhip/actions/runs/{run_id}",
+            "head_commit": {"id": public_head, "tree_id": "d" * 40},
+            "repository": {"full_name": "szTheory/genewhip", "private": False,
+                "owner": {"login": "szTheory"}},
+            "head_repository": {"full_name": "szTheory/genewhip", "private": False}}
+        journal_value = {"schema": "genewhip.v02-delivery-journal.v1",
+            "repository": "szTheory/genewhip", "source_head": public_head,
+            "public_base_sha": public_base, "public_source_sha": public_head,
+            "candidate_sha": "a" * 40, "tree_sha": "d" * 40,
+            "started_at": self.started, "qualification_started_at": self.started,
+            "qualification_dispatch_requested": True, "qualification_dispatch_submitted": True,
+            "qualification_dispatch_nonce": nonce, "selected_run_created_at": created,
+            "pull_request": "38", "merge_parents": [public_base], "merge_strategy": "squash"}
+        journal_path = attempt_root / "hosted-delivery-journal.json"
+        self._write_admission(journal_path, journal_value)
+        failure_path = attempt_root / "failure.json"
+        self._write_admission(failure_path, {"schema": "genewhip.phase7-fresh-batch-failure.v1",
+            "authorization_sha256": BATCH.AUTH_SHA256, "stage": "qualification",
+            "reason": "fresh-batch-qualification-failed",
+            "observed_at": "2026-10-31T21:57:06.732067+00:00"})
+        predecessor["failure"] = self._reference(failure_path, failure_path.read_bytes())
+        delivery = {"schema": "genewhip.v02-public-source-delivery.v1", "status": "merged",
+            "public_source_sha": public_head, "public_base_sha": public_base,
+            "candidate_sha": journal_value["candidate_sha"], "tree_sha": journal_value["tree_sha"],
+            "pull_request": "38", "merge_parents": [public_base], "merge_strategy": "squash"}
+        delivery_path = attempt_root / "source-delivery.json"
+        self._write_admission(delivery_path, delivery)
+        terminal_dir = attempt_root / f"terminal-record-{run_id}"
+        terminal_dir.mkdir(parents=True, exist_ok=True)
+        run_path, jobs_path = terminal_dir / "run.json", terminal_dir / "jobs.json"
+        self._write_admission(run_path, run)
+        self._write_admission(jobs_path, snapshot_jobs)
+        safe_line = ("REJECT: qualification-child-failed:runtime:1:BLOCKED: "
+            "phase7-host-batch-failed:backend=native;report=fail;"
+            "case=recursion94/withhold-first-plate;row=fail;return=1;"
+            "cleanup=confirmed;bound=none;cleanup_reason=missing;"
+            "status_observation=missing;cleanup_queries=other")
+        log_path = terminal_dir / "v02-runtime-job.log"
+        log_path.write_text(safe_line + "\n")
+        runtime_job = next(row for row in terminal_jobs if row["name"] == "v02-runtime")
+        packet_jobs = []
+        for row in terminal_jobs:
+            failures = [step.get("name") for step in next(item for item in snapshot_jobs
+                if item["name"] == row["name"]).get("steps", [])
+                if step.get("conclusion") == "failure"]
+            packet_jobs.append({**row, "failed_steps": failures})
+        packet = {"schema": "genewhip.phase7-attempt-terminal-evidence.v1",
+            "attempt_root": attempt_root.relative_to(self.root).as_posix(), "nonce": nonce,
+            "coordinator_terminal": {"exit_code": 1,
+                "failure_record_observed_at": "2026-10-31T21:57:06.732067+00:00",
+                "failure_record_reason": "fresh-batch-qualification-failed",
+                "failure_record_stage": "qualification"},
+            "source_commit": public_head, "public_tree": journal_value["tree_sha"],
+            "qualification_state": "failed/nonqualifying; no acceptance, inventory, or release claim",
+            "workflow_run": {key: run[key] for key in ("id", "name", "event", "status",
+                "conclusion", "created_at", "head_sha", "path", "run_attempt", "display_title", "html_url")},
+            "jobs": packet_jobs,
+            "job_totals": {"conclusions": {"failure": 2, "skipped": 7, "success": 7}, "total": 16},
+            "pull_request": {"number": 38, "state": "closed", "merged": True,
+                "head_sha": public_head, "base_sha": public_base,
+                "merge_commit_sha": public_head},
+            "runtime_failure": {"job_id": runtime_job["id"],
+                "failed_step": "Run complete current-source product safety and chunk roster",
+                "bounded_failure_line": safe_line,
+                "cause_limit": "Retained hosted log has no underlying assertion/test traceback; do not infer cause.",
+                "log": {"path": log_path.relative_to(self.root).as_posix(),
+                    "sha256": hashlib.sha256(log_path.read_bytes()).hexdigest(),
+                    "bytes": log_path.stat().st_size}}}
+        packet_path = terminal_dir / "terminal-packet.json"
+        self._write_admission(packet_path, packet)
+        terminal = {"schema": "genewhip.phase7-terminal-observation.v1", "attempt_index": 1,
+            "attempt_root": attempt_root.relative_to(self.root).as_posix(), "all_jobs_terminal": True,
+            "event": "workflow_dispatch", "workflow_run_id": run_id, "run_attempt": 1,
+            "created_at": created, "run_status": "completed", "run_conclusion": "failure",
+            "head_sha": public_head, "started_at": self.started,
+            "qualification_dispatch_nonce": nonce, "qualification_run": run,
+            "qualification_jobs": snapshot_jobs, "jobs": terminal_jobs,
+            "qualification_run_snapshot": self._reference(run_path, run_path.read_bytes()),
+            "qualification_jobs_snapshot": self._reference(jobs_path, jobs_path.read_bytes()),
+            "terminal_packet": self._reference(packet_path, packet_path.read_bytes()),
+            "hosted_log": self._reference(log_path, log_path.read_bytes()),
+            "source_delivery": self._reference(delivery_path, delivery_path.read_bytes()),
+            "hosted_delivery_journal": self._reference(journal_path, journal_path.read_bytes()),
+            "diagnostic_profile": BATCH.NATIVE_HOST_RUNTIME_PROFILE,
+            "owning_case": BATCH.NATIVE_HOST_RUNTIME_CASE, "failed_lane": "v02-runtime",
+            "inner_row_cleanup": "confirmed", "inner_row_bound": "none", "batch_return": 1,
+            "outer_runtime_cleanup": "unknown", "hosted_cleanup_outcome": "unknown",
+            "desktop_child_return": "unknown", "original_failure_cause": "unknown",
+            "local_monitor_safety_issue": False, "local_monitor_cleanup": "confirmed",
+            "safety_job_failed": False, "qualification_accepted": False,
+            "full_qualification_dispatched": True, "merge_attempted": True,
+            "actual_pr_merged": True, "pull_request": {"number": 38, "state": "closed",
+                "merged": True, "head_sha": public_head, "base_sha": public_base,
+                "merge_commit_sha": public_head}}
+        terminal_path = attempt_root / "terminal-observation.json"
+        self._write_admission(terminal_path, terminal)
+        repair_path = attempt_root / "repair-evidence.json"
+        repair = {"live_retry_authorized": False, "diagnostic_only": True,
+            "diagnostic_case": BATCH.NATIVE_HOST_RUNTIME_CASE,
+            "diagnostic_profile": BATCH.NATIVE_HOST_RUNTIME_PROFILE,
+            "safety_job_failed": False, "had_safety_job_failure": False,
+            "hosted_cleanup_outcome": "unknown", "qualification_accepted": False,
+            "unknown_high_findings": False, "full_qualification_dispatched": True,
+            "outer_runtime_cleanup": "unknown", "inner_row_cleanup": "confirmed",
+            "inner_row_bound": "none", "batch_return": 1,
+            "desktop_child_return": "unknown", "original_failure_cause": "unknown"}
+        self._write_admission(repair_path, repair)
+        predecessor = {"attempt_index": 1, "attempt_root": attempt_root.relative_to(self.root).as_posix(),
+            **{key: self._reference(path, path.read_bytes()) for key, path in (
+                ("failure", attempt_root / "failure.json"), ("journal", journal_path),
+                ("terminal_observation", terminal_path), ("repair_evidence", repair_path),
+                ("source_admission", self.source_admission_path))},
+            "cleanup_evidence": None, "disposition": "bounded-diagnostic-followup",
+            "all_ci_terminal": True, "safety_status": "diagnostic-only",
+            "cleanup_status": "unknown-hosted-test-outcome", "unknown_high_findings": False}
+        for name in BATCH.NATIVE_HOST_RUNTIME_SOURCE_PATHS:
+            source = self.root / name
+            source.parent.mkdir(parents=True, exist_ok=True)
+            source.write_bytes(b"# fresh native host diagnostic fixture\n")
+            pins[name] = hashlib.sha256(source.read_bytes()).hexdigest()
+        second = self.root / BATCH.POLICY_ROOT / "attempt-0002"
+        return second, predecessor, pins
+
+    def test_native_host_runtime_profile_binds_failed_full_run_without_resolving_outer_cleanup(self):
+        second, predecessor, pins = self._native_host_runtime_successor()
+        admission_path = second / "source-admission.json"
+
+        def validate(pred=predecessor, selected=pins,
+                     disposition="bounded-diagnostic-followup"):
+            claim = self.root / BATCH.POLICY_ROOT / "successors" / (
+                BATCH._predecessor_identity_sha256(pred) + ".json")
+            claim.unlink(missing_ok=True)
+            admission = self._source_admission(selected, attempt_index=2,
+                predecessor=pred, disposition=disposition)
+            digest = self._write_admission(admission_path, admission)
+            return self._validate(admission_path=admission_path, admission_sha=digest,
+                journal=second / "hosted-delivery-journal.json",
+                publication=second / "candidate/publication-copy",
+                preflight=second / "candidate/preparation.json",
+                output=second / "candidate/preparation.json")
+
+        result = validate()
+        self.assertEqual(result["admission"]["disposition"], "bounded-diagnostic-followup")
+        self.assertEqual(result["admission"]["predecessor"]["cleanup_status"],
+                         "unknown-hosted-test-outcome")
+        terminal_path = self.root / predecessor["terminal_observation"]["path"]
+        terminal_raw = terminal_path.read_bytes()
+        terminal = json.loads(terminal_raw)
+        for field, value in (
+                ("event", "pull_request"), ("failed_lane", "safety"),
+                ("owning_case", "other-native-case"), ("outer_runtime_cleanup", "confirmed"),
+                ("hosted_cleanup_outcome", "confirmed"), ("desktop_child_return", "zero"),
+                ("original_failure_cause", "assertion-known"), ("safety_job_failed", True),
+                ("qualification_accepted", True), ("full_qualification_dispatched", False),
+                ("merge_attempted", False),
+                ("batch_return", 0), ("batch_return", True),
+                ("inner_row_bound", "violation")):
+            changed = {**terminal, field: value}
+            self._write_admission(terminal_path, changed)
+            pred = {**predecessor, "terminal_observation": self._reference(
+                terminal_path, terminal_path.read_bytes())}
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError,
+                    "diagnostic-classification-invalid|native-host-runtime-evidence-invalid"):
+                validate(pred=pred)
+        terminal_path.write_bytes(terminal_raw)
+
+        for mutate in (
+                lambda value: value["jobs"].pop(),
+                lambda value: value["jobs"][0].update(status="in_progress"),
+                lambda value: value["jobs"][0].update(conclusion="cancelled"),
+                lambda value: value["jobs"].append({"id": 999, "name": "unknown",
+                    "status": "completed", "conclusion": "success"}),
+                lambda value: value["jobs"][1].update(id=value["jobs"][0]["id"]),
+                lambda value: value["qualification_jobs"].pop(),
+                lambda value: value["qualification_run"].update(head_sha="f" * 40),
+                lambda value: value["qualification_run"].update(event="push"),
+                lambda value: value["qualification_run"].update(conclusion="success"),
+                lambda value: value["pull_request"].update(merged=False),
+                lambda value: value.update(qualification_dispatch_nonce="3" * 32),
+                lambda value: value.update(source_delivery=dict(value["terminal_packet"])),
+                lambda value: value.update(terminal_packet={"path": value["terminal_packet"]["path"],
+                    "sha256": "0" * 64}),
+                lambda value: value.update(qualification_jobs_snapshot=dict(value["terminal_packet"])),
+                lambda value: value.update(hosted_log=dict(value["terminal_packet"])),
+        ):
+            changed = json.loads(terminal_raw)
+            mutate(changed)
+            self._write_admission(terminal_path, changed)
+            pred = {**predecessor, "terminal_observation": self._reference(
+                terminal_path, terminal_path.read_bytes())}
+            with self.assertRaises(ValueError):
+                validate(pred=pred)
+        terminal_path.write_bytes(terminal_raw)
+
+        for key in ("outer_runtime_cleanup", "inner_row_cleanup", "batch_return",
+                    "desktop_child_return", "original_failure_cause", "full_qualification_dispatched"):
+            repair_path = self.root / predecessor["repair_evidence"]["path"]
+            repair_raw = repair_path.read_bytes()
+            repair = json.loads(repair_raw)
+            repair[key] = {"outer_runtime_cleanup": "confirmed", "inner_row_cleanup": "unconfirmed",
+                "batch_return": 0, "desktop_child_return": "zero", "original_failure_cause": "known",
+                "full_qualification_dispatched": False}[key]
+            self._write_admission(repair_path, repair)
+            pred = {**predecessor, "repair_evidence": self._reference(
+                repair_path, repair_path.read_bytes())}
+            with self.subTest(repair_key=key), self.assertRaises(ValueError):
+                validate(pred=pred)
+            repair_path.write_bytes(repair_raw)
+
+        packet_path = self.root / terminal["terminal_packet"]["path"]
+        packet_raw = packet_path.read_bytes()
+        packet = json.loads(packet_raw)
+        packet["job_totals"]["conclusions"]["failure"] = 1
+        self._write_admission(packet_path, packet)
+        changed = {**terminal, "terminal_packet": self._reference(packet_path, packet_path.read_bytes())}
+        self._write_admission(terminal_path, changed)
+        pred = {**predecessor, "terminal_observation": self._reference(
+            terminal_path, terminal_path.read_bytes())}
+        with self.assertRaisesRegex(ValueError, "native-host-runtime-evidence-invalid"):
+            validate(pred=pred)
+        packet_path.write_bytes(packet_raw)
+        terminal_path.write_bytes(terminal_raw)
+
+        log_path = self.root / terminal["hosted_log"]["path"]
+        log_raw = log_path.read_bytes()
+        for replacement in (b"case=recursion94/other-case", b"return=0", b"cleanup=unconfirmed"):
+            bad_log = log_raw.replace(b"case=recursion94/withhold-first-plate", replacement) \
+                if replacement.startswith(b"case=") else log_raw.replace(
+                    b"return=1" if replacement == b"return=0" else b"cleanup=confirmed", replacement)
+            log_path.write_bytes(bad_log)
+            changed = {**terminal, "hosted_log": self._reference(log_path, bad_log)}
+            self._write_admission(terminal_path, changed)
+            pred = {**predecessor, "terminal_observation": self._reference(
+                terminal_path, terminal_path.read_bytes())}
+            with self.assertRaisesRegex(ValueError, "native-host-runtime-evidence-invalid"):
+                validate(pred=pred)
+        log_path.write_bytes(log_raw)
+        terminal_path.write_bytes(terminal_raw)
+
+        source_path = "scripts/evidence/v02_run.py"
+        source_file = self.root / source_path
+        source_raw = source_file.read_bytes()
+        partial = dict(pins)
+        partial[source_path] = self.pins[source_path]
+        source_file.write_bytes(b"# prior diagnostic fixture\n")
+        with self.assertRaisesRegex(ValueError, "diagnostic-source-change-unproven"):
+            validate(selected=partial)
+        source_file.write_bytes(source_raw)
     def test_diagnostic_admission_preserves_unknown_and_cannot_become_normal_retry(self):
         second, predecessor, pins = self._diagnostic_successor()
         path = second / "source-admission.json"

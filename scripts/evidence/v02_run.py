@@ -743,11 +743,13 @@ _SAFE_HOST_BATCH_BOUNDS = frozenset({
 
 
 def _safe_host_batch_failure(backend: str, return_code: object, host: object) -> str:
-    backend_value = backend if backend in {"software", "native"} else "other"
+    backend_value = backend if isinstance(backend, str) and backend in {"software", "native"} else "other"
     code_value = str(return_code) if type(return_code) is int and return_code in {0, 1, 77} else "other"
     report = host if isinstance(host, dict) else {}
     report_status = report.get("status")
-    report_status = report_status if report_status in {"pass", "fail", "in-progress"} else "other"
+    report_status = (report_status if isinstance(report_status, str) and
+                     report_status in {"pass", "fail", "in-progress"} else
+                     ("missing" if report_status is None else "other"))
     rows = report.get("runs")
     failed = next((row for row in rows if isinstance(row, dict) and row.get("status") == "fail"),
                   None) if isinstance(rows, list) else None
@@ -756,24 +758,106 @@ def _safe_host_batch_failure(backend: str, return_code: object, host: object) ->
         process = {}
     else:
         pair = (failed.get("fixture"), failed.get("case"))
-        case_value = f"{pair[0]}/{pair[1]}" if pair in _SAFE_HOST_BATCH_CASES else "unrecognized"
+        case_value = (f"{pair[0]}/{pair[1]}" if all(isinstance(item, str) for item in pair) and
+                      pair in _SAFE_HOST_BATCH_CASES else "unrecognized")
         row_status = "fail"
         process = failed.get("process") if isinstance(failed.get("process"), dict) else {}
-    cleanup = process.get("process_group_cleanup")
-    cleanup = cleanup if cleanup in _SAFE_HOST_BATCH_CLEANUP else ("other" if cleanup else "missing")
-    bound = process.get("bound_violation_reason")
-    if bound not in _SAFE_HOST_BATCH_BOUNDS:
+    def enum(value, allowed):
+        if value is None:
+            return "missing"
+        return value if isinstance(value, str) and value in allowed else "other"
+
+    def tri_bool(value):
+        return "true" if value is True else "false" if value is False else "unavailable"
+
+    def counter(value, maximum, *, expected=None, positive=False):
+        if value is None:
+            return "missing"
+        if type(value) is not int:
+            return "untyped"
+        if value < 0:
+            return "negative"
+        if value > maximum:
+            return "overrange"
+        if expected is not None:
+            return "expected" if value == expected else "mismatch"
+        if positive:
+            return "zero" if value == 0 else "positive"
+        return "in-range"
+
+    cleanup = enum(process.get("process_group_cleanup"), _SAFE_HOST_BATCH_CLEANUP)
+    bound = enum(process.get("bound_violation_reason"), _SAFE_HOST_BATCH_BOUNDS)
+    if bound == "missing":
         bound = "unspecified" if process.get("bound_violation") is True else "none"
-    reason = process.get("cleanup_reason")
-    reason = reason if reason in _SAFE_HOST_BATCH_REASONS else ("other" if reason else "missing")
-    observation = process.get("cleanup_status_observation")
-    observation = (observation if observation in _SAFE_HOST_BATCH_REASONS
-                   else ("other" if observation else "missing"))
+    reason = enum(process.get("cleanup_reason"), _SAFE_HOST_BATCH_REASONS)
+    observation = enum(process.get("cleanup_status_observation"), _SAFE_HOST_BATCH_REASONS)
     attempts = process.get("cleanup_observation_attempts")
-    attempts = str(attempts) if type(attempts) is int and 0 <= attempts <= 16 else "other"
-    return (f"backend={backend_value};report={report_status};case={case_value};row={row_status};"
-            f"return={code_value};cleanup={cleanup};bound={bound};cleanup_reason={reason};"
-            f"status_observation={observation};cleanup_queries={attempts}")
+    attempts_value = str(attempts) if type(attempts) is int and 0 <= attempts <= 16 else "other"
+    # Keep the outer host-batch status separate from the child process result.
+    child_return = process.get("return_code")
+    if child_return is None:
+        child_exit = "missing"
+    elif type(child_return) is not int:
+        child_exit = "untyped"
+    elif child_return < 0:
+        child_exit = "signaled"
+    else:
+        child_exit = "zero" if child_return == 0 else "nonzero"
+
+    reason_value = enum(failed.get("reason") if failed is not None else None,
+                        {"core-input-progress-or-common-boundary-mismatch",
+                         "host-renderer-pcm-or-device-mismatch"})
+    core_outcome = enum(failed.get("core_outcome") if failed is not None else None, {"pass", "fail"})
+    host_outcome = enum(failed.get("host_outcome") if failed is not None else None,
+                        {"pass-diagnostic", "fail-diagnostic"})
+    diagnostics = failed.get("failure_diagnostic") if failed is not None else None
+    diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
+    comparisons = failed.get("common_boundary") if failed is not None else None
+    comparisons = comparisons if isinstance(comparisons, dict) else {}
+    renderer = failed.get("renderer") if failed is not None else None
+    renderer = renderer if isinstance(renderer, dict) else {}
+    audio = failed.get("audio") if failed is not None else None
+    audio = audio if isinstance(audio, dict) else {}
+    clocks = failed.get("observed_clocks") if failed is not None else None
+    clocks = clocks if isinstance(clocks, dict) else {}
+    fixture = failed.get("fixture") if failed is not None else None
+    if fixture == "recursion94":
+        field_max, call_max = 7200, 100_000_000
+    elif fixture == "tank-battle":
+        field_max, call_max = 4500, 10_000_000
+    else:
+        field_max, call_max = 7200, 100_000_000
+    fields = {
+        "schema": "genewhip.v02-host-batch-failure.v1",
+        "backend": backend_value, "report": report_status, "case": case_value, "row": row_status,
+        "batch_return": code_value, "child_exit": child_exit, "cleanup": cleanup, "bound": bound,
+        "cleanup_reason": reason, "status_observation": observation, "cleanup_queries": attempts_value,
+        "reason": reason_value, "core_outcome": core_outcome, "host_outcome": host_outcome,
+        "source_samples_equal": tri_bool(comparisons.get("source_samples_equal")),
+        "input_equal": tri_bool((comparisons.get("inputs") or {}).get("equal")
+                                 if isinstance(comparisons.get("inputs"), dict) else None),
+        "renderer_pixel_equal": tri_bool(comparisons.get("renderer_pixel_equal")),
+        "pcm_equal": tri_bool(comparisons.get("full_pcm_equal")),
+        "readback_activity": tri_bool(renderer.get("renderer_readback_activity")),
+        "audio_activity": tri_bool(audio.get("audio_device_activity")),
+        "capture_field_matches": tri_bool(diagnostics.get("capture_field_matches")),
+        "renderer_named": tri_bool(diagnostics.get("renderer_named")),
+        "video_driver_named": tri_bool(diagnostics.get("video_driver_named")),
+        "audio_driver_named": tri_bool(diagnostics.get("audio_driver_named")),
+        "native_status": ("missing" if clocks.get("status") is None else
+                          "untyped" if type(clocks.get("status")) is not int else
+                          "zero" if clocks.get("status") == 0 else "nonzero"),
+        "active_ticks": counter(clocks.get("active_ticks"), 3600, expected=3600),
+        "fields": counter(clocks.get("fields"), field_max),
+        "boundary_calls": counter(clocks.get("boundary_calls"), call_max),
+        "audio_submitted_frames": counter(audio.get("audio_submitted_frames"), 28_800_000, positive=True),
+        "audio_consumed_frames": counter(audio.get("audio_device_consumed_frames"), 28_800_000, positive=True),
+    }
+    rendered = json.dumps(fields, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    if len(rendered.encode("utf-8")) > 4096:
+        rendered = json.dumps({"schema": fields["schema"], "diagnostic": "unavailable"},
+                              sort_keys=True, separators=(",", ":"))
+    return rendered
 
 
 def _collect_checked_host_batch(desktop, compiler, backend: str, build: pathlib.Path,
