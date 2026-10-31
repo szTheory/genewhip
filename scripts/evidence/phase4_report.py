@@ -3,6 +3,7 @@
 """Collect and validate the versioned Phase 4 evidence roster."""
 import argparse
 import hashlib
+import io
 import importlib.util
 import json
 import math
@@ -102,8 +103,55 @@ SAFE_CTEST_DIAGNOSTIC_METHODS = frozenset({
     "BaselineRecordContract.test_failure_handoff_keeps_every_candidate_fail_skip_and_unknown",
 })
 SAFE_CTEST_DIAGNOSTIC_PREFIX = "GENEWHIP_TEST_RESULT:"
+PHASE5_PROCESS_DIAGNOSTIC_METHOD = "BaselineRecordContract.test_real_process_output_cap_timeout_and_status"
+PHASE5_PROCESS_SUBCASES = ("success", "stdout-cap", "timeout-direct", "timeout-descendant",
+                           "exact-1023", "exact-1024", "stderr-cap")
+PROCESS_CLEANUP_ENUM = (r"group-inactive|group-observer-cleanup-unconfirmed|group-status-budget-exhausted|"
+    r"group-cleanup-os-error|cleanup-permission-denied|group-leader-reap-unconfirmed|"
+    r"group-leader-wait-unconfirmed|group-reported-active|group-signal-permission-denied|"
+    r"group-signal-visible|group-status-unavailable|cleanup-unclassified|not-observed|missing|other")
+PROCESS_OBSERVER_STAGE_ENUM = (r"spawn|pipe|setup|selector|select|read|deadline|byte-limit|wait|"
+    r"nonzero-exit|parse|observer-cleanup|none|missing|other")
+PROCESS_SIGNAL_PHASE_ENUM = r"status-probe|sigterm|sigkill|other|none|missing"
+PROCESS_OBSERVER_RETURN_ENUM = r"zero|nonzero|signaled|missing|other"
+PROCESS_OBSERVER_ERROR_ENUM = r"permission|not-found|interrupted|timeout|io|other|none|missing"
+PROCESS_OBSERVER_RAW = (rf"(?::({PROCESS_OBSERVER_STAGE_ENUM}):({PROCESS_SIGNAL_PHASE_ENUM}):"
+    rf"({PROCESS_OBSERVER_RETURN_ENUM}):({PROCESS_OBSERVER_ERROR_ENUM}))?")
+PROCESS_OBSERVER_SAFE = (rf"(?:;observer_failure_stage=({PROCESS_OBSERVER_STAGE_ENUM});"
+    rf"cleanup_signal_phase=({PROCESS_SIGNAL_PHASE_ENUM});"
+    rf"observer_return_category=({PROCESS_OBSERVER_RETURN_ENUM});"
+    rf"observer_error_category=({PROCESS_OBSERVER_ERROR_ENUM}))?")
+PROCESS_CLEANUP_DIAGNOSTIC = (rf"(?:;cleanup_reason=({PROCESS_CLEANUP_ENUM});"
+    rf"status_observation=({PROCESS_CLEANUP_ENUM});cleanup_queries=(0|[1-9]|1[0-6]|other)" +
+    PROCESS_OBSERVER_SAFE + r")?")
+PHASE5_PROCESS_DIAGNOSTIC = re.compile(
+    r"^GENEWHIP_TEST_RESULT:BaselineRecordContract\.test_real_process_output_cap_timeout_and_status"
+    r":(failure|error):process:([a-z0-9-]+):"
+    r"(AssertionError|PermissionError|FileNotFoundError|TimeoutExpired|OSError|RuntimeError|ValueError|TypeError|KeyError|IndexError|other|missing):"
+    r"(not-launched|started|completed|failed|missing):"
+    r"(not-launched|pending|confirmed|unconfirmed|missing):"
+    r"(AssertionError|PermissionError|FileNotFoundError|TimeoutExpired|OSError|RuntimeError|ValueError|TypeError|KeyError|IndexError|other|missing):"
+    r"(zero|nonzero|signaled|missing):"
+    r"(output-byte-cap|timeout|cleanup-unconfirmed|other|none)"
+    rf"(?::({PROCESS_CLEANUP_ENUM}):({PROCESS_CLEANUP_ENUM}):(0|[1-9]|1[0-6]|other)" +
+    PROCESS_OBSERVER_RAW + r")?$")
 SAFE_CTEST_DIAGNOSTIC = re.compile(
-    r"^GENEWHIP_TEST_RESULT:([A-Za-z][A-Za-z0-9_]*\.test_[A-Za-z0-9_]+):(failure|error)$")
+    r"^GENEWHIP_TEST_RESULT:([A-Za-z][A-Za-z0-9_]*\.test_[A-Za-z0-9_]+):(failure|error)"
+    r"(?::(AssertionError|PermissionError|FileNotFoundError|TimeoutExpired|OSError|RuntimeError|ValueError|TypeError|KeyError|IndexError|other)"
+    r":(confirmed|unconfirmed|missing):(phase7-capture-byte-limit|phase7-json-byte-limit|phase7-retained-byte-limit|"
+    r"phase7-rss-byte-limit|phase7-rss-observation-unavailable|phase7-scratch-byte-limit|phase7-scratch-root-invalid|"
+    r"phase7-scratch-tree-unsafe|phase7-stdout-stderr-byte-limit|phase7-wall-timeout|none|other|unspecified-bound-violation)"
+    r":(group-inactive|group-leader-reap-unconfirmed|group-leader-wait-unconfirmed|"
+    r"group-observer-cleanup-unconfirmed|group-status-budget-exhausted|group-reported-active|"
+    r"cleanup-permission-denied|group-cleanup-os-error|group-signal-permission-denied|"
+    r"group-signal-visible|group-status-unavailable|"
+    r"cleanup-unclassified|not-observed|missing|other)"
+    r":(group-inactive|group-leader-reap-unconfirmed|group-leader-wait-unconfirmed|"
+    r"group-observer-cleanup-unconfirmed|group-status-budget-exhausted|group-reported-active|"
+    r"cleanup-permission-denied|group-cleanup-os-error|group-signal-permission-denied|"
+    r"group-signal-visible|group-status-unavailable|"
+    r"cleanup-unclassified|not-observed|missing|other)"
+    r":(0|[1-9]|1[0-6]|other)" + PROCESS_OBSERVER_RAW + r")?$")
 HOST_SCHEMA = "genewhip-phase4-host-sessions"
 HOST_CONTROLS = ROOT / "fixtures/independent-game-v2/host-controls.json"
 HOST_HEX = re.compile(r"^[0-9a-f]{64}$")
@@ -231,6 +279,7 @@ def safety_start(build, root=ROOT):
         else:
             path.unlink(missing_ok=True)
     _remove_safety_export(Path(build) / "safety-export")
+    _remove_safety_export(Path(build) / "safety-failure-export")
     run = {"schema": SAFETY_RUN_SCHEMA, "version": 1,
            "run_id": secrets.token_hex(16), **identity}
     _write_json(ci / "safety-run.json", run)
@@ -275,15 +324,42 @@ def sanitize_ctest_junit(source, destination):
             for line in (stream.text or "").splitlines():
                 if not line.startswith(SAFE_CTEST_DIAGNOSTIC_PREFIX):
                     continue
+                process_match = PHASE5_PROCESS_DIAGNOSTIC.fullmatch(line)
+                if process_match:
+                    if process_match.group(2) not in PHASE5_PROCESS_SUBCASES:
+                        raise ValueError("safety-ctest-diagnostic-invalid")
+                    diagnostics.add((PHASE5_PROCESS_DIAGNOSTIC_METHOD, *process_match.groups(), "process"))
+                    continue
                 match = SAFE_CTEST_DIAGNOSTIC.fullmatch(line)
                 if not match or match.group(1) not in SAFE_CTEST_DIAGNOSTIC_METHODS:
                     raise ValueError("safety-ctest-diagnostic-invalid")
-                diagnostics.add((match.group(1), match.group(2)))
+                diagnostics.add((*match.groups(), "legacy"))
         if diagnostics:
             safe_output = ET.SubElement(safe_case, "system-out")
-            safe_output.text = "\n".join(
-                f"GENEWHIP_SAFE_TEST_RESULT:{method}:{kind}"
-                for method, kind in sorted(diagnostics))
+            lines = []
+            for row in sorted(diagnostics, key=lambda row: tuple(
+                     (0, "") if value is None else (1, str(value)) for value in row)):
+                method, kind, *fields = row
+                flavor = fields.pop()
+                if flavor == "process":
+                    subcase, exception, status, cleanup, cleanup_error, return_category, failure, reason, observation, attempts, observer, signal_phase, observer_return, observer_error = fields
+                    lines.append(f"GENEWHIP_SAFE_TEST_RESULT:{method}:{kind};process_subcase={subcase};"
+                        f"process_exception={exception};process_status={status};process_cleanup={cleanup};"
+                        f"process_cleanup_error={cleanup_error};process_return={return_category};process_failure={failure}" +
+                        (f";cleanup_reason={reason};status_observation={observation};cleanup_queries={attempts}"
+                         if reason is not None else "") +
+                        (f";observer_failure_stage={observer};cleanup_signal_phase={signal_phase};"
+                         f"observer_return_category={observer_return};observer_error_category={observer_error}"
+                         if observer is not None else ""))
+                else:
+                    exception, cleanup, bound, reason, status, attempts, observer, signal_phase, observer_return, observer_error = fields
+                    lines.append(f"GENEWHIP_SAFE_TEST_RESULT:{method}:{kind}" +
+                        (f";exception={exception};cleanup={cleanup};bound={bound};"
+                         f"cleanup_reason={reason};status_observation={status};cleanup_queries={attempts}" if exception else "") +
+                        (f";observer_failure_stage={observer};cleanup_signal_phase={signal_phase};"
+                         f"observer_return_category={observer_return};observer_error_category={observer_error}"
+                         if observer is not None else ""))
+            safe_output.text = "\n".join(lines)
     payload = ET.tostring(root, encoding="utf-8", xml_declaration=True) + b"\n"
     if PERSONAL_HOME_PATH.search(payload):
         raise ValueError("safety-ctest-personal-path")
@@ -324,12 +400,62 @@ def summarize_sanitized_ctest_failures(source):
             for line in (stream.text or "").splitlines():
                 if not line.startswith("GENEWHIP_SAFE_TEST_RESULT:"):
                     continue
+                process_match = re.fullmatch(
+                    r"GENEWHIP_SAFE_TEST_RESULT:BaselineRecordContract\.test_real_process_output_cap_timeout_and_status:(failure|error);"
+                    r"process_subcase=([a-z0-9-]+);process_exception=(AssertionError|PermissionError|FileNotFoundError|TimeoutExpired|OSError|RuntimeError|ValueError|TypeError|KeyError|IndexError|other|missing);"
+                    r"process_status=(not-launched|started|completed|failed|missing);process_cleanup=(not-launched|pending|confirmed|unconfirmed|missing);"
+                    r"process_cleanup_error=(AssertionError|PermissionError|FileNotFoundError|TimeoutExpired|OSError|RuntimeError|ValueError|TypeError|KeyError|IndexError|other|missing);"
+                    r"process_return=(zero|nonzero|signaled|missing);"
+                    r"process_failure=(output-byte-cap|timeout|cleanup-unconfirmed|other|none)" +
+                    PROCESS_CLEANUP_DIAGNOSTIC, line)
+                if process_match:
+                    if process_match.group(2) not in PHASE5_PROCESS_SUBCASES:
+                        raise ValueError("safety-ctest-diagnostic-invalid")
+                    output.append(f"CTest process subcase: {PHASE5_PROCESS_DIAGNOSTIC_METHOD} "
+                        f"[{process_match.group(2)}; {process_match.group(1)}; exception={process_match.group(3)}; "
+                        f"status={process_match.group(4)}; cleanup={process_match.group(5)}; "
+                        f"cleanup_error={process_match.group(6)}; return={process_match.group(7)}; "
+                        f"result={process_match.group(8)}" +
+                        (f"; cleanup_reason={process_match.group(9)}; status_observation={process_match.group(10)}; "
+                         f"cleanup_queries={process_match.group(11)}" if process_match.group(9) is not None else "") +
+                        (f"; observer_failure_stage={process_match.group(12)}; cleanup_signal_phase={process_match.group(13)}"
+                         f"; observer_return_category={process_match.group(14)}; observer_error_category={process_match.group(15)}"
+                         if process_match.group(12) is not None else "") + "]")
+                    continue
                 match = re.fullmatch(
-                    r"GENEWHIP_SAFE_TEST_RESULT:([A-Za-z][A-Za-z0-9_]*\.test_[A-Za-z0-9_]+):(failure|error)",
+                    r"GENEWHIP_SAFE_TEST_RESULT:([A-Za-z][A-Za-z0-9_]*\.test_[A-Za-z0-9_]+):(failure|error)"
+                    r"(?:;exception=(AssertionError|PermissionError|FileNotFoundError|TimeoutExpired|OSError|RuntimeError|ValueError|TypeError|KeyError|IndexError|other)"
+                    r";cleanup=(confirmed|unconfirmed|missing);bound=(phase7-capture-byte-limit|phase7-json-byte-limit|"
+                    r"phase7-retained-byte-limit|phase7-rss-byte-limit|phase7-rss-observation-unavailable|"
+                    r"phase7-scratch-byte-limit|phase7-scratch-root-invalid|phase7-scratch-tree-unsafe|"
+                    r"phase7-stdout-stderr-byte-limit|phase7-wall-timeout|none|other|unspecified-bound-violation);cleanup_reason="
+                    r"(group-inactive|group-observer-cleanup-unconfirmed|group-status-budget-exhausted|"
+                    r"group-leader-reap-unconfirmed|group-leader-wait-unconfirmed|group-reported-active|"
+                    r"cleanup-permission-denied|group-cleanup-os-error|group-signal-permission-denied|"
+                    r"group-signal-visible|"
+                    r"group-status-unavailable|cleanup-unclassified|not-observed|missing|other);status_observation="
+                    r"(group-inactive|group-observer-cleanup-unconfirmed|group-status-budget-exhausted|"
+                    r"group-leader-reap-unconfirmed|group-leader-wait-unconfirmed|group-reported-active|"
+                    r"cleanup-permission-denied|group-cleanup-os-error|group-signal-permission-denied|"
+                    r"group-signal-visible|"
+                    r"group-status-unavailable|cleanup-unclassified|not-observed|missing|other);"
+                    r"cleanup_queries=(0|[1-9]|1[0-6]|other)" + PROCESS_OBSERVER_SAFE + r")?",
                     line)
                 if not match or match.group(1) not in SAFE_CTEST_DIAGNOSTIC_METHODS:
                     raise ValueError("safety-ctest-diagnostic-invalid")
-                output.append(f"CTest subtest failure: {match.group(1)} [{match.group(2)}]")
+                if match.group(3):
+                    if (match.group(2) == "failure") != (match.group(3) == "AssertionError"):
+                        raise ValueError("safety-ctest-diagnostic-invalid")
+                    output.append(
+                        f"CTest subtest failure: {match.group(1)} [{match.group(2)}; "
+                        f"exception={match.group(3)}; cleanup={match.group(4)}; bound={match.group(5)}; "
+                        f"cleanup_reason={match.group(6)}; status_observation={match.group(7)}; "
+                        f"cleanup_queries={match.group(8)}" +
+                        (f"; observer_failure_stage={match.group(9)}; cleanup_signal_phase={match.group(10)}"
+                         f"; observer_return_category={match.group(11)}; observer_error_category={match.group(12)}"
+                         if match.group(9) is not None else "") + "]")
+                else:
+                    output.append(f"CTest subtest failure: {match.group(1)} [{match.group(2)}]")
     return sorted(set(output))
 
 
@@ -525,6 +651,83 @@ def safety_export(build, output, root=ROOT):
     finally:
         if temp_dir.exists():
             shutil.rmtree(temp_dir)
+    return output
+
+
+def safety_failure_export(build, output, root=ROOT):
+    """Retain bounded failure diagnostics without producing safety completion evidence."""
+    build, output = Path(build).resolve(), Path(output)
+    if output.name != "safety-failure-export" or output.parent.resolve() != build:
+        raise ValueError("safety-failure-export-destination")
+    _remove_safety_export(output)
+    ci = _safety_ci_root(build)
+    run_path = ci / "safety-run.json"
+    def read_owned(path, cap):
+        info = path.lstat()
+        if (path.is_symlink() or not path.is_file() or info.st_uid != os.getuid()
+                or info.st_nlink != 1 or info.st_size > cap):
+            raise ValueError("safety-failure-export-file-invalid")
+        with path.open("rb") as stream:
+            raw = stream.read(cap + 1)
+        if len(raw) > cap:
+            raise ValueError("safety-failure-export-file-invalid")
+        return raw
+    run = json.loads(read_owned(run_path, 4096))
+    identity = public_source_identity(root)
+    if (not isinstance(run, dict)
+            or set(run) != {"schema", "version", "run_id", "source_revision", "source_tree_id"}
+            or run.get("schema") != SAFETY_RUN_SCHEMA or type(run.get("version")) is not int
+            or run.get("version") != 1
+            or not re.fullmatch(r"[0-9a-f]{32}", str(run.get("run_id", "")))
+            or any(not re.fullmatch(r"[0-9a-f]{40}", str(run.get(key, "")))
+                   or run.get(key) != identity.get(key) for key in ("source_revision", "source_tree_id"))):
+        raise ValueError("safety-failure-export-identity")
+    payloads, lanes = [], []
+    for lane in SAFETY_LANES:
+        directory = ci / lane
+        if directory.is_symlink():
+            raise ValueError("safety-failure-export-file-invalid")
+        source = directory / "ctest-junit.xml"
+        if not source.exists() and not source.is_symlink():
+            continue
+        raw = read_owned(source, 2 * 1024 * 1024)
+        failures = summarize_sanitized_ctest_failures(io.BytesIO(raw))
+        original = ET.fromstring(raw)
+        cases = original.findall(".//testcase")
+        if len(cases) > 4096:
+            raise ValueError("safety-failure-export-case-limit")
+        safe = ET.Element("testsuites")
+        suite = ET.SubElement(safe, "testsuite")
+        for index, case in enumerate(cases):
+            target = ET.SubElement(suite, "testcase", {"name": f"case-{index + 1}"})
+            for marker in ("failure", "error", "skipped"):
+                if case.find(marker) is not None:
+                    ET.SubElement(target, marker)
+            lines = [line for stream in case.findall("system-out")
+                     for line in (stream.text or "").splitlines()
+                     if line.startswith("GENEWHIP_SAFE_TEST_RESULT:")]
+            if lines:
+                ET.SubElement(target, "system-out").text = "\n".join(lines)
+        payload = ET.tostring(safe, encoding="utf-8", xml_declaration=True) + b"\n"
+        payloads.append((Path(lane) / "ctest-junit.xml", payload))
+        lanes.append({"lane": lane, "source_junit_sha256": hashlib.sha256(raw).hexdigest(),
+                      "exported_junit_sha256": hashlib.sha256(payload).hexdigest(), "failures": failures})
+    if not any(row["failures"] for row in lanes):
+        raise ValueError("safety-failure-export-no-failure")
+    report = {"schema": "genewhip-safety-failure-diagnostics-v1", "status": "failed",
+              "qualification_accepted": False, "run_id": run["run_id"], **identity, "lanes": lanes}
+    payloads.append((Path("failure-diagnostics.json"), _json_bytes(report)))
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = Path(tempfile.mkdtemp(prefix=".safety-failure-export-", dir=output.parent))
+    try:
+        for relative, payload in payloads:
+            target = temporary / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(payload)
+        os.replace(temporary, output)
+    finally:
+        if temporary.exists():
+            shutil.rmtree(temporary)
     return output
 
 
@@ -1439,6 +1642,7 @@ def main(argv=None):
     export = sub.add_parser("safety-export")
     export.add_argument("--build", type=Path, required=True)
     export.add_argument("--out", type=Path, required=True)
+    export.add_argument("--failure-only", action="store_true")
     host = sub.add_parser("host-export")
     host.add_argument("--build", type=Path, required=True)
     host.add_argument("--out", type=Path, required=True)
@@ -1474,7 +1678,10 @@ def main(argv=None):
         return 0
     if args.command == "safety-export":
         try:
-            safety_export(args.build, args.out)
+            if args.failure_only:
+                safety_failure_export(args.build, args.out)
+            else:
+                safety_export(args.build, args.out)
         except (OSError, ValueError) as exc:
             reason = str(exc) if isinstance(exc, ValueError) else "safety-export-io"
             print("REJECT: " + reason, file=sys.stderr)

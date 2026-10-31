@@ -678,6 +678,225 @@ class ReportContract(unittest.TestCase):
                 module.sanitize_ctest_junit(unowned, unowned_output)
             self.assertFalse(unowned_output.exists())
 
+    def test_phase5_process_subcase_diagnostics_are_fixed_enum_only(self):
+        phase5_spec = importlib.util.spec_from_file_location(
+            "phase5_process_diagnostic_contract", ROOT / "tests/evidence/phase5_baseline_contract.py")
+        phase5 = importlib.util.module_from_spec(phase5_spec)
+        phase5_spec.loader.exec_module(phase5)
+        method = "BaselineRecordContract.test_real_process_output_cap_timeout_and_status"
+        old = [{"status": "completed", "process_group_cleanup": "confirmed"}]
+        self.assertEqual(phase5.safe_process_diagnostic("timeout-direct", old, 1,
+            AssertionError("private path /tmp/PRIVATE_TOKEN")), {
+                "subcase": "timeout-direct", "exception": "AssertionError",
+                "status": "missing", "cleanup": "missing", "cleanup_error": "missing",
+                "return_category": "missing",
+                "failure_category": "other", "cleanup_reason": "missing",
+                "status_observation": "missing", "cleanup_attempts": "0",
+                "observer_failure_stage": "missing", "cleanup_signal_phase": "missing",
+                "observer_return_category": "missing", "observer_error_category": "missing"})
+        stale = type("BaselineRecordContract", (), {"_testMethodName": method.split(".", 1)[1],
+            "_phase5_process_diagnostic": phase5.safe_process_diagnostic("timeout-direct", old, 1, None)})()
+        stale_result = type("Result", (), {"failures": [(stale, "private traceback")], "errors": []})()
+        with tempfile.TemporaryFile(mode="w+t") as emitted:
+            with patch("sys.stderr", emitted):
+                phase5.emit_safe_failure_diagnostics(stale_result)
+            emitted.seek(0)
+            self.assertEqual(emitted.read().strip(), "GENEWHIP_TEST_RESULT:" + method +
+                ":failure:process:timeout-direct:missing:missing:missing:missing:missing:none:missing:missing:0"
+                ":missing:missing:missing:missing")
+        projected = phase5.safe_process_diagnostic("stderr-cap", [*old, {
+            "status": "failed", "process_group_cleanup": "unconfirmed",
+            "cleanup_error": "PermissionError", "returncode": None,
+            "cleanup_reason": "cleanup-permission-denied",
+            "cleanup_status_observation": "group-status-unavailable",
+            "cleanup_observation_attempts": 3,
+            "observer_failure_stage": "read", "cleanup_signal_phase": "sigkill",
+            "observer_return_category": "signaled", "observer_error_category": "io",
+            "private_path": "/tmp/PRIVATE_TOKEN"}], 1,
+            ValueError("bounded process cleanup unconfirmed: non-qualifying"))
+        self.assertEqual(projected["return_category"], "missing")
+        test = type("BaselineRecordContract", (), {"_testMethodName": method.split(".", 1)[1],
+            "_phase5_process_diagnostic": projected})()
+        result = type("Result", (), {"failures": [(test, "private traceback /tmp/PRIVATE_TOKEN")],
+                                      "errors": []})()
+        with tempfile.TemporaryFile(mode="w+t") as emitted:
+            with patch("sys.stderr", emitted):
+                phase5.emit_safe_failure_diagnostics(result)
+            emitted.seek(0)
+            marker = emitted.read().strip()
+        self.assertEqual(marker, "GENEWHIP_TEST_RESULT:" + method +
+            ":failure:process:stderr-cap:ValueError:failed:unconfirmed:PermissionError:missing:cleanup-unconfirmed"
+            ":cleanup-permission-denied:group-status-unavailable:3:read:sigkill:signaled:io")
+        self.assertNotIn("PRIVATE_TOKEN", marker)
+        self.assertNotIn("/tmp", marker)
+        with tempfile.TemporaryDirectory() as temporary:
+            source_xml = Path(temporary) / "raw.xml"
+            sanitized = Path(temporary) / "safe.xml"
+            source_xml.write_text("<testsuites><testsuite><testcase name='phase5_baseline_contract'>"
+                "<failure/><system-err>" + marker + "</system-err></testcase></testsuite></testsuites>")
+            module.sanitize_ctest_junit(source_xml, sanitized)
+            summary = module.summarize_sanitized_ctest_failures(sanitized)
+            self.assertEqual(summary, ["CTest failure [failure]",
+                "CTest process subcase: " + method +
+                " [stderr-cap; failure; exception=ValueError; status=failed; cleanup=unconfirmed; "
+                "cleanup_error=PermissionError; return=missing; result=cleanup-unconfirmed; "
+                "cleanup_reason=cleanup-permission-denied; status_observation=group-status-unavailable; cleanup_queries=3; "
+                "observer_failure_stage=read; cleanup_signal_phase=sigkill; observer_return_category=signaled; "
+                "observer_error_category=io]"])
+            self.assertNotIn("PRIVATE_TOKEN", sanitized.read_text())
+            extended_xml = sanitized.read_text()
+            # Historical markers remain readable without inventing cleanup observations.
+            legacy = marker.rsplit(":", 7)[0]
+            source_xml.write_text("<testsuites><testsuite><testcase name='phase5_baseline_contract'>"
+                "<failure/><system-err>" + legacy + "</system-err></testcase></testsuite></testsuites>")
+            module.sanitize_ctest_junit(source_xml, sanitized)
+            self.assertEqual(module.summarize_sanitized_ctest_failures(sanitized), [
+                "CTest failure [failure]", "CTest process subcase: " + method +
+                " [stderr-cap; failure; exception=ValueError; status=failed; cleanup=unconfirmed; "
+                "cleanup_error=PermissionError; return=missing; result=cleanup-unconfirmed]"])
+            for replacement in ("private-value:group-status-unavailable:3",
+                                "cleanup-permission-denied:private-value:3",
+                                "cleanup-permission-denied:group-status-unavailable:17",
+                                "cleanup-permission-denied:group-status-unavailable:True",
+                                "cleanup-permission-denied:group-status-unavailable",
+                                "cleanup-permission-denied:group-status-unavailable:3:extra"):
+                bad = legacy + ":" + replacement
+                source_xml.write_text("<testsuites><testsuite><testcase name='phase5_baseline_contract'>"
+                    "<failure/><system-err>" + bad + "</system-err></testcase></testsuite></testsuites>")
+                with self.assertRaisesRegex(ValueError, "safety-ctest-diagnostic-invalid"):
+                    module.sanitize_ctest_junit(source_xml, Path(temporary) / "invalid.xml")
+                parts = replacement.split(":")
+                keys = ("cleanup_reason", "status_observation", "cleanup_queries", "extra")
+                suffix = ";".join(key + "=" + value for key, value in zip(keys, parts))
+                safe_bad = extended_xml.replace(
+                    "cleanup_reason=cleanup-permission-denied;status_observation=group-status-unavailable;cleanup_queries=3",
+                    suffix)
+                sanitized.write_text(safe_bad)
+                with self.assertRaisesRegex(ValueError, "safety-ctest-diagnostic-invalid"):
+                    module.summarize_sanitized_ctest_failures(sanitized)
+            malformed = Path(temporary) / "malformed.xml"
+            malformed.write_text("<testsuites><testsuite><testcase name='phase5_baseline_contract'>"
+                "<failure/><system-err>" + marker.replace("stderr-cap", "unknown-case") +
+                "</system-err></testcase></testsuite></testsuites>")
+            with self.assertRaisesRegex(ValueError, "safety-ctest-diagnostic-invalid"):
+                module.sanitize_ctest_junit(malformed, Path(temporary) / "rejected.xml")
+
+    def test_observer_failure_stage_and_signal_phase_remain_fixed_and_distinguishable(self):
+        native = ("GENEWHIP_TEST_RESULT:NativeParserContract."
+            "test_phase7_launcher_keeps_shorter_caller_deadline:error:RuntimeError:unconfirmed:"
+            "phase7-wall-timeout:cleanup-permission-denied:group-status-unavailable:3")
+        baseline = ("GENEWHIP_TEST_RESULT:BaselineRecordContract."
+            "test_real_process_output_cap_timeout_and_status:failure:process:stdout-cap:"
+            "ValueError:failed:unconfirmed:PermissionError:missing:cleanup-unconfirmed:"
+            "cleanup-permission-denied:group-status-unavailable:3")
+        with tempfile.TemporaryDirectory() as temporary:
+            raw, safe = Path(temporary) / "raw.xml", Path(temporary) / "safe.xml"
+            def xml(marker):
+                return ("<testsuites><testsuite><testcase name='diagnostic'>"
+                    "<failure/><system-err>private traceback PRIVATE_TOKEN\n" + marker +
+                    "</system-err></testcase></testsuite></testsuites>")
+            for marker in (native, baseline):
+                summaries = []
+                for stage, phase in (("parse", "sigterm"), ("byte-limit", "sigkill")):
+                    raw.write_text(xml(marker + ":" + stage + ":" + phase + ":zero:none"))
+                    module.sanitize_ctest_junit(raw, safe)
+                    summary = module.summarize_sanitized_ctest_failures(safe)
+                    self.assertTrue(any("observer_failure_stage=" + stage in line
+                        and "cleanup_signal_phase=" + phase in line for line in summary))
+                    self.assertNotIn("PRIVATE_TOKEN", safe.read_text())
+                    summaries.append(summary)
+                self.assertNotEqual(*summaries)
+                for suffix in (":private-stage:sigterm:zero:none", ":parse:private-phase:zero:none", ":parse",
+                               ":parse:sigterm", ":parse:sigterm:private-return:none",
+                               ":parse:sigterm:zero:private-error", ":parse:sigterm:zero:none:extra"):
+                    raw.write_text(xml(marker + suffix))
+                    with self.assertRaisesRegex(ValueError, "safety-ctest-diagnostic-invalid"):
+                        module.sanitize_ctest_junit(raw, Path(temporary) / "rejected.xml")
+                good = safe.read_text()
+                for wrong in (good.replace("observer_failure_stage=byte-limit", "observer_failure_stage=private-stage"),
+                              good.replace("cleanup_signal_phase=sigkill", "cleanup_signal_phase=private-phase"),
+                              good.replace("observer_return_category=zero", "observer_return_category=private-return"),
+                              good.replace("observer_error_category=none", "observer_error_category=private-error"),
+                              good.replace(";cleanup_signal_phase=sigkill", "")):
+                    safe.write_text(wrong)
+                    with self.assertRaisesRegex(ValueError, "safety-ctest-diagnostic-invalid"):
+                        module.summarize_sanitized_ctest_failures(safe)
+
+    def test_phase5_process_diagnostic_tracks_only_current_run_retained_state(self):
+        import io
+        phase5_spec = importlib.util.spec_from_file_location(
+            "phase5_process_run_retained_contract", ROOT / "tests/evidence/phase5_baseline_contract.py")
+        phase5 = importlib.util.module_from_spec(phase5_spec)
+        phase5_spec.loader.exec_module(phase5)
+
+        class Boundary:
+            def __init__(self, error=None):
+                self.error = error
+
+            def require_host_process_context(self):
+                if self.error:
+                    raise self.error
+
+        class FakeProcess:
+            def __init__(self, *, boundary_error=None, run_error=None):
+                self.boundary = Boundary(boundary_error)
+                self.run_error = run_error
+                self.receipt_entered = False
+
+            def process_boundary(self):
+                return self.boundary
+
+            def receipt_file(self, root, destination):
+                self.receipt_entered = True
+                return io.StringIO()
+
+            def run(self, command, *, runs, **kwargs):
+                runs.append({"status": "failed", "process_group_cleanup": "unconfirmed",
+                    "cleanup_error": "PermissionError", "returncode": 7,
+                    "secret": "/tmp/PRIVATE_TOKEN"})
+                if self.run_error:
+                    raise self.run_error
+                return type("Result", (), {"returncode": 0, "stdout": ""})()
+
+        method = "test_real_process_output_cap_timeout_and_status"
+        case = type("BaselineRecordContract", (), {"_testMethodName": method,
+            "_phase5_process_diagnostic": {"subcase": "stderr-cap", "status": "completed"}})()
+        admitted = FakeProcess(run_error=ValueError("bounded process output byte cap"))
+        with self.assertRaisesRegex(ValueError, "bounded process output byte cap"):
+            phase5.run_retained(admitted, ["fake"], label="bounded", diagnostic_case=case,
+                diagnostic_subcase="stdout-cap")
+        self.assertTrue(admitted.receipt_entered)
+        self.assertEqual(case._phase5_process_diagnostic, {
+            "subcase": "stdout-cap", "exception": "ValueError", "status": "failed",
+            "cleanup": "unconfirmed", "cleanup_error": "PermissionError",
+            "return_category": "nonzero", "failure_category": "output-byte-cap",
+            "cleanup_reason": "missing", "status_observation": "missing", "cleanup_attempts": "0",
+            "observer_failure_stage": "missing", "cleanup_signal_phase": "missing",
+            "observer_return_category": "missing", "observer_error_category": "missing"})
+
+        early = FakeProcess(boundary_error=PermissionError("private path /tmp/PRIVATE_TOKEN"))
+        with self.assertRaisesRegex(PermissionError, "private path"):
+            phase5.run_retained(early, ["fake"], label="early", diagnostic_case=case,
+                diagnostic_subcase="timeout-direct")
+        self.assertFalse(early.receipt_entered)
+        self.assertEqual(case._phase5_process_diagnostic, {
+            "subcase": "timeout-direct", "exception": "PermissionError", "status": "missing",
+            "cleanup": "missing", "cleanup_error": "missing", "return_category": "missing",
+            "failure_category": "other", "cleanup_reason": "missing",
+            "status_observation": "missing", "cleanup_attempts": "0",
+            "observer_failure_stage": "missing", "cleanup_signal_phase": "missing",
+            "observer_return_category": "missing", "observer_error_category": "missing"})
+        result = type("Result", (), {"failures": [(case, "private traceback")], "errors": []})()
+        with tempfile.TemporaryFile(mode="w+t") as emitted:
+            with patch("sys.stderr", emitted):
+                phase5.emit_safe_failure_diagnostics(result)
+            emitted.seek(0)
+            text = emitted.read().strip()
+        self.assertEqual(text, "GENEWHIP_TEST_RESULT:BaselineRecordContract." + method +
+            ":failure:process:timeout-direct:PermissionError:missing:missing:missing:missing:other:missing:missing:0"
+            ":missing:missing:missing:missing")
+        self.assertNotIn("PRIVATE_TOKEN", text)
+
     def test_phase6_runner_emits_only_owned_failure_method_and_kind(self):
         route_spec = importlib.util.spec_from_file_location(
             "phase6_route_diagnostic_contract", ROOT / "tests/session/phase6_route_contract.py")
@@ -687,15 +906,17 @@ class ReportContract(unittest.TestCase):
         error = route.NativeParserContract("test_process_group_and_stream_caps_are_enforced")
         result = type("TestResult", (), {
             "failures": [(failure, PRIVATE_TEST_PATH + "/traceback")],
-            "errors": [(error, PRIVATE_TEST_PATH + "/exception")]})()
+            "errors": [(error, PRIVATE_TEST_PATH + "/exception")],
+            "safe_exception_by_test": {id(failure): "AssertionError", id(error): "RuntimeError"},
+            "safe_cleanup_by_test": {}})()
         with tempfile.TemporaryFile(mode="w+t") as diagnostic:
             with patch("sys.stderr", diagnostic):
                 route._emit_safe_failure_diagnostics(result)
             diagnostic.seek(0)
             emitted = diagnostic.read()
         self.assertEqual(emitted.splitlines(), [
-            "GENEWHIP_TEST_RESULT:NativeParserContract.test_bounded_malformed_route_matrix_both_clients:failure",
-            "GENEWHIP_TEST_RESULT:NativeParserContract.test_process_group_and_stream_caps_are_enforced:error",
+            "GENEWHIP_TEST_RESULT:NativeParserContract.test_bounded_malformed_route_matrix_both_clients:failure:AssertionError:missing:none:missing:missing:0:missing:missing:missing:missing",
+            "GENEWHIP_TEST_RESULT:NativeParserContract.test_process_group_and_stream_caps_are_enforced:error:RuntimeError:missing:none:missing:missing:0:missing:missing:missing:missing",
         ])
         self.assertNotIn(PRIVATE_TEST_PATH, emitted)
 
@@ -806,6 +1027,88 @@ class ReportContract(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "safety-ctest-outcome|safety-lane-artifact-mismatch"):
                     module.safety_export(build, output)
             self.assertFalse(output.exists(), "failed CTest evidence was exported")
+
+    def test_safety_failure_export_keeps_actual_fixed_diagnostics_without_completion(self):
+        identity = {"source_revision": TEST_REVISION, "source_tree_id": "c" * 40}
+        with tempfile.TemporaryDirectory() as temporary:
+            build = Path(temporary)
+            create_complete_safety_build(build)
+            complete = (build / "ci/safety-complete.json").read_bytes()
+            source = build / "ci/native/ctest-junit.xml"
+            marker = ("GENEWHIP_SAFE_TEST_RESULT:NativeParserContract."
+                "test_phase7_launcher_keeps_shorter_caller_deadline:error;exception=RuntimeError;"
+                "cleanup=unconfirmed;bound=phase7-wall-timeout;cleanup_reason=cleanup-permission-denied;"
+                "status_observation=group-status-unavailable;cleanup_queries=3;observer_failure_stage=parse;"
+                "cleanup_signal_phase=sigterm;observer_return_category=zero;observer_error_category=none")
+            source.write_text("<testsuites private='PRIVATE_TOKEN'><testsuite>"
+                "<testcase name='PRIVATE_TOKEN'><error message='PRIVATE_TOKEN'/>"
+                "<system-out>" + marker + "\nPRIVATE_TOKEN</system-out>"
+                "<system-err>PRIVATE_TOKEN</system-err></testcase></testsuite></testsuites>")
+            source_sha = module.sha(source)
+            output = build / "safety-failure-export"
+            with patch.object(module, "public_source_identity", return_value=identity), \
+                 patch.object(module, "safety_finish", side_effect=AssertionError("must not complete safety")):
+                self.assertEqual(module.main(["safety-export", "--failure-only", "--build", str(build),
+                    "--out", str(output)]), 0)
+            report = json.loads((output / "failure-diagnostics.json").read_text())
+            self.assertEqual(report["status"], "failed")
+            self.assertIs(report["qualification_accepted"], False)
+            self.assertEqual(report["source_revision"], TEST_REVISION)
+            native = next(row for row in report["lanes"] if row["lane"] == "native")
+            self.assertEqual(native["source_junit_sha256"], source_sha)
+            self.assertEqual(native["exported_junit_sha256"], module.sha(output / "native/ctest-junit.xml"))
+            self.assertTrue(any("observer_failure_stage=parse" in line
+                and "observer_error_category=none" in line for line in native["failures"]))
+            for path in output.rglob("*"):
+                if path.is_file():
+                    self.assertNotIn(b"PRIVATE_TOKEN", path.read_bytes())
+            self.assertEqual((build / "ci/safety-complete.json").read_bytes(), complete)
+            self.assertFalse((output / "safety-complete.json").exists())
+            self.assertFalse(any(path.name.endswith("raw.xml") for path in output.rglob("*")))
+
+    def test_safety_failure_export_rejects_stale_identity_and_nonfailure(self):
+        identity = {"source_revision": TEST_REVISION, "source_tree_id": "c" * 40}
+        with tempfile.TemporaryDirectory() as temporary:
+            build = Path(temporary)
+            create_complete_safety_build(build)
+            output = build / "safety-failure-export"
+            for current, reason in ((identity, "safety-failure-export-no-failure"),
+                                    ({**identity, "source_revision": "d" * 40}, "safety-failure-export-identity")):
+                output.mkdir()
+                (output / "stale.txt").write_text("old")
+                with patch.object(module, "public_source_identity", return_value=current):
+                    with self.assertRaisesRegex(ValueError, reason):
+                        module.safety_failure_export(build, output)
+                self.assertFalse(output.exists())
+            with self.assertRaisesRegex(ValueError, "safety-failure-export-destination"):
+                module.safety_failure_export(build, build / "ci")
+            self.assertTrue((build / "ci/safety-run.json").is_file())
+
+    def test_safety_failure_export_rejects_unsafe_files_and_unknown_diagnostics(self):
+        identity = {"source_revision": TEST_REVISION, "source_tree_id": "c" * 40}
+        with tempfile.TemporaryDirectory() as temporary:
+            build = Path(temporary)
+            create_complete_safety_build(build)
+            source = build / "ci/native/ctest-junit.xml"
+            original = source.read_bytes()
+            output = build / "safety-failure-export"
+            outside = build / "outside.xml"
+            outside.write_bytes(original)
+            source.unlink()
+            source.symlink_to(outside)
+            with patch.object(module, "public_source_identity", return_value=identity):
+                with self.assertRaisesRegex(ValueError, "safety-failure-export-file-invalid"):
+                    module.safety_failure_export(build, output)
+                source.unlink()
+                source.write_bytes(b"x" * (2 * 1024 * 1024 + 1))
+                with self.assertRaisesRegex(ValueError, "safety-failure-export-file-invalid"):
+                    module.safety_failure_export(build, output)
+                source.write_text("<testsuites><testsuite><testcase name='fixed'><error/>"
+                    "<system-out>GENEWHIP_SAFE_TEST_RESULT:NativeParserContract.test_unknown:error"
+                    "</system-out></testcase></testsuite></testsuites>")
+                with self.assertRaisesRegex(ValueError, "safety-ctest-diagnostic-invalid"):
+                    module.safety_failure_export(build, output)
+            self.assertFalse(output.exists())
 
     def test_safety_export_is_curated_and_binds_the_sanitized_junit_bytes(self):
         identity = {"source_revision": TEST_REVISION, "source_tree_id": "c" * 40}
