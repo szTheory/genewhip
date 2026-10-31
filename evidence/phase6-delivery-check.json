@@ -1,0 +1,153 @@
+{
+  "baseline_revision": "40be4d2",
+  "default_controller_bytes": {
+    "genewhip-independent-game-v2/action-no-trigger": "ccb61cf77855ae4e5a3a20a02d967cee43c2d89608d48b5f023acf69c4365464",
+    "genewhip-independent-game-v2/action-sound": "0e7910700182a56632674c0eee7da643362dd6128964bb49f753a8edac0afbdf",
+    "genewhip-independent-game-v2/start-idle": "9d245ad2e1c4a0ae8966cb4a7def2a2f1da3ca237ee1961f46534b3bf43fbc3f",
+    "genewhip-independent-game-v2/start-move": "07c3f572c8ff6361d6c7ee855821fd4cc5e6e5fd9316a53e446adca5c7de8028",
+    "genewhip-independent-game-v2/sustained-play": "88323fe96df76d2ce7b8cc02af5a01eff3c30f561b5f32df4beee2760b590465",
+    "genewhip-independent-game-v2/title-no-start": "1749316c7ad4136d294cbe62a107eaada6f24141832cd577ddc243eae841ac34",
+    "recursion94/full-route": "94f7f482aac82438e2df1009be832bb608edb99c3ddf1b6cb5b2a303704e17aa",
+    "recursion94/withhold-final-b": "74d85e8de10740d4a9a33f5ec80d2db406be9d47558b6b7867261c84485eb450",
+    "recursion94/withhold-first-plate": "5ff73a97420f0b64f6cf60842ea41c780e9b3f54bada7fe9cd60b4c5ad5db8e6",
+    "tank-battle/full-route": "ac086c6c51e6f41a1925967d555f94383e5ca37483744ac6a5ca1bfad22a940d",
+    "tank-battle/withhold-early-hit": "bda7b6a2ebeab8e36bd2d8d39779d7617589c6bb0753b2dafadf0b60846cab5f",
+    "tank-battle/withhold-late-hit": "1c8489dbd2dbe5f1b0564fb223aa719e5b530c1ad2ef8804326b92521b11aa95"
+  },
+  "default_roundtrip_byte_identical": true,
+  "map_sha256": "61768d626c34b04887955a7f0f71c081d21c2ae4779d49c14dbc4a09bd00d596",
+  "negative_controls": [
+    {
+      "actual": "delivery-map-event-count",
+      "expected": "delivery-map-event-count",
+      "status": "pass"
+    },
+    {
+      "actual": "delivery-map-consumption:19",
+      "expected": "delivery-map-consumption:19",
+      "status": "pass"
+    },
+    {
+      "actual": "delivery-map-consumption:18",
+      "expected": "delivery-map-consumption:18",
+      "status": "pass"
+    },
+    {
+      "actual": "delivery-map-paused-meta:7",
+      "expected": "delivery-map-paused-meta:7",
+      "status": "pass"
+    },
+    {
+      "actual": "delivery-map-cleanup-is-event",
+      "expected": "delivery-map-cleanup-is-event",
+      "status": "pass"
+    },
+    {
+      "actual": "delivery-map-expected-poll:19",
+      "expected": "delivery-map-expected-poll:19",
+      "status": "pass"
+    },
+    {
+      "actual": "delivery-map-effective-mask:19",
+      "expected": "delivery-map-effective-mask:19",
+      "status": "pass"
+    },
+    {
+      "actual": "delivery-map-hold:19",
+      "expected": "delivery-map-hold:19",
+      "status": "pass"
+    },
+    {
+      "actual": "delivery-map-release:19",
+      "expected": "delivery-map-release:19",
+      "status": "pass"
+    },
+    {
+      "actual": "delivery-map-expected-poll:7",
+      "expected": "delivery-map-expected-poll:7",
+      "status": "pass"
+    },
+    {
+      "actual": "delivery-map-hold:1",
+      "expected": "delivery-map-hold:1",
+      "status": "pass"
+    },
+    {
+      "actual": "delivery-map-release:2",
+      "expected": "delivery-map-release:2",
+      "status": "pass"
+    },
+    {
+      "actual": "delivery-map-source-identity",
+      "expected": "delivery-map-source-identity",
+      "status": "pass"
+    },
+    {
+      "actual": "tracer-source-duration",
+      "expected": "tracer-source-duration",
+      "status": "pass"
+    },
+    {
+      "actual": "tracer-final-b-hold",
+      "expected": "tracer-final-b-hold",
+      "status": "pass"
+    },
+    {
+      "actual": "tracer-final-b-hold",
+      "expected": "tracer-final-b-hold",
+      "status": "pass"
+    },
+    {
+      "actual": "tracer-source-predicates",
+      "expected": "tracer-source-predicates",
+      "status": "pass"
+    },
+    {
+      "actual": "tracer-consumed-poll",
+      "expected": "tracer-consumed-poll",
+      "status": "pass"
+    },
+    {
+      "actual": "tracer-process-outcome",
+      "expected": "tracer-process-outcome",
+      "status": "pass"
+    },
+    {
+      "actual": "tracer-envelope",
+      "expected": "tracer-envelope",
+      "status": "pass"
+    },
+    {
+      "actual": "tracer-candidate-identity",
+      "expected": "tracer-candidate-identity",
+      "status": "pass"
+    },
+    {
+      "actual": "tracer-raw-identity",
+      "expected": "tracer-raw-identity",
+      "status": "pass"
+    },
+    {
+      "actual": "tracer-request-clock",
+      "expected": "tracer-request-clock",
+      "status": "pass"
+    },
+    {
+      "actual": "tracer-raw-request-binding",
+      "expected": "tracer-raw-request-binding",
+      "status": "pass"
+    },
+    {
+      "actual": "tracer-request-mask",
+      "expected": "tracer-request-mask",
+      "status": "pass"
+    },
+    {
+      "actual": "tracer-request-mask",
+      "expected": "tracer-request-mask",
+      "status": "pass"
+    }
+  ],
+  "schema": "genewhip-phase6-delivery-contract-v1",
+  "status": "pass"
+}

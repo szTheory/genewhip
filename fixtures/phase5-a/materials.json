@@ -1,0 +1,299 @@
+{
+  "lineage_id": "monteslu/retro-homebrew-games",
+  "material_locations": [
+    {
+      "kind": "archive-member",
+      "logical_path": "LICENSE",
+      "member_path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/LICENSE",
+      "sha256": "31f78e8b90dcb80522bf1f767a65c03fad80953ed028dfa4334386c128a84df5"
+    },
+    {
+      "file": {
+        "path": "fixtures/phase5-a/source-overrides/Makefile",
+        "sha256": "84a878d80da35d983699931c6944acd509d2f066d481e1236fe6bea5384d7deb"
+      },
+      "kind": "reviewed-override",
+      "logical_path": "Makefile",
+      "source_revision": "0e04e1c2552fe174ecb3051adf270a65b2b2c819"
+    },
+    {
+      "kind": "archive-member",
+      "logical_path": "README.md",
+      "member_path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/tank-battle/README.md",
+      "sha256": "331d3a72796bea9f65c591c3e9775b6cdb51d1a88aec56d2762878450b64bbfd"
+    },
+    {
+      "file": {
+        "path": "fixtures/phase5-a/source-overrides/reviewed-build.sh",
+        "sha256": "2272f1fa3fdb9faae4386c563099631a87b0a7fa8e727c5ba202538abc82ee74"
+      },
+      "kind": "reviewed-override",
+      "logical_path": "build.sh",
+      "source_revision": "0e04e1c2552fe174ecb3051adf270a65b2b2c819"
+    },
+    {
+      "kind": "archive-member",
+      "logical_path": "res/resources.res",
+      "member_path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/tank-battle/res/resources.res",
+      "sha256": "65d9b4fe274fcfda9419e224ec0decd814151e8e74cd4e043458eb00b4e0961d"
+    },
+    {
+      "kind": "archive-member",
+      "logical_path": "src/boot/rom_head.c",
+      "member_path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/tank-battle/src/boot/rom_head.c",
+      "sha256": "bac9bdc1b1be77e3e2f1bc3f119f23120e499fdaea6b88bd542307569735957e"
+    },
+    {
+      "kind": "archive-member",
+      "logical_path": "src/main.c",
+      "member_path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/tank-battle/src/main.c",
+      "sha256": "a5c6c554372b0d23b8717326be9de8ca97bb69b92a85759115f7ca9a8398c9a9"
+    }
+  ],
+  "materials": [
+    {
+      "category": "code",
+      "license": "MIT",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "workspace",
+      "path": "LICENSE",
+      "sha256": "31f78e8b90dcb80522bf1f767a65c03fad80953ed028dfa4334386c128a84df5",
+      "source_revision": "eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+      "terms_source": "https://github.com/monteslu/retro-homebrew-games/blob/eb7dc3044f9d2f76047f3b3573971bf86575ca52/LICENSE"
+    },
+    {
+      "category": "build_tools",
+      "license": "MIT",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "workspace",
+      "path": "Makefile",
+      "sha256": "84a878d80da35d983699931c6944acd509d2f066d481e1236fe6bea5384d7deb",
+      "source_revision": "0e04e1c2552fe174ecb3051adf270a65b2b2c819",
+      "terms_source": "https://github.com/szTheory/genewhip/blob/0e04e1c2552fe174ecb3051adf270a65b2b2c819/LICENSE"
+    },
+    {
+      "category": "code",
+      "license": "MIT",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "workspace",
+      "path": "README.md",
+      "sha256": "331d3a72796bea9f65c591c3e9775b6cdb51d1a88aec56d2762878450b64bbfd",
+      "source_revision": "eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+      "terms_source": "https://github.com/monteslu/retro-homebrew-games/blob/eb7dc3044f9d2f76047f3b3573971bf86575ca52/LICENSE"
+    },
+    {
+      "category": "build_tools",
+      "license": "MIT",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "workspace",
+      "path": "build.sh",
+      "sha256": "2272f1fa3fdb9faae4386c563099631a87b0a7fa8e727c5ba202538abc82ee74",
+      "source_revision": "0e04e1c2552fe174ecb3051adf270a65b2b2c819",
+      "terms_source": "https://github.com/szTheory/genewhip/blob/0e04e1c2552fe174ecb3051adf270a65b2b2c819/LICENSE"
+    },
+    {
+      "category": "resources",
+      "license": "MIT",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "workspace",
+      "path": "res/resources.res",
+      "sha256": "65d9b4fe274fcfda9419e224ec0decd814151e8e74cd4e043458eb00b4e0961d",
+      "source_revision": "eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+      "terms_source": "https://github.com/monteslu/retro-homebrew-games/blob/eb7dc3044f9d2f76047f3b3573971bf86575ca52/LICENSE"
+    },
+    {
+      "category": "code",
+      "license": "MIT",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "workspace",
+      "path": "src/boot/rom_head.c",
+      "sha256": "bac9bdc1b1be77e3e2f1bc3f119f23120e499fdaea6b88bd542307569735957e",
+      "source_revision": "eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+      "terms_source": "https://github.com/monteslu/retro-homebrew-games/blob/eb7dc3044f9d2f76047f3b3573971bf86575ca52/LICENSE"
+    },
+    {
+      "category": "code",
+      "license": "MIT",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "workspace",
+      "path": "src/main.c",
+      "sha256": "a5c6c554372b0d23b8717326be9de8ca97bb69b92a85759115f7ca9a8398c9a9",
+      "source_revision": "eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+      "terms_source": "https://github.com/monteslu/retro-homebrew-games/blob/eb7dc3044f9d2f76047f3b3573971bf86575ca52/LICENSE"
+    },
+    {
+      "category": "startup_objects",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "MIT",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/sgdk/src/boot/sega.s",
+      "sha256": "d6133cfea8c831013fc4ffffb6ef584b67af398d4c5d928e88a1eee79e5c3164",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/license.txt"
+    },
+    {
+      "category": "startup_objects",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "MIT",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/sgdk/md.ld",
+      "sha256": "10cb1e7b1ef281f04d12ce4be543acc7469934a65964cc635211835370130fc2",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/license.txt"
+    },
+    {
+      "category": "runtime_objects",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "SGDK MIT; MD Debugger MIT; MiniMusic zlib; applicable GCC Runtime Library Exception",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/sgdk/lib/libmd.a",
+      "sha256": "38d43d1fb6ea71a6530cb43e1ece8cb4493e61e7b91affbb21069d9693cc5eed",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/license.txt"
+    },
+    {
+      "category": "compiler_libraries",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "GPL-3.0-or-later WITH GCC-exception-3.1",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/usr/lib/gcc/m68k-elf/13.2.0/libgcc.a",
+      "sha256": "bcabed8e046dbfa4a99658c25f15549f53d4735ed358e94aea5a7c429adb9864",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/COPYING.RUNTIME"
+    },
+    {
+      "category": "compiler_libraries",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "GCC Runtime Library Exception3.1",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/usr/share/licenses/gcc/COPYING.RUNTIME",
+      "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/COPYING.RUNTIME"
+    },
+    {
+      "category": "build_tools",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "GPL-3.0-or-later; tool stays local",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/usr/bin/m68k-elf-gcc",
+      "sha256": "722a5da665ce83068e3ff63a851a3831cf32c9e5552837210023d429365fa803",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/COPYING.RUNTIME"
+    },
+    {
+      "category": "build_tools",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "GNU Binutils GPL; tool stays local",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/usr/bin/m68k-elf-as",
+      "sha256": "1b741afa87b7cee886afac46d4a722a72a83797fffae1b698d07818982c83657",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/COPYING.RUNTIME"
+    },
+    {
+      "category": "build_tools",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "GNU Binutils GPL; tool stays local",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/usr/bin/m68k-elf-ld",
+      "sha256": "798d8e8ad4140c8927b30eccf498034b5ac87e2477654bc4624731f53dd0f56b",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/COPYING.RUNTIME"
+    },
+    {
+      "category": "build_tools",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "GNU Binutils GPL; tool stays local",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/usr/bin/m68k-elf-objcopy",
+      "sha256": "9b565b9722dd67deb2fc0e41d1afbb724f05baed3cd9c4a00152e8d7628ed623",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/COPYING.RUNTIME"
+    },
+    {
+      "category": "converters",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "MIT",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/sgdk/bin/sizebnd.jar",
+      "sha256": "2d6ca27224d2a3b22bbd37564927a983a70719f82d8536fabd91de1231fc67c8",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/license.txt"
+    },
+    {
+      "category": "fonts",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "MIT",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/sgdk/res/image/font_default.png",
+      "sha256": "622ea5a10717f2e60ed20a2c64a434447be6dcda697faa32caf41b95bd5452f7",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/license.txt"
+    },
+    {
+      "category": "media",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "MIT",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/sgdk/res/image/sgdk_logo.png",
+      "sha256": "dc4db8169fb9cbe13496eb23c9f4345cc08d96d83389fd2bea13f4da71bf4e41",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/license.txt"
+    },
+    {
+      "category": "resources",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "MIT",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/sgdk/res/sound/stop_xgm.bin",
+      "sha256": "ab3e100d400a8660a102cbe3d8c7b992dfb98510639de3c71f45bb34b005b9f6",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/license.txt"
+    },
+    {
+      "category": "code",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "MIT",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/sgdk/inc/config.h",
+      "sha256": "2600748c988059d8e6689a4f4e58233ad2aff164e3ead7585fc1f238b16d62fb",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://github.com/Stephane-D/SGDK/blob/180afae85ebd3b75ed4d5101937956eb4baa369b/license.txt"
+    },
+    {
+      "category": "build_tools",
+      "image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+      "license": "GPL-2.0-only WITH Classpath-exception-2.0; OpenJDK11.0.24 tool stays local",
+      "notice": "local-fixtures/phase5/tank-battle/NOTICES.txt",
+      "origin": "image",
+      "path": "/opt/jre-minimal/bin/java",
+      "sha256": "f289ea1e36550a8cac220bfbd68d2d1a33aa86396a586b2ffa7942d3af8bc41f",
+      "source_revision": "180afae85ebd3b75ed4d5101937956eb4baa369b",
+      "terms_source": "https://openjdk.org/legal/gplv2+ce.html"
+    }
+  ],
+  "reviewed_material_inventory": {
+    "algorithm": "SHA-256 per file",
+    "file_count": 10,
+    "inventory_sha256": "038ab13a6f39f042f1a30f363ffb398138a3a7e36789066d20632717674afca7"
+  },
+  "schema": "genewhip-phase5-material-terms-v1",
+  "source_archive_sha256": "0751013a99631e08b0309bfde06c8ff578abeda0113c3b208aaf81951a1e6753",
+  "source_revision": "eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+  "title_id": "tank-battle"
+}

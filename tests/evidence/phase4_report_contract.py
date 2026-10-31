@@ -9,8 +9,30 @@ import math
 import re
 import tempfile
 import unittest
+import subprocess
+import sys
 from unittest.mock import patch
 from pathlib import Path
+
+SYNTHETIC_EXPORT = "--export-validator-synthetic" in sys.argv
+PROCESS_DENIALS = []
+if SYNTHETIC_EXPORT:
+    sys.argv.remove("--export-validator-synthetic")
+
+    def deny_process(event, args):
+        if (event in {"subprocess.Popen", "os.system", "os.fork", "os.forkpty", "pty.spawn"}
+                or event.startswith(("os.exec", "os.spawn", "os.posix_spawn"))):
+            PROCESS_DENIALS.append(event)
+            raise PermissionError("export-validator-independent-process-denial")
+
+    # Install and independently exercise the original API before production imports.
+    sys.addaudithook(deny_process)
+    try:
+        subprocess.Popen(["/__no_usable_export_client__"])
+    except PermissionError:
+        pass
+    if PROCESS_DENIALS != ["subprocess.Popen"]:
+        raise AssertionError("export-validator-preimport-denial-not-observed")
 
 ROOT = Path(__file__).resolve().parents[2]
 TEST_REVISION = "a" * 40
@@ -49,7 +71,7 @@ def synthetic_host_report(mode):
                                "rom_sha256": hashlib.sha256((ROOT / session["rom"]).read_bytes()).hexdigest()}
     runs = []
     for fixture in ("independent-game-v2", "sounded-diagnostic"):
-        modes = ("live",) if live else ("software-dummy", "software-disk", "replace-drop", "missing-audio-negative")
+        modes = ("live", "replace-drop") if live else ("software-dummy", "software-disk", "replace-drop", "missing-audio-negative")
         for run_mode in modes:
             unavailable = run_mode == "missing-audio-negative"
             settings = {"os": "Darwin", "os_release": "test", "os_version": "test", "architecture": "arm64",
@@ -61,7 +83,7 @@ def synthetic_host_report(mode):
                         "audio_queue_policy": {"target_source_frames": 2403, "cap_source_frames": 9612},
                         "renderer_readback": {"status": "unavailable", "reason": "no renderer API"},
                         "physical_scanout": "unobserved"}
-            if run_mode == "replace-drop":
+            if run_mode == "replace-drop" and not live:
                 settings["audio_backend_requested"] = "disk"
             stats = {"stats_version": 2, "present_errors": 0, "present_calls": 8,
                      "present_successes": 8, "presentation_error": 0,
@@ -267,6 +289,122 @@ def synthetic_report():
 
 
 class ReportContract(unittest.TestCase):
+    def test_producer_export_composition_accepts_actual_rosters(self):
+        """Exercise the real roster producer and the public exporter without launching clients."""
+        from types import SimpleNamespace
+        producer_spec = importlib.util.spec_from_file_location(
+            "phase4_session_producer", ROOT / "tests/desktop/phase4_sessions.py")
+        producer = importlib.util.module_from_spec(producer_spec)
+        producer_spec.loader.exec_module(producer)
+        with tempfile.TemporaryDirectory(prefix="gw-host-producer-export-") as temporary:
+            base = Path(temporary)
+            build = base / "build"
+            (build / "evidence").mkdir(parents=True)
+            desktop = build / "tools/desktop/genewhip-desktop"
+            headless = build / "tools/session/gw_headless"
+            desktop.parent.mkdir(parents=True)
+            headless.parent.mkdir(parents=True)
+            desktop.write_bytes(b"synthetic desktop executable")
+            headless.write_bytes(b"synthetic headless executable")
+            cache = build / "CMakeCache.txt"
+            cache.write_text("CMAKE_BUILD_TYPE:STRING=Release\n")
+            identities = {"build_configuration_sha256": module.sha(cache),
+                          "desktop_build_sha256": module.sha(desktop),
+                          "headless_build_sha256": module.sha(headless)}
+            expected = {mode: synthetic_host_report(mode) for mode in ("software", "live")}
+            for report in expected.values():
+                report.update(identities)
+                for row in report["runs"]:
+                    row.update(identities)
+
+            def producer_rows(mode):
+                return {row["id"]: row for row in expected[mode]["runs"]}
+
+            with patch.object(producer, "ROOT", ROOT), \
+                 patch.object(producer, "EXECUTION_SCOPE", None), \
+                 patch.object(producer, "run_controls", side_effect=lambda name, *_args:
+                              producer_rows("live" if name.endswith("-live") else "software")[name]), \
+                 patch.object(producer, "run_missing_audio", side_effect=lambda name, *_args:
+                              producer_rows("software")[name + "-missing-audio-negative"]), \
+                 patch.object(producer, "run_replacement", side_effect=lambda name, *_args:
+                              producer_rows("live" if _args and _args[-1] == "live" else "software")
+                              [name + "-replace-drop"]), \
+                 patch.object(producer.subprocess, "run", return_value=subprocess.CompletedProcess(
+                     ["git", "rev-parse", "HEAD"], 0, TEST_REVISION + "\n", "")), \
+                 patch.dict("os.environ", {"GENEWHIP_LIVE_DISPLAY": "1", "GENEWHIP_LIVE_AUDIO": "1"}):
+                for mode, filename in (("software", "phase4-host-sessions.json"),
+                                       ("live", "phase4-host-live.json")):
+                    result = producer.run_all(SimpleNamespace(mode=mode, headless=headless,
+                        desktop=desktop, build=build, out=build / "evidence" / filename))
+                    self.assertEqual(result, 0)
+                    generated = json.loads((build / "evidence" / filename).read_text())
+                    self.assertEqual(generated["denominator"], len(expected[mode]["runs"]))
+                    expected[mode] = generated
+
+            hygiene = base / "scripts/ci/public_hygiene.py"
+            hygiene.parent.mkdir(parents=True)
+            hygiene.write_bytes((ROOT / "scripts/ci/public_hygiene.py").read_bytes())
+            with patch.object(module, "public_source_identity", return_value={
+                    "source_revision": TEST_REVISION, "source_tree_id": "f" * 40}):
+                module.host_export(build, build / "host-export", "123456", 2,
+                                   TEST_REVISION, root=base)
+
+    def test_host_export_replacement_contract_through_real_consumer(self):
+        identity = {"source_revision": TEST_REVISION, "source_tree_id": "f" * 40}
+        mutations = ("valid", "missing", "extra", "duplicate", "wrong-video", "wrong-audio",
+                     "software-video", "software-audio", "display", "controls", "primary", "replacement",
+                     "stale-build", "stale-control", "pcm", "skip")
+        reasons = {"missing": "roster", "extra": "roster", "duplicate": "roster",
+                   "wrong-video": "setup", "wrong-audio": "setup", "software-video": "setup",
+                   "software-audio": "setup", "display": "capability", "controls": "controls",
+                   "primary": "source-identity", "replacement": "source-identity",
+                   "stale-build": "stale-identity", "stale-control": "control-identity",
+                   "pcm": "deterministic-identity", "skip": "outcome"}
+        for mutation in mutations:
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary)
+                build, reports = self._host_export_fixture(base)
+                self.assertEqual((reports["software"]["denominator"], reports["live"]["denominator"]), (8, 4))
+                self.assertFalse(list(base.rglob("*.bin")))
+                self.assertFalse(any(path.stat().st_mode & 0o111 for path in build.rglob("*") if path.is_file()))
+                live = reports["live"]
+                row = next(r for r in live["runs"] if r["id"].endswith("replace-drop"))
+                if mutation == "missing": live["runs"].remove(row)
+                elif mutation == "extra": live["runs"].append(dict(row, id="unexpected-replace-drop"))
+                elif mutation == "duplicate": live["runs"].append(copy.deepcopy(row))
+                elif mutation == "wrong-video": row["host_settings"]["video_driver"] = "dummy"
+                elif mutation == "wrong-audio": row["host_settings"]["audio_backend_requested"] = "disk"
+                elif mutation.startswith("software-"):
+                    row = next(r for r in reports["software"]["runs"] if r["id"].endswith("replace-drop"))
+                    row["host_settings"]["video_driver" if mutation.endswith("video") else "audio_backend_requested"] = "cocoa" if mutation.endswith("video") else "coreaudio"
+                elif mutation == "display": row["host_settings"]["display_identity"] = None
+                elif mutation == "controls": row["controls_exercised"] = ["drop"]
+                elif mutation in ("primary", "replacement"): row[mutation]["rom_sha256"] = "0" * 64
+                elif mutation == "stale-build": row["desktop_build_sha256"] = "0" * 64
+                elif mutation == "stale-control": row["control_sha256"] = "0" * 64
+                elif mutation == "pcm": row["headless_core_pcm_sha256"] = "0" * 64
+                elif mutation == "skip":
+                    index = live["runs"].index(row)
+                    live["runs"][index] = {"id": row["id"], "outcome": "skipped", "reason": "CoreAudio unavailable"}
+                live["denominator"] = len(live["runs"])
+                live["counts"] = {name: sum(r["outcome"] == name for r in live["runs"]) for name in ("pass", "skipped", "fail")}
+                for mode, filename in (("software", "sessions"), ("live", "live")):
+                    (build / f"evidence/phase4-host-{filename}.json").write_text(json.dumps(reports[mode]))
+                hygiene = base / "scripts/ci/public_hygiene.py"
+                hygiene.parent.mkdir(parents=True)
+                hygiene.write_bytes((ROOT / "scripts/ci/public_hygiene.py").read_bytes())
+                output = build / "export"
+                with patch.object(module, "public_source_identity", return_value=identity) as seam:
+                    if mutation == "valid":
+                        module.host_export(build, output, "123456", 2, TEST_REVISION, root=base)
+                        self.assertEqual(len(list(output.iterdir())), 3)
+                        self.assertEqual(json.loads((output / "phase4-host-live.json").read_text())["denominator"], 4)
+                    else:
+                        with self.assertRaisesRegex(ValueError, "desktop-host-" + reasons[mutation]):
+                            module.host_export(build, output, "123456", 2, TEST_REVISION, root=base)
+                        self.assertFalse(output.exists())
+                    seam.assert_called_once_with(base)
+
     def _host_export_fixture(self, base):
         build = base / "desktop-build"
         (build / "evidence").mkdir(parents=True)
@@ -451,6 +589,8 @@ class ReportContract(unittest.TestCase):
         self.assertIn("path: build/safety-export/", safety_job)
         self.assertNotIn("build/ci/", safety_job)
         gate = (ROOT / "scripts/ci/required-gate.sh").read_text()
+        default_gate = gate.split('if [[ "${1:-}" == "--phase6-local" ]]; then', 1)[1]
+        default_gate = default_gate.split("\nfi\n", 1)[1]
         self.assertIn("ctest-junit.raw.xml", gate)
         self.assertIn("safety-sanitize-junit", gate)
         self.assertTrue(gate.startswith("#!/usr/bin/env bash\nset -euo pipefail"),
@@ -458,7 +598,7 @@ class ReportContract(unittest.TestCase):
         self.assertLess(gate.index("ctest --test-dir \"build/ci/$lane\""),
                         gate.index("safety-sanitize-junit"))
         self.assertLess(gate.index("safety-sanitize-junit"), gate.index("check_ctest_skips.py"))
-        self.assertNotIn("--output-on-failure", gate)
+        self.assertNotIn("--output-on-failure", default_gate)
         self.assertNotIn("ctest-junit.raw.xml", safety_job)
         for path in ("build/ci/native/CMakeCache.txt", "build/ci/sanitizer/CMakeCache.txt",
                      "build/ci/production/CMakeCache.txt"):
@@ -1110,4 +1250,24 @@ class ReportContract(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    if SYNTHETIC_EXPORT:
+        names = [name for name in unittest.defaultTestLoader.getTestCaseNames(ReportContract)
+                 if name.startswith(("test_host_export", "test_producer_export", "test_live_display",
+                                     "test_desktop_", "test_ci_desktop"))]
+        result = unittest.TextTestRunner(verbosity=2).run(unittest.TestSuite(ReportContract(name) for name in names))
+        production_attempts = len(PROCESS_DENIALS) - 1
+        production_denied = len(PROCESS_DENIALS[1:])
+        # Exercise restored original API again: caught denials stay observable.
+        try:
+            subprocess.Popen(["/__no_usable_export_client__"])
+        except PermissionError:
+            pass
+        sticky = PROCESS_DENIALS == ["subprocess.Popen", "subprocess.Popen"]
+        print(json.dumps({"preimport_denial": PROCESS_DENIALS[:1], "sticky_denial": sticky,
+                          "production_process_attempts": production_attempts,
+                          "production_process_denied": production_denied,
+                          "production_process_starts": production_attempts - production_denied,
+                          "tests_run": result.testsRun}, sort_keys=True))
+        sys.exit(0 if result.wasSuccessful() and production_attempts == 0 and sticky else 1)
+    else:
+        unittest.main(verbosity=2)

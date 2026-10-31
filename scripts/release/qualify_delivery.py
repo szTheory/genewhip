@@ -24,6 +24,10 @@ from scripts.release import promote
 REQUIRED_JOBS = {"required-ci", "safety", "gameplay", "desktop", "package", "performance",
                  "attestation"}
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+HEX_RE = re.compile(r"^[0-9a-f]{64}$")
+V02_REQUIREMENTS = ("EVID-03", "COMP-02", "PERF-03", "REL-04", "DOC-02")
+V02_PACKET_SCHEMA = "genewhip.v02-publisher-packet.v1"
+V02_PREPUBLICATION_SCOPE = "publisher-readiness"
 
 
 class DeliveryError(RuntimeError):
@@ -102,6 +106,176 @@ def validate_main_run(run: Any, expected_sha: str) -> list[str]:
     return []
 
 
+def validate_v02_qualification_run(run: Any, expected_sha: str) -> list[str]:
+    """Require the exact successful qualification close and its trusted source run."""
+    if not isinstance(run, dict) or run.get("event") != "push":
+        return ["v02-qualification-event-invalid"]
+    if run.get("headSha") != expected_sha:
+        return ["v02-qualification-source-mismatch"]
+    if run.get("status") != "completed" or run.get("conclusion") != "success":
+        return ["v02-qualification-run-not-success"]
+    jobs = run.get("jobs")
+    if not isinstance(jobs, list):
+        return ["v02-qualification-jobs-unavailable"]
+    observed: dict[str, list[dict[str, Any]]] = {}
+    for job in jobs:
+        if isinstance(job, dict) and isinstance(job.get("name"), str):
+            observed.setdefault(job["name"], []).append(job)
+    required = {"required-ci", "attestation", "v02-release-qualification"}
+    if not required <= observed.keys() or any(len(observed[name]) != 1 for name in required):
+        return ["v02-qualification-job-missing-or-ambiguous"]
+    if any(observed[name][0].get("status") != "completed"
+           or observed[name][0].get("conclusion") != "success" for name in required):
+        return ["v02-qualification-job-not-success"]
+    return []
+
+
+def validate_v02_publisher_packet(packet: Any, repository: str | None = None) -> list[str]:
+    """Validate untrusted packet shape; this alone never authenticates a publisher."""
+    if not isinstance(packet, dict) or packet.get("schema") != V02_PACKET_SCHEMA:
+        return ["v02-publisher-packet-schema-invalid"]
+    repo = packet.get("repository")
+    if not isinstance(repo, str) or not promote.REPO_RE.fullmatch(repo) or ".." in repo.split("/"):
+        return ["v02-publisher-packet-repository-invalid"]
+    if repository is not None and repository != repo:
+        return ["v02-publisher-packet-repository-mismatch"]
+    if packet.get("release_tag") != "v0.2.0" or not SHA_RE.fullmatch(str(packet.get("source_sha", ""))):
+        return ["v02-publisher-packet-release-identity-invalid"]
+    preflight = packet.get("preflight")
+    if validate_preflight(preflight, repo):
+        return ["v02-publisher-packet-preflight-invalid"]
+    qualification = packet.get("qualification")
+    publisher = packet.get("publisher")
+    if not isinstance(qualification, dict) or not isinstance(publisher, dict):
+        return ["v02-publisher-packet-run-identity-invalid"]
+    if (not str(qualification.get("run_id", "")).isdigit()
+            or type(qualification.get("run_attempt")) is not int or qualification["run_attempt"] < 1
+            or qualification.get("source_sha") != packet["source_sha"]
+            or qualification.get("workflow_path") != ".github/workflows/ci.yml"
+            or qualification.get("ref") != "refs/heads/main" or qualification.get("event") != "push"):
+        return ["v02-publisher-packet-qualification-identity-invalid"]
+    if (not str(publisher.get("run_id", "")).isdigit()
+            or type(publisher.get("run_attempt")) is not int or publisher["run_attempt"] < 1
+            or not SHA_RE.fullmatch(str(publisher.get("source_sha", "")))
+            or publisher.get("workflow_path") != ".github/workflows/release.yml"
+            or publisher.get("ref") != "refs/heads/main"
+            or publisher.get("event") != "workflow_dispatch"):
+        return ["v02-publisher-packet-publisher-identity-invalid"]
+    if not isinstance(packet.get("publisher_correlation_id"), str) or not packet["publisher_correlation_id"]:
+        return ["v02-publisher-packet-correlation-id-invalid"]
+    if not HEX_RE.fullmatch(str(packet.get("inventory_sha256", ""))):
+        return ["v02-publisher-packet-inventory-digest-invalid"]
+    if ("requirement_outcomes" in packet or "final_qualified" in packet
+            or "final_outcomes" in packet):
+        return ["v02-publisher-packet-final-claims-forbidden"]
+    digests = packet.get("asset_digests")
+    if not isinstance(digests, dict):
+        return ["v02-publisher-packet-asset-digests-invalid"]
+    expected_names = {
+        name for prefix in ("genewhip-0.2.0-sdk-diagnostic-darwin-arm64",
+                            "genewhip-0.2.0-playable-preview-macos-arm64")
+        for name in (f"{prefix}-{packet['source_sha'][:12]}.tar.gz",
+                     f"{prefix}-{packet['source_sha'][:12]}.tar.gz.sha256",
+                     f"{prefix}-{packet['source_sha'][:12]}.tar.gz.qualification.json")
+    } | {"inventory.json", "SHA256SUMS"}
+    if set(digests) != expected_names or any(not HEX_RE.fullmatch(str(value)) for value in digests.values()):
+        return ["v02-publisher-packet-asset-roster-invalid"]
+    if digests.get("inventory.json") != packet["inventory_sha256"]:
+        return ["v02-publisher-packet-inventory-digest-mismatch"]
+    claims = packet.get("prepublication_outcomes")
+    if (packet.get("prepublication_scope") != V02_PREPUBLICATION_SCOPE
+            or not isinstance(claims, dict) or set(claims) != set(V02_REQUIREMENTS)
+            or any(claims.get(name) != "pass" for name in V02_REQUIREMENTS)):
+        return ["v02-publisher-packet-prepublication-readiness-incomplete"]
+    return []
+
+
+def validate_v02_authenticated_packet(packet: Any, repository: str,
+                                      qualification_run: Any, qualification_identity: Any,
+                                      publisher_run: Any, publisher_identity: Any) -> list[str]:
+    """Bind packet claims to independently fetched GitHub run/attempt/workflow facts."""
+    problems = validate_v02_publisher_packet(packet, repository)
+    if problems:
+        return problems
+    qualification = packet["qualification"]
+    publisher = packet["publisher"]
+    problems = validate_v02_qualification_run(qualification_run, packet["source_sha"])
+    if problems:
+        return problems
+    if (str(qualification_run.get("databaseId")) != str(qualification["run_id"])
+            or qualification_run.get("attempt") != qualification["run_attempt"]):
+        return ["v02-qualification-run-attempt-mismatch"]
+    problems = validate_workflow_identity(qualification_identity, qualification["workflow_path"],
+                                          packet["source_sha"], "push")
+    if problems:
+        return problems
+    if str(qualification_identity.get("id")) != str(qualification["run_id"]) \
+            or qualification_identity.get("run_attempt") != qualification["run_attempt"]:
+        return ["v02-qualification-workflow-attempt-mismatch"]
+    problems = validate_publisher_run(
+        publisher_run, publisher["source_sha"], qualification["run_id"],
+        qualification["run_attempt"], packet["publisher_correlation_id"],
+        qualified_source_sha=packet["source_sha"])
+    if problems:
+        return problems
+    if (str(publisher_run.get("databaseId")) != str(publisher["run_id"])
+            or publisher_run.get("attempt") != publisher["run_attempt"]):
+        return ["v02-publisher-run-attempt-mismatch"]
+    problems = validate_workflow_identity(publisher_identity, publisher["workflow_path"],
+                                          publisher["source_sha"], "workflow_dispatch")
+    if problems:
+        return problems
+    if (str(publisher_identity.get("id")) != str(publisher["run_id"])
+            or publisher_identity.get("run_attempt") != publisher["run_attempt"]):
+        return ["v02-publisher-workflow-attempt-mismatch"]
+    return validate_publisher_branch_identity(publisher_identity, publisher["source_sha"])
+
+
+def make_v02_adoption_receipt(packet: dict[str, Any], release_info: dict[str, Any],
+                              docs_receipt: dict[str, Any]) -> dict[str, Any]:
+    """Create a directional receipt outside the immutable release subjects."""
+    expected_commands = {"play", "build", "embed", "offline_source_core_build", "errors"}
+    packages = docs_receipt.get("packages")
+    expected_archives = {
+        "sdk": f"genewhip-0.2.0-sdk-diagnostic-darwin-arm64-{packet.get('source_sha', '')[:12]}.tar.gz",
+        "desktop": f"genewhip-0.2.0-playable-preview-macos-arm64-{packet.get('source_sha', '')[:12]}.tar.gz",
+    }
+    if (docs_receipt.get("outcome") != "pass" or docs_receipt.get("mode") != "public-downloaded"
+            or docs_receipt.get("local_source_identity") != packet.get("source_sha")
+            or not isinstance(docs_receipt.get("commands"), dict)
+            or set(docs_receipt["commands"]) != expected_commands
+            or any(value != "pass" for value in docs_receipt["commands"].values())
+            or not isinstance(packages, dict) or set(packages) != {"sdk", "desktop"}
+            or any(item.get("source_revision") != packet.get("source_sha")
+                   or item.get("source_state") != "clean" for item in packages.values())
+            or any(packages[role].get("archive") != archive
+                   or packages[role].get("archive_sha256") != packet.get("asset_digests", {}).get(archive)
+                   for role, archive in expected_archives.items())
+            or release_info.get("tag") != packet.get("release_tag")):
+        raise DeliveryError("downloaded-adoption-not-qualified")
+    processes = docs_receipt.get("processes")
+    if (not isinstance(processes, list) or not processes
+            or any(not isinstance(item, dict) or item.get("process_group_cleanup") != "confirmed"
+                   for item in processes)):
+        raise DeliveryError("downloaded-adoption-cleanup-unconfirmed")
+    assets = release_info.get("assets")
+    if not isinstance(assets, list):
+        raise DeliveryError("downloaded-adoption-assets-missing")
+    digests = {row.get("name"): row.get("sha256") for row in assets if isinstance(row, dict)}
+    if digests != packet.get("asset_digests"):
+        raise DeliveryError("downloaded-adoption-subject-digest-mismatch")
+    return {"schema": "genewhip-v02-downloaded-adoption-v1", "version": "0.2.0",
+            "outcome": "pass", "final_qualified": True,
+            "repository": packet["repository"], "tag": packet["release_tag"],
+            "source_sha": packet["source_sha"], "inventory_sha256": packet["inventory_sha256"],
+            "qualification": packet["qualification"], "publisher": packet["publisher"],
+            "publisher_correlation_id": packet["publisher_correlation_id"],
+            "asset_digests": digests,
+            "requirement_outcomes": {name: "pass" for name in V02_REQUIREMENTS},
+            "adoption": {"outcome": "pass", "docs_receipt_sha256": hashlib.sha256(
+                json.dumps(docs_receipt, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}}
+
+
 def validate_workflow_identity(run: Any, expected_path: str, expected_sha: str,
                                expected_event: str) -> list[str]:
     if not isinstance(run, dict) or run.get("path") != expected_path:
@@ -148,7 +322,8 @@ def validate_publisher_branch_identity(run: Any, expected_sha: str) -> list[str]
 
 
 def validate_release(release: Any, repository: str, tag: str,
-                     directory: pathlib.Path, expected_sha: str) -> dict[str, Any]:
+                     directory: pathlib.Path, expected_sha: str,
+                     version: str = "0.1.0") -> dict[str, Any]:
     if not isinstance(release, dict) or release.get("tag_name") != tag \
             or release.get("draft") is not False or release.get("prerelease") is not True:
         raise DeliveryError("release-visibility-or-tag-invalid")
@@ -161,6 +336,10 @@ def validate_release(release: Any, repository: str, tag: str,
         raise DeliveryError("release-inventory-missing-or-invalid") from None
     if inventory.get("source_revision") != expected_sha:
         raise DeliveryError("release-source-mismatch")
+    expected_schema = (promote.V02_INVENTORY_SCHEMA if version == "0.2.0"
+                       else "genewhip.release-inventory.v1")
+    if inventory.get("version") != version or inventory.get("schema") != expected_schema:
+        raise DeliveryError("release-inventory-version-mismatch")
     digests, problems = promote.validate_release_inventory(directory, inventory)
     if problems:
         raise DeliveryError(problems[0])
@@ -194,7 +373,8 @@ def validate_release(release: Any, repository: str, tag: str,
         raise DeliveryError("release-archive-privacy-findings")
     urls = {name: f"https://github.com/{repository}/releases/download/{tag}/{name}"
             for name in sorted(digests)}
-    return {"tag": tag, "source_sha": expected_sha, "release_url": release.get("html_url"),
+    return {"tag": tag, "version": version, "source_sha": expected_sha,
+            "release_url": release.get("html_url"),
             "assets": [{"name": name, "sha256": digests[name], "url": urls[name]}
                        for name in sorted(digests)], "inventory": inventory}
 
@@ -216,9 +396,9 @@ def self_test() -> dict[str, Any]:
 def _safe_path(value: pathlib.Path) -> pathlib.Path:
     path = value if value.is_absolute() else ROOT / value
     path = path.resolve()
-    allowed = (ROOT / "build" / "phase4").resolve()
-    if allowed not in path.parents:
-        raise DeliveryError("output-path-outside-phase4-build")
+    allowed = ((ROOT / "build" / "phase4").resolve(), (ROOT / "build" / "v02").resolve())
+    if not any(root == path or root in path.parents for root in allowed):
+        raise DeliveryError("output-path-outside-build")
     return path
 
 
@@ -259,6 +439,83 @@ def _gh_json(args: list[str], timeout: int = 60) -> Any:
         return json.loads(_gh(args, timeout))
     except json.JSONDecodeError:
         raise DeliveryError("github-response-invalid") from None
+
+
+def authenticate_v02_publisher_packet(packet: Any, repository: str | None = None) -> dict[str, Any]:
+    """Reopen every publisher/qualification identity through the live GitHub API."""
+    problems = validate_v02_publisher_packet(packet, repository)
+    if problems:
+        raise DeliveryError(problems[0])
+    repository = packet["repository"]
+    qualification, publisher = packet["qualification"], packet["publisher"]
+    qid, qattempt = str(qualification["run_id"]), qualification["run_attempt"]
+    pid, pattempt = str(publisher["run_id"]), publisher["run_attempt"]
+    qualification_run = _gh_json(["run", "view", qid, "--repo", repository,
+                                  "--attempt", str(qattempt), "--json",
+                                  "attempt,event,headSha,status,conclusion,jobs,workflowName,databaseId"])
+    qualification_identity = _gh_json(["api", f"repos/{repository}/actions/runs/{qid}/attempts/{qattempt}"])
+    publisher_run = _gh_json(["run", "view", pid, "--repo", repository,
+                              "--attempt", str(pattempt), "--json",
+                              "attempt,event,headSha,status,conclusion,jobs,workflowName,databaseId,displayTitle"])
+    publisher_identity = _gh_json(["api", f"repos/{repository}/actions/runs/{pid}/attempts/{pattempt}"])
+    problems = validate_v02_authenticated_packet(packet, repository, qualification_run,
+                                                  qualification_identity, publisher_run,
+                                                  publisher_identity)
+    if problems:
+        raise DeliveryError(problems[0])
+    preflight = packet["preflight"]
+    identity = preflight.get("expected_identity", {})
+    head, base = identity.get("head"), identity.get("base")
+    if not SHA_RE.fullmatch(str(head or "")) or not SHA_RE.fullmatch(str(base or "")):
+        raise DeliveryError("v02-publisher-packet-preflight-identity-invalid")
+    _inspect_live_repository(repository, head, base)
+    release = _gh_json(["api", f"repos/{repository}/releases/tags/{packet['release_tag']}"])
+    ref = _gh_json(["api", f"repos/{repository}/git/ref/tags/{packet['release_tag']}"])
+    tag_object = ref.get("object") if isinstance(ref, dict) else None
+    if not isinstance(tag_object, dict) or not isinstance(tag_object.get("sha"), str):
+        raise DeliveryError("release-tag-reference-invalid")
+    tag_sha = tag_object["sha"]
+    if tag_object.get("type") == "tag":
+        annotated = _gh_json(["api", f"repos/{repository}/git/tags/{tag_sha}"])
+        target = annotated.get("object") if isinstance(annotated, dict) else None
+        if not isinstance(target, dict) or target.get("type") != "commit":
+            raise DeliveryError("release-tag-target-invalid")
+        tag_sha = target.get("sha")
+    if tag_sha != packet["source_sha"]:
+        raise DeliveryError("release-tag-source-mismatch")
+    return {"qualification_run": qualification_run, "qualification_identity": qualification_identity,
+            "publisher_run": publisher_run, "publisher_identity": publisher_identity,
+            "release": release, "tag_sha": tag_sha}
+
+
+def verify_v02_subject_attestations(directory: pathlib.Path, packet: dict[str, Any]) -> None:
+    """Verify archive and inventory provenance before parsing or executing package members."""
+    directory = pathlib.Path(directory)
+    for name, expected_digest in packet["asset_digests"].items():
+        path = directory / name
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            raise DeliveryError("release-asset-missing-or-invalid") from None
+        if path.is_symlink() or not path.is_file() or info.st_size > promote.MAX_RELEASE_ASSET_BYTES:
+            raise DeliveryError("release-asset-missing-or-invalid")
+        digest = hashlib.sha256()
+        with path.open("rb") as asset:
+            for chunk in iter(lambda: asset.read(1024 * 1024), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != expected_digest:
+            raise DeliveryError("release-asset-digest-mismatch")
+    if hashlib.sha256((directory / "inventory.json").read_bytes()).hexdigest() != packet["inventory_sha256"]:
+        raise DeliveryError("release-inventory-digest-mismatch")
+    qualification = packet["qualification"]
+    subject_names = [name for name in packet["asset_digests"] if name.endswith(".tar.gz")]
+    subject_names.append("inventory.json")
+    for name in subject_names:
+        try:
+            promote.verify_attestation(directory / name, packet["repository"], packet["source_sha"],
+                                       str(qualification["run_id"]), qualification["run_attempt"])
+        except promote.PromotionError as error:
+            raise DeliveryError(str(error)) from None
 
 
 def _read_json(path: pathlib.Path) -> Any:
@@ -399,7 +656,8 @@ def run_delivery(args: argparse.Namespace) -> dict[str, Any]:
                          "--json", "attempt,event,headSha,status,conclusion,jobs,workflowName,databaseId"])
 
     run = _wait_for(main_run, args.timeout_seconds)
-    problems = validate_main_run(run, source_sha)
+    problems = (validate_v02_qualification_run(run, source_sha) if args.require_v02_qualification
+                else validate_main_run(run, source_sha))
     if problems:
         raise DeliveryError(problems[0])
     run_id, attempt = str(run.get("databaseId")), int(run.get("attempt", 0))
@@ -418,7 +676,8 @@ def run_delivery(args: argparse.Namespace) -> dict[str, Any]:
     correlation_id = secrets.token_hex(16)
     _gh(["workflow", "run", "release.yml", "--repo", repository, "--ref", "main",
          "-f", f"source_sha={source_sha}", "-f", f"run_id={run_id}",
-         "-f", f"run_attempt={attempt}", "-f", f"correlation_id={correlation_id}"])
+         "-f", f"run_attempt={attempt}", "-f", f"correlation_id={correlation_id}",
+         "-f", f"release_version={args.version}"])
 
     def publisher_run():
         rows = _gh_json(["run", "list", "--repo", repository, "--workflow", "release.yml", "--branch",
@@ -469,6 +728,8 @@ def run_delivery(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def verify_release(args: argparse.Namespace) -> dict[str, Any]:
+    if args.download_only:
+        return verify_v02_download(args)
     repository = args.repository
     _check_preflight(args.preflight, repository)
     evidence = _read_json(args.evidence)
@@ -524,7 +785,8 @@ def verify_release(args: argparse.Namespace) -> dict[str, Any]:
     if tag_ref.get("object", {}).get("sha") != source_sha:
         raise DeliveryError("release-tag-source-mismatch")
     _gh(["release", "download", args.release_tag, "--repo", repository, "--dir", str(directory)])
-    release_info = validate_release(release, repository, args.release_tag, directory, source_sha)
+    release_info = validate_release(release, repository, args.release_tag, directory, source_sha,
+                                    args.version)
     # Execute only after the archive inventory, SHA256SUMS, receipts, notices, and privacy scan pass.
     result = subprocess.run([sys.executable, str(ROOT / "tests/package/docs_commands.py"),
                              "--local-artifacts", str(directory),
@@ -540,13 +802,114 @@ def verify_release(args: argparse.Namespace) -> dict[str, Any]:
     return evidence
 
 
+def resolve_v02_download_context(args: argparse.Namespace) -> dict[str, Any]:
+    """Resolve optional repository/preflight from a valid packet before CLI guard bypass."""
+    if args.version != "0.2.0" or args.release_tag != "v0.2.0":
+        raise DeliveryError("download-only-requires-v0.2.0")
+    packet = _read_json(args.evidence)
+    problems = validate_v02_publisher_packet(packet, args.repository)
+    if problems:
+        raise DeliveryError(problems[0])
+    if args.source_sha and args.source_sha != packet["source_sha"]:
+        raise DeliveryError("v02-publisher-packet-source-mismatch")
+    if args.preflight:
+        supplied = _read_json(args.preflight)
+        if supplied != packet["preflight"]:
+            raise DeliveryError("v02-publisher-packet-preflight-mismatch")
+    if pathlib.Path(args.evidence_out).resolve() == pathlib.Path(args.evidence).resolve():
+        raise DeliveryError("download-adoption-output-would-overwrite-publisher-packet")
+    facts = authenticate_v02_publisher_packet(packet, packet["repository"])
+    args.repository = packet["repository"]
+    args.packet = packet
+    args.authenticated_facts = facts
+    return packet
+
+
+def make_v02_adoption_failure(packet: dict[str, Any], reason: str, *, published: bool) -> dict[str, Any]:
+    """Record authenticated-path failure without converting readiness into final claims."""
+    return {"schema": "genewhip-v02-downloaded-adoption-v1", "version": "0.2.0",
+            "outcome": "failed", "final_qualified": False,
+            "status": "published-but-failed" if published else "not-qualified",
+            "blockers": [reason], "repository": packet["repository"],
+            "tag": packet["release_tag"], "source_sha": packet["source_sha"],
+            "prepublication_scope": V02_PREPUBLICATION_SCOPE,
+            "prepublication_outcomes": packet["prepublication_outcomes"],
+            "requirement_outcomes": {name: "not-qualified" for name in V02_REQUIREMENTS}}
+
+
+def verify_v02_download(args: argparse.Namespace) -> dict[str, Any]:
+    packet = args.packet
+    facts = getattr(args, "authenticated_facts", None)
+    authenticated = facts is not None
+    directory = None
+    published = False
+    try:
+        if facts is None:
+            facts = authenticate_v02_publisher_packet(packet, args.repository)
+            authenticated = True
+        published = isinstance(facts.get("release"), dict) and facts["release"].get("draft") is False
+        directory = _safe_path(args.download_dir)
+        evidence_out = _safe_path(args.evidence_out)
+        if evidence_out == directory or directory in evidence_out.parents:
+            raise DeliveryError("download-adoption-output-inside-immutable-subjects")
+        if directory.exists():
+            if directory.is_symlink() or any(directory.iterdir()):
+                raise DeliveryError("download-directory-not-empty")
+        else:
+            directory.mkdir(parents=True)
+        _gh(["release", "download", packet["release_tag"], "--repo", packet["repository"],
+             "--dir", str(directory)])
+        # Hash and verify signed provenance before archive extraction or bundled execution.
+        verify_v02_subject_attestations(directory, packet)
+        release_info = validate_release(facts["release"], packet["repository"],
+                                        packet["release_tag"], directory, packet["source_sha"], "0.2.0")
+        if (hashlib.sha256((directory / "inventory.json").read_bytes()).hexdigest()
+                != packet["inventory_sha256"]):
+            raise DeliveryError("release-inventory-digest-mismatch")
+        observed = {row["name"]: row["sha256"] for row in release_info["assets"]}
+        if observed != packet["asset_digests"]:
+            raise DeliveryError("release-asset-digest-mismatch")
+        docs_receipt_path = pathlib.Path(args.evidence_out).with_name(
+            pathlib.Path(args.evidence_out).stem + "-docs.json")
+        docs_path = _safe_path(docs_receipt_path)
+        if directory == docs_path or directory in docs_path.parents:
+            raise DeliveryError("downloaded-adoption-receipt-inside-immutable-subjects")
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "tests/package/docs_commands.py"),
+             "--public-download", "--publisher-packet", str(pathlib.Path(args.evidence)),
+             "--local-artifacts", str(directory), "--version", "0.2.0", "--offline",
+             "--out", str(docs_path)], cwd=ROOT, text=True, capture_output=True,
+            timeout=14400, check=False)
+        if result.returncode:
+            raise DeliveryError("downloaded-package-adoption-smoke-failed")
+        try:
+            docs_receipt = json.loads(result.stdout.strip().splitlines()[-1])
+        except (json.JSONDecodeError, IndexError):
+            raise DeliveryError("downloaded-package-adoption-receipt-invalid") from None
+        adoption = make_v02_adoption_receipt(packet, release_info, docs_receipt)
+        adoption["docs_receipt"] = str(docs_path.relative_to(ROOT))
+        _write_json(args.evidence_out, adoption)
+        return adoption
+    except (DeliveryError, OSError, ValueError, TypeError, KeyError,
+            subprocess.SubprocessError, promote.PromotionError) as error:
+        reason = str(error) if isinstance(error, DeliveryError) else type(error).__name__
+        if authenticated and validate_v02_publisher_packet(packet, args.repository) == []:
+            _write_json(args.evidence_out,
+                        make_v02_adoption_failure(packet, reason, published=published))
+        raise DeliveryError(reason) from None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    mode = parser.add_mutually_exclusive_group(required=True)
+    mode = parser.add_mutually_exclusive_group(required=False)
     mode.add_argument("--self-test", action="store_true")
     mode.add_argument("--prepare-merge", action="store_true")
     mode.add_argument("--run", action="store_true")
     mode.add_argument("--verify", action="store_true")
+    parser.add_argument("--contracts-only", action="store_true")
+    parser.add_argument("--download-only", action="store_true")
+    parser.add_argument("--require-v02-qualification", action="store_true")
+    parser.add_argument("--version", choices=("0.1.0", "0.2.0"), default="0.1.0")
     parser.add_argument("--repository")
     parser.add_argument("--preflight", type=pathlib.Path)
     parser.add_argument("--pull-request", type=int)
@@ -558,17 +921,41 @@ def main() -> int:
     parser.add_argument("--evidence", type=pathlib.Path,
                         default=pathlib.Path("build/phase4/delivery-evidence.json"))
     parser.add_argument("--source-sha")
-    parser.add_argument("--release-tag", default="v0.1.0")
+    parser.add_argument("--release-tag")
     parser.add_argument("--download-dir", type=pathlib.Path,
                         default=pathlib.Path("build/phase4/downloaded-release"))
     args = parser.parse_args()
     try:
+        if not (args.self_test or args.prepare_merge or args.run or args.verify or args.contracts_only):
+            parser.error("select --self-test, --prepare-merge, --run, --verify, or --contracts-only")
+        if args.release_tag is None:
+            args.release_tag = "v" + args.version
+        if args.contracts_only:
+            result = self_test()
+            print(json.dumps(result, sort_keys=True))
+            return 0 if result["pass"] else 1
         if args.self_test:
             result = self_test()
             print(json.dumps(result, sort_keys=True))
             return 0 if result["pass"] else 1
+        if args.download_only:
+            if not args.verify:
+                parser.error("--download-only requires --verify")
+            try:
+                resolve_v02_download_context(args)
+            except (DeliveryError, OSError, ValueError, TypeError, KeyError) as error:
+                reason = str(error) if isinstance(error, DeliveryError) else type(error).__name__
+                print("BLOCKED: " + reason, file=sys.stderr)
+                return 1
+            result = verify_release(args)
+            print(json.dumps(result, sort_keys=True))
+            return 0
         if not args.repository or not args.preflight:
             parser.error("--prepare-merge/--run/--verify require --repository and --preflight")
+        if args.require_v02_qualification and args.version != "0.2.0":
+            parser.error("--require-v02-qualification requires --version 0.2.0")
+        if args.version == "0.2.0" and args.run and not args.require_v02_qualification:
+            parser.error("v0.2 --run requires --require-v02-qualification")
         if args.timeout_seconds < 1 or args.timeout_seconds > 86400:
             parser.error("--timeout-seconds must be from 1 through 86400")
         if args.prepare_merge or args.run:

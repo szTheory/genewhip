@@ -1,0 +1,46 @@
+{
+  "schema": "genewhip-control-monitor-fix-v1",
+  "outcome": "verified-monitor-repair-and-two-controls",
+  "phase6_complete": false,
+  "fix": "One lstat per live entry; skip only FileNotFoundError for disappearing live metadata/trace opens. Retain actual error, symlink, limit and required-artifact rejection.",
+  "source_sha256": {
+    "scripts/evidence/phase6_feedback48.py": "310df02d5687e75db886297b97ad231670817bb3bbd5e99a0295723b30664ab5",
+    "tests/evidence/phase6_feedback48_contract.py": "9bdf5d306665a1271bee3f71365f5bb2af6f8d7172ab094652ffb056ef9c6e5b"
+  },
+  "causal": {
+    "old_required_failures": 3,
+    "current_passes": 22,
+    "os_children": 0
+  },
+  "controls": {
+    "complete_reports": 2,
+    "passed_rows": 12,
+    "required_rows": 12,
+    "pcm_files": 12,
+    "byte_identical_case_pairs": 6,
+    "field_records_verified": 1680,
+    "native_children": 12,
+    "measured_group_wall_seconds": 5.59155
+  },
+  "scope": {
+    "tank_launches": 0,
+    "core_changes": false,
+    "binary_changes": false,
+    "dependencies_added": 0,
+    "plan48_retroactively_accepted": false
+  },
+  "review": {
+    "path": ".planning/debug/control-monitor-race-evidence/final-review.json",
+    "sha256": "8ae2bbe5d651a26d93c42a8b56ce93ac62507fd1e9e6f82a4422222eaad565de"
+  },
+  "retained_check": {
+    "path": ".planning/debug/control-monitor-race-evidence/closeout-check.json",
+    "sha256": "9d3022fa22f00c14ff28464fb20941df107c45826c742c7f306cb73bd73ec2a6"
+  },
+  "limitations": [
+    "Historical whole-batch self-test fails old-clock2400s+900s reservation; no full-suite pass claimed.",
+    "Original driver deletes temporary geometry/PSG traces after checking; independent review used surviving field records, fullPCM and source-reported summaries.",
+    "Tank STATE observations retain original source binding. No Tank physical-frame/PCM or second-title/actual-desktop/whole-safety acceptance."
+  ],
+  "next_product_priority": "RECURSION94 original public-core interaction/sustained route; then both-title actual desktop and remaining safety/determinism evidence. Reopen monitor only for a new causal failure."
+}

@@ -1,0 +1,459 @@
+{
+  "audio_device_activity": true,
+  "audio_device_consumed_frames": 2767891,
+  "audio_submitted_frames": 2908428,
+  "backend": "software",
+  "candidate_sha256": "43fb272c849fd6c97572603f4aa303cc00d9f617cddb660f7f928a6b4d1e0c3f",
+  "capability": "audio-enabled",
+  "core_outcome": "pass",
+  "core_report": {
+    "path": "evidence/phase6-tracer.json",
+    "sha256": "95b2258787c56104c432bb4716e9cfc1ff0e54e256f6bf5b90567a3bdf8380a8"
+  },
+  "delivery_client": "sdl",
+  "delivery_map_sha256": "c1a40faca8ddf3a6558b1d9fd3824e2fb0d3dd8f567fe5e6a789f6d4790da623",
+  "diagnostic_only": true,
+  "disk_audio_artifact": {
+    "bytes": 11027200,
+    "path": "build/phase6/evidence/phase6-sdl-diagnostic-work/sdlaudio.raw",
+    "sha256": "8ec01dc47eac7824688ac0fa47296b5c2336862010b30e14578d8105b7e9bb27"
+  },
+  "effective_masks": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    32,
+    0,
+    0,
+    0,
+    32,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    16,
+    0
+  ],
+  "guest_poll_observations": [
+    {
+      "event_id": "input-event-01",
+      "expected": {
+        "attempt": 0,
+        "tick": 2
+      },
+      "host_input_observed": false,
+      "input_observed": false,
+      "poll_attempt": 0,
+      "poll_field": 25,
+      "poll_observed": true,
+      "poll_tick": 2
+    },
+    {
+      "event_id": "input-event-02",
+      "expected": {
+        "attempt": 0,
+        "tick": 23
+      },
+      "host_input_observed": true,
+      "input_observed": true,
+      "poll_attempt": 0,
+      "poll_field": 46,
+      "poll_observed": true,
+      "poll_tick": 23
+    },
+    {
+      "event_id": "input-event-03",
+      "expected": {
+        "attempt": 1,
+        "tick": 2
+      },
+      "host_input_observed": false,
+      "input_observed": false,
+      "poll_attempt": 1,
+      "poll_field": 746,
+      "poll_observed": true,
+      "poll_tick": 2
+    },
+    {
+      "event_id": "input-event-04",
+      "expected": {
+        "attempt": 1,
+        "tick": 23
+      },
+      "host_input_observed": true,
+      "input_observed": true,
+      "poll_attempt": 1,
+      "poll_field": 767,
+      "poll_observed": true,
+      "poll_tick": 23
+    },
+    {
+      "event_id": "input-event-05",
+      "expected": {
+        "attempt": 2,
+        "tick": 2
+      },
+      "host_input_observed": false,
+      "input_observed": false,
+      "poll_attempt": 2,
+      "poll_field": 1467,
+      "poll_observed": true,
+      "poll_tick": 2
+    },
+    {
+      "event_id": "input-event-06",
+      "expected": {
+        "attempt": 2,
+        "tick": 23
+      },
+      "host_input_observed": true,
+      "input_observed": true,
+      "poll_attempt": 2,
+      "poll_field": 1488,
+      "poll_observed": true,
+      "poll_tick": 23
+    },
+    {
+      "event_id": "input-event-07",
+      "expected": {
+        "clock": "paused-ui-meta",
+        "field": 2161
+      },
+      "host_input_observed": true,
+      "input_observed": true,
+      "poll_attempt": null,
+      "poll_field": null,
+      "poll_observed": null,
+      "poll_tick": null
+    },
+    {
+      "event_id": "input-event-08",
+      "expected": {
+        "clock": "paused-ui-meta",
+        "field": 2162
+      },
+      "host_input_observed": true,
+      "input_observed": true,
+      "poll_attempt": null,
+      "poll_field": null,
+      "poll_observed": null,
+      "poll_tick": null
+    },
+    {
+      "event_id": "input-event-09",
+      "expected": {
+        "attempt": 3,
+        "tick": 2
+      },
+      "host_input_observed": false,
+      "input_observed": false,
+      "poll_attempt": 3,
+      "poll_field": 2190,
+      "poll_observed": true,
+      "poll_tick": 2
+    },
+    {
+      "event_id": "input-event-10",
+      "expected": {
+        "attempt": 3,
+        "tick": 23
+      },
+      "host_input_observed": true,
+      "input_observed": true,
+      "poll_attempt": 3,
+      "poll_field": 2211,
+      "poll_observed": true,
+      "poll_tick": 23
+    },
+    {
+      "event_id": "input-event-11",
+      "expected": {
+        "clock": "paused-ui-meta",
+        "field": 2881
+      },
+      "host_input_observed": true,
+      "input_observed": true,
+      "poll_attempt": null,
+      "poll_field": null,
+      "poll_observed": null,
+      "poll_tick": null
+    },
+    {
+      "event_id": "input-event-12",
+      "expected": {
+        "clock": "paused-ui-meta",
+        "field": 2882
+      },
+      "host_input_observed": true,
+      "input_observed": true,
+      "poll_attempt": null,
+      "poll_field": null,
+      "poll_observed": null,
+      "poll_tick": null
+    },
+    {
+      "event_id": "input-event-13",
+      "expected": {
+        "attempt": 4,
+        "tick": 2
+      },
+      "host_input_observed": false,
+      "input_observed": false,
+      "poll_attempt": 4,
+      "poll_field": 2913,
+      "poll_observed": true,
+      "poll_tick": 2
+    },
+    {
+      "event_id": "input-event-14",
+      "expected": {
+        "attempt": 4,
+        "tick": 5
+      },
+      "host_input_observed": true,
+      "input_observed": true,
+      "poll_attempt": 4,
+      "poll_field": 2916,
+      "poll_observed": true,
+      "poll_tick": 5
+    },
+    {
+      "event_id": "input-event-15",
+      "expected": {
+        "attempt": 4,
+        "tick": 501
+      },
+      "host_input_observed": false,
+      "input_observed": false,
+      "poll_attempt": 4,
+      "poll_field": 3412,
+      "poll_observed": true,
+      "poll_tick": 501
+    },
+    {
+      "event_id": "input-event-16",
+      "expected": {
+        "attempt": 4,
+        "tick": 672
+      },
+      "host_input_observed": true,
+      "input_observed": true,
+      "poll_attempt": 4,
+      "poll_field": 3583,
+      "poll_observed": true,
+      "poll_tick": 672
+    },
+    {
+      "event_id": "input-event-17",
+      "expected": {
+        "attempt": 4,
+        "tick": 672
+      },
+      "host_input_observed": false,
+      "input_observed": false,
+      "poll_attempt": 4,
+      "poll_field": 3583,
+      "poll_observed": true,
+      "poll_tick": 672
+    },
+    {
+      "event_id": "input-event-18",
+      "expected": {
+        "attempt": 4,
+        "tick": 676
+      },
+      "host_input_observed": true,
+      "input_observed": true,
+      "poll_attempt": 4,
+      "poll_field": 3587,
+      "poll_observed": true,
+      "poll_tick": 676
+    },
+    {
+      "event_id": "input-event-19",
+      "expected": {
+        "attempt": 4,
+        "tick": 697
+      },
+      "host_input_observed": true,
+      "input_observed": true,
+      "poll_attempt": 4,
+      "poll_field": 3608,
+      "poll_observed": true,
+      "poll_tick": 697
+    }
+  ],
+  "host_outcome": "fail-diagnostic",
+  "input_events": [
+    {
+      "effective_mask": 0,
+      "handler": "SDL_Gamepad/sample_port",
+      "port": 0,
+      "requested_mask": 8
+    },
+    {
+      "effective_mask": 0,
+      "handler": "SDL_Gamepad/sample_port",
+      "port": 0,
+      "requested_mask": 0
+    },
+    {
+      "effective_mask": 0,
+      "handler": "SDL_Gamepad/sample_port",
+      "port": 0,
+      "requested_mask": 8
+    },
+    {
+      "effective_mask": 0,
+      "handler": "SDL_Gamepad/sample_port",
+      "port": 0,
+      "requested_mask": 0
+    },
+    {
+      "effective_mask": 0,
+      "handler": "SDL_Gamepad/sample_port",
+      "port": 0,
+      "requested_mask": 8
+    },
+    {
+      "effective_mask": 0,
+      "handler": "SDL_Gamepad/sample_port",
+      "port": 0,
+      "requested_mask": 0
+    },
+    {
+      "effective_mask": 32,
+      "handler": "SDL_Gamepad/sample_port",
+      "port": 0,
+      "requested_mask": 32
+    },
+    {
+      "effective_mask": 0,
+      "handler": "SDL_Gamepad/sample_port",
+      "port": 0,
+      "requested_mask": 0
+    },
+    {
+      "effective_mask": 0,
+      "handler": "SDL_Gamepad/sample_port",
+      "port": 0,
+      "requested_mask": 8
+    },
+    {
+      "effective_mask": 0,
+      "handler": "SDL_Gamepad/sample_port",
+      "port": 0,
+      "requested_mask": 0
+    },
+    {
+      "effective_mask": 32,
+      "handler": "SDL_Gamepad/sample_port",
+      "port": 0,
+      "requested_mask": 32
+    },
+    {
+      "effective_mask": 0,
+      "handler": "SDL_Gamepad/sample_port",
+      "port": 0,
+      "requested_mask": 0
+    },
+    {
+      "effective_mask": 0,
+      "handler": "SDL_Gamepad/sample_port",
+      "port": 0,
+      "requested_mask": 1
+    },
+    {
+      "effective_mask": 0,
+      "handler": "SDL_Gamepad/sample_port",
+      "port": 0,
+      "requested_mask": 0
+    },
+    {
+      "effective_mask": 0,
+      "handler": "SDL_Gamepad/sample_port",
+      "port": 0,
+      "requested_mask": 8
+    },
+    {
+      "effective_mask": 0,
+      "handler": "SDL_Gamepad/sample_port",
+      "port": 0,
+      "requested_mask": 0
+    },
+    {
+      "effective_mask": 0,
+      "handler": "SDL_Gamepad/sample_port",
+      "port": 0,
+      "requested_mask": 2
+    },
+    {
+      "effective_mask": 0,
+      "handler": "SDL_Gamepad/sample_port",
+      "port": 0,
+      "requested_mask": 0
+    },
+    {
+      "effective_mask": 16,
+      "handler": "SDL_Gamepad/sample_port",
+      "port": 0,
+      "requested_mask": 16
+    },
+    {
+      "effective_mask": 0,
+      "handler": "SDL_Gamepad/sample_port",
+      "port": 0,
+      "requested_mask": 0
+    }
+  ],
+  "limitations": [
+    "Early REC software-route diagnostic only; it does not close HOST-04.",
+    "Renderer readback is a per-frame center-pixel sample, not a full-frame comparison.",
+    "PCM is observed at the real route callback; cross-client media comparison belongs to Plan51."
+  ],
+  "pcm_frames": 2908428,
+  "pcm_sha256": "6e1fe95cb287d4d9",
+  "presented_frames": 3631,
+  "process": {
+    "client": "desktop",
+    "process_group_cleanup": "unknown-at-run-time; see independent guard review and task3 containment contract",
+    "receipt_status": "reconciled-from-complete-child-reports",
+    "return_code": null,
+    "stdout_stderr_bytes": "not-retained-by-original-wrapper",
+    "wall_seconds": 60
+  },
+  "raw_outputs": {
+    "host": {
+      "bytes": 2173,
+      "path": "build/phase6/evidence/phase6-sdl-diagnostic-work/host.json",
+      "sha256": "ee40a6c1e615e68931619bb7d358ebc0b085a587622ad6d661933621c30c5a0f"
+    },
+    "native": {
+      "bytes": 901689,
+      "path": "build/phase6/evidence/phase6-sdl-diagnostic-work/native.json",
+      "sha256": "b06475409503815798bbfb3dfbf093e7cb70fb6d39e082db4cf0319c00674cae"
+    }
+  },
+  "renderer_readback_samples": 3631,
+  "renderer_readback_sha256": "236c23f606caabd4",
+  "route_metadata": {
+    "client": "sdl",
+    "map_id": "recursion94-genewhip-public-client-v1",
+    "original_input_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+    "schema": "genewhip-consumed-input-map-v1",
+    "sha256": "c1a40faca8ddf3a6558b1d9fd3824e2fb0d3dd8f567fe5e6a789f6d4790da623"
+  },
+  "schema": "genewhip-phase6-sdl-diagnostic-v1",
+  "wrapper_failure": {
+    "child_product_result": "fail",
+    "error": "core_path.relative_to(ROOT) received relative path after child completed",
+    "rerun": false,
+    "stage": "post-child-report-serialization"
+  }
+}
