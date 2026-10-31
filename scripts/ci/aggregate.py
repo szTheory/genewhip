@@ -6,12 +6,15 @@ import os
 import re
 import sys
 
-REQUIRED_LANES = ("safety", "gameplay", "desktop", "package", "performance")
+REQUIRED_LANES = ("safety", "gameplay", "desktop", "package", "performance",
+                  "product-smoke", "phase7-fast")
+FULL_V02_LANE = "v02-release-qualification"
 SUPPORTED_EVENTS = ("pull_request", "merge_group", "push", "workflow_dispatch")
 SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
-def validate_lanes(needs, event_name, source_sha, head_sha, base_sha, event_ref=None):
+def validate_lanes(needs, event_name, source_sha, head_sha, base_sha, event_ref=None,
+                   expected_run_id=None, expected_run_attempt=None):
     """Return stable rejection codes for incomplete or stale required CI evidence."""
     problems = []
     if event_name not in SUPPORTED_EVENTS:
@@ -22,16 +25,23 @@ def validate_lanes(needs, event_name, source_sha, head_sha, base_sha, event_ref=
     if not isinstance(needs, dict):
         return ["needs-not-object"]
 
-    expected = set(REQUIRED_LANES)
+    full_v02_required = event_name == "workflow_dispatch"
+    required_lanes = REQUIRED_LANES + ((FULL_V02_LANE,) if full_v02_required else ())
+    expected = set(required_lanes)
     actual = set(needs) - {"attestation"}
-    for lane in REQUIRED_LANES:
+    if not full_v02_required:
+        optional = needs.get(FULL_V02_LANE)
+        if optional is not None and (not isinstance(optional, dict) or optional.get("result") != "skipped"):
+            problems.append("full-v02-lane-must-skip-unselected-event")
+        actual.discard(FULL_V02_LANE)
+    for lane in required_lanes:
         if lane not in actual:
             problems.append(f"required-lane-missing:{lane}")
     for lane in sorted(actual - expected):
         problems.append(f"unexpected-lane:{lane}")
 
     expected_identity = {"source_sha": source_sha, "head_sha": head_sha, "base_sha": base_sha}
-    for lane in REQUIRED_LANES:
+    for lane in required_lanes:
         if lane not in needs:
             continue
         record = needs[lane]
@@ -52,11 +62,17 @@ def validate_lanes(needs, event_name, source_sha, head_sha, base_sha, event_ref=
                       "base_sha": "stale-base"}[field]
             if value != expected_value:
                 problems.append(f"{reason}:{lane}")
+        if lane in ("product-smoke", "phase7-fast", FULL_V02_LANE) and expected_run_id is not None:
+            for field, expected_value in (("run_id", str(expected_run_id)),
+                                          ("run_attempt", str(expected_run_attempt)),
+                                          ("event_name", event_name)):
+                if outputs.get(field) != expected_value:
+                    problems.append(f"lane-event-identity-mismatch:{lane}:{field}")
 
     attestation = needs.get("attestation")
     if not isinstance(attestation, dict):
         problems.append("attestation-job-missing")
-    elif event_name == "push" and event_ref == "refs/heads/main":
+    elif (event_name in {"push", "workflow_dispatch"} and event_ref == "refs/heads/main"):
         if attestation.get("result") != "success":
             problems.append(f"attestation-job-{attestation.get('result') or 'missing'}:trusted-main-push")
         outputs = attestation.get("outputs")
@@ -79,15 +95,20 @@ def main():
         head_sha = os.environ["EXPECTED_HEAD_SHA"]
         base_sha = os.environ["EXPECTED_BASE_SHA"]
         event_ref = os.environ["EVENT_REF"]
+        run_id = os.environ.get("EXPECTED_RUN_ID")
+        run_attempt = os.environ.get("EXPECTED_RUN_ATTEMPT")
     except (KeyError, json.JSONDecodeError) as exc:
         print(f"REJECT: aggregate-input-invalid:{type(exc).__name__}", file=sys.stderr)
         return 2
-    problems = validate_lanes(needs, event_name, source_sha, head_sha, base_sha, event_ref)
+    problems = validate_lanes(needs, event_name, source_sha, head_sha, base_sha, event_ref,
+                              run_id, run_attempt)
     if problems:
         for problem in problems:
             print("REJECT: " + problem, file=sys.stderr)
         return 1
-    print("required-aggregate: PASS (5/5 current, successful lanes; " + event_name + ")")
+    full_v02_required = event_name == "workflow_dispatch"
+    required_lanes = REQUIRED_LANES + ((FULL_V02_LANE,) if full_v02_required else ())
+    print(f"required-aggregate: PASS ({len(required_lanes)}/{len(required_lanes)} current, successful lanes; " + event_name + ")")
     return 0
 
 

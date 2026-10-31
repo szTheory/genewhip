@@ -1,0 +1,25 @@
+{
+  "schema": "genewhip-v02-schema-document-v1",
+  "evidence_schema": "genewhip-v02-evidence-v1",
+  "required": ["schema", "scope", "source_identity", "roster", "observations", "artifacts"],
+  "properties": {
+    "schema": {"type": "string", "const": "genewhip-v02-evidence-v1"},
+    "scope": {"type": "string", "enum": ["control-tracer", "smoke", "full", "safety", "chunk"]},
+    "source_identity": {"type": "object", "required": ["fixture_id", "profile", "machine", "scenario_sha256", "oracle_sha256", "rom_sha256", "source_sha256", "cmake_cache_sha256", "executable_sha256"]},
+    "roster": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "observations": {"type": "array", "items": {"type": "object", "required": ["case_id", "status", "fields", "play_state", "position", "psg_writes", "input_sha256", "pcm_sha256", "video_sha256", "source_predicates"]}},
+    "artifacts": {"type": "object"}
+  },
+  "observation": {
+    "required": ["case_id", "status", "fields", "play_state", "position", "psg_writes", "input_sha256", "pcm_sha256", "video_sha256", "source_predicates"],
+    "status_enum": ["pass", "fail", "unsupported", "skipped", "unknown", "infrastructure-error"],
+    "types": {"case_id": "string", "status": "string", "fields": "nonnegative-integer", "play_state": "nonnegative-integer", "position": "nonnegative-integer", "psg_writes": "integer-array", "input_sha256": "sha256-or-empty", "pcm_sha256": "sha256-or-empty", "video_sha256": "sha256-or-empty", "source_predicates": "boolean-map"}
+  },
+  "matrix_observation": {
+    "required": ["ancestry", "case_id", "client_scope", "denominators", "historic_disposition", "identity", "observation_dependencies", "observations", "outcome", "reached", "reason", "repetition", "stage", "title_id"],
+    "stages": ["load", "boot", "interaction", "sustained", "completion"],
+    "outcomes": ["pass", "fail", "unsupported", "skipped", "unknown", "infrastructure-error"],
+    "client_scopes": ["core", "software-sdl", "native-sdl"]
+  },
+  "additional_properties": false
+}

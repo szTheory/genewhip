@@ -9,6 +9,36 @@ raster diagnostic. The game result is bounded to six source-derived cases/840 fi
 actual vsync, acoustic quality, and latency remain unknown. Package identities and checksums are in
 [`packaging/desktop/README.md`](../packaging/desktop/README.md).
 
+<a id="v02-errors"></a>
+
+## Startup and cartridge recovery
+
+For a downloaded unsigned and unnotarized app, first verify its provenance and archive subject digest. If macOS blocks a trusted app, open it once, then use **System Settings → Privacy & Security → Open Anyway** and confirm for that app. Apple documents this app-specific exception; do not disable Gatekeeper globally. Native host execution is qualified on macOS 26.6.2 arm64 only; the deployment target does not establish support for older macOS versions.
+
+The desktop runner reports missing files as `REJECT: missing`, malformed or truncated cartridge bytes as `REJECT: invalid-rom`, and unsupported input-log headers as `REJECT: input-log ...`. An invalid dropped cartridge prints a sanitized reason and leaves the current session running. A successful drop prints `LOADED:` and replaces the cartridge. If SDL audio cannot initialize, the runner prints `audio: disabled (<reason>)`, continues video-only, and reports `audio=off`; this is not evidence for an audio-qualified route. Use the exact messages and retained-session behavior described here when diagnosing startup; core rejection and host device failures are separate outcomes.
+
+For the local development archive, set `CHECKOUT`, `ARTIFACT_DIR`, `DESKTOP_ARCHIVE`, `PACKAGE_DIR`, `ROM`, `MISSING_ROM`, `TRUNCATED_ROM`, `UNSUPPORTED_LOG`, `DROP_SCRIPT`, and `ERROR_LOG` to the trusted checkout, exact extracted package and test fixtures. The runner performs these input checks before starting SDL for command-line load errors:
+
+```sh
+if "$PACKAGE_DIR/bin/genewhip-desktop" "$MISSING_ROM" >"$ERROR_LOG" 2>&1; then
+  exit 1
+fi
+grep -q '^REJECT: missing ' "$ERROR_LOG"
+if "$PACKAGE_DIR/bin/genewhip-desktop" --replay "$UNSUPPORTED_LOG" --fields 1 "$ROM" >"$ERROR_LOG" 2>&1; then
+  exit 1
+fi
+grep -q '^REJECT: input-log ' "$ERROR_LOG"
+if "$PACKAGE_DIR/bin/genewhip-desktop" --fields 1 "$TRUNCATED_ROM" >"$ERROR_LOG" 2>&1; then
+  exit 1
+fi
+grep -q '^REJECT: invalid-rom ' "$ERROR_LOG"
+"$PACKAGE_DIR/bin/genewhip-desktop" --fields 30 --host-script "$DROP_SCRIPT" "$ROM" >"$ERROR_LOG" 2>&1
+grep -q '^REJECT: invalid-rom ' "$ERROR_LOG"
+grep -q '^fields=30 ' "$ERROR_LOG"
+```
+
+The drop script contains a frame-1 drop of the truncated input followed by a frame-30 quit. The final field count proves the active cartridge session continued after the failed replacement. Input-log format version 1 is independent of package 0.2.0 and API 4; do not change an API version just because the package version changed.
+
 ## Build
 
 ```sh
@@ -182,6 +212,27 @@ replay field by field. Logs are bounded to 65536 entries and are rejected with `
 `order`, `port`, `mask`, `capacity` or `io` before any event is scheduled. The runner and headless
 client must use the same port devices as the recording.
 
+For bounded source-step integration contracts, both clients also accept
+`--route-plan FILE --route-report FILE`. GWRP v1 supports the original tracer;
+GWRC v1 executes the frozen field/source controllers produced by
+`python3 -I scripts/evidence/phase6_routes.py --compile DIRECTORY`. Both are tool-private binary formats;
+its bounds, instruction-boundary dispatch semantics, report stages and frozen
+route validator are documented in [core.md](core.md#bounded-source-step-route-tracer).
+The SDL route path uses the same keyboard/gamepad action handlers as
+`--host-script`, then samples the resulting port mask. It still drains real
+field and audio output; reports distinguish host capability failures from guest
+outcomes.
+
+The Phase6 test route uses an SDL virtual joystick with an explicit GUID
+mapping for directional hats and face/start buttons. The no-ROM contract
+`python3 -I tests/desktop/phase6_routes.py --mode input-contract --build
+build/phase6 --delivery-map fixtures/phase6/recursion94-consumed-map-v1.json
+--output evidence/phase6-sdl-virtual-input-contract.json` checks each of the
+nineteen mapped masks through `SDL_Gamepad`, the normal event pump and
+`sample_port`. It validates the controller seam only. The earlier full software
+route diagnostic retained a D-pad mismatch and therefore remains failed; its
+real renderer/audio observations are diagnostic data, not HOST-04 acceptance.
+
 Whether input feels immediate on a real display and a physical gamepad is a named human check:
 automation establishes event chronology and reproducibility, not perceived responsiveness.
 
@@ -291,3 +342,22 @@ listener preference or physical output quality.
 - The pinned SDL3 source archive was downloaded and its digest/notices verified during the local
   build. No Genewhip release URL exists; the hosted CI desktop job has not run.
 - A rejected file never opens a window, so the error appears only on stderr.
+
+## Phase 6 SDL host qualification
+
+The Phase 6 host qualification drives the admitted Recursion 94 and Tank Battle
+cases through two independent SDL virtual gamepads, the normal event pump and
+`sample_port`. It compares guest progress and source samples with the retained
+headless evidence, reads the selected full frame from the SDL renderer target,
+and compares complete PCM separately from SDL audio submission and observed
+queue consumption. Software qualification uses SDL dummy video/software
+rendering and the disk audio driver. The local macOS native qualification uses
+Cocoa, Metal and CoreAudio. These runs establish those bounded paths on this
+machine; they do not establish physical scanout, acoustic quality or latency.
+
+Native route checks request background gamepad events and raise the Cocoa
+window before input. They report focus and raw virtual joystick state, and
+retain a structured exit-77 capability result if native video or audio cannot
+start. The route-only hint and window request do not change ordinary runner
+defaults. The dedicated host checks are registered as `phase6_host_routes`,
+`phase6_host_native` and `phase6_host_contract` in the desktop CTest suite.
