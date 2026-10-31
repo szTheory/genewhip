@@ -17,6 +17,8 @@ PRIVATE = {".bin", ".rom", ".mdrom", ".gen", ".smd", ".sav", ".srm", ".state"}
 PUBLIC_GAME_CANDIDATES = {
     "fixtures/independent-game/game.bin",
     "fixtures/independent-game-v2/game.bin",
+    "fixtures/phase5-a/game.bin",
+    "fixtures/phase5-b/game.bin",
 }
 
 def _sha256(path):
@@ -46,6 +48,30 @@ def _verified_public_candidate(root, name, path):
     """Allow only the exact versioned admitted ROM bound to current identities."""
     if path.is_symlink():
         return _verified_original_rom(root, name, path)
+    if name in {"fixtures/phase5-a/game.bin", "fixtures/phase5-b/game.bin"}:
+        try:
+            manifest = json.loads((root / "fixtures/manifest.json").read_text())
+            row = next((entry for entry in manifest["fixtures"]
+                        if entry.get("rom") == name and entry.get("id") in
+                        {"genewhip-phase5-a", "genewhip-phase5-b"}), None)
+            if row is None:
+                return False
+            spec = __import__("importlib.util", fromlist=["spec_from_file_location"])
+            module_spec = spec.spec_from_file_location(
+                "gw_public_phase5_fixture_manifest", root / "tools/evidence/fixture_manifest.py")
+            provenance_spec = spec.spec_from_file_location(
+                "gw_public_phase5_source_provenance", root / "scripts/fixtures/source_provenance.py")
+            if any(item is None or item.loader is None for item in (module_spec, provenance_spec)):
+                return False
+            validator = spec.module_from_spec(module_spec)
+            module_spec.loader.exec_module(validator)
+            provenance = spec.module_from_spec(provenance_spec)
+            provenance_spec.loader.exec_module(provenance)
+            provenance._phase5_candidate_record(validator, row, root)
+            return row.get("status") == "admitted" and row.get("outcome") == "pass"
+        except (KeyError, OSError, TypeError, ValueError, subprocess.SubprocessError,
+                json.JSONDecodeError, AttributeError, ImportError):
+            return False
     if name == "fixtures/independent-game-v2/game.bin":
         try:
             manifest = json.loads((root / "fixtures/manifest.json").read_text())

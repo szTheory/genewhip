@@ -1,0 +1,33 @@
+{
+  "acceptance": "unreached; no retry; interrupted unreported child counts remain unknown",
+  "available_controls_root": "evidence/phase6-tank-continuation-d125-g22-controls",
+  "completed_reservations": 0,
+  "planned_denominator": {
+    "control_parents": 2,
+    "full_pcm_files": 12,
+    "native_control_children": 12,
+    "tank": 1
+  },
+  "reason": "[Errno 2] No such file or directory: 'build/phase6/repairs-aneu655v/report.json'",
+  "recovery_owner": "06-22",
+  "reservation_ids": [
+    "GW-06-AUTH-tank-continuation-d125-tank-pea-continuation-1"
+  ],
+  "retained_ledger_path": "evidence/phase6-repairs.json",
+  "retained_ledger_sha256": "7a7b51379d992a35a1a77657e6734f586f8e316f81f717744ea00101ae574ee4",
+  "retained_raw_receipts": [
+    {
+      "native_raw_in_ledger": false,
+      "native_report_sha256": null,
+      "record_id": "GW-06-AUTH-tank-continuation-d125-tank-pea-continuation-1",
+      "status": "interrupted"
+    }
+  ],
+  "schema": "phase6-d125-continuation-halt-v1",
+  "status": "HALTED",
+  "public_export": {
+    "raw_sha256": "83099e386d46477ee95c24c629f0167c23e6c31821a6798a8a843881745e7725",
+    "raw_private_path": "build/phase6/d125-owner22-private-halt/continuation-halt-raw.json",
+    "scope": "checkout prefix removed from new exception text only; exact original raw retained"
+  }
+}

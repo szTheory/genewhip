@@ -1,0 +1,41 @@
+{
+  "schema": "phase6-tank-continuation-check-rejected-v1",
+  "status": "rejected-unreached",
+  "independently_checked": false,
+  "recovery_owner": "06-22",
+  "receipt_sha256": "3147b7fdf4937b430f8b93087fbed611e6637e4a8f5e4c7270d5826f227c747a",
+  "source_identity": "efdc0d268650f18edf6dab1d3748993ca3deb46288eea6029164ad219491d475",
+  "bridge_sha256": "a1708376b527e4a3da338bcfa5e5a448b99bc0b1724faf6bafaf7bce5cd27034",
+  "reason": "Headless CLI exited 2 before ROM load/report: stack-before-A7 invocation omitted required probe-only mode. No retry.",
+  "actual": {
+    "headless_cli_processes": 1,
+    "rom_loads": 0,
+    "valid_tank_captures": 0,
+    "control_parent_runs": 0,
+    "native_control_children": 0,
+    "full_pcm_files": 0,
+    "new_target_attempts": 1,
+    "total_target_attempts": 2
+  },
+  "required": {
+    "valid_tank_captures": 1,
+    "control_parent_runs": 2,
+    "native_control_children": 12,
+    "full_pcm_files": 12
+  },
+  "actual_halt_review": {
+    "path": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/06-22-FINAL-REVIEW.json",
+    "sha256": "cfe79bc4abb3144b04ea2480f5f8d6b3976ffa5be223d5ccc1d5e5315240420a",
+    "disposition": "halt-confirmed"
+  },
+  "checker_cli_invoked": false,
+  "publication": "Explicit rejection record only; no receipt recomputation, checked acceptance or ledger promotion occurred.",
+  "phase6_complete": false,
+  "downstream_blocked": [
+    "06-12",
+    "06-09",
+    "06-05",
+    "06-06",
+    "06-07"
+  ]
+}

@@ -1,0 +1,1509 @@
+{
+  "bridge_sha256": "9df246405683c03deee9c9c1bcd71e9527898cb91ab95917b6a8fd85869d505d",
+  "build_tool_identity": {
+    "builds": {
+      "hooks-off": {
+        "build_tool_name": "ninja",
+        "build_tool_sha256": "48761628046784f59bd789f5a72b88da99205c5849e5d19ae4d317854ae09e83",
+        "cache_sha256": "05989f70a8e684ef502742d91676443ee22d109d7eea60ecf3d3c240093d5cdb",
+        "command": [
+          "cmake",
+          "--build",
+          "build/phase6-movem-hooks-off",
+          "--target",
+          "gw_headless",
+          "--parallel",
+          "2"
+        ],
+        "compiler_name": "cc",
+        "compiler_sha256": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9",
+        "settings": {
+          "CMAKE_BUILD_TYPE": "",
+          "CMAKE_C_COMPILER": "/usr/bin/cc",
+          "CMAKE_C_FLAGS": "",
+          "CMAKE_MAKE_PROGRAM": "/opt/homebrew/bin/ninja",
+          "GENEWHIP_TEST_HOOKS": "OFF"
+        }
+      },
+      "native": {
+        "build_tool_name": "ninja",
+        "build_tool_sha256": "48761628046784f59bd789f5a72b88da99205c5849e5d19ae4d317854ae09e83",
+        "cache_sha256": "acff1f6447306366f10895b747e288886c029e222ce5878508776b4de3a55a4c",
+        "command": [
+          "cmake",
+          "--build",
+          "build/phase6",
+          "--target",
+          "gw_headless",
+          "--parallel",
+          "2"
+        ],
+        "compiler_name": "cc",
+        "compiler_sha256": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9",
+        "settings": {
+          "CMAKE_BUILD_TYPE": "",
+          "CMAKE_C_COMPILER": "/usr/bin/cc",
+          "CMAKE_C_FLAGS": "",
+          "CMAKE_MAKE_PROGRAM": "/opt/homebrew/bin/ninja",
+          "GENEWHIP_TEST_HOOKS": "ON"
+        }
+      },
+      "sanitize": {
+        "build_tool_name": "ninja",
+        "build_tool_sha256": "48761628046784f59bd789f5a72b88da99205c5849e5d19ae4d317854ae09e83",
+        "cache_sha256": "0f2204d4e321b6491d26185f3e68b40a0e12c9486e45cd2d4cabc085cfaab336",
+        "command": [
+          "cmake",
+          "--build",
+          "build/phase6-movem-sanitize",
+          "--target",
+          "gw_headless",
+          "--parallel",
+          "2"
+        ],
+        "compiler_name": "cc",
+        "compiler_sha256": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9",
+        "settings": {
+          "CMAKE_BUILD_TYPE": "",
+          "CMAKE_C_COMPILER": "/usr/bin/cc",
+          "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+          "CMAKE_MAKE_PROGRAM": "/opt/homebrew/bin/ninja",
+          "GENEWHIP_TEST_HOOKS": "ON"
+        }
+      }
+    },
+    "cmake_name": "cmake",
+    "cmake_sha256": "01bb5214684f5390e96e0d6aef7aafd7415b77ecbcfd59f6b55b018d8de0d9a2"
+  },
+  "capture_descriptor_sha256": "f5ec4a0f4e154cacab94cbdeac8affa6e9fad01cd05eebeeeb155a1bfa3fc2e4",
+  "component_revalidation": {
+    "changes": [],
+    "classification": "none",
+    "prior_verdict_preserved": true,
+    "raw_qualification_outputs_complete": true,
+    "runtime_input_oracle_build_closure_unchanged": true,
+    "status": "unchanged"
+  },
+  "control_client_binary_sha256": "f15b0cadc720f4c8c4c6dca3b9deb02f13df647b23de5a78324637ad591bd7c2",
+  "current_source_closure": {
+    "component_sha256": {
+      "CMakeLists.txt": "aecc1b95cd5c10a261a71d486752e6090b297f6628952789ec3cc473987100dc",
+      "cmake/EffectiveConfiguration.cmake": "970af9843e9fe13fab48d67a0ca3ea3a41407c2e7ff944e530c134798929a37d",
+      "cmake/GenewhipDesktop.cmake": "8de01cf79bca7ba9c885645e0f04aaa21cd32c7a16c8ee15b2031d7460a0cd04",
+      "include/genewhip/genewhip.h": "fae8cbfb3b0e5e3e7f41063eaabe3dae1ae9e71293a341b8d794532063da0f19",
+      "scripts/evidence/phase6_accounting.py": "35f8a0ed64a6ea29a090f3b583084d730e4e86e0536ea6cd8fe9870bff196585",
+      "scripts/evidence/phase6_routes.py": "93b363193afec8be2ff025b9b806a4e2efb5cf9253dd7582325660b5a0099ccd",
+      "src/audio_kernel.h": "904d72bbeef9f1e85fab1b20c6b8c6395d4c0d39e2ad858d4175797926fe53e8",
+      "src/audio_out.c": "88411feff8e3f1ac81e78503000d7a38222faf4c22215decf13b87e558d3c26e",
+      "src/audio_out.h": "cf0ffb40d4a35308084148764f32af285bf1f162dbb766b37edea09819fd3587",
+      "src/bus.c": "4957e9e888c4a7e890bd416701c888439e09b6224ce210e0ed50fa5db95489a5",
+      "src/core.c": "6c7af23879bc982cbbbfdcedb1c29ab76abc4bbb57eb8fa2c7791f9c28e8695b",
+      "src/cpu68000.c": "2c4f9e0a8285ac036abb65b45036e3ee8cda0c1dd7c6caaa571ec581baa598e9",
+      "src/diagnostic.c": "703cc829fd8d9a177a1df49c56d6f10a006e139d0584e9fabbde57eb7a26424b",
+      "src/diagnostics.c": "78a7e172dd5a5c377d6af76a50bcf37a5c14449d8fc375e4dd774cd9bacc074a",
+      "src/internal.h": "e280c5da3ac1d5aed0c1e2f7816280b0932f38326470921c22d72647e7530dce",
+      "src/io.c": "1995ed7e09bff8d46ba62aba82b62c7f372396590d08a1efdf127967ecf136f8",
+      "src/io.h": "b6735adb5e896793979bf076451e3e70207443a8ad04016c491b9bb0cf2de6eb",
+      "src/psg.c": "c5bd03079a672a5cb6af027b3398e3e525ade1f3924be4dd499be8a5955e8f56",
+      "src/psg.h": "71e11308ac5f5995ba5890c2964b5b943506f7436633f4c4d8f9640ee36cb678",
+      "src/render.c": "7460a0984818d7cf39d4b0bb53648474d6fa6d057d768f0b95c7cacae9798e6a",
+      "src/state_digest.c": "500176e08cc5fa5db75421c93a255f03d693b7467d929a9f733c782809cc3de3",
+      "src/state_digest.h": "6ec915654439ac66c81ffc29db6f65da15f453ccf59cfab33733e7782d3516ff",
+      "src/vdp.c": "5839e3125b2ea5f3be44f53c0f5b35963fc14ac3f2e3964d3ca4d73b837f74ae",
+      "src/vdp.h": "e6772f95fdb097234ff604595e0bf90d53b280726cb9c0d2a0e2c238445f9490",
+      "src/ym2612.c": "24e83e20165ca38124236d21452e58038357b7f17d7e969a0af4d567bc230608",
+      "src/ym2612.h": "c60e3383b9b949374d39ac166174090a9446c20fddf187f4f582a686c29861fe",
+      "src/z80.c": "51d23789fcce51fce373cbdd30482d154b1d8678ca36056723e53c644ecc5c32",
+      "src/z80.h": "92565747241d5fbfa930a94dacf36c1598a79716ce17731d68276a2fb3f50319",
+      "src/z80_bus.c": "7dcb7176d3aaa1a5ed39b21ebbd7240e395c0835d9a9d72656abeeb4fb11fa4b",
+      "tests/evidence/phase6_accounting_contract.py": "0b5e5a1a084701b3867271730086b10d473764177a0e77951108ffa53a61d70b",
+      "tests/evidence/phase6_d124_consumers_contract.py": "3f05000c09ae7cf20991b5d8d0e95ae544c98cc8ab78cae80f3a4664d16affd5",
+      "tests/evidence/phase6_d125_authored_fixture.py": "5ba2ed0d3000dc3a0ff085055415a2a04cdbafa15a940565c9ad9cfbaebcb305",
+      "tests/evidence/phase6_d125_consumers_contract.py": "4a9d39a8b89d96401c0e9639383dfd8671568a381aa2a9b2ee6a1282700118e5",
+      "tests/evidence/phase6_stack_observation_contract.py": "17ede1a4dc394ad5e983eb4860c9dcd7d0817339ab9829b84688fd140886c58a",
+      "tests/evidence/phase6_tank_continuation_contract.py": "ac79ce93c55b2ea49de1dcc4533364f1a4db0efba14c24a91cffa951d5f79f1a",
+      "tests/fixtures/phase4_game.py": "067f7f37f4850f7a0adef0a0317f2191cd31e87ccbd9fb268eeada674693534a",
+      "tests/fixtures/phase6_repairs.py": "4c24f2b518da4cb5bb182548c14e8408079e0bb70900e697cd1a482776cfb000",
+      "tests/session/phase6_route_contract.py": "11ba7c89e590a82c7602f2b9e6455c803e6e1ac23641d6984f55e27501c7aaf4",
+      "tests/session/phase6_stack_forward_contract.c": "99da347f10a908fe80fae856e619994b5957ca9f0c204b67127755511f376d83",
+      "tools/desktop/CMakeLists.txt": "03ffc4b59ccf80d5f6aae8ffb612bcfdbe3a3866bb7e3bafa46b4ad33b9f7e6a",
+      "tools/desktop/audio.c": "49a52bff4e38bd421e6adb354ad1eeafeda5d1e549ce6870c4b6e58db8906ba2",
+      "tools/desktop/audio.h": "3352e557cbb57be5c796db5320eb7736497087835d5c9c4022689632b6ed99a7",
+      "tools/desktop/main_sdl.c": "5a0567ab037d5216f913f37e5c4a7a05c5bcd2f11496a832d7a2b9bc8f312892",
+      "tools/desktop/stats.h": "3bcf7f367143f6423d1de8096561533a88c4385f2f8c80ed76a6e44f38287972",
+      "tools/diagnostic/main.c": "7c4b4b1430b36054bea4bf8569a0c25b65b74719966c54f34bec1e8325d22b8f",
+      "tools/evidence/core_benchmark.c": "5be2dc68d6ba04a14573e423bd75f7f804c75049d1f9eb84d1ca93da0c082287",
+      "tools/evidence/diagnostic_identity.h": "d0a209880ff6c5acf17811a96a0956da4f47c9931ed4de06e05a36962732ddd3",
+      "tools/evidence/evidence.h": "de0e6e1d8bb09cb9ba5775a2b71dbad851e822bf01c18099c4d07152ed7b91dd",
+      "tools/evidence/fm_compare/CMakeLists.txt": "970ee5c3ba547f143bb21462b0864d583878eec0b1b4fc555e8b292fe4a398a2",
+      "tools/evidence/fm_compare/nuked_replay.c": "1cecba2f691d05309120eb4b6eb80b89ea7ad72a20b6cb9453ffdc46ef550c8d",
+      "tools/evidence/fm_compare/port_replay.c": "b825f1fb5da0e344e30becd2c8c7e8588f9efd1710c2a59bcb3b28c984865241",
+      "tools/evidence/main.c": "264abf6437aa0bec9a881f8dd7969ee61e405a7655f0d64ec164616ff3e93752",
+      "tools/evidence/validate.c": "9b7a911820b60c21b7df355b7bed294ec0a1d8470bb96875563a434b83894f0e",
+      "tools/headless/main.c": "ffd19aa2e912242efa506e7c57e42773407107de030280e663fd9a7404601045",
+      "tools/session/CMakeLists.txt": "7eb996770f669e2510aa260a21000190c8baba3e38c74205b45c2e9f937ede58",
+      "tools/session/input_log.c": "ae3d6bdddd359e6b7d3d28bb5f551b0185efe634c01a875f87e6b3dd3809523e",
+      "tools/session/input_log.h": "93085784e47121fb01cf325169825efab6275d9d76ab7196e44ea701e68e2108",
+      "tools/session/rate_ctl.c": "13f19473878f7901a4a74e4beae82419fb0cc4563c91144b401644099521a015",
+      "tools/session/rate_ctl.h": "2fc370a8e1780010ada4f2720be3e0194b9bb2e93db73c8f7528a25ca5076281",
+      "tools/session/rom_file.c": "7838d2e6c377fea7e2adfe11ba31c47ebfc904719d8f81685e5ffdd9b40e4e49",
+      "tools/session/rom_file.h": "2238f2dfdd36d8c5188cdd2dc0fefe9b7bfb3a5ca81f484ca7e40cf048cd07d7",
+      "tools/session/route_controller.c": "1b2413e9bc2d28c871f2e5759860859ca27d63d69773eea088cec3dceec16123",
+      "tools/session/route_controller.h": "7b018cdcd67c474ac0da81d42be2025b260e18ca4e0cd32d49ebe5e23d280def",
+      "tools/session/session.c": "e1310ec60c323d9bb934c07fee2ce75b315734a9a17851bedb7d7945c0415fc9",
+      "tools/session/session.h": "8613b36c50eb66e9b00bdc5a91584d883eaccc1f6a04aa4a3c2a4e560c8cc9c5"
+    },
+    "source_identity": "efdc0d268650f18edf6dab1d3748993ca3deb46288eea6029164ad219491d475"
+  },
+  "d125_component_disposition": {
+    "component_review_path": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/06-22-COMPONENT-REVIEW-G02.md",
+    "component_review_sha256": "2ffa2071435ae9ebe743d33144b688e0623075c4359c4e08e07519b70194c717",
+    "components": [
+      {
+        "new_sha256": "aecc1b95cd5c10a261a71d486752e6090b297f6628952789ec3cc473987100dc",
+        "old_sha256": "aecc1b95cd5c10a261a71d486752e6090b297f6628952789ec3cc473987100dc",
+        "path": "CMakeLists.txt"
+      },
+      {
+        "new_sha256": "970af9843e9fe13fab48d67a0ca3ea3a41407c2e7ff944e530c134798929a37d",
+        "old_sha256": "970af9843e9fe13fab48d67a0ca3ea3a41407c2e7ff944e530c134798929a37d",
+        "path": "cmake/EffectiveConfiguration.cmake"
+      },
+      {
+        "new_sha256": "8de01cf79bca7ba9c885645e0f04aaa21cd32c7a16c8ee15b2031d7460a0cd04",
+        "old_sha256": "8de01cf79bca7ba9c885645e0f04aaa21cd32c7a16c8ee15b2031d7460a0cd04",
+        "path": "cmake/GenewhipDesktop.cmake"
+      },
+      {
+        "new_sha256": "fae8cbfb3b0e5e3e7f41063eaabe3dae1ae9e71293a341b8d794532063da0f19",
+        "old_sha256": "fae8cbfb3b0e5e3e7f41063eaabe3dae1ae9e71293a341b8d794532063da0f19",
+        "path": "include/genewhip/genewhip.h"
+      },
+      {
+        "new_sha256": "35f8a0ed64a6ea29a090f3b583084d730e4e86e0536ea6cd8fe9870bff196585",
+        "old_sha256": "f8cf19dd8731ee548b3b0672dcc113ae6fd667a6e8a09770fe628dd096f53a0f",
+        "path": "scripts/evidence/phase6_accounting.py"
+      },
+      {
+        "new_sha256": "93b363193afec8be2ff025b9b806a4e2efb5cf9253dd7582325660b5a0099ccd",
+        "old_sha256": "ae80307204b08fb556df0da4e77ae3a36be351b2f5bb7d1cf7fbba2635a1b541",
+        "path": "scripts/evidence/phase6_routes.py"
+      },
+      {
+        "new_sha256": "904d72bbeef9f1e85fab1b20c6b8c6395d4c0d39e2ad858d4175797926fe53e8",
+        "old_sha256": "904d72bbeef9f1e85fab1b20c6b8c6395d4c0d39e2ad858d4175797926fe53e8",
+        "path": "src/audio_kernel.h"
+      },
+      {
+        "new_sha256": "88411feff8e3f1ac81e78503000d7a38222faf4c22215decf13b87e558d3c26e",
+        "old_sha256": "88411feff8e3f1ac81e78503000d7a38222faf4c22215decf13b87e558d3c26e",
+        "path": "src/audio_out.c"
+      },
+      {
+        "new_sha256": "cf0ffb40d4a35308084148764f32af285bf1f162dbb766b37edea09819fd3587",
+        "old_sha256": "cf0ffb40d4a35308084148764f32af285bf1f162dbb766b37edea09819fd3587",
+        "path": "src/audio_out.h"
+      },
+      {
+        "new_sha256": "4957e9e888c4a7e890bd416701c888439e09b6224ce210e0ed50fa5db95489a5",
+        "old_sha256": "4957e9e888c4a7e890bd416701c888439e09b6224ce210e0ed50fa5db95489a5",
+        "path": "src/bus.c"
+      },
+      {
+        "new_sha256": "6c7af23879bc982cbbbfdcedb1c29ab76abc4bbb57eb8fa2c7791f9c28e8695b",
+        "old_sha256": "6c7af23879bc982cbbbfdcedb1c29ab76abc4bbb57eb8fa2c7791f9c28e8695b",
+        "path": "src/core.c"
+      },
+      {
+        "new_sha256": "2c4f9e0a8285ac036abb65b45036e3ee8cda0c1dd7c6caaa571ec581baa598e9",
+        "old_sha256": "2c4f9e0a8285ac036abb65b45036e3ee8cda0c1dd7c6caaa571ec581baa598e9",
+        "path": "src/cpu68000.c"
+      },
+      {
+        "new_sha256": "703cc829fd8d9a177a1df49c56d6f10a006e139d0584e9fabbde57eb7a26424b",
+        "old_sha256": "703cc829fd8d9a177a1df49c56d6f10a006e139d0584e9fabbde57eb7a26424b",
+        "path": "src/diagnostic.c"
+      },
+      {
+        "new_sha256": "78a7e172dd5a5c377d6af76a50bcf37a5c14449d8fc375e4dd774cd9bacc074a",
+        "old_sha256": "78a7e172dd5a5c377d6af76a50bcf37a5c14449d8fc375e4dd774cd9bacc074a",
+        "path": "src/diagnostics.c"
+      },
+      {
+        "new_sha256": "e280c5da3ac1d5aed0c1e2f7816280b0932f38326470921c22d72647e7530dce",
+        "old_sha256": "e280c5da3ac1d5aed0c1e2f7816280b0932f38326470921c22d72647e7530dce",
+        "path": "src/internal.h"
+      },
+      {
+        "new_sha256": "1995ed7e09bff8d46ba62aba82b62c7f372396590d08a1efdf127967ecf136f8",
+        "old_sha256": "1995ed7e09bff8d46ba62aba82b62c7f372396590d08a1efdf127967ecf136f8",
+        "path": "src/io.c"
+      },
+      {
+        "new_sha256": "b6735adb5e896793979bf076451e3e70207443a8ad04016c491b9bb0cf2de6eb",
+        "old_sha256": "b6735adb5e896793979bf076451e3e70207443a8ad04016c491b9bb0cf2de6eb",
+        "path": "src/io.h"
+      },
+      {
+        "new_sha256": "c5bd03079a672a5cb6af027b3398e3e525ade1f3924be4dd499be8a5955e8f56",
+        "old_sha256": "c5bd03079a672a5cb6af027b3398e3e525ade1f3924be4dd499be8a5955e8f56",
+        "path": "src/psg.c"
+      },
+      {
+        "new_sha256": "71e11308ac5f5995ba5890c2964b5b943506f7436633f4c4d8f9640ee36cb678",
+        "old_sha256": "71e11308ac5f5995ba5890c2964b5b943506f7436633f4c4d8f9640ee36cb678",
+        "path": "src/psg.h"
+      },
+      {
+        "new_sha256": "7460a0984818d7cf39d4b0bb53648474d6fa6d057d768f0b95c7cacae9798e6a",
+        "old_sha256": "7460a0984818d7cf39d4b0bb53648474d6fa6d057d768f0b95c7cacae9798e6a",
+        "path": "src/render.c"
+      },
+      {
+        "new_sha256": "500176e08cc5fa5db75421c93a255f03d693b7467d929a9f733c782809cc3de3",
+        "old_sha256": "500176e08cc5fa5db75421c93a255f03d693b7467d929a9f733c782809cc3de3",
+        "path": "src/state_digest.c"
+      },
+      {
+        "new_sha256": "6ec915654439ac66c81ffc29db6f65da15f453ccf59cfab33733e7782d3516ff",
+        "old_sha256": "6ec915654439ac66c81ffc29db6f65da15f453ccf59cfab33733e7782d3516ff",
+        "path": "src/state_digest.h"
+      },
+      {
+        "new_sha256": "5839e3125b2ea5f3be44f53c0f5b35963fc14ac3f2e3964d3ca4d73b837f74ae",
+        "old_sha256": "5839e3125b2ea5f3be44f53c0f5b35963fc14ac3f2e3964d3ca4d73b837f74ae",
+        "path": "src/vdp.c"
+      },
+      {
+        "new_sha256": "e6772f95fdb097234ff604595e0bf90d53b280726cb9c0d2a0e2c238445f9490",
+        "old_sha256": "e6772f95fdb097234ff604595e0bf90d53b280726cb9c0d2a0e2c238445f9490",
+        "path": "src/vdp.h"
+      },
+      {
+        "new_sha256": "24e83e20165ca38124236d21452e58038357b7f17d7e969a0af4d567bc230608",
+        "old_sha256": "24e83e20165ca38124236d21452e58038357b7f17d7e969a0af4d567bc230608",
+        "path": "src/ym2612.c"
+      },
+      {
+        "new_sha256": "c60e3383b9b949374d39ac166174090a9446c20fddf187f4f582a686c29861fe",
+        "old_sha256": "c60e3383b9b949374d39ac166174090a9446c20fddf187f4f582a686c29861fe",
+        "path": "src/ym2612.h"
+      },
+      {
+        "new_sha256": "51d23789fcce51fce373cbdd30482d154b1d8678ca36056723e53c644ecc5c32",
+        "old_sha256": "51d23789fcce51fce373cbdd30482d154b1d8678ca36056723e53c644ecc5c32",
+        "path": "src/z80.c"
+      },
+      {
+        "new_sha256": "92565747241d5fbfa930a94dacf36c1598a79716ce17731d68276a2fb3f50319",
+        "old_sha256": "92565747241d5fbfa930a94dacf36c1598a79716ce17731d68276a2fb3f50319",
+        "path": "src/z80.h"
+      },
+      {
+        "new_sha256": "7dcb7176d3aaa1a5ed39b21ebbd7240e395c0835d9a9d72656abeeb4fb11fa4b",
+        "old_sha256": "7dcb7176d3aaa1a5ed39b21ebbd7240e395c0835d9a9d72656abeeb4fb11fa4b",
+        "path": "src/z80_bus.c"
+      },
+      {
+        "new_sha256": "0b5e5a1a084701b3867271730086b10d473764177a0e77951108ffa53a61d70b",
+        "old_sha256": "ab42367e3e5969e60c0856a3fda4f251663304ffee225c2bdac0e6dc72c799ba",
+        "path": "tests/evidence/phase6_accounting_contract.py"
+      },
+      {
+        "new_sha256": "3f05000c09ae7cf20991b5d8d0e95ae544c98cc8ab78cae80f3a4664d16affd5",
+        "old_sha256": "absent-at-accepted19",
+        "path": "tests/evidence/phase6_d124_consumers_contract.py"
+      },
+      {
+        "new_sha256": "5ba2ed0d3000dc3a0ff085055415a2a04cdbafa15a940565c9ad9cfbaebcb305",
+        "old_sha256": "absent-at-accepted19",
+        "path": "tests/evidence/phase6_d125_authored_fixture.py"
+      },
+      {
+        "new_sha256": "4a9d39a8b89d96401c0e9639383dfd8671568a381aa2a9b2ee6a1282700118e5",
+        "old_sha256": "absent-at-accepted19",
+        "path": "tests/evidence/phase6_d125_consumers_contract.py"
+      },
+      {
+        "new_sha256": "17ede1a4dc394ad5e983eb4860c9dcd7d0817339ab9829b84688fd140886c58a",
+        "old_sha256": "17ede1a4dc394ad5e983eb4860c9dcd7d0817339ab9829b84688fd140886c58a",
+        "path": "tests/evidence/phase6_stack_observation_contract.py"
+      },
+      {
+        "new_sha256": "ac79ce93c55b2ea49de1dcc4533364f1a4db0efba14c24a91cffa951d5f79f1a",
+        "old_sha256": "709f3b8afb0f569ad2e09e1b9f7b571470840838f388b670236368c56742958a",
+        "path": "tests/evidence/phase6_tank_continuation_contract.py"
+      },
+      {
+        "new_sha256": "067f7f37f4850f7a0adef0a0317f2191cd31e87ccbd9fb268eeada674693534a",
+        "old_sha256": "067f7f37f4850f7a0adef0a0317f2191cd31e87ccbd9fb268eeada674693534a",
+        "path": "tests/fixtures/phase4_game.py"
+      },
+      {
+        "new_sha256": "4c24f2b518da4cb5bb182548c14e8408079e0bb70900e697cd1a482776cfb000",
+        "old_sha256": "4cf9b8b5edfe650691cff9f2f92f3d81c4e69c3c30847927de9084967df4fc4d",
+        "path": "tests/fixtures/phase6_repairs.py"
+      },
+      {
+        "new_sha256": "11ba7c89e590a82c7602f2b9e6455c803e6e1ac23641d6984f55e27501c7aaf4",
+        "old_sha256": "11ba7c89e590a82c7602f2b9e6455c803e6e1ac23641d6984f55e27501c7aaf4",
+        "path": "tests/session/phase6_route_contract.py"
+      },
+      {
+        "new_sha256": "99da347f10a908fe80fae856e619994b5957ca9f0c204b67127755511f376d83",
+        "old_sha256": "99da347f10a908fe80fae856e619994b5957ca9f0c204b67127755511f376d83",
+        "path": "tests/session/phase6_stack_forward_contract.c"
+      },
+      {
+        "new_sha256": "03ffc4b59ccf80d5f6aae8ffb612bcfdbe3a3866bb7e3bafa46b4ad33b9f7e6a",
+        "old_sha256": "03ffc4b59ccf80d5f6aae8ffb612bcfdbe3a3866bb7e3bafa46b4ad33b9f7e6a",
+        "path": "tools/desktop/CMakeLists.txt"
+      },
+      {
+        "new_sha256": "49a52bff4e38bd421e6adb354ad1eeafeda5d1e549ce6870c4b6e58db8906ba2",
+        "old_sha256": "49a52bff4e38bd421e6adb354ad1eeafeda5d1e549ce6870c4b6e58db8906ba2",
+        "path": "tools/desktop/audio.c"
+      },
+      {
+        "new_sha256": "3352e557cbb57be5c796db5320eb7736497087835d5c9c4022689632b6ed99a7",
+        "old_sha256": "3352e557cbb57be5c796db5320eb7736497087835d5c9c4022689632b6ed99a7",
+        "path": "tools/desktop/audio.h"
+      },
+      {
+        "new_sha256": "5a0567ab037d5216f913f37e5c4a7a05c5bcd2f11496a832d7a2b9bc8f312892",
+        "old_sha256": "5a0567ab037d5216f913f37e5c4a7a05c5bcd2f11496a832d7a2b9bc8f312892",
+        "path": "tools/desktop/main_sdl.c"
+      },
+      {
+        "new_sha256": "3bcf7f367143f6423d1de8096561533a88c4385f2f8c80ed76a6e44f38287972",
+        "old_sha256": "3bcf7f367143f6423d1de8096561533a88c4385f2f8c80ed76a6e44f38287972",
+        "path": "tools/desktop/stats.h"
+      },
+      {
+        "new_sha256": "7c4b4b1430b36054bea4bf8569a0c25b65b74719966c54f34bec1e8325d22b8f",
+        "old_sha256": "7c4b4b1430b36054bea4bf8569a0c25b65b74719966c54f34bec1e8325d22b8f",
+        "path": "tools/diagnostic/main.c"
+      },
+      {
+        "new_sha256": "5be2dc68d6ba04a14573e423bd75f7f804c75049d1f9eb84d1ca93da0c082287",
+        "old_sha256": "5be2dc68d6ba04a14573e423bd75f7f804c75049d1f9eb84d1ca93da0c082287",
+        "path": "tools/evidence/core_benchmark.c"
+      },
+      {
+        "new_sha256": "d0a209880ff6c5acf17811a96a0956da4f47c9931ed4de06e05a36962732ddd3",
+        "old_sha256": "d0a209880ff6c5acf17811a96a0956da4f47c9931ed4de06e05a36962732ddd3",
+        "path": "tools/evidence/diagnostic_identity.h"
+      },
+      {
+        "new_sha256": "de0e6e1d8bb09cb9ba5775a2b71dbad851e822bf01c18099c4d07152ed7b91dd",
+        "old_sha256": "de0e6e1d8bb09cb9ba5775a2b71dbad851e822bf01c18099c4d07152ed7b91dd",
+        "path": "tools/evidence/evidence.h"
+      },
+      {
+        "new_sha256": "970ee5c3ba547f143bb21462b0864d583878eec0b1b4fc555e8b292fe4a398a2",
+        "old_sha256": "970ee5c3ba547f143bb21462b0864d583878eec0b1b4fc555e8b292fe4a398a2",
+        "path": "tools/evidence/fm_compare/CMakeLists.txt"
+      },
+      {
+        "new_sha256": "1cecba2f691d05309120eb4b6eb80b89ea7ad72a20b6cb9453ffdc46ef550c8d",
+        "old_sha256": "1cecba2f691d05309120eb4b6eb80b89ea7ad72a20b6cb9453ffdc46ef550c8d",
+        "path": "tools/evidence/fm_compare/nuked_replay.c"
+      },
+      {
+        "new_sha256": "b825f1fb5da0e344e30becd2c8c7e8588f9efd1710c2a59bcb3b28c984865241",
+        "old_sha256": "b825f1fb5da0e344e30becd2c8c7e8588f9efd1710c2a59bcb3b28c984865241",
+        "path": "tools/evidence/fm_compare/port_replay.c"
+      },
+      {
+        "new_sha256": "264abf6437aa0bec9a881f8dd7969ee61e405a7655f0d64ec164616ff3e93752",
+        "old_sha256": "264abf6437aa0bec9a881f8dd7969ee61e405a7655f0d64ec164616ff3e93752",
+        "path": "tools/evidence/main.c"
+      },
+      {
+        "new_sha256": "9b7a911820b60c21b7df355b7bed294ec0a1d8470bb96875563a434b83894f0e",
+        "old_sha256": "9b7a911820b60c21b7df355b7bed294ec0a1d8470bb96875563a434b83894f0e",
+        "path": "tools/evidence/validate.c"
+      },
+      {
+        "new_sha256": "ffd19aa2e912242efa506e7c57e42773407107de030280e663fd9a7404601045",
+        "old_sha256": "ffd19aa2e912242efa506e7c57e42773407107de030280e663fd9a7404601045",
+        "path": "tools/headless/main.c"
+      },
+      {
+        "new_sha256": "7eb996770f669e2510aa260a21000190c8baba3e38c74205b45c2e9f937ede58",
+        "old_sha256": "7eb996770f669e2510aa260a21000190c8baba3e38c74205b45c2e9f937ede58",
+        "path": "tools/session/CMakeLists.txt"
+      },
+      {
+        "new_sha256": "ae3d6bdddd359e6b7d3d28bb5f551b0185efe634c01a875f87e6b3dd3809523e",
+        "old_sha256": "ae3d6bdddd359e6b7d3d28bb5f551b0185efe634c01a875f87e6b3dd3809523e",
+        "path": "tools/session/input_log.c"
+      },
+      {
+        "new_sha256": "93085784e47121fb01cf325169825efab6275d9d76ab7196e44ea701e68e2108",
+        "old_sha256": "93085784e47121fb01cf325169825efab6275d9d76ab7196e44ea701e68e2108",
+        "path": "tools/session/input_log.h"
+      },
+      {
+        "new_sha256": "13f19473878f7901a4a74e4beae82419fb0cc4563c91144b401644099521a015",
+        "old_sha256": "13f19473878f7901a4a74e4beae82419fb0cc4563c91144b401644099521a015",
+        "path": "tools/session/rate_ctl.c"
+      },
+      {
+        "new_sha256": "2fc370a8e1780010ada4f2720be3e0194b9bb2e93db73c8f7528a25ca5076281",
+        "old_sha256": "2fc370a8e1780010ada4f2720be3e0194b9bb2e93db73c8f7528a25ca5076281",
+        "path": "tools/session/rate_ctl.h"
+      },
+      {
+        "new_sha256": "7838d2e6c377fea7e2adfe11ba31c47ebfc904719d8f81685e5ffdd9b40e4e49",
+        "old_sha256": "7838d2e6c377fea7e2adfe11ba31c47ebfc904719d8f81685e5ffdd9b40e4e49",
+        "path": "tools/session/rom_file.c"
+      },
+      {
+        "new_sha256": "2238f2dfdd36d8c5188cdd2dc0fefe9b7bfb3a5ca81f484ca7e40cf048cd07d7",
+        "old_sha256": "2238f2dfdd36d8c5188cdd2dc0fefe9b7bfb3a5ca81f484ca7e40cf048cd07d7",
+        "path": "tools/session/rom_file.h"
+      },
+      {
+        "new_sha256": "1b2413e9bc2d28c871f2e5759860859ca27d63d69773eea088cec3dceec16123",
+        "old_sha256": "1b2413e9bc2d28c871f2e5759860859ca27d63d69773eea088cec3dceec16123",
+        "path": "tools/session/route_controller.c"
+      },
+      {
+        "new_sha256": "7b018cdcd67c474ac0da81d42be2025b260e18ca4e0cd32d49ebe5e23d280def",
+        "old_sha256": "7b018cdcd67c474ac0da81d42be2025b260e18ca4e0cd32d49ebe5e23d280def",
+        "path": "tools/session/route_controller.h"
+      },
+      {
+        "new_sha256": "e1310ec60c323d9bb934c07fee2ce75b315734a9a17851bedb7d7945c0415fc9",
+        "old_sha256": "e1310ec60c323d9bb934c07fee2ce75b315734a9a17851bedb7d7945c0415fc9",
+        "path": "tools/session/session.c"
+      },
+      {
+        "new_sha256": "8613b36c50eb66e9b00bdc5a91584d883eaccc1f6a04aa4a3c2a4e560c8cc9c5",
+        "old_sha256": "8613b36c50eb66e9b00bdc5a91584d883eaccc1f6a04aa4a3c2a4e560c8cc9c5",
+        "path": "tools/session/session.h"
+      }
+    ],
+    "prior_bridge_file_sha256": "a36ca21fe8a0e7f948d670efba90a04fd534854001bb25d2433c058d0d709c3d",
+    "prior_bridge_path": "evidence/phase6-tank-observer-bridge-d123-g02.json",
+    "prior_bridge_sha256": "6ff8254b4f072f7c29ee55e311f1703567291799636ddc60dc3b511c1762c0f7",
+    "raw_closure": {
+      "capture_descriptor_sha256": "f5ec4a0f4e154cacab94cbdeac8affa6e9fad01cd05eebeeeb155a1bfa3fc2e4",
+      "external_tool_sha256": {
+        "cmake": "01bb5214684f5390e96e0d6aef7aafd7415b77ecbcfd59f6b55b018d8de0d9a2",
+        "hooks-off:CMAKE_C_COMPILER": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9",
+        "hooks-off:CMAKE_MAKE_PROGRAM": "48761628046784f59bd789f5a72b88da99205c5849e5d19ae4d317854ae09e83",
+        "native:CMAKE_C_COMPILER": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9",
+        "native:CMAKE_MAKE_PROGRAM": "48761628046784f59bd789f5a72b88da99205c5849e5d19ae4d317854ae09e83",
+        "sanitize:CMAKE_C_COMPILER": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9",
+        "sanitize:CMAKE_MAKE_PROGRAM": "48761628046784f59bd789f5a72b88da99205c5849e5d19ae4d317854ae09e83"
+      },
+      "original_semantic_closure": {
+        "base_commit": "73c767bf5ecabe15eeb061296d7b571c7c0c5654",
+        "bridge_sha256": "be402e52f03279bfd90247692d5d45c57cd2980c56bbff154e3aeb1f403db3e9",
+        "capture_descriptor_sha256": "f5ec4a0f4e154cacab94cbdeac8affa6e9fad01cd05eebeeeb155a1bfa3fc2e4",
+        "control_client_binary_sha256": "f15b0cadc720f4c8c4c6dca3b9deb02f13df647b23de5a78324637ad591bd7c2",
+        "control_driver_inputs": {
+          "fixtures/independent-game-v2/game.bin": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb",
+          "fixtures/independent-game-v2/oracle.json": "1a9d99cb01496f26fe3dc33d0c1bcb0cf22bd9178088fa183e5bba37a8600f42",
+          "fixtures/independent-game-v2/scenario.json": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2",
+          "fixtures/independent-game-v2/src/game.s": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe",
+          "tests/fixtures/phase4_game.py": "067f7f37f4850f7a0adef0a0317f2191cd31e87ccbd9fb268eeada674693534a"
+        },
+        "current_source_identity": "efdc0d268650f18edf6dab1d3748993ca3deb46288eea6029164ad219491d475",
+        "historical_11_status": "halted-immutable",
+        "historical_control_driver_inputs": {
+          "fixtures/independent-game-v2/game.bin": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb",
+          "fixtures/independent-game-v2/oracle.json": "1a9d99cb01496f26fe3dc33d0c1bcb0cf22bd9178088fa183e5bba37a8600f42",
+          "fixtures/independent-game-v2/scenario.json": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2",
+          "fixtures/independent-game-v2/src/game.s": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe",
+          "tests/fixtures/phase4_game.py": "0e12e7df67796383f8f051000e8c4e4a93e16226db32c037a9245b89c7c90832"
+        },
+        "launches": 0,
+        "native_binary_sha256": "131009e734225960783944ead01e81faca3ecd376eeabc8d5992445195400514",
+        "new_target_attempts": 0,
+        "offline_authorization_proof": {
+          "coordinator_sha256": "4c24f2b518da4cb5bb182548c14e8408079e0bb70900e697cd1a482776cfb000",
+          "executed_in_this_artifact": false,
+          "required_commands": [
+            "python3 -I tests/evidence/phase6_accounting_contract.py",
+            "python3 -I tests/fixtures/phase6_repairs.py --tank-continuation-offline"
+          ],
+          "test_contract_sha256": "0b5e5a1a084701b3867271730086b10d473764177a0e77951108ffa53a61d70b"
+        },
+        "old_source_identity": "597d400ce791b447f14104028d4b83aeacc3907c9d844972eb9f1ee58dbf9ccf",
+        "original_runtime_closure": {
+          "common_raw_reports": true,
+          "descriptors": {
+            "hooks-off": "78965c61dbe31983897aad941757dea646720bd0aaa1908d44b805bb9626e613",
+            "native": "78965c61dbe31983897aad941757dea646720bd0aaa1908d44b805bb9626e613",
+            "sanitize": "78965c61dbe31983897aad941757dea646720bd0aaa1908d44b805bb9626e613"
+          },
+          "fixture_and_D118_authority_unchanged": true,
+          "guests": {
+            "hooks-off": "6ade9be937d545d52aecff5021e9639625092e0f858093fa8e9d0fb5ee65f059",
+            "native": "6ade9be937d545d52aecff5021e9639625092e0f858093fa8e9d0fb5ee65f059",
+            "sanitize": "6ade9be937d545d52aecff5021e9639625092e0f858093fa8e9d0fb5ee65f059"
+          },
+          "observer_output_paths": {
+            "hooks-off": "build/phase6-movem-hooks-off/tools/session/gw_headless",
+            "native": "build/phase6/tools/session/gw_headless",
+            "sanitize": "build/phase6-movem-sanitize/tools/session/gw_headless"
+          },
+          "retained_historical_binary_paths": {
+            "hooks-off": "build/phase6-d122-original-binaries/hooks-off/gw_headless",
+            "native": "build/phase6-d122-original-binaries/native/gw_headless",
+            "sanitize": "build/phase6-d122-original-binaries/sanitize/gw_headless"
+          },
+          "variant_binaries": {
+            "hooks-off": "ccb99b27902dec2e912f657660900e008df3bb78c795bf91b8e67a39a0e65869",
+            "native": "131009e734225960783944ead01e81faca3ecd376eeabc8d5992445195400514",
+            "sanitize": "689f1671085c5ecf6b4f5976e26b8a1caa27b328c837ca78b8f57bbc7c2f14ac"
+          },
+          "variant_binaries_distinct": true,
+          "variant_binary_command_paths": {
+            "hooks-off": "build/phase6-movem-hooks-off/tools/session/gw_headless",
+            "native": "build/phase6/tools/session/gw_headless",
+            "sanitize": "build/phase6-movem-sanitize/tools/session/gw_headless"
+          }
+        },
+        "plan12_unblocked": false,
+        "proof_input_changed_paths": {
+          "scripts/evidence/phase6_accounting.py": {
+            "after_sha256": "35f8a0ed64a6ea29a090f3b583084d730e4e86e0536ea6cd8fe9870bff196585",
+            "before_sha256": "19e754d8ed07cb201e34ed32eb52501059943c0f5593c7276f4f3e8ff818dee3"
+          },
+          "scripts/evidence/phase6_routes.py": {
+            "after_sha256": "93b363193afec8be2ff025b9b806a4e2efb5cf9253dd7582325660b5a0099ccd",
+            "before_sha256": "ae80307204b08fb556df0da4e77ae3a36be351b2f5bb7d1cf7fbba2635a1b541"
+          },
+          "tests/evidence/phase6_accounting_contract.py": {
+            "after_sha256": "0b5e5a1a084701b3867271730086b10d473764177a0e77951108ffa53a61d70b",
+            "before_sha256": "680bad0a4012fb4dc00d5f61bb3fd591ebcece29755059babc3ed34cea93add9"
+          },
+          "tests/fixtures/phase6_repairs.py": {
+            "after_sha256": "4c24f2b518da4cb5bb182548c14e8408079e0bb70900e697cd1a482776cfb000",
+            "before_sha256": "950d3761cdac48168ccabab927c7b820545523a9247b6750f44824bf1b2f318e"
+          },
+          "tools/headless/main.c": {
+            "after_sha256": "ffd19aa2e912242efa506e7c57e42773407107de030280e663fd9a7404601045",
+            "before_sha256": "0fbc50eab81a82b4eab03c609f6218f526cf047cb9dc846009facbb37ca94f6b"
+          },
+          "tools/session/route_controller.c": {
+            "after_sha256": "1b2413e9bc2d28c871f2e5759860859ca27d63d69773eea088cec3dceec16123",
+            "before_sha256": "175da93b90cf253827aa92336ec18d53362f3acf7ac6121fdd5ecb67fff716fb"
+          }
+        },
+        "retained_manifest_sha256": "f3bea1d760873298b940d00aa0c5e70147cdd78a64907c4704d90f62d1e87146",
+        "retained_report_common_sha256": "7856b65a4e5e0d901ef70023d18c76453791f2f863ffcc1d76c27d83a971a211",
+        "retained_reports": [
+          {
+            "assertions": {
+              "bounded_zero_field_prefix": true,
+              "exact_unsupported_stop": true,
+              "fault_does_not_retire": true,
+              "pea_16bit_timing": true,
+              "pea_opcode_retired": true,
+              "stack_pointer_and_sr": true,
+              "stack_value_big_endian": true,
+              "stop_metadata_agrees": true,
+              "swap_result": true
+            },
+            "case": "debug-current-native-producer",
+            "process_stream_sha256": {
+              "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "stdout": "4539d248c965d1ba3c0c417f973a4a499408754249c255f000f3bb43cf45179d"
+            },
+            "raw_report_sha256": "7856b65a4e5e0d901ef70023d18c76453791f2f863ffcc1d76c27d83a971a211",
+            "variant": "native"
+          },
+          {
+            "assertions": {
+              "bounded_zero_field_prefix": true,
+              "exact_unsupported_stop": true,
+              "fault_does_not_retire": true,
+              "pea_16bit_timing": true,
+              "pea_opcode_retired": true,
+              "stack_pointer_and_sr": true,
+              "stack_value_big_endian": true,
+              "stop_metadata_agrees": true,
+              "swap_result": true
+            },
+            "case": "debug-current-sanitize-producer",
+            "process_stream_sha256": {
+              "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "stdout": "4539d248c965d1ba3c0c417f973a4a499408754249c255f000f3bb43cf45179d"
+            },
+            "raw_report_sha256": "7856b65a4e5e0d901ef70023d18c76453791f2f863ffcc1d76c27d83a971a211",
+            "variant": "sanitize"
+          },
+          {
+            "assertions": {
+              "bounded_zero_field_prefix": true,
+              "exact_unsupported_stop": true,
+              "fault_does_not_retire": true,
+              "pea_16bit_timing": true,
+              "pea_opcode_retired": true,
+              "stack_pointer_and_sr": true,
+              "stack_value_big_endian": true,
+              "stop_metadata_agrees": true,
+              "swap_result": true
+            },
+            "case": "debug-current-hooks-off-producer",
+            "process_stream_sha256": {
+              "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "stdout": "4539d248c965d1ba3c0c417f973a4a499408754249c255f000f3bb43cf45179d"
+            },
+            "raw_report_sha256": "7856b65a4e5e0d901ef70023d18c76453791f2f863ffcc1d76c27d83a971a211",
+            "variant": "hooks-off"
+          }
+        ],
+        "schema": "phase6-tank-proof-revalidation-v1",
+        "source_changed_paths": {
+          "scripts/evidence/phase6_accounting.py": {
+            "after_sha256": "35f8a0ed64a6ea29a090f3b583084d730e4e86e0536ea6cd8fe9870bff196585",
+            "before_sha256": "19e754d8ed07cb201e34ed32eb52501059943c0f5593c7276f4f3e8ff818dee3"
+          },
+          "scripts/evidence/phase6_routes.py": {
+            "after_sha256": "93b363193afec8be2ff025b9b806a4e2efb5cf9253dd7582325660b5a0099ccd",
+            "before_sha256": "ae80307204b08fb556df0da4e77ae3a36be351b2f5bb7d1cf7fbba2635a1b541"
+          },
+          "tests/fixtures/phase6_repairs.py": {
+            "after_sha256": "4c24f2b518da4cb5bb182548c14e8408079e0bb70900e697cd1a482776cfb000",
+            "before_sha256": "950d3761cdac48168ccabab927c7b820545523a9247b6750f44824bf1b2f318e"
+          },
+          "tools/headless/main.c": {
+            "after_sha256": "ffd19aa2e912242efa506e7c57e42773407107de030280e663fd9a7404601045",
+            "before_sha256": "0fbc50eab81a82b4eab03c609f6218f526cf047cb9dc846009facbb37ca94f6b"
+          },
+          "tools/session/CMakeLists.txt": {
+            "after_sha256": "7eb996770f669e2510aa260a21000190c8baba3e38c74205b45c2e9f937ede58",
+            "before_sha256": "99e7d0b7da558e0b0b40912333afb54e46939e657e6c61e271916632b78c48c5"
+          },
+          "tools/session/route_controller.c": {
+            "after_sha256": "1b2413e9bc2d28c871f2e5759860859ca27d63d69773eea088cec3dceec16123",
+            "before_sha256": "175da93b90cf253827aa92336ec18d53362f3acf7ac6121fdd5ecb67fff716fb"
+          },
+          "tools/session/session.h": {
+            "after_sha256": "8613b36c50eb66e9b00bdc5a91584d883eaccc1f6a04aa4a3c2a4e560c8cc9c5",
+            "before_sha256": "7360fad4fb0652fc809238023f3eef9fa239eeb3bbfbc304a7ebc799a2526445"
+          }
+        },
+        "status": "passed-no-launch",
+        "tank_capture_descriptor_bytes": 816,
+        "tank_capture_descriptor_sha256": "f5ec4a0f4e154cacab94cbdeac8affa6e9fad01cd05eebeeeb155a1bfa3fc2e4",
+        "verifier_sha256": "ac79ce93c55b2ea49de1dcc4533364f1a4db0efba14c24a91cffa951d5f79f1a",
+        "watched_ranges": [
+          {
+            "address": 60466,
+            "bytes": 2,
+            "name": "instruction-word-0",
+            "observation": "side-effect-free boundary memory span"
+          },
+          {
+            "address": 60468,
+            "bytes": 2,
+            "name": "instruction-word-1",
+            "observation": "side-effect-free boundary memory span"
+          },
+          {
+            "address": 60470,
+            "bytes": 2,
+            "name": "instruction-word-2",
+            "observation": "side-effect-free boundary memory span"
+          }
+        ]
+      },
+      "qualification_rows": [
+        {
+          "binary_sha256": "f15b0cadc720f4c8c4c6dca3b9deb02f13df647b23de5a78324637ad591bd7c2",
+          "bound_violation": false,
+          "checks": {
+            "after_a7": 2784952332,
+            "after_bytes": [
+              0,
+              6,
+              146,
+              60
+            ],
+            "after_status": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "before_a7": 2784952336,
+            "before_bytes": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "before_status": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "boundary_calls": 1,
+            "fields": 0,
+            "instruction_delta": 1,
+            "master_tick_delta": 140,
+            "opcode": 18553,
+            "probe_pc": 512,
+            "read_calls": 8,
+            "retired": true,
+            "source_a7": 2784952336,
+            "sr_unchanged": true
+          },
+          "command": [
+            "build/phase6/tools/session/gw_headless",
+            "build/phase6/d123-observer/qualification-g02/native/guest.bin",
+            "--route-plan",
+            "build/phase6/d123-observer/qualification-g02/native/route.bin",
+            "--route-report",
+            "build/phase6/d123-observer/qualification-g02/native/native-report.json",
+            "--route-instruction-probe",
+            "512",
+            "--route-probe-only",
+            "--route-probe-stack-before-a7"
+          ],
+          "descriptor_sha256": "6eca64ca2401bfe76ab0312cefed0001a46f47a420f95950c06961d525ae6acf",
+          "guest_sha256": "7d174bfef54dd2d6a8e25629a969e0ef0734b67e0087e454dc7219821af036fe",
+          "kind": "qualification",
+          "oracle_sha256": "37563cbe830e771b645e1dd7fe651d585825f9e7d81eb34a04d821b3f281f21c",
+          "process_return_code": 0,
+          "process_streams": {
+            "stderr": {
+              "observed_bytes": 0,
+              "path": "build/phase6/d123-observer/qualification-g02/native/process.stderr.raw",
+              "retained_bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "truncated": false
+            },
+            "stdout": {
+              "observed_bytes": 46,
+              "path": "build/phase6/d123-observer/qualification-g02/native/process.stdout.raw",
+              "retained_bytes": 46,
+              "sha256": "c4bf92f4e06f7a7d360955da3a0508c63ef158b57542dbebb5804d6475584e46",
+              "truncated": false
+            }
+          },
+          "purpose_id": "d123-qual-g02-native",
+          "raw_report_path": "build/phase6/d123-observer/qualification-g02/native/native-report.json",
+          "raw_report_sha256": "8225ef1491af4aea2b1fffbd0071ccc1a1f327adf660aa4b7b54a01a77dc2bf6",
+          "source_identity": "bc4d31aa500494b6b74d18ae06dacb23bf2f01013ce8ee42481b28dae88866ad",
+          "status": "passed",
+          "timed_out": false,
+          "variant": "native"
+        },
+        {
+          "binary_sha256": "739233cb0d418642e2e6cb48879c8becaacfa0b961aeb3c3389cf4949d2ffda5",
+          "bound_violation": false,
+          "checks": {
+            "after_a7": 2,
+            "after_bytes": [
+              0,
+              0,
+              165,
+              255
+            ],
+            "after_status": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "before_a7": 2,
+            "before_bytes": [
+              0,
+              0,
+              165,
+              255
+            ],
+            "before_status": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "boundary_calls": 2,
+            "fields": 0,
+            "instruction_delta": 1,
+            "master_tick_delta": 28,
+            "opcode": 20081,
+            "probe_pc": 518,
+            "read_calls": 8,
+            "retired": true,
+            "source_a7": 2,
+            "sr_unchanged": true
+          },
+          "command": [
+            "build/phase6-movem-sanitize/tools/session/gw_headless",
+            "build/phase6/d123-observer/qualification-g02/sanitize/guest.bin",
+            "--route-plan",
+            "build/phase6/d123-observer/qualification-g02/sanitize/route.bin",
+            "--route-report",
+            "build/phase6/d123-observer/qualification-g02/sanitize/native-report.json",
+            "--route-instruction-probe",
+            "518",
+            "--route-probe-only",
+            "--route-probe-stack-before-a7"
+          ],
+          "descriptor_sha256": "6eca64ca2401bfe76ab0312cefed0001a46f47a420f95950c06961d525ae6acf",
+          "guest_sha256": "1cdf9fbcc52197fb017e503c539de6953165d493a0a759e270089042c50857b5",
+          "kind": "qualification",
+          "oracle_sha256": "7092d4e52c44c3b36d0170dcb35d2a952cfa35022059d3e58eabc63278a124ef",
+          "process_return_code": 0,
+          "process_streams": {
+            "stderr": {
+              "observed_bytes": 0,
+              "path": "build/phase6/d123-observer/qualification-g02/sanitize/process.stderr.raw",
+              "retained_bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "truncated": false
+            },
+            "stdout": {
+              "observed_bytes": 46,
+              "path": "build/phase6/d123-observer/qualification-g02/sanitize/process.stdout.raw",
+              "retained_bytes": 46,
+              "sha256": "4de6a2600ec17c18b74692b3e8309f1507fec446c41ae4644f39d8b4403218fa",
+              "truncated": false
+            }
+          },
+          "purpose_id": "d123-qual-g02-sanitize",
+          "raw_report_path": "build/phase6/d123-observer/qualification-g02/sanitize/native-report.json",
+          "raw_report_sha256": "ff373389d8dea2358c2db677eab1ab6b6857f2ad30c692c89dc59401f9b66c84",
+          "source_identity": "bc4d31aa500494b6b74d18ae06dacb23bf2f01013ce8ee42481b28dae88866ad",
+          "status": "passed",
+          "timed_out": false,
+          "variant": "sanitize"
+        },
+        {
+          "binary_sha256": "8e28e24b87bc6718dfaaf72825e037f06ed47d0c9945d9059bfc4d476316f90f",
+          "bound_violation": false,
+          "checks": {
+            "after_a7": 8388616,
+            "after_bytes": [
+              null,
+              null,
+              null,
+              null
+            ],
+            "after_status": [
+              1,
+              1,
+              1,
+              1
+            ],
+            "before_a7": 8388616,
+            "before_bytes": [
+              null,
+              null,
+              null,
+              null
+            ],
+            "before_status": [
+              1,
+              1,
+              1,
+              1
+            ],
+            "boundary_calls": 2,
+            "fields": 0,
+            "instruction_delta": 1,
+            "master_tick_delta": 28,
+            "opcode": 20081,
+            "probe_pc": 518,
+            "read_calls": 8,
+            "retired": true,
+            "source_a7": 8388616,
+            "sr_unchanged": true
+          },
+          "command": [
+            "build/phase6-movem-hooks-off/tools/session/gw_headless",
+            "build/phase6/d123-observer/qualification-g02/hooks-off/guest.bin",
+            "--route-plan",
+            "build/phase6/d123-observer/qualification-g02/hooks-off/route.bin",
+            "--route-report",
+            "build/phase6/d123-observer/qualification-g02/hooks-off/native-report.json",
+            "--route-instruction-probe",
+            "518",
+            "--route-probe-only",
+            "--route-probe-stack-before-a7"
+          ],
+          "descriptor_sha256": "6eca64ca2401bfe76ab0312cefed0001a46f47a420f95950c06961d525ae6acf",
+          "guest_sha256": "0ac7fce1dc651a20fd36111e4fa4719f1c0e40eb60d4e5947197c786cf1b37e9",
+          "kind": "qualification",
+          "oracle_sha256": "ca715a077fdcf69f50cb7fc03fe8998533fa4230a54c8752861f48ccf53f4b47",
+          "process_return_code": 0,
+          "process_streams": {
+            "stderr": {
+              "observed_bytes": 0,
+              "path": "build/phase6/d123-observer/qualification-g02/hooks-off/process.stderr.raw",
+              "retained_bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "truncated": false
+            },
+            "stdout": {
+              "observed_bytes": 46,
+              "path": "build/phase6/d123-observer/qualification-g02/hooks-off/process.stdout.raw",
+              "retained_bytes": 46,
+              "sha256": "4de6a2600ec17c18b74692b3e8309f1507fec446c41ae4644f39d8b4403218fa",
+              "truncated": false
+            }
+          },
+          "purpose_id": "d123-qual-g02-hooks-off",
+          "raw_report_path": "build/phase6/d123-observer/qualification-g02/hooks-off/native-report.json",
+          "raw_report_sha256": "9c928ff8501fa02b2b19929cb5a5200384254d3621cfa0d170ce5a6e4c472b7a",
+          "source_identity": "bc4d31aa500494b6b74d18ae06dacb23bf2f01013ce8ee42481b28dae88866ad",
+          "status": "passed",
+          "timed_out": false,
+          "variant": "hooks-off"
+        }
+      ],
+      "qualification_variants": [
+        "native",
+        "sanitize",
+        "hooks-off"
+      ],
+      "retained_file_sha256": {
+        "build/phase6-d122-original-binaries/hooks-off/gw_headless": "ccb99b27902dec2e912f657660900e008df3bb78c795bf91b8e67a39a0e65869",
+        "build/phase6-d122-original-binaries/native/gw_headless": "131009e734225960783944ead01e81faca3ecd376eeabc8d5992445195400514",
+        "build/phase6-d122-original-binaries/sanitize/gw_headless": "689f1671085c5ecf6b4f5976e26b8a1caa27b328c837ca78b8f57bbc7c2f14ac",
+        "build/phase6-movem-hooks-off/CMakeCache.txt": "05989f70a8e684ef502742d91676443ee22d109d7eea60ecf3d3c240093d5cdb",
+        "build/phase6-movem-hooks-off/tools/session/gw_headless": "8e28e24b87bc6718dfaaf72825e037f06ed47d0c9945d9059bfc4d476316f90f",
+        "build/phase6-movem-sanitize/CMakeCache.txt": "0f2204d4e321b6491d26185f3e68b40a0e12c9486e45cd2d4cabc085cfaab336",
+        "build/phase6-movem-sanitize/tools/session/gw_headless": "739233cb0d418642e2e6cb48879c8becaacfa0b961aeb3c3389cf4949d2ffda5",
+        "build/phase6/CMakeCache.txt": "acff1f6447306366f10895b747e288886c029e222ce5878508776b4de3a55a4c",
+        "build/phase6/d123-observer/qualification-g02/hooks-off/guest.bin": "0ac7fce1dc651a20fd36111e4fa4719f1c0e40eb60d4e5947197c786cf1b37e9",
+        "build/phase6/d123-observer/qualification-g02/hooks-off/native-report.json": "9c928ff8501fa02b2b19929cb5a5200384254d3621cfa0d170ce5a6e4c472b7a",
+        "build/phase6/d123-observer/qualification-g02/hooks-off/process.stderr.raw": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "build/phase6/d123-observer/qualification-g02/hooks-off/process.stdout.raw": "4de6a2600ec17c18b74692b3e8309f1507fec446c41ae4644f39d8b4403218fa",
+        "build/phase6/d123-observer/qualification-g02/hooks-off/route.bin": "6eca64ca2401bfe76ab0312cefed0001a46f47a420f95950c06961d525ae6acf",
+        "build/phase6/d123-observer/qualification-g02/hooks-off/run.json": "861c1c74aa1ff5358b9b00ceaa3aae974bcdf8720a9efeb6688ccc9fa7e6b770",
+        "build/phase6/d123-observer/qualification-g02/native/guest.bin": "7d174bfef54dd2d6a8e25629a969e0ef0734b67e0087e454dc7219821af036fe",
+        "build/phase6/d123-observer/qualification-g02/native/native-report.json": "8225ef1491af4aea2b1fffbd0071ccc1a1f327adf660aa4b7b54a01a77dc2bf6",
+        "build/phase6/d123-observer/qualification-g02/native/process.stderr.raw": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "build/phase6/d123-observer/qualification-g02/native/process.stdout.raw": "c4bf92f4e06f7a7d360955da3a0508c63ef158b57542dbebb5804d6475584e46",
+        "build/phase6/d123-observer/qualification-g02/native/route.bin": "6eca64ca2401bfe76ab0312cefed0001a46f47a420f95950c06961d525ae6acf",
+        "build/phase6/d123-observer/qualification-g02/native/run.json": "3130b831919a37c218adbd70072ab71279228fa8185bfa3af5a36f3a1809a3b9",
+        "build/phase6/d123-observer/qualification-g02/qualification-rows.json": "e4da50366bb46238976201601be84d94afaa8b3d55303f22048e3f059b2d5fe7",
+        "build/phase6/d123-observer/qualification-g02/sanitize/guest.bin": "1cdf9fbcc52197fb017e503c539de6953165d493a0a759e270089042c50857b5",
+        "build/phase6/d123-observer/qualification-g02/sanitize/native-report.json": "ff373389d8dea2358c2db677eab1ab6b6857f2ad30c692c89dc59401f9b66c84",
+        "build/phase6/d123-observer/qualification-g02/sanitize/process.stderr.raw": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "build/phase6/d123-observer/qualification-g02/sanitize/process.stdout.raw": "4de6a2600ec17c18b74692b3e8309f1507fec446c41ae4644f39d8b4403218fa",
+        "build/phase6/d123-observer/qualification-g02/sanitize/route.bin": "6eca64ca2401bfe76ab0312cefed0001a46f47a420f95950c06961d525ae6acf",
+        "build/phase6/d123-observer/qualification-g02/sanitize/run.json": "7ea7673f9a2cf95f58cab0e991d50dc113ec517754d0d84d0f34ed2942a5313a",
+        "build/phase6/tools/session/gw_headless": "f15b0cadc720f4c8c4c6dca3b9deb02f13df647b23de5a78324637ad591bd7c2",
+        "evidence/phase5-baseline-roster.json": "759253094500b61c7272de016a9a2e416bb70731133e63beb52a83a64889e691",
+        "evidence/phase5-baseline.json": "38c4eafbf094a5ce5db4cb07b21731e10b84d5447cc8572eadefc80efc95fd98",
+        "evidence/phase5-current-reference.json": "c283e02cbd683148764ee8fbae244f3677d6398cf53019f6518522bd7cd34ecf",
+        "evidence/phase5-failure-inventory.json": "dc535a6b3f79fb84a5aae4c500363c3ce87e0f3e92a88987bafc268ba36d9562",
+        "evidence/phase6-capture-recovery.json": "f3bea1d760873298b940d00aa0c5e70147cdd78a64907c4704d90f62d1e87146",
+        "evidence/phase6-stack-observation-manifest-d122.json": "fa767d0c09b568d2586fb7bfcd0eb90b818e84f4f706f6a42f39303a1fbc8d7f",
+        "evidence/phase6-stack-observation-manifest-d123-g02.json": "bcdea865c38137fe70d4ded4c571d2612b5232dd4d0fcd4f3e36fa1fbbf7501c",
+        "evidence/phase6-stack-observation-manifest.json": "d8821aca38b898c81dbb6c1ce490d10792526f486081a6f8b95c717726737e23",
+        "fixtures/independent-game-v2/game.bin": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb",
+        "fixtures/independent-game-v2/host-controls.json": "3bece05f616f9b152f222b9f4d930c117d9f73ff228062e381e218058611c6fb",
+        "fixtures/independent-game-v2/oracle.json": "1a9d99cb01496f26fe3dc33d0c1bcb0cf22bd9178088fa183e5bba37a8600f42",
+        "fixtures/independent-game-v2/scenario.json": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2",
+        "fixtures/independent-game-v2/src/game.s": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe",
+        "fixtures/phase5-a/game.bin": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723",
+        "fixtures/phase5-a/input-program.json": "e3478d34dcd98a71265b97f33c56b9f5f0f858628a516a9034cc3dbe0b5c8ed2",
+        "fixtures/phase5-a/oracle.json": "2bf285d507c3e7c917329f3c4601c48d17fcdc14f4c01c8665fb98bbfe94fc3e",
+        "fixtures/phase5-a/scenario.json": "0df6c9a42d9ba90a96f681e8f4ab7396c1f8c56d47dc887f64cab5a766792bb1",
+        "fixtures/phase5-b/game.bin": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff",
+        "fixtures/phase5-b/input-program.json": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        "fixtures/phase5-b/oracle.json": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389",
+        "fixtures/phase5-b/scenario.json": "31e9c22129a6ce1b3ac2d1980c325e86bfbefb4e2fda85ae018c311e2cb40700",
+        "tests/fixtures/phase4_game.py": "067f7f37f4850f7a0adef0a0317f2191cd31e87ccbd9fb268eeada674693534a"
+      }
+    },
+    "schema": "phase6-d125-component-disposition-v1"
+  },
+  "development_rows_excluded": true,
+  "downstream_authority": {
+    "accepted_independent_review_required": true,
+    "bridge_hash_excludes_review": true,
+    "phase7_authorized": false,
+    "plan12_authorized": false
+  },
+  "manifest_path": "evidence/phase6-stack-observation-manifest-d123-g02.json",
+  "manifest_sha256": "bcdea865c38137fe70d4ded4c571d2612b5232dd4d0fcd4f3e36fa1fbbf7501c",
+  "native_binary_sha256": "f15b0cadc720f4c8c4c6dca3b9deb02f13df647b23de5a78324637ad591bd7c2",
+  "original_semantic_closure": {
+    "base_commit": "73c767bf5ecabe15eeb061296d7b571c7c0c5654",
+    "bridge_sha256": "be402e52f03279bfd90247692d5d45c57cd2980c56bbff154e3aeb1f403db3e9",
+    "capture_descriptor_sha256": "f5ec4a0f4e154cacab94cbdeac8affa6e9fad01cd05eebeeeb155a1bfa3fc2e4",
+    "control_client_binary_sha256": "f15b0cadc720f4c8c4c6dca3b9deb02f13df647b23de5a78324637ad591bd7c2",
+    "control_driver_inputs": {
+      "fixtures/independent-game-v2/game.bin": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb",
+      "fixtures/independent-game-v2/oracle.json": "1a9d99cb01496f26fe3dc33d0c1bcb0cf22bd9178088fa183e5bba37a8600f42",
+      "fixtures/independent-game-v2/scenario.json": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2",
+      "fixtures/independent-game-v2/src/game.s": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe",
+      "tests/fixtures/phase4_game.py": "067f7f37f4850f7a0adef0a0317f2191cd31e87ccbd9fb268eeada674693534a"
+    },
+    "current_source_identity": "efdc0d268650f18edf6dab1d3748993ca3deb46288eea6029164ad219491d475",
+    "historical_11_status": "halted-immutable",
+    "historical_control_driver_inputs": {
+      "fixtures/independent-game-v2/game.bin": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb",
+      "fixtures/independent-game-v2/oracle.json": "1a9d99cb01496f26fe3dc33d0c1bcb0cf22bd9178088fa183e5bba37a8600f42",
+      "fixtures/independent-game-v2/scenario.json": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2",
+      "fixtures/independent-game-v2/src/game.s": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe",
+      "tests/fixtures/phase4_game.py": "0e12e7df67796383f8f051000e8c4e4a93e16226db32c037a9245b89c7c90832"
+    },
+    "launches": 0,
+    "native_binary_sha256": "131009e734225960783944ead01e81faca3ecd376eeabc8d5992445195400514",
+    "new_target_attempts": 0,
+    "offline_authorization_proof": {
+      "coordinator_sha256": "4c24f2b518da4cb5bb182548c14e8408079e0bb70900e697cd1a482776cfb000",
+      "executed_in_this_artifact": false,
+      "required_commands": [
+        "python3 -I tests/evidence/phase6_accounting_contract.py",
+        "python3 -I tests/fixtures/phase6_repairs.py --tank-continuation-offline"
+      ],
+      "test_contract_sha256": "0b5e5a1a084701b3867271730086b10d473764177a0e77951108ffa53a61d70b"
+    },
+    "old_source_identity": "597d400ce791b447f14104028d4b83aeacc3907c9d844972eb9f1ee58dbf9ccf",
+    "original_runtime_closure": {
+      "common_raw_reports": true,
+      "descriptors": {
+        "hooks-off": "78965c61dbe31983897aad941757dea646720bd0aaa1908d44b805bb9626e613",
+        "native": "78965c61dbe31983897aad941757dea646720bd0aaa1908d44b805bb9626e613",
+        "sanitize": "78965c61dbe31983897aad941757dea646720bd0aaa1908d44b805bb9626e613"
+      },
+      "fixture_and_D118_authority_unchanged": true,
+      "guests": {
+        "hooks-off": "6ade9be937d545d52aecff5021e9639625092e0f858093fa8e9d0fb5ee65f059",
+        "native": "6ade9be937d545d52aecff5021e9639625092e0f858093fa8e9d0fb5ee65f059",
+        "sanitize": "6ade9be937d545d52aecff5021e9639625092e0f858093fa8e9d0fb5ee65f059"
+      },
+      "observer_output_paths": {
+        "hooks-off": "build/phase6-movem-hooks-off/tools/session/gw_headless",
+        "native": "build/phase6/tools/session/gw_headless",
+        "sanitize": "build/phase6-movem-sanitize/tools/session/gw_headless"
+      },
+      "retained_historical_binary_paths": {
+        "hooks-off": "build/phase6-d122-original-binaries/hooks-off/gw_headless",
+        "native": "build/phase6-d122-original-binaries/native/gw_headless",
+        "sanitize": "build/phase6-d122-original-binaries/sanitize/gw_headless"
+      },
+      "variant_binaries": {
+        "hooks-off": "ccb99b27902dec2e912f657660900e008df3bb78c795bf91b8e67a39a0e65869",
+        "native": "131009e734225960783944ead01e81faca3ecd376eeabc8d5992445195400514",
+        "sanitize": "689f1671085c5ecf6b4f5976e26b8a1caa27b328c837ca78b8f57bbc7c2f14ac"
+      },
+      "variant_binaries_distinct": true,
+      "variant_binary_command_paths": {
+        "hooks-off": "build/phase6-movem-hooks-off/tools/session/gw_headless",
+        "native": "build/phase6/tools/session/gw_headless",
+        "sanitize": "build/phase6-movem-sanitize/tools/session/gw_headless"
+      }
+    },
+    "plan12_unblocked": false,
+    "proof_input_changed_paths": {
+      "scripts/evidence/phase6_accounting.py": {
+        "after_sha256": "35f8a0ed64a6ea29a090f3b583084d730e4e86e0536ea6cd8fe9870bff196585",
+        "before_sha256": "19e754d8ed07cb201e34ed32eb52501059943c0f5593c7276f4f3e8ff818dee3"
+      },
+      "scripts/evidence/phase6_routes.py": {
+        "after_sha256": "93b363193afec8be2ff025b9b806a4e2efb5cf9253dd7582325660b5a0099ccd",
+        "before_sha256": "ae80307204b08fb556df0da4e77ae3a36be351b2f5bb7d1cf7fbba2635a1b541"
+      },
+      "tests/evidence/phase6_accounting_contract.py": {
+        "after_sha256": "0b5e5a1a084701b3867271730086b10d473764177a0e77951108ffa53a61d70b",
+        "before_sha256": "680bad0a4012fb4dc00d5f61bb3fd591ebcece29755059babc3ed34cea93add9"
+      },
+      "tests/fixtures/phase6_repairs.py": {
+        "after_sha256": "4c24f2b518da4cb5bb182548c14e8408079e0bb70900e697cd1a482776cfb000",
+        "before_sha256": "950d3761cdac48168ccabab927c7b820545523a9247b6750f44824bf1b2f318e"
+      },
+      "tools/headless/main.c": {
+        "after_sha256": "ffd19aa2e912242efa506e7c57e42773407107de030280e663fd9a7404601045",
+        "before_sha256": "0fbc50eab81a82b4eab03c609f6218f526cf047cb9dc846009facbb37ca94f6b"
+      },
+      "tools/session/route_controller.c": {
+        "after_sha256": "1b2413e9bc2d28c871f2e5759860859ca27d63d69773eea088cec3dceec16123",
+        "before_sha256": "175da93b90cf253827aa92336ec18d53362f3acf7ac6121fdd5ecb67fff716fb"
+      }
+    },
+    "retained_manifest_sha256": "f3bea1d760873298b940d00aa0c5e70147cdd78a64907c4704d90f62d1e87146",
+    "retained_report_common_sha256": "7856b65a4e5e0d901ef70023d18c76453791f2f863ffcc1d76c27d83a971a211",
+    "retained_reports": [
+      {
+        "assertions": {
+          "bounded_zero_field_prefix": true,
+          "exact_unsupported_stop": true,
+          "fault_does_not_retire": true,
+          "pea_16bit_timing": true,
+          "pea_opcode_retired": true,
+          "stack_pointer_and_sr": true,
+          "stack_value_big_endian": true,
+          "stop_metadata_agrees": true,
+          "swap_result": true
+        },
+        "case": "debug-current-native-producer",
+        "process_stream_sha256": {
+          "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "4539d248c965d1ba3c0c417f973a4a499408754249c255f000f3bb43cf45179d"
+        },
+        "raw_report_sha256": "7856b65a4e5e0d901ef70023d18c76453791f2f863ffcc1d76c27d83a971a211",
+        "variant": "native"
+      },
+      {
+        "assertions": {
+          "bounded_zero_field_prefix": true,
+          "exact_unsupported_stop": true,
+          "fault_does_not_retire": true,
+          "pea_16bit_timing": true,
+          "pea_opcode_retired": true,
+          "stack_pointer_and_sr": true,
+          "stack_value_big_endian": true,
+          "stop_metadata_agrees": true,
+          "swap_result": true
+        },
+        "case": "debug-current-sanitize-producer",
+        "process_stream_sha256": {
+          "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "4539d248c965d1ba3c0c417f973a4a499408754249c255f000f3bb43cf45179d"
+        },
+        "raw_report_sha256": "7856b65a4e5e0d901ef70023d18c76453791f2f863ffcc1d76c27d83a971a211",
+        "variant": "sanitize"
+      },
+      {
+        "assertions": {
+          "bounded_zero_field_prefix": true,
+          "exact_unsupported_stop": true,
+          "fault_does_not_retire": true,
+          "pea_16bit_timing": true,
+          "pea_opcode_retired": true,
+          "stack_pointer_and_sr": true,
+          "stack_value_big_endian": true,
+          "stop_metadata_agrees": true,
+          "swap_result": true
+        },
+        "case": "debug-current-hooks-off-producer",
+        "process_stream_sha256": {
+          "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "4539d248c965d1ba3c0c417f973a4a499408754249c255f000f3bb43cf45179d"
+        },
+        "raw_report_sha256": "7856b65a4e5e0d901ef70023d18c76453791f2f863ffcc1d76c27d83a971a211",
+        "variant": "hooks-off"
+      }
+    ],
+    "schema": "phase6-tank-proof-revalidation-v1",
+    "source_changed_paths": {
+      "scripts/evidence/phase6_accounting.py": {
+        "after_sha256": "35f8a0ed64a6ea29a090f3b583084d730e4e86e0536ea6cd8fe9870bff196585",
+        "before_sha256": "19e754d8ed07cb201e34ed32eb52501059943c0f5593c7276f4f3e8ff818dee3"
+      },
+      "scripts/evidence/phase6_routes.py": {
+        "after_sha256": "93b363193afec8be2ff025b9b806a4e2efb5cf9253dd7582325660b5a0099ccd",
+        "before_sha256": "ae80307204b08fb556df0da4e77ae3a36be351b2f5bb7d1cf7fbba2635a1b541"
+      },
+      "tests/fixtures/phase6_repairs.py": {
+        "after_sha256": "4c24f2b518da4cb5bb182548c14e8408079e0bb70900e697cd1a482776cfb000",
+        "before_sha256": "950d3761cdac48168ccabab927c7b820545523a9247b6750f44824bf1b2f318e"
+      },
+      "tools/headless/main.c": {
+        "after_sha256": "ffd19aa2e912242efa506e7c57e42773407107de030280e663fd9a7404601045",
+        "before_sha256": "0fbc50eab81a82b4eab03c609f6218f526cf047cb9dc846009facbb37ca94f6b"
+      },
+      "tools/session/CMakeLists.txt": {
+        "after_sha256": "7eb996770f669e2510aa260a21000190c8baba3e38c74205b45c2e9f937ede58",
+        "before_sha256": "99e7d0b7da558e0b0b40912333afb54e46939e657e6c61e271916632b78c48c5"
+      },
+      "tools/session/route_controller.c": {
+        "after_sha256": "1b2413e9bc2d28c871f2e5759860859ca27d63d69773eea088cec3dceec16123",
+        "before_sha256": "175da93b90cf253827aa92336ec18d53362f3acf7ac6121fdd5ecb67fff716fb"
+      },
+      "tools/session/session.h": {
+        "after_sha256": "8613b36c50eb66e9b00bdc5a91584d883eaccc1f6a04aa4a3c2a4e560c8cc9c5",
+        "before_sha256": "7360fad4fb0652fc809238023f3eef9fa239eeb3bbfbc304a7ebc799a2526445"
+      }
+    },
+    "status": "passed-no-launch",
+    "tank_capture_descriptor_bytes": 816,
+    "tank_capture_descriptor_sha256": "f5ec4a0f4e154cacab94cbdeac8affa6e9fad01cd05eebeeeb155a1bfa3fc2e4",
+    "verifier_sha256": "ac79ce93c55b2ea49de1dcc4533364f1a4db0efba14c24a91cffa951d5f79f1a",
+    "watched_ranges": [
+      {
+        "address": 60466,
+        "bytes": 2,
+        "name": "instruction-word-0",
+        "observation": "side-effect-free boundary memory span"
+      },
+      {
+        "address": 60468,
+        "bytes": 2,
+        "name": "instruction-word-1",
+        "observation": "side-effect-free boundary memory span"
+      },
+      {
+        "address": 60470,
+        "bytes": 2,
+        "name": "instruction-word-2",
+        "observation": "side-effect-free boundary memory span"
+      }
+    ]
+  },
+  "original_semantic_closure_sha256": "a1270bae82ba2e548ea7b25a5b3d7ceccf614131e379ae72ca14c3933de3d1c0",
+  "producer_source_identity": "bc4d31aa500494b6b74d18ae06dacb23bf2f01013ce8ee42481b28dae88866ad",
+  "qualification_path": "build/phase6/d123-observer/qualification-g02/qualification-rows.json",
+  "qualification_rows": [
+    {
+      "binary_sha256": "f15b0cadc720f4c8c4c6dca3b9deb02f13df647b23de5a78324637ad591bd7c2",
+      "bound_violation": false,
+      "checks": {
+        "after_a7": 2784952332,
+        "after_bytes": [
+          0,
+          6,
+          146,
+          60
+        ],
+        "after_status": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "before_a7": 2784952336,
+        "before_bytes": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "before_status": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "boundary_calls": 1,
+        "fields": 0,
+        "instruction_delta": 1,
+        "master_tick_delta": 140,
+        "opcode": 18553,
+        "probe_pc": 512,
+        "read_calls": 8,
+        "retired": true,
+        "source_a7": 2784952336,
+        "sr_unchanged": true
+      },
+      "command": [
+        "build/phase6/tools/session/gw_headless",
+        "build/phase6/d123-observer/qualification-g02/native/guest.bin",
+        "--route-plan",
+        "build/phase6/d123-observer/qualification-g02/native/route.bin",
+        "--route-report",
+        "build/phase6/d123-observer/qualification-g02/native/native-report.json",
+        "--route-instruction-probe",
+        "512",
+        "--route-probe-only",
+        "--route-probe-stack-before-a7"
+      ],
+      "descriptor_sha256": "6eca64ca2401bfe76ab0312cefed0001a46f47a420f95950c06961d525ae6acf",
+      "guest_sha256": "7d174bfef54dd2d6a8e25629a969e0ef0734b67e0087e454dc7219821af036fe",
+      "kind": "qualification",
+      "oracle_sha256": "37563cbe830e771b645e1dd7fe651d585825f9e7d81eb34a04d821b3f281f21c",
+      "process_return_code": 0,
+      "process_streams": {
+        "stderr": {
+          "observed_bytes": 0,
+          "path": "build/phase6/d123-observer/qualification-g02/native/process.stderr.raw",
+          "retained_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "truncated": false
+        },
+        "stdout": {
+          "observed_bytes": 46,
+          "path": "build/phase6/d123-observer/qualification-g02/native/process.stdout.raw",
+          "retained_bytes": 46,
+          "sha256": "c4bf92f4e06f7a7d360955da3a0508c63ef158b57542dbebb5804d6475584e46",
+          "truncated": false
+        }
+      },
+      "purpose_id": "d123-qual-g02-native",
+      "raw_report_path": "build/phase6/d123-observer/qualification-g02/native/native-report.json",
+      "raw_report_sha256": "8225ef1491af4aea2b1fffbd0071ccc1a1f327adf660aa4b7b54a01a77dc2bf6",
+      "source_identity": "bc4d31aa500494b6b74d18ae06dacb23bf2f01013ce8ee42481b28dae88866ad",
+      "status": "passed",
+      "timed_out": false,
+      "variant": "native"
+    },
+    {
+      "binary_sha256": "739233cb0d418642e2e6cb48879c8becaacfa0b961aeb3c3389cf4949d2ffda5",
+      "bound_violation": false,
+      "checks": {
+        "after_a7": 2,
+        "after_bytes": [
+          0,
+          0,
+          165,
+          255
+        ],
+        "after_status": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "before_a7": 2,
+        "before_bytes": [
+          0,
+          0,
+          165,
+          255
+        ],
+        "before_status": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "boundary_calls": 2,
+        "fields": 0,
+        "instruction_delta": 1,
+        "master_tick_delta": 28,
+        "opcode": 20081,
+        "probe_pc": 518,
+        "read_calls": 8,
+        "retired": true,
+        "source_a7": 2,
+        "sr_unchanged": true
+      },
+      "command": [
+        "build/phase6-movem-sanitize/tools/session/gw_headless",
+        "build/phase6/d123-observer/qualification-g02/sanitize/guest.bin",
+        "--route-plan",
+        "build/phase6/d123-observer/qualification-g02/sanitize/route.bin",
+        "--route-report",
+        "build/phase6/d123-observer/qualification-g02/sanitize/native-report.json",
+        "--route-instruction-probe",
+        "518",
+        "--route-probe-only",
+        "--route-probe-stack-before-a7"
+      ],
+      "descriptor_sha256": "6eca64ca2401bfe76ab0312cefed0001a46f47a420f95950c06961d525ae6acf",
+      "guest_sha256": "1cdf9fbcc52197fb017e503c539de6953165d493a0a759e270089042c50857b5",
+      "kind": "qualification",
+      "oracle_sha256": "7092d4e52c44c3b36d0170dcb35d2a952cfa35022059d3e58eabc63278a124ef",
+      "process_return_code": 0,
+      "process_streams": {
+        "stderr": {
+          "observed_bytes": 0,
+          "path": "build/phase6/d123-observer/qualification-g02/sanitize/process.stderr.raw",
+          "retained_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "truncated": false
+        },
+        "stdout": {
+          "observed_bytes": 46,
+          "path": "build/phase6/d123-observer/qualification-g02/sanitize/process.stdout.raw",
+          "retained_bytes": 46,
+          "sha256": "4de6a2600ec17c18b74692b3e8309f1507fec446c41ae4644f39d8b4403218fa",
+          "truncated": false
+        }
+      },
+      "purpose_id": "d123-qual-g02-sanitize",
+      "raw_report_path": "build/phase6/d123-observer/qualification-g02/sanitize/native-report.json",
+      "raw_report_sha256": "ff373389d8dea2358c2db677eab1ab6b6857f2ad30c692c89dc59401f9b66c84",
+      "source_identity": "bc4d31aa500494b6b74d18ae06dacb23bf2f01013ce8ee42481b28dae88866ad",
+      "status": "passed",
+      "timed_out": false,
+      "variant": "sanitize"
+    },
+    {
+      "binary_sha256": "8e28e24b87bc6718dfaaf72825e037f06ed47d0c9945d9059bfc4d476316f90f",
+      "bound_violation": false,
+      "checks": {
+        "after_a7": 8388616,
+        "after_bytes": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "after_status": [
+          1,
+          1,
+          1,
+          1
+        ],
+        "before_a7": 8388616,
+        "before_bytes": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "before_status": [
+          1,
+          1,
+          1,
+          1
+        ],
+        "boundary_calls": 2,
+        "fields": 0,
+        "instruction_delta": 1,
+        "master_tick_delta": 28,
+        "opcode": 20081,
+        "probe_pc": 518,
+        "read_calls": 8,
+        "retired": true,
+        "source_a7": 8388616,
+        "sr_unchanged": true
+      },
+      "command": [
+        "build/phase6-movem-hooks-off/tools/session/gw_headless",
+        "build/phase6/d123-observer/qualification-g02/hooks-off/guest.bin",
+        "--route-plan",
+        "build/phase6/d123-observer/qualification-g02/hooks-off/route.bin",
+        "--route-report",
+        "build/phase6/d123-observer/qualification-g02/hooks-off/native-report.json",
+        "--route-instruction-probe",
+        "518",
+        "--route-probe-only",
+        "--route-probe-stack-before-a7"
+      ],
+      "descriptor_sha256": "6eca64ca2401bfe76ab0312cefed0001a46f47a420f95950c06961d525ae6acf",
+      "guest_sha256": "0ac7fce1dc651a20fd36111e4fa4719f1c0e40eb60d4e5947197c786cf1b37e9",
+      "kind": "qualification",
+      "oracle_sha256": "ca715a077fdcf69f50cb7fc03fe8998533fa4230a54c8752861f48ccf53f4b47",
+      "process_return_code": 0,
+      "process_streams": {
+        "stderr": {
+          "observed_bytes": 0,
+          "path": "build/phase6/d123-observer/qualification-g02/hooks-off/process.stderr.raw",
+          "retained_bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "truncated": false
+        },
+        "stdout": {
+          "observed_bytes": 46,
+          "path": "build/phase6/d123-observer/qualification-g02/hooks-off/process.stdout.raw",
+          "retained_bytes": 46,
+          "sha256": "4de6a2600ec17c18b74692b3e8309f1507fec446c41ae4644f39d8b4403218fa",
+          "truncated": false
+        }
+      },
+      "purpose_id": "d123-qual-g02-hooks-off",
+      "raw_report_path": "build/phase6/d123-observer/qualification-g02/hooks-off/native-report.json",
+      "raw_report_sha256": "9c928ff8501fa02b2b19929cb5a5200384254d3621cfa0d170ce5a6e4c472b7a",
+      "source_identity": "bc4d31aa500494b6b74d18ae06dacb23bf2f01013ce8ee42481b28dae88866ad",
+      "status": "passed",
+      "timed_out": false,
+      "variant": "hooks-off"
+    }
+  ],
+  "qualification_sha256": "e4da50366bb46238976201601be84d94afaa8b3d55303f22048e3f059b2d5fe7",
+  "real_tank_runtime_a7": "unknown until 06-14; observer rows do not prove Tank capture",
+  "recovery_owner": "06-22",
+  "schema": "phase6-tank-observer-bridge-d123-v1",
+  "source_identity": "efdc0d268650f18edf6dab1d3748993ca3deb46288eea6029164ad219491d475",
+  "status": "passed-observer-bridge-no-launch"
+}
