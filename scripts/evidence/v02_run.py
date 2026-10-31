@@ -685,6 +685,82 @@ def run_smoke(build: pathlib.Path, scope_path: pathlib.Path, out: pathlib.Path) 
     return receipt
 
 
+_SAFE_HOST_BATCH_CASES = frozenset({
+    ("recursion94", "full-route"), ("recursion94", "withhold-first-plate"),
+    ("recursion94", "withhold-final-b"), ("tank-battle", "full-route"),
+    ("tank-battle", "withhold-early-hit"), ("tank-battle", "withhold-late-hit"),
+})
+_SAFE_HOST_BATCH_CLEANUP = frozenset({"confirmed", "unconfirmed", "not-launched"})
+_SAFE_HOST_BATCH_REASONS = frozenset({
+    "group-inactive", "group-observer-cleanup-unconfirmed", "group-status-budget-exhausted",
+    "cleanup-permission-denied", "group-cleanup-os-error",
+    "group-leader-reap-unconfirmed", "group-leader-wait-unconfirmed",
+    "group-reported-active", "group-signal-permission-denied", "group-signal-visible",
+    "group-status-unavailable", "cleanup-unclassified", "not-observed",
+})
+_SAFE_HOST_BATCH_BOUNDS = frozenset({
+    "phase7-wall-timeout", "phase7-stdout-stderr-byte-limit",
+    "phase7-rss-observation-unavailable", "phase7-rss-byte-limit",
+    "phase7-scratch-tree-unsafe", "phase7-scratch-byte-limit",
+    "phase7-json-byte-limit", "phase7-capture-byte-limit",
+    "phase7-retained-byte-limit", "phase7-binary-file-byte-limit",
+})
+
+
+def _safe_host_batch_failure(backend: str, return_code: object, host: object) -> str:
+    backend_value = backend if backend in {"software", "native"} else "other"
+    code_value = str(return_code) if type(return_code) is int and return_code in {0, 1, 77} else "other"
+    report = host if isinstance(host, dict) else {}
+    report_status = report.get("status")
+    report_status = report_status if report_status in {"pass", "fail", "in-progress"} else "other"
+    rows = report.get("runs")
+    failed = next((row for row in rows if isinstance(row, dict) and row.get("status") == "fail"),
+                  None) if isinstance(rows, list) else None
+    if failed is None:
+        case_value, row_status = "missing", "missing"
+        process = {}
+    else:
+        pair = (failed.get("fixture"), failed.get("case"))
+        case_value = f"{pair[0]}/{pair[1]}" if pair in _SAFE_HOST_BATCH_CASES else "unrecognized"
+        row_status = "fail"
+        process = failed.get("process") if isinstance(failed.get("process"), dict) else {}
+    cleanup = process.get("process_group_cleanup")
+    cleanup = cleanup if cleanup in _SAFE_HOST_BATCH_CLEANUP else ("other" if cleanup else "missing")
+    bound = process.get("bound_violation_reason")
+    if bound not in _SAFE_HOST_BATCH_BOUNDS:
+        bound = "unspecified" if process.get("bound_violation") is True else "none"
+    reason = process.get("cleanup_reason")
+    reason = reason if reason in _SAFE_HOST_BATCH_REASONS else ("other" if reason else "missing")
+    observation = process.get("cleanup_status_observation")
+    observation = (observation if observation in _SAFE_HOST_BATCH_REASONS
+                   else ("other" if observation else "missing"))
+    attempts = process.get("cleanup_observation_attempts")
+    attempts = str(attempts) if type(attempts) is int and 0 <= attempts <= 16 else "other"
+    return (f"backend={backend_value};report={report_status};case={case_value};row={row_status};"
+            f"return={code_value};cleanup={cleanup};bound={bound};cleanup_reason={reason};"
+            f"status_observation={observation};cleanup_queries={attempts}")
+
+
+def _collect_checked_host_batch(desktop, compiler, backend: str, build: pathlib.Path,
+                                core_path: pathlib.Path, mapping_path: pathlib.Path,
+                                host_path: pathlib.Path, candidate_path: pathlib.Path,
+                                candidate: dict) -> dict:
+    return_code = desktop.host_batch(
+        backend, build, core_path, mapping_path, host_path, candidate_path)
+    try:
+        host = json.loads(host_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        if return_code != 0:
+            raise ValueError("phase7-host-batch-failed:" +
+                             _safe_host_batch_failure(backend, return_code, None))
+        raise
+    if return_code != 0:
+        raise ValueError("phase7-host-batch-failed:" +
+                         _safe_host_batch_failure(backend, return_code, host))
+    compiler.validate_host_report(host, candidate)
+    return host
+
+
 def run_execution(mode: str, build: pathlib.Path, scope_path: pathlib.Path, out: pathlib.Path) -> dict:
     """Dispatch the existing bounded collectors under a fresh explicit Phase 7 scope."""
     if mode not in ("full", "safety", "chunk"):
@@ -783,9 +859,8 @@ def run_execution(mode: str, build: pathlib.Path, scope_path: pathlib.Path, out:
                 host_path = runtime / f"host-{backend}.json"
                 if backend == "native" and not limits.get("require_native", True):
                     raise ValueError("phase7-native-capability-requirement-missing")
-                desktop.host_batch(backend, build, core_path, mapping_path, host_path, candidate_path)
-                host = json.loads(host_path.read_text())
-                compiler.validate_host_report(host, candidate)
+                host = _collect_checked_host_batch(desktop, compiler, backend, build,
+                    core_path, mapping_path, host_path, candidate_path, candidate)
                 if host.get("outcome", host.get("status")) not in ("pass", "pass-diagnostic"):
                     raise ValueError("phase7-host-roster-failed:" + backend)
                 rows["host-" + backend] = {"path": str(host_path.relative_to(ROOT)), "sha256": sha(host_path),
