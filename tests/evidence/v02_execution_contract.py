@@ -364,6 +364,7 @@ class Phase7ExecutionContract(unittest.TestCase):
                     routed["host"].append(backend)
                     output.write_text(json.dumps({"schema":"genewhip-phase6-host-v1", "backend":backend,
                         "status":"pass-diagnostic", "outcome":"pass", "runs":[]}))
+                    return 0
                 value.host_batch = fake_hosts
             elif pathlib.Path(key).name == "v02_matrix.py":
                 value.validate_host_report = lambda report, candidate: None
