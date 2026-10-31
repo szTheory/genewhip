@@ -20,7 +20,17 @@ on:
         description: Unique coordinator dispatch identity
         required: true
         type: string
-run-name: ${{ github.event_name == 'workflow_dispatch' && format('Plan10 qualification {0}', inputs.qualification_nonce) || github.workflow }}
+      native_diagnostic_case:
+        description: Fixed non-qualifying native case diagnostic
+        required: false
+        default: none
+        type: choice
+        options: [none, recursion94-withhold-first-plate]
+      diagnostic_source_sha:
+        description: Exact reviewed source for the fixed native diagnostic
+        required: false
+        type: string
+run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic_case == 'recursion94-withhold-first-plate' && format('Plan10 native diagnostic {0}', inputs.qualification_nonce) || github.event_name == 'workflow_dispatch' && format('Plan10 qualification {0}', inputs.qualification_nonce) || github.workflow }}
 permissions:
   contents: read
   actions: read
@@ -30,13 +40,15 @@ env:
   GENEWHIP_QUALIFICATION_STARTED_AT: ${{ inputs.qualification_started_at }}
   GENEWHIP_QUALIFICATION_NONCE: ${{ inputs.qualification_nonce }}
   GENEWHIP_QUALIFICATION_PHASE: preparation
+  GENEWHIP_NATIVE_DIAGNOSTIC_CASE: ${{ inputs.native_diagnostic_case }}
+  GENEWHIP_NATIVE_DIAGNOSTIC_SOURCE_SHA: ${{ inputs.diagnostic_source_sha }}
   GITHUB_BASE_SHA: ${{ inputs.qualification_base_sha || github.event.before || github.sha }}
 concurrency:
   group: preview-ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   safety:
-    if: github.event_name != 'schedule'
+    if: github.event_name != 'schedule' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     runs-on: macos-26
     timeout-minutes: 45
     outputs:
@@ -78,7 +90,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
   gameplay:
-    if: github.event_name != 'schedule'
+    if: github.event_name != 'schedule' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     runs-on: macos-26
     timeout-minutes: 30
     outputs:
@@ -111,7 +123,7 @@ jobs:
       - name: Check report and named gameplay mutations
         run: python3 tests/evidence/phase4_report_contract.py
   product-smoke:
-    if: github.event_name != 'schedule'
+    if: github.event_name != 'schedule' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     runs-on: macos-26
     timeout-minutes: 45
     outputs:
@@ -144,7 +156,7 @@ jobs:
       - name: Require actual title paths, cleanup and source identity
         run: python3 -I tests/evidence/v02_execution_contract.py --contracts
   phase7-fast:
-    if: github.event_name != 'schedule'
+    if: github.event_name != 'schedule' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     runs-on: macos-26
     timeout-minutes: 30
     outputs:
@@ -166,7 +178,7 @@ jobs:
       - name: Run v0.2 semantic, privacy, rights and delivery controls
         run: bash scripts/ci/required-gate.sh --phase7-fast
   desktop:
-    if: github.event_name != 'schedule'
+    if: github.event_name != 'schedule' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     runs-on: macos-26
     timeout-minutes: 60
     outputs:
@@ -219,7 +231,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
   package:
-    if: github.event_name != 'schedule'
+    if: github.event_name != 'schedule' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     runs-on: macos-26
     timeout-minutes: 120
     permissions:
@@ -281,7 +293,7 @@ jobs:
         run: test -n "$GITHUB_SHA"
   attestation:
     name: attestation
-    if: always() && ((github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.package.result == 'success') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.package.result == 'success' && needs.v02-release-qualification.result == 'success'))
+    if: always() && ((github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.package.result == 'success') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.package.result == 'success' && needs.v02-release-qualification.result == 'success')) && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     needs: [package, v02-package, v02-release-qualification]
     runs-on: macos-26
     timeout-minutes: 15
@@ -322,7 +334,7 @@ jobs:
         with:
           subject-path: 'build/release-assets/*.tar.gz,build/release-assets/inventory.json'
   performance:
-    if: github.event_name != 'schedule'
+    if: github.event_name != 'schedule' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     runs-on: macos-26
     timeout-minutes: 30
     outputs:
@@ -351,7 +363,7 @@ jobs:
   v02-runtime:
     if: github.event_name == 'workflow_dispatch'
     runs-on: macos-26
-    timeout-minutes: 360
+    timeout-minutes: ${{ inputs.native_diagnostic_case == 'recursion94-withhold-first-plate' && 45 || 360 }}
     env:
       GENEWHIP_QUALIFICATION_PHASE: runtime
       GITHUB_BASE_SHA: ${{ inputs.qualification_base_sha }}
@@ -370,6 +382,13 @@ jobs:
         with: {phase: runtime}
       - name: Verify exact source checkout
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Reject unsupported diagnostic selectors before setup
+        run: >-
+          python3 -I -c 'import os; value=os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_CASE", "");
+          assert value in ("", "none", "recursion94-withhold-first-plate"), "native-diagnostic-selector-invalid"'
+      - name: Require the reviewed diagnostic source before setup
+        if: inputs.native_diagnostic_case == 'recursion94-withhold-first-plate'
+        run: test "$GITHUB_SHA" = "$GENEWHIP_NATIVE_DIAGNOSTIC_SOURCE_SHA"
       - name: Prepare pinned evidence dependencies
         run: bash scripts/ci/prepare_evidence_dependencies.sh
       - name: Build identified debug clients and safety roster
@@ -378,11 +397,19 @@ jobs:
           cmake -S . -B build/v02/runtime-build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=ON -DGENEWHIP_TEST_HOOKS=ON
           cmake --build build/v02/runtime-build --parallel 2
       - name: Run complete current-source product safety and chunk roster
+        if: inputs.native_diagnostic_case != 'recursion94-withhold-first-plate'
         run: >-
           python3 -I scripts/release/v02_qualification.py --mode runtime
           --build build/v02/runtime-build --scope evidence/v02-execution.json
           --out build/v02/runtime-observation.json
+      - name: Diagnose one native case without qualification
+        if: inputs.native_diagnostic_case == 'recursion94-withhold-first-plate'
+        run: >-
+          python3 -I scripts/release/v02_qualification.py --mode native-diagnostic
+          --build build/v02/runtime-build --scope evidence/v02-execution.json
+          --out build/v02/native-diagnostic.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: inputs.native_diagnostic_case != 'recursion94-withhold-first-plate'
         with:
           name: v02-runtime-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -390,9 +417,17 @@ jobs:
             build/v02/runtime-transfer/inventory.json
           if-no-files-found: error
           retention-days: 30
+      - name: Retain sanitized diagnostic on success or failure
+        if: always() && inputs.native_diagnostic_case == 'recursion94-withhold-first-plate'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-case-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/v02/native-diagnostic.json
+          if-no-files-found: error
+          retention-days: 30
   v02-benchmark-control:
     # Explicit needs chain below keeps all three workload benchmarks serial (max-parallel: 1).
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     needs: [v02-runtime]
     runs-on: macos-26
     timeout-minutes: 240
@@ -418,7 +453,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
   v02-benchmark-recursion94:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     needs: [v02-benchmark-control]
     runs-on: macos-26
     timeout-minutes: 240
@@ -444,7 +479,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
   v02-benchmark-tank-battle:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     needs: [v02-benchmark-recursion94]
     runs-on: macos-26
     timeout-minutes: 240
@@ -470,7 +505,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
   v02-package:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     needs: [v02-runtime, v02-benchmark-control, v02-benchmark-recursion94, v02-benchmark-tank-battle]
     runs-on: macos-26
     timeout-minutes: 240
@@ -569,7 +604,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
   v02-release-qualification:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     needs: [v02-runtime, v02-benchmark-control, v02-benchmark-recursion94, v02-benchmark-tank-battle, v02-package]
     runs-on: macos-26
     timeout-minutes: 15
@@ -611,7 +646,7 @@ jobs:
         run: python3 -I scripts/release/v02_qualification.py --mode validate --evidence build/v02/qualification-dimensions.json --out build/v02/final-close.json
   required-aggregate:
     name: required-ci
-    if: always() && github.event_name != 'schedule'
+    if: always() && github.event_name != 'schedule' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     needs: [safety, gameplay, desktop, package, performance, product-smoke, phase7-fast, v02-release-qualification, attestation]
     runs-on: macos-26
     timeout-minutes: 5
