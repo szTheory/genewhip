@@ -1526,9 +1526,10 @@ def _require_campaign_layout(args: argparse.Namespace) -> None:
         raise ValueError("recovery-campaign-journal-layout-invalid")
     if not under_root(args.out):
         raise ValueError("recovery-campaign-output-layout-invalid")
-    if args.mode in {"hosted", "retry-source"} and not under_root(args.preflight):
+    if args.mode in {"hosted", "retry-source", "successor-source"} and not under_root(args.preflight):
         raise ValueError("recovery-campaign-preflight-layout-invalid")
-    if args.mode in {"hosted", "retry-source", "stage-public"} and args.publication_copy is not None:
+    if args.mode in {"hosted", "retry-source", "stage-public", "successor-source"} \
+            and args.publication_copy is not None:
         if not under_root(args.publication_copy):
             raise ValueError("recovery-campaign-publication-layout-invalid")
     for value in (args.journal, args.out, args.preflight, args.publication_copy):
@@ -1545,6 +1546,79 @@ def _require_campaign_layout(args: argparse.Namespace) -> None:
             current = current / part
             if current.is_symlink():
                 raise ValueError("recovery-campaign-output-symlink")
+
+
+def _reject_output_collisions(args: argparse.Namespace) -> None:
+    """Reject mode output paths that alias consumed inputs or candidate bytes."""
+    output = args.out if args.out.is_absolute() else ROOT / args.out
+    if output.is_symlink():
+        raise ValueError("qualification-output-path-aliases-input")
+    output_resolved = output.resolve(strict=False)
+    mode_inputs: dict[str, tuple[str, ...]] = {
+        "plan": ("scope",), "runtime": ("scope",),
+        "semantic-mutants": ("scope",), "semantic-mutants-worker": ("scope",),
+        "package": ("scope", "public_evidence"),
+        "validate": ("scope", "evidence"), "close": ("scope", "evidence"),
+        "stage-public": ("preflight", "scope", "campaign", "journal", "continuation", "authorization"),
+        "retry-source": ("preflight", "publication_copy", "scope", "campaign", "journal",
+            "continuation"),
+        "successor-source": ("preflight", "publication_copy", "scope", "campaign", "journal",
+            "continuation"),
+        "hosted": ("preflight", "publication_copy", "scope", "campaign", "journal",
+            "continuation")}
+    names = list(mode_inputs.get(args.mode, ()))
+    # Prepare-only intentionally writes the generated packet at --out; the
+    # parser's default --preflight path is not read in this mode.
+    if args.mode == "stage-public" and args.prepare_only:
+        names = [name for name in names if name not in {"preflight", "authorization"}]
+        # Authorization is a consumed input even in prepare-only mode when supplied;
+        # only the default output/preflight overlap is intentionally permitted.
+        if args.authorization is not None:
+            names.append("authorization")
+    for name in names:
+        value = getattr(args, name, None)
+        if value is None:
+            continue
+        input_path = value if value.is_absolute() else ROOT / value
+        input_resolved = input_path.resolve(strict=False)
+        if output_resolved == input_resolved:
+            raise ValueError("qualification-output-path-aliases-input")
+        try:
+            output_info, input_info = output.stat(), input_path.stat()
+        except OSError:
+            pass
+        else:
+            if (output_info.st_dev, output_info.st_ino) == (input_info.st_dev, input_info.st_ino):
+                raise ValueError("qualification-output-path-aliases-input")
+        if name == "publication_copy":
+            lexical_candidate = pathlib.Path(os.path.abspath(input_path))
+            lexical_output = pathlib.Path(os.path.abspath(output))
+            if (lexical_output == lexical_candidate
+                    or lexical_output.is_relative_to(lexical_candidate)
+                    or output_resolved.is_relative_to(input_resolved)):
+                raise ValueError("qualification-output-path-aliases-candidate")
+            if input_path.is_dir() and not input_path.is_symlink() and output.exists():
+                visited = 0
+                for parent, directories, files in os.walk(input_path, followlinks=False):
+                    directories[:] = [entry for entry in directories
+                        if not (pathlib.Path(parent) / entry).is_symlink()]
+                    visited += len(directories)
+                    if visited > 5000:
+                        raise ValueError("qualification-candidate-tree-exceeds-collision-scan-bound")
+                    for filename in files:
+                        visited += 1
+                        if visited > 5000:
+                            raise ValueError("qualification-candidate-tree-exceeds-collision-scan-bound")
+                        candidate_file = pathlib.Path(parent) / filename
+                        if candidate_file.is_symlink() or not candidate_file.is_file():
+                            continue
+                        try:
+                            candidate_info, output_info = candidate_file.stat(), output.stat()
+                        except OSError:
+                            continue
+                        if (candidate_info.st_dev, candidate_info.st_ino) == (
+                                output_info.st_dev, output_info.st_ino):
+                            raise ValueError("qualification-output-path-aliases-candidate")
 
 
 def _validate_package_transfer_identity(inventory: Any, source_sha: str) -> dict[str, Any]:
@@ -1771,16 +1845,154 @@ def _verified_merge_receipt(pr: dict[str, Any], repository: str, candidate: path
     merge_sha = pr.get("mergeCommit", {}).get("oid")
     if not isinstance(merge_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", merge_sha):
         raise ValueError("protected-merge-commit-identity-invalid")
-    commit = _gh_json(repository, f"commits/{merge_sha}", phase=phase)
+    # The REST Commits endpoint includes per-file patches and can exceed the
+    # coordinator's bounded capture. The Git Database endpoint returns the
+    # commit object metadata needed here without the diff payload.
+    commit = _gh_json(repository, f"git/commits/{merge_sha}", phase=phase)
     parents = [row.get("sha") for row in commit.get("parents", [])]
     expected_tree = _git(candidate, "rev-parse", "HEAD^{tree}")
-    actual_tree = commit.get("commit", {}).get("tree", {}).get("sha")
-    if actual_tree != expected_tree or parents not in ([base], [base, head], [head, base]):
+    actual_tree = commit.get("tree", {}).get("sha")
+    if (commit.get("sha") != merge_sha or actual_tree != expected_tree
+            or parents not in ([base], [base, head], [head, base])):
         raise ValueError("protected-merge-parents-or-tree-mismatch")
     return {"pull_request": str(pr["number"]), "pull_request_url": pr.get("url"),
         "public_source_sha": merge_sha, "candidate_sha": head, "public_base_sha": base,
         "merge_parents": parents, "branch": branch,
         "merge_strategy": "squash" if parents == [base] else "merge", "tree_sha": actual_tree}
+
+
+def _r10_successor_constants() -> dict[str, Any]:
+    spec = importlib.util.spec_from_file_location("gw_v02_r10_predecessor",
+        ROOT / "scripts/release/v02_continuation.py")
+    if spec is None or spec.loader is None:
+        raise ValueError("source-successor-predecessor-validator-unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return dict(module.R10_SUCCESSOR_PREDECESSOR)
+
+
+def _validate_r10_predecessor_artifacts(journal_bytes: bytes) -> dict[str, Any]:
+    spec = importlib.util.spec_from_file_location("gw_v02_r10_predecessor",
+        ROOT / "scripts/release/v02_continuation.py")
+    if spec is None or spec.loader is None:
+        raise ValueError("source-successor-predecessor-validator-unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        return module.validate_r10_merged_predecessor(ROOT, journal_bytes=journal_bytes)
+    except ValueError as error:
+        raise ValueError("source-successor-predecessor-artifacts-invalid") from None
+
+
+def _required_preview_success(pr: dict[str, Any], run: dict[str, Any],
+                              expected: dict[str, Any]) -> None:
+    checks = pr.get("statusCheckRollup")
+    preview_lanes = {"safety", "gameplay", "desktop", "package", "performance",
+        "product-smoke", "phase7-fast"}
+    conditional_skips = {"v02-runtime", "extended", "v02-benchmark-control",
+        "v02-benchmark-recursion94", "v02-benchmark-tank-battle", "v02-package",
+        "v02-release-qualification", "attestation"}
+    if not isinstance(checks, list):
+        raise ValueError("source-successor-prior-required-check-not-success")
+    by_name: dict[str, dict[str, Any]] = {}
+    for row in checks:
+        if (not isinstance(row, dict) or not isinstance(row.get("name"), str)
+                or not row["name"] or row["name"] in by_name):
+            raise ValueError("source-successor-prior-required-check-not-success")
+        by_name[row["name"]] = row
+    expected_names = preview_lanes | conditional_skips | {"required-ci"}
+    if set(by_name) != expected_names:
+        raise ValueError("source-successor-prior-required-check-not-success")
+    if any(by_name[name].get("status") != "COMPLETED"
+            or by_name[name].get("conclusion") != "SUCCESS"
+            for name in preview_lanes | {"required-ci"}):
+        raise ValueError("source-successor-prior-required-check-not-success")
+    if any(by_name[name].get("status") != "COMPLETED"
+            or by_name[name].get("conclusion") != "SKIPPED" for name in conditional_skips):
+        raise ValueError("source-successor-prior-required-check-not-success")
+    if (run.get("id") != int(expected["preview_run_id"])
+            or run.get("head_sha") != expected["source_head"]
+            or run.get("event") != "pull_request"
+            or run.get("status") != "completed" or run.get("conclusion") != "success"):
+        raise ValueError("source-successor-prior-preview-run-mismatch")
+
+
+def _verify_r10_merged_source(repository: str, journal: dict[str, Any],
+                              journal_bytes: bytes, *, phase: str) -> dict[str, Any]:
+    expected = _validate_r10_predecessor_artifacts(journal_bytes)
+    if (journal.get("source_head") != expected["source_head"]
+            or journal.get("public_base_sha") != expected["public_base_sha"]
+            or journal.get("repository") != "szTheory/genewhip"
+            or journal.get("branch") != "v0.2-source-" + expected["source_head"][:12]
+            or journal.get("started_at") != "2026-10-30T16:50:39.837827+00:00"
+            or journal.get("push_performed") is not True):
+        raise ValueError("source-successor-prior-journal-identity-invalid")
+    if repository != "szTheory/genewhip":
+        raise ValueError("source-successor-prior-repository-mismatch")
+    encoded = urllib.parse.quote(repository, safe="/")
+    listing = _external(["gh", "pr", "list", "--repo", repository, "--head", journal["branch"],
+        "--state", "all", "--json",
+        "number,url,state,headRefName,headRefOid,baseRefName,baseRefOid,mergeCommit,statusCheckRollup"],
+        timeout=45, phase=phase)
+    try:
+        prs = json.loads(listing.stdout)
+    except json.JSONDecodeError:
+        raise ValueError("source-successor-prior-pr-list-invalid") from None
+    matches = [row for row in prs if isinstance(row, dict)
+        and str(row.get("number")) == expected["pull_request"]]
+    if (len(matches) != 1 or matches[0].get("state") != "MERGED"
+            or matches[0].get("headRefName") != journal["branch"]
+            or matches[0].get("headRefOid") != expected["source_head"]
+            or matches[0].get("baseRefName") != "main"
+            or matches[0].get("baseRefOid") != expected["public_base_sha"]):
+        raise ValueError("source-successor-prior-pr-not-exact-merged-source")
+    pr = matches[0]
+    workflow_result = _external(["gh", "api",
+        f"repos/{encoded}/actions/runs/{expected['preview_run_id']}", "--jq",
+        "{id,head_sha,event,status,conclusion}"], timeout=45, phase=phase)
+    try:
+        run = json.loads(workflow_result.stdout)
+    except json.JSONDecodeError:
+        raise ValueError("source-successor-prior-preview-run-invalid") from None
+    _required_preview_success(pr, run, expected)
+    for sha in (expected["source_head"], expected["merge_commit_sha"]):
+        query = _external(["gh", "api",
+            f"repos/{encoded}/actions/runs?head_sha={sha}&per_page=100", "--jq",
+            "{total_count,workflow_runs:[.workflow_runs[]|{id,head_sha,event,status,conclusion,display_title,head_branch,path}]}"],
+            timeout=45, phase=phase)
+        try:
+            runs_value = json.loads(query.stdout)
+        except json.JSONDecodeError:
+            raise ValueError("source-successor-prior-run-list-invalid") from None
+        runs = runs_value.get("workflow_runs") if isinstance(runs_value, dict) else None
+        if (not isinstance(runs, list) or runs_value.get("total_count") != len(runs) or len(runs) >= 100
+                or any(not isinstance(row, dict) or row.get("status") != "completed"
+                    or row.get("event") == "workflow_dispatch"
+                    or str(row.get("display_title", "")).startswith("Plan10 qualification ")
+                    for row in runs)):
+            raise ValueError("source-successor-prior-workflow-active-or-qualified")
+        if sha == expected["source_head"] and runs != [{"id": int(expected["preview_run_id"]),
+                "head_sha": expected["source_head"], "event": "pull_request", "status": "completed",
+                "conclusion": "success", "display_title": "Required preview checks",
+                "head_branch": journal["branch"], "path": ".github/workflows/ci.yml"}]:
+            raise ValueError("source-successor-prior-preview-run-roster-mismatch")
+        if sha == expected["merge_commit_sha"] and runs != [{
+                "id": int(expected["merge_preview_run_id"]), "head_sha": expected["merge_commit_sha"],
+                "event": "push", "status": "completed", "conclusion": "success",
+                "display_title": "Required preview checks", "head_branch": "main",
+                "path": ".github/workflows/ci.yml"}]:
+            raise ValueError("source-successor-prior-merge-preview-run-mismatch")
+    old_candidate = ROOT / expected["candidate_root"] / "publication"
+    receipt = _verified_merge_receipt(pr, repository, old_candidate,
+        expected["source_head"], expected["public_base_sha"], journal["branch"], phase=phase)
+    if (receipt["public_source_sha"] != expected["merge_commit_sha"]
+            or receipt["tree_sha"] != expected["merge_tree_sha"]):
+        raise ValueError("source-successor-prior-merge-metadata-mismatch")
+    main = _gh_json(repository, "git/ref/heads/main", phase=phase)
+    if main.get("object", {}).get("sha") != receipt["public_source_sha"]:
+        raise ValueError("source-successor-public-main-moved")
+    return {**receipt, "preview_run_id": expected["preview_run_id"],
+        "required_check": {"name": "required-ci", "status": "COMPLETED", "conclusion": "SUCCESS"}}
 
 
 def _validate_source_retry_history(journal: dict[str, Any]) -> None:
@@ -1825,6 +2037,198 @@ def _validate_source_retry_history(journal: dict[str, Any]) -> None:
             or retry.get("failed_required_check") != {"name": "required-ci",
                 "status": "COMPLETED", "conclusion": "FAILURE"}):
         raise ValueError("hosted-delivery-journal-source-retry-archive-conflicts")
+    if prior.get("source_successor") is not None:
+        _validate_source_successor_history(prior)
+
+
+def _validate_source_successor_history(journal: dict[str, Any]) -> None:
+    successor = journal.get("source_successor") if isinstance(journal, dict) else None
+    if successor is None:
+        return
+    required_keys = {"schema", "archive", "archive_sha256", "started_at", "prior_source_head",
+        "prior_public_base_sha", "prior_merge_commit_sha", "prior_merge_tree_sha",
+        "prior_pull_request", "prior_preview_run_id", "active_source_head", "active_base_sha",
+        "active_repository", "required_check"}
+    if (not isinstance(successor, dict) or set(successor) != required_keys
+            or successor.get("schema") != "genewhip.v02-source-successor.v1"
+            or not isinstance(successor.get("archive"), str)
+            or not re.fullmatch(r"[0-9a-f]{64}", str(successor.get("archive_sha256", "")))
+            or successor.get("started_at") != journal.get("started_at")
+            or successor.get("active_source_head") != journal.get("source_head")
+            or successor.get("active_base_sha") != journal.get("public_base_sha")
+            or successor.get("active_repository") != journal.get("repository")
+            or successor.get("required_check") != {"name": "required-ci", "status": "COMPLETED",
+                "conclusion": "SUCCESS"}):
+        raise ValueError("hosted-delivery-journal-source-successor-identity-invalid")
+    archive_input = ROOT / successor["archive"]
+    if archive_input.is_symlink():
+        raise ValueError("hosted-delivery-journal-source-successor-archive-invalid")
+    archive = archive_input.resolve(strict=True)
+    expected_root = (ROOT / "build/v02/failures").resolve()
+    if not archive.is_relative_to(expected_root):
+        raise ValueError("hosted-delivery-journal-source-successor-archive-invalid")
+    raw = archive.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != successor["archive_sha256"]:
+        raise ValueError("hosted-delivery-journal-source-successor-archive-digest-mismatch")
+    predecessor = _r10_successor_constants()
+    if (hashlib.sha256(raw).hexdigest() != predecessor["journal_sha256"]
+            or successor.get("prior_source_head") != predecessor["source_head"]
+            or successor.get("prior_public_base_sha") != predecessor["public_base_sha"]
+            or successor.get("prior_merge_commit_sha") != predecessor["merge_commit_sha"]
+            or successor.get("prior_merge_tree_sha") != predecessor["merge_tree_sha"]
+            or successor.get("prior_pull_request") != predecessor["pull_request"]
+            or successor.get("prior_preview_run_id") != predecessor["preview_run_id"]):
+        raise ValueError("hosted-delivery-journal-source-successor-archive-conflicts")
+    _validate_source_retry_history(json.loads(raw))
+    _validate_r10_predecessor_artifacts(raw)
+
+
+def _write_journal_atomically(path: pathlib.Path, value: dict[str, Any], *,
+                              expected_current_bytes: bytes | None = None) -> None:
+    if path.is_symlink() or path.parent.is_symlink():
+        raise ValueError("delivery-journal-path-invalid")
+    encoded = (json.dumps(value, sort_keys=True, indent=2) + "\n").encode("utf-8")
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="wb", dir=path.parent,
+                prefix=path.name + ".transition-", suffix=".tmp", delete=False) as stream:
+            temporary = pathlib.Path(stream.name)
+            stream.write(encoded)
+            stream.flush()
+            os.fsync(stream.fileno())
+        if expected_current_bytes is not None:
+            try:
+                current_bytes = path.read_bytes()
+            except OSError:
+                raise ValueError("delivery-journal-transition-source-changed") from None
+            if current_bytes != expected_current_bytes:
+                raise ValueError("delivery-journal-transition-source-changed")
+        os.replace(temporary, path)
+        temporary = None
+        directory_fd = os.open(path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_NOFOLLOW", 0))
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    except OSError:
+        raise ValueError("delivery-journal-atomic-write-failed") from None
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def _resume_source_successor(packet: dict[str, Any], publication_copy: pathlib.Path,
+        journal_path: pathlib.Path, journal_bytes: bytes, active: dict[str, Any],
+        expected: dict[str, Any], scope_path: pathlib.Path) -> dict[str, Any]:
+    """Resume only an exact unpushed successor after its result write failed."""
+    if (set(active) != {"schema", "started_at", "repository", "source_head", "public_base_sha",
+            "branch", "push_performed", "source_successor"}
+            or active.get("schema") != "genewhip.v02-delivery-journal.v1"
+            or active.get("push_performed") is not False):
+        raise ValueError("source-successor-resume-state-invalid")
+    transition = active.get("source_successor")
+    head = packet["public_identity"]["head_sha"]
+    base = packet["public_identity"]["base_sha"]
+    repository = packet["repository"]
+    branch = "v0.2-source-" + head[:12]
+    if (active.get("source_head") != head or active.get("public_base_sha") != base
+            or active.get("repository") != repository or active.get("branch") != branch
+            or active.get("started_at") != "2026-10-30T16:50:39.837827+00:00"
+            or any(key in active for key in ("public_source_sha", "pull_request", "merge_commit",
+                "merge_parents", "candidate_sha", "merge_strategy", "qualification_started_at",
+                "source_sha", "run_id", "run_attempt"))
+            or any(key.startswith(("qualification_", "selected_run_")) for key in active)):
+        raise ValueError("source-successor-resume-state-invalid")
+    _validate_source_successor_history(active)
+    if (not isinstance(transition, dict)
+            or base != expected["merge_commit_sha"] or repository != "szTheory/genewhip"
+            or transition.get("active_source_head") != head
+            or transition.get("active_base_sha") != base
+            or transition.get("active_repository") != repository
+            or transition.get("started_at") != active.get("started_at")
+            or transition.get("prior_source_head") != expected["source_head"]
+            or transition.get("prior_public_base_sha") != expected["public_base_sha"]
+            or transition.get("prior_merge_commit_sha") != expected["merge_commit_sha"]
+            or transition.get("prior_merge_tree_sha") != expected["merge_tree_sha"]
+            or transition.get("prior_pull_request") != expected["pull_request"]
+            or transition.get("prior_preview_run_id") != expected["preview_run_id"]
+            or transition.get("required_check") != {"name": "required-ci", "status": "COMPLETED",
+                "conclusion": "SUCCESS"}):
+        raise ValueError("source-successor-resume-lineage-invalid")
+    archive_path = ROOT / transition["archive"]
+    if archive_path.is_symlink():
+        raise ValueError("source-successor-archive-path-invalid")
+    try:
+        predecessor_bytes = archive_path.read_bytes()
+        predecessor = json.loads(predecessor_bytes)
+    except (OSError, json.JSONDecodeError):
+        raise ValueError("source-successor-predecessor-archive-invalid") from None
+    if (hashlib.sha256(predecessor_bytes).hexdigest() != transition["archive_sha256"]
+            or transition["archive_sha256"] != expected["journal_sha256"]
+            or not isinstance(predecessor, dict)):
+        raise ValueError("source-successor-predecessor-archive-invalid")
+    _validate_r10_predecessor_artifacts(predecessor_bytes)
+    scope = json.loads(scope_path.read_text(encoding="utf-8"))
+    _require_hosted_budget(active["started_at"], datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                           scope, phase="preparation")
+    policy = _fresh_public_policy(packet, publication_copy)
+    observations = policy.get("repository_observations", {}).get("observations", {})
+    if (policy.get("repository") != repository
+            or observations.get("expected_identity", {}).get("observed_default_branch_sha") != base):
+        raise ValueError("source-successor-live-public-base-mismatch")
+    prior_env = {key: os.environ.get(key) for key in
+        ("GENEWHIP_QUALIFICATION_STARTED_AT", "GENEWHIP_QUALIFICATION_PHASE")}
+    os.environ["GENEWHIP_QUALIFICATION_STARTED_AT"] = active["started_at"]
+    os.environ["GENEWHIP_QUALIFICATION_PHASE"] = "preparation"
+    try:
+        merge = _verify_r10_merged_source(repository, predecessor, predecessor_bytes,
+            phase="preparation")
+    finally:
+        for key, value in prior_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+    if (merge.get("public_source_sha") != transition["prior_merge_commit_sha"]
+            or merge.get("tree_sha") != transition["prior_merge_tree_sha"]
+            or merge.get("pull_request") != transition["prior_pull_request"]
+            or merge.get("preview_run_id") != transition["prior_preview_run_id"]):
+        raise ValueError("source-successor-resume-merge-changed")
+    repository_q = urllib.parse.quote(repository, safe="/")
+    branch_result = _external(["gh", "pr", "list", "--repo", repository, "--head", branch,
+        "--state", "all", "--json", "number,state,headRefOid"], timeout=45, phase="preparation")
+    try:
+        branches = json.loads(branch_result.stdout)
+    except json.JSONDecodeError:
+        raise ValueError("source-successor-resume-pr-list-invalid") from None
+    if not isinstance(branches, list) or branches:
+        raise ValueError("source-successor-resume-already-published")
+    refs = _gh_json(repository, "git/matching-refs/heads/" + urllib.parse.quote(branch, safe=""),
+        phase="preparation")
+    if not isinstance(refs, list) or refs:
+        raise ValueError("source-successor-resume-already-published")
+    run_result = _external(["gh", "api",
+        f"repos/{repository_q}/actions/runs?head_sha={head}&per_page=100", "--jq",
+        "{total_count,workflow_runs:[.workflow_runs[]|{id,head_sha,event,status,conclusion}]}"],
+        timeout=45, phase="preparation")
+    try:
+        runs_value = json.loads(run_result.stdout)
+    except json.JSONDecodeError:
+        raise ValueError("source-successor-resume-run-list-invalid") from None
+    runs = runs_value.get("workflow_runs") if isinstance(runs_value, dict) else None
+    if (not isinstance(runs, list) or runs_value.get("total_count") != len(runs)
+            or len(runs) >= 100 or runs):
+        raise ValueError("source-successor-resume-already-published")
+    if journal_path.read_bytes() != journal_bytes:
+        raise ValueError("source-successor-resume-journal-changed")
+    _require_hosted_budget(active["started_at"], datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                           scope, phase="preparation")
+    return {"source_head": head, "public_base_sha": base, "repository": repository,
+        "started_at": active["started_at"], "push_performed": False,
+        "predecessor_archive": transition["archive"],
+        "predecessor_journal_sha256": transition["archive_sha256"],
+        "predecessor_merge": merge}
 
 
 def retry_sanitized_source(packet_path: pathlib.Path, publication_copy: pathlib.Path,
@@ -2013,6 +2417,176 @@ def _retry_sanitized_source_bound(packet: dict[str, Any], publication_copy: path
         "push_performed": False}
 
 
+def source_successor_sanitized_source(packet_path: pathlib.Path, publication_copy: pathlib.Path,
+        journal_path: pathlib.Path, *, campaign_path: pathlib.Path,
+        campaign_sha256: str, scope_path: pathlib.Path,
+        recovery_selection: str, continuation_path: pathlib.Path,
+        continuation_purpose: str) -> dict[str, Any]:
+    """Bind one reviewed replacement to the exact R10 source already merged."""
+    _require_campaign_for_journal(journal_path, scope_path, campaign_path, campaign_sha256,
+        phase="runtime", recovery_selection=recovery_selection,
+        continuation_path=continuation_path, continuation_purpose=continuation_purpose)
+    if continuation_purpose != "current-native-return" or recovery_selection != "17":
+        raise ValueError("source-successor-current-return-required")
+    packet = _valid_packet_for_delivery(packet_path, publication_copy)
+    expected = _r10_successor_constants()
+    fixed_journal = ROOT / "build/v02/campaign15/hosted-delivery-journal.json"
+    if (journal_path.is_symlink() or journal_path.resolve(strict=True) != fixed_journal.resolve(strict=True)
+            or not journal_path.is_file()):
+        raise ValueError("source-successor-journal-path-invalid")
+    original_bytes = journal_path.read_bytes()
+    try:
+        current_journal = json.loads(original_bytes)
+    except json.JSONDecodeError:
+        raise ValueError("source-successor-prior-journal-invalid") from None
+    if isinstance(current_journal, dict) and "source_successor" in current_journal:
+        return _resume_source_successor(packet, publication_copy, journal_path,
+            original_bytes, current_journal, expected, scope_path)
+    if hashlib.sha256(original_bytes).hexdigest() != expected["journal_sha256"]:
+        raise ValueError("source-successor-prior-journal-not-exact-r10")
+    previous = current_journal
+    _validate_source_retry_history(previous)
+    _validate_r10_predecessor_artifacts(original_bytes)
+    new_head = packet["public_identity"]["head_sha"]
+    new_base = packet["public_identity"]["base_sha"]
+    repository = packet["repository"]
+    if (new_head == expected["source_head"] or new_base != expected["merge_commit_sha"]
+            or repository != "szTheory/genewhip"):
+        raise ValueError("source-successor-candidate-not-based-on-exact-merged-source")
+    if any(key in previous for key in ("public_source_sha", "merge_commit", "merge_parents",
+            "candidate_sha", "merge_strategy", "qualification_started_at", "source_sha",
+            "run_id", "run_attempt")) or any(key.startswith(("qualification_", "selected_run_"))
+                for key in previous):
+        raise ValueError("source-successor-prior-journal-already-consumed")
+    start = previous.get("started_at")
+    if not isinstance(start, str) or start != "2026-10-30T16:50:39.837827+00:00":
+        raise ValueError("source-successor-campaign-start-mismatch")
+    workflow_start = os.environ.get("GENEWHIP_QUALIFICATION_STARTED_AT")
+    if workflow_start and workflow_start != start:
+        raise ValueError("source-successor-clock-conflicts-with-workflow")
+    scope = json.loads(scope_path.read_text(encoding="utf-8"))
+    _require_hosted_budget(start, datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                           scope, phase="preparation")
+    policy = _fresh_public_policy(packet, publication_copy)
+    observations = policy.get("repository_observations", {}).get("observations", {})
+    if (policy.get("repository") != repository
+            or observations.get("expected_identity", {}).get("observed_default_branch_sha") != new_base):
+        raise ValueError("source-successor-live-public-base-mismatch")
+    prior_env = {key: os.environ.get(key) for key in
+        ("GENEWHIP_QUALIFICATION_STARTED_AT", "GENEWHIP_QUALIFICATION_PHASE")}
+    os.environ["GENEWHIP_QUALIFICATION_STARTED_AT"] = start
+    os.environ["GENEWHIP_QUALIFICATION_PHASE"] = "preparation"
+    try:
+        merge = _verify_r10_merged_source(repository, previous, original_bytes, phase="preparation")
+    finally:
+        for key, value in prior_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+    _require_hosted_budget(start, datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                           scope, phase="preparation")
+    old_sha = hashlib.sha256(original_bytes).hexdigest()
+    build_root = (ROOT / "build/v02").resolve()
+    archive_root = ROOT / "build/v02/failures"
+    if archive_root.is_symlink():
+        raise ValueError("source-successor-archive-path-invalid")
+    archive_root.mkdir(parents=True, exist_ok=True)
+    if not archive_root.resolve().is_relative_to(build_root):
+        raise ValueError("source-successor-archive-path-invalid")
+    archive = archive_root / f"merged-source-predecessor-{expected['source_head']}-{old_sha}.json"
+    try:
+        with archive.open("xb") as stream:
+            stream.write(original_bytes)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except FileExistsError:
+        if archive.read_bytes() != original_bytes:
+            raise ValueError("source-successor-archive-path-conflicts") from None
+    except OSError:
+        raise ValueError("source-successor-archive-write-failed") from None
+    archive_relative = archive.resolve().relative_to(ROOT.resolve()).as_posix()
+    transition = {"schema": "genewhip.v02-source-successor.v1", "archive": archive_relative,
+        "archive_sha256": old_sha, "started_at": start,
+        "prior_source_head": expected["source_head"],
+        "prior_public_base_sha": expected["public_base_sha"],
+        "prior_merge_commit_sha": merge["public_source_sha"],
+        "prior_merge_tree_sha": merge["tree_sha"],
+        "prior_pull_request": merge["pull_request"],
+        "prior_preview_run_id": expected["preview_run_id"],
+        "active_source_head": new_head, "active_base_sha": new_base,
+        "active_repository": repository, "required_check": merge["required_check"]}
+    active = {"schema": "genewhip.v02-delivery-journal.v1", "started_at": start,
+        "repository": repository, "source_head": new_head, "public_base_sha": new_base,
+        "branch": "v0.2-source-" + new_head[:12], "push_performed": False,
+        "source_successor": transition}
+    _validate_source_successor_history(active)
+    _require_hosted_budget(start, datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                           scope, phase="preparation")
+    _write_journal_atomically(journal_path, active, expected_current_bytes=original_bytes)
+    return {"source_head": new_head, "public_base_sha": new_base,
+        "repository": repository, "started_at": start, "push_performed": False,
+        "predecessor_archive": archive_relative, "predecessor_journal_sha256": old_sha,
+        "predecessor_merge": merge}
+
+
+def _adopt_incomplete_merged_source(packet: dict[str, Any], candidate: pathlib.Path,
+        journal_path: pathlib.Path, previous: dict[str, Any]) -> dict[str, Any] | None:
+    """Recover a verified merge receipt before the moved-main preflight can reject it."""
+    head = packet["public_identity"]["head_sha"]
+    base = packet["public_identity"]["base_sha"]
+    repository = packet["repository"]
+    branch = previous.get("branch")
+    if (previous.get("push_performed") is not True or previous.get("source_head") != head
+            or previous.get("public_base_sha") != base
+            or branch != "v0.2-source-" + head[:12]):
+        return None
+    if any(key in previous for key in ("public_source_sha", "merge_commit", "merge_parents",
+            "candidate_sha", "merge_strategy", "qualification_started_at", "source_sha",
+            "run_id", "run_attempt")):
+        raise ValueError("hosted-delivery-journal-already-consumed")
+    try:
+        original_bytes = journal_path.read_bytes()
+        if json.loads(original_bytes) != previous:
+            raise ValueError("hosted-delivery-journal-changed-before-merge-adoption")
+    except (OSError, json.JSONDecodeError):
+        raise ValueError("hosted-delivery-journal-unavailable-for-merge-adoption") from None
+    listing = _external(["gh", "pr", "list", "--repo", repository, "--head", branch,
+        "--state", "all", "--json",
+        "number,url,state,headRefName,headRefOid,baseRefName,baseRefOid,mergeCommit,statusCheckRollup"],
+        timeout=45, phase="runtime")
+    try:
+        prs = json.loads(listing.stdout)
+    except json.JSONDecodeError:
+        raise ValueError("github-pull-request-list-invalid") from None
+    matches = [row for row in prs if isinstance(row, dict) and row.get("headRefOid") == head]
+    if not matches:
+        return None
+    if len(matches) != 1:
+        raise ValueError("hosted-delivery-journal-merge-pr-not-unique")
+    pr = matches[0]
+    if pr.get("state") != "MERGED":
+        return None
+    if (pr.get("headRefName") != branch or pr.get("baseRefName") != "main"
+            or pr.get("baseRefOid") != base):
+        raise ValueError("hosted-delivery-journal-merge-pr-identity-invalid")
+    checks = pr.get("statusCheckRollup")
+    required = [row for row in checks if isinstance(row, dict) and row.get("name") == "required-ci"] \
+        if isinstance(checks, list) else []
+    if (len(required) != 1 or required[0].get("status") != "COMPLETED"
+            or required[0].get("conclusion") != "SUCCESS"
+            or any(not isinstance(row, dict) or row.get("status") != "COMPLETED"
+                or row.get("conclusion") != "SUCCESS" for row in checks)):
+        raise ValueError("hosted-delivery-journal-merge-required-check-not-success")
+    receipt = _verified_merge_receipt(pr, repository, candidate, head, base, branch, phase="runtime")
+    main = _gh_json(repository, "git/ref/heads/main", phase="runtime")
+    if main.get("object", {}).get("sha") != receipt["public_source_sha"]:
+        raise ValueError("public-main-moved-after-journaled-merge")
+    journal = {**previous, **receipt}
+    _write_journal_atomically(journal_path, journal, expected_current_bytes=original_bytes)
+    return receipt
+
+
 def publish_sanitized_source(packet_path: pathlib.Path, publication_copy: pathlib.Path,
                              journal_path: pathlib.Path, *, campaign_path: pathlib.Path | None = None,
                              campaign_sha256: str | None = None,
@@ -2030,6 +2604,7 @@ def publish_sanitized_source(packet_path: pathlib.Path, publication_copy: pathli
     if journal_path.is_file():
         previous = json.loads(journal_path.read_text(encoding="utf-8"))
         _validate_source_retry_history(previous)
+        _validate_source_successor_history(previous)
         if (not isinstance(previous, dict)
                 or previous.get("schema") != "genewhip.v02-delivery-journal.v1"
                 or previous.get("repository") != packet["repository"]
@@ -2073,6 +2648,11 @@ def publish_sanitized_source(packet_path: pathlib.Path, publication_copy: pathli
             if main.get("object", {}).get("sha") != receipt["public_source_sha"]:
                 raise ValueError("public-main-moved-after-journaled-merge")
             return {**receipt, "pull_request_url": matches[0].get("url")}
+        recovered = _adopt_incomplete_merged_source(packet=packet,
+            candidate=publication_copy.resolve(strict=True), journal_path=journal_path,
+            previous=previous)
+        if recovered is not None:
+            return recovered
     policy = _fresh_public_policy(packet, publication_copy)
     candidate = publication_copy.resolve(strict=True)
     head, base = packet["public_identity"]["head_sha"], packet["public_identity"]["base_sha"]
@@ -2090,6 +2670,8 @@ def publish_sanitized_source(packet_path: pathlib.Path, publication_copy: pathli
         "public_base_sha": base, "branch": branch, "push_performed": False}
     if previous and "source_retry" in previous:
         journal_header["source_retry"] = previous["source_retry"]
+    if previous and "source_successor" in previous:
+        journal_header["source_successor"] = previous["source_successor"]
     _write_json(journal_path, journal_header)
     os.environ["GENEWHIP_QUALIFICATION_STARTED_AT"] = started_at
     os.environ["GENEWHIP_QUALIFICATION_PHASE"] = "preparation"
@@ -2103,9 +2685,13 @@ def publish_sanitized_source(packet_path: pathlib.Path, publication_copy: pathli
             json.dumps(policy, sort_keys=True).encode()).hexdigest()}
     if previous and "source_retry" in previous:
         journal["source_retry"] = previous["source_retry"]
+    if previous and "source_successor" in previous:
+        journal["source_successor"] = previous["source_successor"]
     _write_json(journal_path, journal)
     listed = _external(["gh", "pr", "list", "--repo", repository, "--head", branch,
-                        "--state", "all", "--json", "number,url,headRefOid,baseRefName,state,mergeCommit"], timeout=45)
+        "--state", "all", "--json",
+        "number,url,headRefName,headRefOid,baseRefOid,baseRefName,state,mergeCommit,statusCheckRollup"],
+        timeout=45)
     try:
         prs = json.loads(listed.stdout)
     except json.JSONDecodeError:
@@ -2128,6 +2714,12 @@ def publish_sanitized_source(packet_path: pathlib.Path, publication_copy: pathli
             raise ValueError("github-pull-request-number-unavailable")
         pr_number = number.group(1)
     elif len(prs) == 1 and prs[0].get("state") == "MERGED":
+        checks = prs[0].get("statusCheckRollup")
+        required = [row for row in checks if isinstance(row, dict) and row.get("name") == "required-ci"] \
+            if isinstance(checks, list) else []
+        if (len(required) != 1 or required[0].get("status") != "COMPLETED"
+                or required[0].get("conclusion") != "SUCCESS"):
+            raise ValueError("hosted-delivery-merged-pr-required-check-not-success")
         receipt = _verified_merge_receipt(prs[0], repository, candidate, head, base, branch)
         journal.update(receipt)
         _write_json(journal_path, journal)
@@ -4126,7 +4718,7 @@ def _semantic_mutant_receipt_error(expected: dict[str, Any]) -> str | None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", required=True, choices=("plan", "runtime", "package", "validate", "semantic-mutants", "semantic-mutants-worker", "stage-public", "retry-source", "hosted", "close"))
+    parser.add_argument("--mode", required=True, choices=("plan", "runtime", "package", "validate", "semantic-mutants", "semantic-mutants-worker", "stage-public", "retry-source", "successor-source", "hosted", "close"))
     parser.add_argument("--build", type=pathlib.Path, default=ROOT / "build/phase6")
     parser.add_argument("--scope", type=pathlib.Path, default=ROOT / "evidence/v02-execution.json")
     parser.add_argument("--out", type=pathlib.Path, required=True)
@@ -4176,7 +4768,7 @@ def main(argv: list[str] | None = None) -> int:
                 and args.recovery_selection == "17" and args.continuation is not None):
             raise ValueError("current-native-purpose-requires-stage-public-prepare-only")
         if args.continuation_purpose == "current-native-return" and not (
-                args.mode in ("stage-public", "retry-source", "hosted") and not args.prepare_only
+                args.mode in ("stage-public", "retry-source", "successor-source", "hosted") and not args.prepare_only
                 and args.recovery_selection == "17" and args.continuation is not None):
             raise ValueError("current-return-purpose-requires-protected-return-mode")
         if args.continuation_purpose in ("current-native-preparation", "current-native-return"):
@@ -4188,6 +4780,11 @@ def main(argv: list[str] | None = None) -> int:
             if pathlib.Path(os.path.abspath(supplied_continuation)) != pathlib.Path(
                     os.path.abspath(expected_current_continuation)):
                 raise ValueError("current-native-continuation-path-invalid")
+        if args.mode == "successor-source" and (
+                args.recovery_selection != "17"
+                or args.continuation_purpose != "current-native-return"):
+            raise ValueError("source-successor-current-return-required")
+        _reject_output_collisions(args)
         if selected_campaign_journal and args.campaign is None:
             raise ValueError("recovery-campaign-required-for-selected-journal")
         if args.campaign is not None:
@@ -4327,6 +4924,20 @@ def main(argv: list[str] | None = None) -> int:
             _write_json(args.out, {"schema": "genewhip.v02-source-retry-transition.v1",
                 "status": "prepared", **value})
             print("public-source-retry: prepared; source=" + value["source_head"] +
+                  "; original_started_at=" + value["started_at"] + "; push_performed=false")
+        elif args.mode == "successor-source":
+            if args.publication_copy is None:
+                raise ValueError("stage-public-publication-copy-required")
+            if args.campaign is None or args.continuation is None:
+                raise ValueError("source-successor-current-return-required")
+            value = source_successor_sanitized_source(args.preflight, args.publication_copy,
+                args.journal, campaign_path=args.campaign, campaign_sha256=args.campaign_sha256,
+                scope_path=args.scope, recovery_selection=args.recovery_selection,
+                continuation_path=args.continuation,
+                continuation_purpose=args.continuation_purpose)
+            _write_json(args.out, {"schema": "genewhip.v02-source-successor-transition.v1",
+                "status": "prepared", **value})
+            print("public-source-successor: prepared; source=" + value["source_head"] +
                   "; original_started_at=" + value["started_at"] + "; push_performed=false")
         return 0
     except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError,
