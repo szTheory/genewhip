@@ -59,7 +59,34 @@ CURRENT_RETURN_CANDIDATE_CODE_REVIEW = PHASE / "07-10-CANDIDATE-R12-REVIEW.md"
 CURRENT_RETURN_CANDIDATE_SECURITY_REVIEW = PHASE / "07-10-CANDIDATE-R12-SECURITY.md"
 CURRENT_RETURN_PURPOSE = "current-native-return"
 CURRENT_RETURN_CANDIDATE_ROOT = Path(
-    "build/v02/campaign15/original10/current-source-candidate-final-r10")
+    "build/v02/campaign15/original10/current-source-candidate-final-r13")
+R10_SUCCESSOR_PREDECESSOR = {
+    "preparation_archive_manifest": "history/07-10-current-preparation-r10-postmerge/manifest.json",
+    "preparation_archive_manifest_sha256": "b3b7e1faf542386e8b3f533955bcf83d26efbf2ddb89615046367e9fb3393c4b",
+    "preparation_record_sha256": "56212e1530ee7626e61340a1fbd0e347ae0b874c1e08096d199bbdf627b9917e",
+    "preparation_payload_sha256": "be7fbf61a216bf6a04c8ddd779f6232d77f9f031d6eb0dad246df01d2940ce28",
+    "return_archive_manifest": "history/07-10-current-return-4d9/manifest.json",
+    "return_archive_manifest_sha256": "57f0cb00d51a81ec7014cdb1403f9d9313f10dea3ad38a15b1ef6f34dc65e14e",
+    "return_record_sha256": "6deadb8b7298177268ce36a9d6fcd608b886c613a5ae01afde8f5be220e1e8a8",
+    "return_payload_sha256": "4d9a9edf764a141bebbe98520d7e0f887d9b666d6eff289b62ac025e7ab2114a",
+    "return_report_sha256": "b2d2a4538b3667786976ca243213b380af89c1b33a4959d2078b5e10d3e3354d",
+    "return_review_sha256": "91cff7bf3a5f9c140016cbec69f8b0abb13db1a926b5b1f0fa71f732d13ba118",
+    "candidate_root": "build/v02/campaign15/original10/current-source-candidate-final-r10",
+    "candidate_preparation_sha256": "212a897321410267c9fc6b3dfaf2ed340ca99a48392485451342a157fc4a3433",
+    "candidate_policy_sha256": "4450506e86380c2390d7306b486ca31b0db3fcbc9614de44e80230b920094c8c",
+    "candidate_manifest_sha256": "99bdd74a25cc10cdd5ff78e53d61913f19fbd597c789cd72fdf633e02728f388",
+    "private_source_head": "54819b29a3e9c1f085b60ac2558670c4d7b46150",
+    "source_head": "4464fc51a9f1c817064a1e0baa1816bf7222009d",
+    "public_base_sha": "e505490ff67dae9a1dcace82049857dab8189588",
+    "public_tree_sha": "fb1234d6e95a2eaa3a08f7b1f9404b268a2cd6d0",
+    "journal_sha256": "89232a2d8899937a3e797435c05228306817b3d10e479d7e30849e13cd4bd08c",
+    "pull_request": "21",
+    "preview_run_id": "41163927669",
+    "merge_preview_run_id": "41164633979",
+    "merge_commit_sha": "ac7c5bdc8e4e87e3a6423de7a64524f5f0ca498b",
+    "merge_tree_sha": "fb1234d6e95a2eaa3a08f7b1f9404b268a2cd6d0",
+}
+R10_SUCCESSOR_PREDECESSOR_AST_SHA = "c2aebb05b1ff7cc498b8f9ea322f7c1178d7d5323d251dd00cd520e969193362"
 R3_PREPARATION_RAW_SHA = "acf381a106bbe3daf170ba8ae7d4ac5986d1023bf6673253fa9fad9f8269ef94"
 R3_PREPARATION_PAYLOAD_SHA = "2f3f492d497a2d624ddeadb583e403fad0a5e6d163e31964dce5028722457fbd"
 R8_PACKET = Path("build/v02/campaign15/original10/native-source-revalidation-r8/review-packet.json")
@@ -87,6 +114,14 @@ R8_DARWIN_TEST_PATH = "tests/session/phase6_route_contract.py"
 R8_DARWIN_TEST_METHOD = "test_darwin_group_liveness_distinguishes_zombies"
 R8_DARWIN_TEST_OLD_AST_SHA = "e0f1ced1e88870f92c0fcbd7355f9ed2906e9d0623c2adab71b0f98cd24616bd"
 R8_DARWIN_TEST_CURRENT_AST_SHA = "43da5c9f57ec549d6337620923f612d34d1d44954d14b12b5748376115d56ab0"
+R8_QUALIFICATION_CONTRACT_PATH = "tests/evidence/v02_qualification_contract.py"
+R8_MERGE_RECEIPT_TEST_METHODS = {
+    "test_interrupted_delivery_recovers_only_exact_protected_merge": (
+        "10b7a694bbb648fe88590b69ec09c0fa120cdc143278e7604e1897e18c38a9df",
+        "323f41c80971e6fb06c52ae5783c88244c4ba1b2a8ab98da8c72a9ed73376616"),
+    "test_cached_merge_journal_reopens_remote_pr_and_merge_tree": (
+        "52b6d4a12e796df8c7f910a742a1cc910013b0360b7eaa4b6fa4b8ad17101d7a",
+        "a5f7a78ef4247a6c69263f8602172cfb88c055f91f1dfb8e02a00de08267fd18")}
 R8_SAFETY_REPORT_PATH = "scripts/evidence/phase4_report.py"
 R8_SAFETY_REPORT_FUNCTION = "validate_safety_contracts"
 R8_SAFETY_REPORT_OLD_AST_SHA = "3e1dc10d6137fd68327c840e4968ae7f17dd60313ecaba6098d954bfc7420fca"
@@ -128,14 +163,46 @@ R8_DIAGNOSTIC_REPORT_TEST_SHAS = {
 R8_NATIVE_RUNS = {
     "run": R8_RESULT, "attempt": R8_ATTEMPT, "nested": R8_NESTED}
 R8_COORDINATOR_DELTA_FUNCTIONS = ("_campaign_projection", "_require_campaign_for_journal",
+    "_require_campaign_layout", "_verified_merge_receipt", "_validate_source_retry_history",
     "publish_sanitized_source", "retry_sanitized_source", "_retry_sanitized_source_bound",
     "run_hosted_qualification", "main")
+R8_COORDINATOR_ADDED_FUNCTIONS = ("_r10_successor_constants", "_validate_r10_predecessor_artifacts",
+    "_required_preview_success", "_verify_r10_merged_source", "_validate_source_successor_history",
+    "_write_journal_atomically", "source_successor_sanitized_source", "_adopt_incomplete_merged_source",
+    "_resume_source_successor", "_reject_output_collisions")
+R8_COORDINATOR_ADDED_FUNCTION_SHAS = {
+    "_adopt_incomplete_merged_source": "d53d5771663bfb3d03794200769e3b99b62d1078c30e053bca1a14b913272f19",
+    "_r10_successor_constants": "0b67132fb94812a34fe63555c473ccc6595c4da4c65a7a8bc562267467c23d23",
+    "_reject_output_collisions": "aff853f243a1d8e3ace13d83f88c0b483d9621cb574fd47b1e2dbf3d152bf808",
+    "_required_preview_success": "3073d1d97a616810e026f00223ff227b2d73da573b465ded81bb92e9b8b34858",
+    "_resume_source_successor": "b8d21a04664274c39eae4b45476f8cf47b9195c5ce035cea718a679332292e05",
+    "_validate_r10_predecessor_artifacts": "616e9df00728bd1b903e72c5dbae5526cc12aca7eda16855647f37656dbb32ac",
+    "_validate_source_successor_history": "354c3402e59608c0d79adf7f488a6ecf1cc4aef3aafdf530bfff4037e5e3f8b1",
+    "_verify_r10_merged_source": "f5aaf3fd6ac885d3f5c6107bfbf83e8e3aae370cacc309284f83a3477b6d91fb",
+    "_write_journal_atomically": "5c9569b3f555a00015a66fde111f74e2a744846fd9de894c63a6fa41e3d1942a",
+    "source_successor_sanitized_source": "d58a973456d0619de2feb85a2a16047dea6018b9af0ed9b7be128ea0b29fe70e"}
+R8_COORDINATOR_SPECIAL_FUNCTION_SHAS = {
+    "_require_campaign_layout": (
+        "1b471f79693725bf718ea84e09bdb157dad90b5bb0ba30464b661fa62c4e2ebd",
+        "2edeb583eccd8332cb0b71345e17b6505e9038387138a631a268865151198d13"),
+    "main": (
+        "4a2716348ca978175c5b991ce9f77d123356de1ea7ad6582306950edc32da0cb",
+        "290d26183568033b5f093f7f23aba2d3a537ad05e42290bb6b94a03054eeed22"),
+    "_verified_merge_receipt": (
+        "09055c5c1d85695105c71b22df53bc7fb44643fe1526367791bbac4765243af1",
+        "cbb8a819fce1e7e2294a3cdbcbc3e84ad9bb2b3484b464b1ef4b2efea24b862c"),
+    "_validate_source_retry_history": (
+        "0b3b38151ced2a41d410b8d2fc82b8fc86665f9b48c45de607bbd86600b00cef",
+        "fa610d4f9286b33e8425073afb84a30a50df4ac2e955e655799ca08ca858b9df"),
+    "publish_sanitized_source": (
+        "67ab3c9208cf04c7d463114c704aa6e72f2a6a957a5f2c1457d69520f090e477",
+        "13c0bafc9dad11aed5fa066deb40d7c92eefe789e5a64b55bfed4431b2d69348")}
 R8_CONTINUATION_DELTA_FUNCTIONS = (
     "_current_native_record_payload", "_top_level_assignment_names",
     "_validate_r8_current_source_delta", "build_current_native_continuation",
     "validate_current_native_continuation", "_validate_r3_preparation_record",
     "_validate_current_native_preparation_record", "_current_return_candidate_facts", "_current_native_return_payload",
-    "_write_exclusive_json", "build_current_native_return",
+    "_write_exclusive_json", "build_current_native_return", "validate_r10_merged_predecessor",
     "_validate_current_return_candidate_review", "validate_current_native_return")
 R8_CONTINUATION_DELTA_ASSIGNMENTS = (
     "CURRENT_NATIVE_CONTINUATION", "CURRENT_NATIVE_CODE_REVIEW",
@@ -145,16 +212,21 @@ R8_CONTINUATION_DELTA_ASSIGNMENTS = (
     "CURRENT_RETURN_RECORD", "CURRENT_RETURN_REPORT", "CURRENT_RETURN_REVIEW",
     "CURRENT_RETURN_CODE_REVIEW", "CURRENT_RETURN_SECURITY_REVIEW",
     "CURRENT_RETURN_CANDIDATE_CODE_REVIEW", "CURRENT_RETURN_CANDIDATE_SECURITY_REVIEW",
-    "CURRENT_RETURN_PURPOSE", "CURRENT_RETURN_CANDIDATE_ROOT", "R3_PREPARATION_RAW_SHA",
+    "CURRENT_RETURN_PURPOSE", "CURRENT_RETURN_CANDIDATE_ROOT", "R10_SUCCESSOR_PREDECESSOR",
+    "R10_SUCCESSOR_PREDECESSOR_AST_SHA",
+    "R3_PREPARATION_RAW_SHA",
     "R3_PREPARATION_PAYLOAD_SHA",
     "R8_PACKET", "R8_PACKET_SHA", "R8_RESULT", "R8_RESULT_SHA", "R8_ATTEMPT",
     "R8_ATTEMPT_SHA", "R8_NESTED", "R8_NESTED_SHA", "R8_RESULT_REVIEW",
     "R8_RESULT_REVIEW_SHA", "R8_ADMISSION_REVIEW", "R8_ADMISSION_REVIEW_SHA",
     "R8_SOURCE_SNAPSHOT", "R8_NATIVE_SOURCE_PATHS", "R8_NATIVE_RUNS",
-    "R8_COORDINATOR_DELTA_FUNCTIONS", "R8_CONTINUATION_DELTA_FUNCTIONS",
+    "R8_COORDINATOR_DELTA_FUNCTIONS", "R8_COORDINATOR_ADDED_FUNCTIONS",
+    "R8_COORDINATOR_ADDED_FUNCTION_SHAS", "R8_COORDINATOR_SPECIAL_FUNCTION_SHAS",
+    "R8_CONTINUATION_DELTA_FUNCTIONS",
     "R8_CONTINUATION_DELTA_ASSIGNMENTS", "R8_DARWIN_TEST_PATH",
     "R8_DARWIN_TEST_METHOD", "R8_DARWIN_TEST_OLD_AST_SHA",
     "R8_DARWIN_TEST_CURRENT_AST_SHA", "R8_SAFETY_REPORT_PATH",
+    "R8_QUALIFICATION_CONTRACT_PATH", "R8_MERGE_RECEIPT_TEST_METHODS",
     "R8_SAFETY_REPORT_FUNCTION", "R8_SAFETY_REPORT_OLD_AST_SHA",
     "R8_SAFETY_REPORT_CURRENT_AST_SHA", "R8_SAFETY_REPORT_TEST_PATH",
     "R8_SAFETY_FIXTURE_FUNCTION", "R8_SAFETY_FIXTURE_OLD_AST_SHA",
@@ -565,6 +637,7 @@ def _validate_r8_current_source_delta(root: Path, native_source_pins: dict[str, 
         (unchanged if baseline == current else changed).append(relative)
     expected_changed = [R8_SAFETY_REPORT_PATH, "scripts/release/v02_continuation.py",
         "scripts/release/v02_qualification.py", R8_SAFETY_REPORT_TEST_PATH,
+        R8_QUALIFICATION_CONTRACT_PATH,
         R8_DARWIN_TEST_PATH]
     if changed != expected_changed:
         raise ValueError("current-native-unreviewed-source-delta")
@@ -597,10 +670,11 @@ def _validate_r8_current_source_delta(root: Path, native_source_pins: dict[str, 
                 {"summarize_sanitized_ctest_failures"},
                 set(R8_DIAGNOSTIC_REPORT_METHOD_ASSIGNMENTS)),
             ("scripts/release/v02_qualification.py", set(R8_COORDINATOR_DELTA_FUNCTIONS),
-                set(), set()),
+                set(R8_COORDINATOR_ADDED_FUNCTIONS), set()),
             ("scripts/release/v02_continuation.py", {"main"},
                 set(R8_CONTINUATION_DELTA_FUNCTIONS), set(R8_CONTINUATION_DELTA_ASSIGNMENTS)),
             (R8_SAFETY_REPORT_TEST_PATH, {R8_SAFETY_FIXTURE_FUNCTION}, set(), set()),
+            (R8_QUALIFICATION_CONTRACT_PATH, set(), set(), set()),
             (R8_DARWIN_TEST_PATH, {"main"}, {R8_DIAGNOSTIC_ROUTE_HELPER},
                 {R8_DIAGNOSTIC_ROUTE_METHOD_SET})):
         baseline = baseline_bytes[relative]
@@ -615,6 +689,18 @@ def _validate_r8_current_source_delta(root: Path, native_source_pins: dict[str, 
             raise ValueError("current-native-unreviewed-function-delta:" + relative)
         if relative.endswith("v02_qualification.py"):
             import copy
+            old_nodes = {node.name: node for node in ast.parse(baseline.decode("utf-8")).body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+            new_nodes = {node.name: node for node in ast.parse(current.decode("utf-8")).body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+            if set(R8_COORDINATOR_ADDED_FUNCTION_SHAS) != allowed_added:
+                raise ValueError("current-native-added-function-pin-set-invalid")
+            added_function_shas = {}
+            for name, expected_sha in R8_COORDINATOR_ADDED_FUNCTION_SHAS.items():
+                actual_sha = sha_bytes(ast.dump(new_nodes[name], include_attributes=False).encode("utf-8"))
+                if actual_sha != expected_sha:
+                    raise ValueError("current-native-added-function-unreviewed:" + name)
+                added_function_shas[name] = actual_sha
             def normalize_return_forwarding(function: Any) -> Any:
                 node = copy.deepcopy(function)
                 args = node.args
@@ -646,10 +732,16 @@ def _validate_r8_current_source_delta(root: Path, native_source_pins: dict[str, 
                 return RemovePurposeForwarding().visit(node)
             effectful_forwarders = {"publish_sanitized_source", "retry_sanitized_source",
                 "run_hosted_qualification"}
-            old_nodes = {node.name: node for node in ast.parse(baseline.decode("utf-8")).body
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
-            new_nodes = {node.name: node for node in ast.parse(current.decode("utf-8")).body
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+            coordinator_special_deltas = {}
+            for name, (old_expected, current_expected) in R8_COORDINATOR_SPECIAL_FUNCTION_SHAS.items():
+                if name not in changed_functions:
+                    continue
+                old_sha = sha_bytes(ast.dump(old_nodes[name], include_attributes=False).encode("utf-8"))
+                current_sha = sha_bytes(ast.dump(new_nodes[name], include_attributes=False).encode("utf-8"))
+                if old_sha != old_expected or current_sha != current_expected:
+                    raise ValueError("current-native-coordinator-special-function-unreviewed:" + name)
+                coordinator_special_deltas[name] = {"r8_ast_sha256": old_sha,
+                    "current_ast_sha256": current_sha, "exact_reviewed_function_delta": True}
             if "_retry_sanitized_source_bound" in changed_functions:
                 old_archive_assignment = ast.parse(
                     "archive_dir = journal_path.parent / 'failures'\n"
@@ -679,6 +771,8 @@ def _validate_r8_current_source_delta(root: Path, native_source_pins: dict[str, 
                             new_archive_assignment)):
                     raise ValueError("current-native-retry-archive-helper-body-changed")
             for name in effectful_forwarders & changed_functions:
+                if name in coordinator_special_deltas:
+                    continue
                 if (ast.dump(old_nodes[name], include_attributes=False)
                         != ast.dump(normalize_return_forwarding(new_nodes[name]), include_attributes=False)):
                     raise ValueError("current-native-effectful-function-body-changed:" + name)
@@ -696,11 +790,17 @@ def _validate_r8_current_source_delta(root: Path, native_source_pins: dict[str, 
                 and candidate_root_name in _top_level_assignment_names(node)]
             expected_candidate_root = ast.parse(
                 'CURRENT_RETURN_CANDIDATE_ROOT = Path("build/v02/campaign15/original10/'
-                'current-source-candidate-final-r10")').body[0]
+                'current-source-candidate-final-r13")').body[0]
             if (old_candidate_root or len(new_candidate_root) != 1
                     or ast.dump(new_candidate_root[0], include_attributes=False)
                     != ast.dump(expected_candidate_root, include_attributes=False)):
                 raise ValueError("current-native-candidate-root-delta-invalid")
+            predecessor_rows = [node for node in new_tree.body if isinstance(node, ast.Assign)
+                and "R10_SUCCESSOR_PREDECESSOR" in _top_level_assignment_names(node)]
+            if (len(predecessor_rows) != 1 or sha_bytes(ast.dump(
+                    predecessor_rows[0], include_attributes=False).encode("utf-8"))
+                    != R10_SUCCESSOR_PREDECESSOR_AST_SHA):
+                raise ValueError("current-native-r10-predecessor-constant-unreviewed")
         test_method_delta = None
         specific_delta: dict[str, Any] = {}
         if relative == R8_DARWIN_TEST_PATH:
@@ -970,6 +1070,39 @@ def _validate_r8_current_source_delta(root: Path, native_source_pins: dict[str, 
                     "r8_ast_sha256": None, "current_ast_sha256": digest,
                     "new_test_method": True, "diagnostic_only": True}
                     for method_name, digest in diagnostic_test_shas.items())]
+        elif relative == R8_QUALIFICATION_CONTRACT_PATH:
+            import copy
+            old_tree = ast.parse(baseline.decode("utf-8"))
+            new_tree = ast.parse(current.decode("utf-8"))
+
+            def coordinator_method(tree: Any, method_name: str) -> tuple[Any, Any]:
+                classes = [node for node in tree.body if isinstance(node, ast.ClassDef)
+                    and node.name == "QualificationCoordinatorContract"]
+                if len(classes) != 1:
+                    raise ValueError("current-native-qualification-contract-class-invalid")
+                rows = [node for node in classes[0].body
+                    if isinstance(node, ast.FunctionDef) and node.name == method_name]
+                if len(rows) != 1:
+                    raise ValueError("current-native-merge-receipt-test-method-invalid")
+                return classes[0], rows[0]
+
+            method_delta = {}
+            normalized = copy.deepcopy(new_tree)
+            for method_name, (old_expected, current_expected) in R8_MERGE_RECEIPT_TEST_METHODS.items():
+                old_class, old_method = coordinator_method(old_tree, method_name)
+                new_class, new_method = coordinator_method(new_tree, method_name)
+                old_sha = sha_bytes(ast.dump(old_method, include_attributes=False).encode("utf-8"))
+                new_sha = sha_bytes(ast.dump(new_method, include_attributes=False).encode("utf-8"))
+                if old_sha != old_expected or new_sha != current_expected:
+                    raise ValueError("current-native-merge-receipt-test-method-unreviewed:" + method_name)
+                normalized_class, normalized_method = coordinator_method(normalized, method_name)
+                normalized_class.body[normalized_class.body.index(normalized_method)] = copy.deepcopy(old_method)
+                method_delta[method_name] = {"class": "QualificationCoordinatorContract",
+                    "r8_ast_sha256": old_sha, "current_ast_sha256": new_sha,
+                    "only_test_method_delta": True}
+            if ast.dump(normalized, include_attributes=False) != ast.dump(old_tree, include_attributes=False):
+                raise ValueError("current-native-qualification-contract-changed-outside-reviewed-methods")
+            specific_delta["test_fixture_deltas"] = list(method_delta.values())
         elif module_shell(current, allowed_assignments) != module_shell(baseline, set()):
             raise ValueError("current-native-unreviewed-module-delta:" + relative)
         delta[relative] = {"r8_source_sha256": native_source_pins[relative],
@@ -977,9 +1110,14 @@ def _validate_r8_current_source_delta(root: Path, native_source_pins: dict[str, 
             "changed_functions": sorted(changed_functions),
             "added_functions": sorted(added_functions),
             **({"test_method_delta": test_method_delta} if test_method_delta is not None else {}),
+            **({"exact_coordinator_function_deltas": coordinator_special_deltas}
+                if relative.endswith("v02_qualification.py") and coordinator_special_deltas else {}),
+            **({"exact_coordinator_added_function_ast_sha256": added_function_shas}
+                if relative.endswith("v02_qualification.py") else {}),
             **specific_delta,
             "prelaunch_only_review_boundary": relative not in {
-                R8_SAFETY_REPORT_PATH, R8_SAFETY_REPORT_TEST_PATH, R8_DARWIN_TEST_PATH}}
+                R8_SAFETY_REPORT_PATH, R8_SAFETY_REPORT_TEST_PATH, R8_DARWIN_TEST_PATH,
+                "scripts/release/v02_qualification.py"}}
     return delta
 
 
@@ -1369,6 +1507,7 @@ def _current_native_return_payload(root: Path) -> dict[str, Any]:
         "continuation_module_sha256": source_payload["continuation_module_sha256"],
         "current_risk_evidence_sha256": source_payload["current_risk_evidence_sha256"],
         "candidate": candidate,
+        "merged_source_predecessor": dict(R10_SUCCESSOR_PREDECESSOR),
         "candidate_review_paths": {"code": CURRENT_RETURN_CANDIDATE_CODE_REVIEW.as_posix(),
             "security": CURRENT_RETURN_CANDIDATE_SECURITY_REVIEW.as_posix()},
         "review_paths": {"code": CURRENT_RETURN_CODE_REVIEW.as_posix(),
@@ -1380,6 +1519,115 @@ def _current_native_return_payload(root: Path) -> dict[str, Any]:
         "not_claimed": ["requirements qualified", "full product compatibility",
             "hosted qualification", "guest or package execution", "publication or merge",
             "phase completion"]}
+
+
+def validate_r10_merged_predecessor(root: Path, *, journal_bytes: bytes | None = None) -> dict[str, Any]:
+    """Reopen the one accepted R10 source whose merge receipt was interrupted."""
+    expected = R10_SUCCESSOR_PREDECESSOR
+    phase = PHASE
+    member_sets = (
+        (expected["preparation_archive_manifest"], expected["preparation_archive_manifest_sha256"], {
+            "history/07-10-current-preparation-r10-postmerge/07-10-CURRENT-SOURCE-CONTINUATION.json":
+                expected["preparation_record_sha256"],
+            "history/07-10-current-preparation-r10-postmerge/07-10-CURRENT-SOURCE-CODE-REVIEW.md":
+                "a5d548db98e9930457ebcb53010a26aa44c5c9d95f3db31872a71b63956cb4bc",
+            "history/07-10-current-preparation-r10-postmerge/07-10-CURRENT-SOURCE-SECURITY-REVIEW.md":
+                "99a54ee24b33cbc595fd608c8a9595bd1d5ddd0990f8b1ca34701d0d5e806c01"}),
+        (expected["return_archive_manifest"], expected["return_archive_manifest_sha256"], {
+            "history/07-10-current-return-4d9/07-10-CURRENT-SOURCE-RETURN.json":
+                expected["return_record_sha256"],
+            "history/07-10-current-return-4d9/07-10-RETURN-REVIEW.md":
+                expected["return_review_sha256"],
+            "history/07-10-current-return-4d9/07-10-RETURN.md":
+                expected["return_report_sha256"]}))
+    for manifest_relative, digest, required_members in member_sets:
+        manifest_path = _candidate_path(root, (phase / manifest_relative).as_posix())
+        raw = _regular(manifest_path, cap=64 * 1024)
+        if sha_bytes(raw) != digest:
+            raise ValueError("r10-merged-predecessor-archive-manifest-stale")
+        manifest = _json_object(raw, "r10-merged-predecessor-archive-manifest-invalid")
+        rows = manifest.get("files")
+        if (manifest.get("schema") != "genewhip-original10-preserved-review-revision-v1"
+                or not isinstance(rows, list) or len(rows) < len(required_members)):
+            raise ValueError("r10-merged-predecessor-archive-manifest-invalid")
+        actual_members = {}
+        for row in rows:
+            if not isinstance(row, dict) or set(row) != {"archive", "source", "size_bytes", "sha256"}:
+                raise ValueError("r10-merged-predecessor-archive-manifest-invalid")
+            archive_relative = row.get("archive")
+            if not isinstance(archive_relative, str) or archive_relative in actual_members:
+                raise ValueError("r10-merged-predecessor-archive-manifest-invalid")
+            member_path = _candidate_path(root, (phase / archive_relative).as_posix())
+            member_bytes = _regular(member_path, cap=4 * 1024 * 1024)
+            if (not isinstance(row.get("size_bytes"), int) or isinstance(row.get("size_bytes"), bool)
+                    or row["size_bytes"] != len(member_bytes)
+                    or row.get("sha256") != sha_bytes(member_bytes)):
+                raise ValueError("r10-merged-predecessor-archive-member-stale")
+            actual_members[archive_relative] = row["sha256"]
+        if any(actual_members.get(path) != member_sha for path, member_sha in required_members.items()):
+            raise ValueError("r10-merged-predecessor-archive-member-stale")
+
+    return_path = _candidate_path(root, (phase /
+        "history/07-10-current-return-4d9/07-10-CURRENT-SOURCE-RETURN.json").as_posix())
+    return_raw = _regular(return_path, cap=256 * 1024)
+    return_value = _json_object(return_raw, "r10-merged-predecessor-return-invalid")
+    if (sha_bytes(return_raw) != expected["return_record_sha256"]
+            or sha_bytes(json.dumps(return_value, sort_keys=True, separators=(",", ":")).encode())
+                != expected["return_payload_sha256"]
+            or return_value.get("purpose") != "current-native-return"
+            or return_value.get("product_qualification_claim") is not False):
+        raise ValueError("r10-merged-predecessor-return-stale")
+    candidate = return_value.get("candidate")
+    if (not isinstance(candidate, dict)
+            or candidate.get("private_source_head") != expected["private_source_head"]
+            or candidate.get("public_head") != expected["source_head"]
+            or candidate.get("public_base") != expected["public_base_sha"]
+            or candidate.get("public_tree") != expected["public_tree_sha"]
+            or candidate.get("preparation_path") != expected["candidate_root"] + "/preparation.json"
+            or candidate.get("preparation_sha256") != expected["candidate_preparation_sha256"]
+            or candidate.get("repository_policy_sha256") != expected["candidate_policy_sha256"]
+            or candidate.get("source_manifest_sha256") != expected["candidate_manifest_sha256"]):
+        raise ValueError("r10-merged-predecessor-candidate-stale")
+    candidate_root = _candidate_path(root, expected["candidate_root"])
+    prep_path = _candidate_path(root, expected["candidate_root"] + "/preparation.json")
+    prep_raw = _regular(prep_path, cap=4 * 1024 * 1024)
+    if sha_bytes(prep_raw) != expected["candidate_preparation_sha256"]:
+        raise ValueError("r10-merged-predecessor-candidate-stale")
+    prep = _json_object(prep_raw, "r10-merged-predecessor-candidate-invalid")
+    policy_path = _candidate_path(root, str(prep.get("repository_preflight", "")))
+    policy_raw = _regular(policy_path, cap=4 * 1024 * 1024)
+    if sha_bytes(policy_raw) != expected["candidate_policy_sha256"]:
+        raise ValueError("r10-merged-predecessor-candidate-stale")
+    if (_candidate_git(candidate_root / "publication", "rev-parse", "HEAD") != expected["source_head"]
+            or _candidate_git(candidate_root / "publication", "rev-parse", "HEAD^") != expected["public_base_sha"]
+            or _candidate_git(candidate_root / "publication", "rev-parse", "HEAD^{tree}")
+                != expected["public_tree_sha"]
+            or _candidate_git(candidate_root / "publication", "status", "--porcelain",
+                "--untracked-files=all")):
+        raise ValueError("r10-merged-predecessor-candidate-git-identity-invalid")
+    if journal_bytes is None:
+        journal_path = _candidate_path(root, "build/v02/campaign15/hosted-delivery-journal.json")
+        journal_raw = _regular(journal_path, cap=64 * 1024)
+    else:
+        journal_raw = journal_bytes
+        if len(journal_raw) > 64 * 1024:
+            raise ValueError("r10-merged-predecessor-journal-invalid")
+    journal = _json_object(journal_raw, "r10-merged-predecessor-journal-invalid")
+    if (sha_bytes(journal_raw) != expected["journal_sha256"]
+            or journal.get("schema") != "genewhip.v02-delivery-journal.v1"
+            or journal.get("repository") != "szTheory/genewhip"
+            or journal.get("source_head") != expected["source_head"]
+            or journal.get("public_base_sha") != expected["public_base_sha"]
+            or journal.get("branch") != "v0.2-source-" + expected["source_head"][:12]
+            or journal.get("push_performed") is not True
+            or journal.get("started_at") != "2026-10-30T16:50:39.837827+00:00"
+            or any(key in journal for key in ("public_source_sha", "merge_commit", "merge_parents",
+                "candidate_sha", "merge_strategy", "qualification_started_at", "source_sha",
+                "run_id", "run_attempt"))):
+        raise ValueError("r10-merged-predecessor-journal-stale")
+    return {**expected, "preparation_payload_sha256": expected["preparation_payload_sha256"],
+        "return_payload_sha256": expected["return_payload_sha256"],
+        "journal_sha256": sha_bytes(journal_raw)}
 
 
 def _write_exclusive_json(root: Path, relative: Path, payload: dict[str, Any]) -> None:

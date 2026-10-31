@@ -993,6 +993,10 @@ class ContinuationContracts(unittest.TestCase):
                      mock.patch.object(coordinator, "_external", side_effect=remote_reply):
                     result = coordinator._retry_sanitized_source_bound(packet, publication,
                         journal, original_bytes, previous, start, scope, ROOT / "build/v02")
+                self.assertEqual(result["archive_sha256"], hashlib.sha256(original_bytes).hexdigest())
+                self.assertEqual(result["prior_source_head"], old_head)
+                self.assertEqual(result["source_head"], new_head)
+                self.assertFalse(result["push_performed"])
                 active = json.loads(journal.read_bytes())
                 archive = ROOT / result["archive"]
                 self.assertTrue(archive.is_relative_to(ROOT / "build/v02/failures"))
@@ -1009,6 +1013,275 @@ class ContinuationContracts(unittest.TestCase):
             finally:
                 if archive is not None:
                     archive.unlink(missing_ok=True)
+
+    def test_incomplete_merged_source_is_adopted_before_fresh_base_checks(self):
+        repository = "szTheory/genewhip"
+        old_head, base, merge_sha = "a" * 40, "b" * 40, "c" * 40
+        packet = {"repository": repository, "public_identity":
+            {"head_sha": old_head, "base_sha": base}}
+        previous = {"schema": "genewhip.v02-delivery-journal.v1",
+            "started_at": "2026-10-30T16:50:39.837827+00:00",
+            "repository": repository, "source_head": old_head, "public_base_sha": base,
+            "branch": "v0.2-source-" + old_head[:12], "push_performed": True}
+        checks = [{"name": "required-ci", "status": "COMPLETED", "conclusion": "SUCCESS"},
+            {"name": "phase7-fast", "status": "COMPLETED", "conclusion": "SUCCESS"}]
+        pr = {"number": 21, "url": "https://example.invalid/pull/21", "state": "MERGED",
+            "headRefName": previous["branch"], "headRefOid": old_head,
+            "baseRefName": "main", "baseRefOid": base,
+            "mergeCommit": {"oid": merge_sha}, "statusCheckRollup": checks}
+        receipt = {"pull_request": "21", "pull_request_url": pr["url"],
+            "public_source_sha": merge_sha, "candidate_sha": old_head,
+            "public_base_sha": base, "merge_parents": [base], "branch": previous["branch"],
+            "merge_strategy": "squash", "tree_sha": "d" * 40}
+        with tempfile.TemporaryDirectory(prefix="gw-merge-adoption-") as temp:
+            root = Path(temp)
+            journal_path = root / "journal.json"
+            original = (json.dumps(previous, sort_keys=True, indent=2) + "\n").encode()
+            journal_path.write_bytes(original)
+            listing = SimpleNamespace(stdout=json.dumps([pr]), returncode=0)
+            def gh_json(_repo, endpoint, **_kwargs):
+                self.assertEqual(endpoint, "git/ref/heads/main")
+                return {"object": {"sha": merge_sha}}
+            with mock.patch.object(coordinator, "_external", return_value=listing) as external, \
+                 mock.patch.object(coordinator, "_verified_merge_receipt", return_value=receipt) as verify, \
+                 mock.patch.object(coordinator, "_gh_json", side_effect=gh_json):
+                actual = coordinator._adopt_incomplete_merged_source(
+                    packet, root / "publication", journal_path, previous)
+            external.assert_called_once()
+            verify.assert_called_once_with(pr, repository, root / "publication", old_head,
+                base, previous["branch"], phase="runtime")
+            self.assertEqual(actual, receipt)
+            updated = json.loads(journal_path.read_bytes())
+            self.assertEqual(updated["public_source_sha"], merge_sha)
+            self.assertEqual(updated["merge_parents"], [base])
+        for bad_pr in ({**pr, "baseRefOid": "e" * 40},
+                {**pr, "statusCheckRollup": [{"name": "required-ci",
+                    "status": "COMPLETED", "conclusion": "FAILURE"}]}):
+            with tempfile.TemporaryDirectory(prefix="gw-merge-adoption-reject-") as temp:
+                root = Path(temp)
+                journal_path = root / "journal.json"
+                journal_path.write_text(json.dumps(previous), encoding="utf-8")
+                before = journal_path.read_bytes()
+                with mock.patch.object(coordinator, "_external",
+                        return_value=SimpleNamespace(stdout=json.dumps([bad_pr]))), \
+                     mock.patch.object(coordinator, "_verified_merge_receipt") as verify, \
+                     self.assertRaises(ValueError):
+                    coordinator._adopt_incomplete_merged_source(
+                        packet, root / "publication", journal_path, previous)
+                verify.assert_not_called()
+                self.assertEqual(journal_path.read_bytes(), before)
+
+    def test_source_successor_preview_roster_matches_required_pull_request_aggregate(self):
+        aggregate_spec = importlib.util.spec_from_file_location(
+            "phase7_required_ci_aggregate", ROOT / "scripts/ci/aggregate.py")
+        self.assertIsNotNone(aggregate_spec)
+        aggregate = importlib.util.module_from_spec(aggregate_spec)
+        aggregate_spec.loader.exec_module(aggregate)
+        preview_lanes = {"safety", "gameplay", "desktop", "package", "performance",
+            "product-smoke", "phase7-fast"}
+        self.assertEqual(set(aggregate.REQUIRED_LANES), preview_lanes)
+        skipped_lanes = {"v02-runtime", "extended", "v02-benchmark-control",
+            "v02-benchmark-recursion94", "v02-benchmark-tank-battle", "v02-package",
+            "v02-release-qualification", "attestation"}
+        checks = ([{"name": name, "status": "COMPLETED", "conclusion": "SUCCESS"}
+            for name in sorted(preview_lanes | {"required-ci"})]
+            + [{"name": name, "status": "COMPLETED", "conclusion": "SKIPPED"}
+                for name in sorted(skipped_lanes)])
+        expected = {"preview_run_id": "41163927669", "source_head": "a" * 40}
+        run = {"id": 41163927669, "head_sha": "a" * 40, "event": "pull_request",
+            "status": "completed", "conclusion": "success"}
+        coordinator._required_preview_success({"statusCheckRollup": checks}, run, expected)
+
+        failures = []
+        missing = [row for row in checks if row["name"] != "desktop"]
+        failures.append(missing)
+        missing_aggregate = [row for row in checks if row["name"] != "required-ci"]
+        failures.append(missing_aggregate)
+        duplicate_aggregate = [*checks, dict(next(row for row in checks
+            if row["name"] == "required-ci"))]
+        duplicate_lane = [*checks, dict(next(row for row in checks
+            if row["name"] == "desktop"))]
+        failures.extend((duplicate_aggregate, duplicate_lane))
+        for bad in (
+                [{**row, "conclusion": "FAILURE"} if row["name"] == "safety" else row
+                    for row in checks],
+                [{**row, "status": "IN_PROGRESS"} if row["name"] == "phase7-fast" else row
+                    for row in checks],
+                [*checks, {"name": "unapproved-optional", "status": "COMPLETED",
+                    "conclusion": "SKIPPED"}],
+                [{**row, "conclusion": "FAILURE"} if row["name"] == "v02-runtime" else row
+                    for row in checks]):
+            failures.append(bad)
+        for bad_checks in failures:
+            with self.subTest(checks=bad_checks), self.assertRaisesRegex(
+                    ValueError, "source-successor-prior-required-check-not-success"):
+                coordinator._required_preview_success(
+                    {"statusCheckRollup": bad_checks}, run, expected)
+
+    def test_r10_predecessor_accepts_only_its_exact_successful_preview_runs(self):
+        repository = "szTheory/genewhip"
+        old_head, base, merge_sha = "a" * 40, "b" * 40, "c" * 40
+        branch = "v0.2-source-" + old_head[:12]
+        expected = {"source_head": old_head, "public_base_sha": base,
+            "merge_commit_sha": merge_sha, "merge_tree_sha": "d" * 40,
+            "pull_request": "21", "preview_run_id": "41163927669",
+            "merge_preview_run_id": "41164633979", "candidate_root": "candidate-r10"}
+        journal = {"source_head": old_head, "public_base_sha": base,
+            "repository": repository, "branch": branch,
+            "started_at": "2026-10-30T16:50:39.837827+00:00", "push_performed": True}
+        journal_bytes = json.dumps(journal, sort_keys=True).encode()
+        required_lanes = {"safety", "gameplay", "desktop", "package", "performance",
+            "product-smoke", "phase7-fast"}
+        conditional_skips = {"v02-runtime", "extended", "v02-benchmark-control",
+            "v02-benchmark-recursion94", "v02-benchmark-tank-battle", "v02-package",
+            "v02-release-qualification", "attestation"}
+        rollup = ([{"name": name, "status": "COMPLETED", "conclusion": "SUCCESS"}
+            for name in sorted(required_lanes | {"required-ci"})]
+            + [{"name": name, "status": "COMPLETED", "conclusion": "SKIPPED"}
+                for name in sorted(conditional_skips)])
+        pr = {"number": 21, "url": "https://github.com/szTheory/genewhip/pull/21",
+            "state": "MERGED", "headRefName": branch, "headRefOid": old_head,
+            "baseRefName": "main", "baseRefOid": base,
+            "mergeCommit": {"oid": merge_sha}, "statusCheckRollup": rollup}
+        run_summary = {"id": int(expected["preview_run_id"]), "head_sha": old_head,
+            "event": "pull_request", "status": "completed", "conclusion": "success"}
+        source_run = {**run_summary, "display_title": "Required preview checks",
+            "head_branch": branch, "path": ".github/workflows/ci.yml"}
+        merge_run = {"id": int(expected["merge_preview_run_id"]), "head_sha": merge_sha,
+            "event": "push", "status": "completed", "conclusion": "success",
+            "display_title": "Required preview checks", "head_branch": "main",
+            "path": ".github/workflows/ci.yml"}
+        receipt = {"public_source_sha": merge_sha, "tree_sha": expected["merge_tree_sha"],
+            "pull_request": "21", "branch": branch}
+
+        def verify(source_rows, merge_rows):
+            def remote(argv, **_kwargs):
+                if argv[:3] == ["gh", "pr", "list"]:
+                    output = [pr]
+                elif argv[:2] == ["gh", "api"] and argv[2].endswith(
+                        "/actions/runs/" + expected["preview_run_id"]):
+                    output = run_summary
+                elif argv[:2] == ["gh", "api"] and "actions/runs?head_sha=" in argv[2]:
+                    if old_head in argv[2]:
+                        rows = source_rows
+                    elif merge_sha in argv[2]:
+                        rows = merge_rows
+                    else:
+                        raise AssertionError("unexpected workflow subject")
+                    output = {"total_count": len(rows), "workflow_runs": rows}
+                else:
+                    raise AssertionError("unexpected GitHub query: " + repr(argv))
+                return SimpleNamespace(stdout=json.dumps(output))
+
+            with mock.patch.object(coordinator, "_validate_r10_predecessor_artifacts",
+                    return_value=expected), \
+                    mock.patch.object(coordinator, "_external", side_effect=remote), \
+                    mock.patch.object(coordinator, "_verified_merge_receipt",
+                        return_value=receipt), \
+                    mock.patch.object(coordinator, "_gh_json",
+                        return_value={"object": {"sha": merge_sha}}):
+                return coordinator._verify_r10_merged_source(
+                    repository, journal, journal_bytes, phase="preparation")
+
+        accepted = verify([source_run], [merge_run])
+        self.assertEqual(accepted["public_source_sha"], merge_sha)
+        self.assertEqual(accepted["preview_run_id"], expected["preview_run_id"])
+        rejected = (
+            ([source_run], [{**merge_run, "status": "in_progress"}],
+                "source-successor-prior-workflow-active-or-qualified"),
+            ([source_run], [{**merge_run, "conclusion": "failure"}],
+                "source-successor-prior-merge-preview-run-mismatch"),
+            ([source_run], [{**merge_run, "event": "workflow_dispatch",
+                "display_title": "Plan10 qualification synthetic"}],
+                "source-successor-prior-workflow-active-or-qualified"),
+            ([source_run], [{**merge_run, "head_sha": "e" * 40}],
+                "source-successor-prior-merge-preview-run-mismatch"),
+            ([source_run], [{**merge_run, "head_branch": "other"}],
+                "source-successor-prior-merge-preview-run-mismatch"),
+            ([source_run], [{**merge_run, "path": ".github/workflows/other.yml"}],
+                "source-successor-prior-merge-preview-run-mismatch"),
+            ([source_run], [{**merge_run, "display_title": "Unrecognized workflow"}],
+                "source-successor-prior-merge-preview-run-mismatch"),
+            ([{**source_run, "head_sha": "e" * 40}], [merge_run],
+                "source-successor-prior-preview-run-roster-mismatch"),
+            ([source_run], [merge_run, {**merge_run, "id": 41164633980}],
+                "source-successor-prior-merge-preview-run-mismatch"))
+        for source_rows, merge_rows, reason in rejected:
+            with self.subTest(reason=reason, source_rows=source_rows, merge_rows=merge_rows), \
+                    self.assertRaisesRegex(ValueError, reason):
+                verify(source_rows, merge_rows)
+
+    def test_source_successor_archives_exact_merged_predecessor_and_rechecks_journal(self):
+        repository = "szTheory/genewhip"
+        start = "2026-10-30T16:50:39.837827+00:00"
+        old_head, old_base, merge_sha, new_head = "a" * 40, "b" * 40, "c" * 40, "d" * 40
+        expected = {"journal_sha256": "", "source_head": old_head,
+            "public_base_sha": old_base, "merge_commit_sha": merge_sha,
+            "merge_tree_sha": "e" * 40, "pull_request": "21", "preview_run_id": "41163927669",
+            "candidate_root": "candidate-r10"}
+        packet = {"repository": repository, "public_identity":
+            {"head_sha": new_head, "base_sha": merge_sha}}
+        policy = {"repository": repository, "repository_observations": {"observations": {
+            "expected_identity": {"observed_default_branch_sha": merge_sha}}}}
+        merge = {"public_source_sha": merge_sha, "tree_sha": expected["merge_tree_sha"],
+            "pull_request": "21", "required_check": {"name": "required-ci",
+                "status": "COMPLETED", "conclusion": "SUCCESS"}}
+        with tempfile.TemporaryDirectory(prefix="gw-source-successor-") as temp:
+            root = Path(temp)
+            journal_path = root / "build/v02/campaign15/hosted-delivery-journal.json"
+            journal_path.parent.mkdir(parents=True)
+            previous = {"schema": "genewhip.v02-delivery-journal.v1", "started_at": start,
+                "repository": repository, "source_head": old_head, "public_base_sha": old_base,
+                "branch": "v0.2-source-" + old_head[:12], "push_performed": True}
+            original = (json.dumps(previous, sort_keys=True, indent=2) + "\n").encode()
+            expected["journal_sha256"] = hashlib.sha256(original).hexdigest()
+            journal_path.write_bytes(original)
+            scope_path = root / "scope.json"
+            scope_path.write_text("{}", encoding="utf-8")
+            def verify(_repo, _journal, raw, *, phase):
+                self.assertEqual(raw, original)
+                self.assertEqual(phase, "preparation")
+                return merge
+            with mock.patch.object(coordinator, "ROOT", root), \
+                 mock.patch.object(coordinator, "_require_campaign_for_journal"), \
+                 mock.patch.object(coordinator, "_valid_packet_for_delivery", return_value=packet), \
+                 mock.patch.object(coordinator, "_r10_successor_constants", return_value=expected), \
+                 mock.patch.object(coordinator, "_validate_r10_predecessor_artifacts", return_value=expected), \
+                 mock.patch.object(coordinator, "_fresh_public_policy", return_value=policy), \
+                 mock.patch.object(coordinator, "_verify_r10_merged_source", side_effect=verify), \
+                 mock.patch.object(coordinator, "_require_hosted_budget", return_value=3600):
+                result = coordinator.source_successor_sanitized_source(Path("packet"),
+                    root / "publication", journal_path, campaign_path=Path("campaign"),
+                    campaign_sha256="f" * 64, scope_path=scope_path, recovery_selection="17",
+                    continuation_path=Path("continuation"), continuation_purpose="current-native-return")
+                self.assertEqual(result["source_head"], new_head)
+                self.assertFalse(result["push_performed"])
+                active = json.loads(journal_path.read_bytes())
+                archive = root / active["source_successor"]["archive"]
+                self.assertEqual(archive.read_bytes(), original)
+                self.assertEqual(active["source_successor"]["prior_merge_commit_sha"], merge_sha)
+                self.assertEqual(active["started_at"], start)
+                self.assertFalse(active["push_performed"])
+
+            journal_path.write_bytes(original)
+            changed = b"concurrent journal update\n"
+            def concurrent_write(*_args, **_kwargs):
+                journal_path.write_bytes(changed)
+                return merge
+            with mock.patch.object(coordinator, "ROOT", root), \
+                 mock.patch.object(coordinator, "_require_campaign_for_journal"), \
+                 mock.patch.object(coordinator, "_valid_packet_for_delivery", return_value=packet), \
+                 mock.patch.object(coordinator, "_r10_successor_constants", return_value=expected), \
+                 mock.patch.object(coordinator, "_validate_r10_predecessor_artifacts", return_value=expected), \
+                 mock.patch.object(coordinator, "_fresh_public_policy", return_value=policy), \
+                 mock.patch.object(coordinator, "_verify_r10_merged_source", side_effect=concurrent_write), \
+                 mock.patch.object(coordinator, "_require_hosted_budget", return_value=3600), \
+                 self.assertRaisesRegex(ValueError, "delivery-journal-transition-source-changed"):
+                coordinator.source_successor_sanitized_source(Path("packet"), root / "publication",
+                    journal_path, campaign_path=Path("campaign"), campaign_sha256="f" * 64,
+                    scope_path=scope_path, recovery_selection="17", continuation_path=Path("continuation"),
+                    continuation_purpose="current-native-return")
+            self.assertEqual(journal_path.read_bytes(), changed)
 
     def test_privacy_fixture_constructs_original_classifier_input_without_public_path_literal(self):
         path = ROOT / "tests/evidence/phase7_creation_receipts_contract.py"
@@ -1084,7 +1357,7 @@ class ContinuationContracts(unittest.TestCase):
 
     def test_current_native_continuation_reopens_exact_r8_and_historical_inputs(self):
         self.assertEqual(continuation.CURRENT_RETURN_CANDIDATE_ROOT.as_posix(),
-            "build/v02/campaign15/original10/current-source-candidate-final-r10")
+            "build/v02/campaign15/original10/current-source-candidate-final-r13")
         with tempfile.TemporaryDirectory(prefix="gw10-current-native-record-") as temporary:
             root = Path(temporary).resolve()
             required = set(continuation.R8_NATIVE_SOURCE_PATHS)
@@ -1111,6 +1384,8 @@ class ContinuationContracts(unittest.TestCase):
             self.assertEqual(payload["purpose"], "current-native-preparation")
             self.assertEqual(payload["native_evidence"]["run_sha256"], continuation.R8_RESULT_SHA)
             self.assertEqual(payload["native_evidence"]["native_source_pins"], packet["source_pins"])
+            self.assertIs(payload["current_source_delta_from_r8"][
+                "scripts/release/v02_qualification.py"]["prelaunch_only_review_boundary"], False)
             safety_delta = payload["current_source_delta_from_r8"][continuation.R8_SAFETY_REPORT_PATH]
             self.assertEqual(safety_delta["safety_summary_contract_delta"], {
                 "function": continuation.R8_SAFETY_REPORT_FUNCTION,
@@ -1170,9 +1445,20 @@ class ContinuationContracts(unittest.TestCase):
             for relative, old, new, expected_error in (
                     ("scripts/release/v02_qualification.py", "def _bounded_command(",
                         "def _bounded_command_mutant(", "current-native-unreviewed-function-delta"),
+                    ("scripts/release/v02_qualification.py", 'if __name__ == "__main__":',
+                        'def _unreviewed_successor_helper():\n    return None\n\nif __name__ == "__main__":',
+                        "current-native-unreviewed-function-delta:scripts/release/v02_qualification.py"),
+                    ("scripts/release/v02_qualification.py",
+                        'raise ValueError("source-successor-resume-state-invalid")',
+                        'raise ValueError("source-successor-resume-state-mutant")',
+                        "current-native-added-function-unreviewed:_resume_source_successor"),
                     ("scripts/release/v02_continuation.py",
-                        "current-source-candidate-final-r10", "current-source-candidate-final-r9",
+                        "current-source-candidate-final-r13", "current-source-candidate-final-r9",
                         "current-native-candidate-root-delta-invalid"),
+                    ("scripts/release/v02_continuation.py",
+                        '"candidate_root": "build/v02/campaign15/original10/current-source-candidate-final-r10"',
+                        '"candidate_root": "build/v02/campaign15/original10/current-source-candidate-final-r9"',
+                        "current-native-r10-predecessor-constant-unreviewed"),
                     ("scripts/release/v02_qualification.py",
                         'archive_sha = hashlib.sha256(original_bytes).hexdigest()',
                         'archive_sha = hashlib.sha256(original_bytes + b"x").hexdigest()',
@@ -1646,6 +1932,314 @@ class ContinuationContracts(unittest.TestCase):
         self.assertFalse((ROOT / "build/v02/current-return-denied.json").exists())
         self.assertEqual(process_denial.receipt()["real_child_starts"], 0)
 
+    def test_successor_source_cli_routes_to_transition_without_publication(self):
+        output = ROOT / "build/v02/campaign15/original10/successor-route.json"
+        packet = {"source_head": "f" * 40, "started_at": "campaign-start", "push_performed": False}
+        argv = ["--mode", "successor-source", "--out", output.relative_to(ROOT).as_posix(),
+            "--preflight", "build/v02/campaign15/original10/preflight.json",
+            "--publication-copy", "build/v02/campaign15/original10/publication",
+            "--scope", "evidence/v02-execution.json", "--recovery-selection", "17",
+            "--continuation", continuation.CURRENT_RETURN_RECORD.as_posix(),
+            "--continuation-purpose", "current-native-return", "--campaign",
+            "build/v02/campaign15/campaign.json", "--campaign-sha256",
+            "f309198a4f25fee9ffb017570e0900de70c199732d9880a4f375d70bc847aad1",
+            "--journal", "build/v02/campaign15/hosted-delivery-journal.json"]
+        with mock.patch.object(coordinator, "_campaign_projection",
+                return_value={"status": "started"}) as projection, \
+             mock.patch.object(coordinator, "source_successor_sanitized_source",
+                return_value=packet) as transition, \
+             mock.patch.object(coordinator, "publish_sanitized_source",
+                side_effect=AssertionError("successor route must not publish")) as publish, \
+             mock.patch.object(coordinator, "_write_json") as write_json, \
+             contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(coordinator.main(argv), 0)
+        projection.assert_called_once()
+        self.assertEqual(projection.call_args.kwargs["selection"], "17")
+        self.assertEqual(projection.call_args.kwargs["continuation_purpose"], "current-native-return")
+        transition.assert_called_once()
+        self.assertEqual(transition.call_args.kwargs["recovery_selection"], "17")
+        self.assertEqual(transition.call_args.kwargs["continuation_purpose"], "current-native-return")
+        publish.assert_not_called()
+        write_json.assert_called_once()
+        self.assertEqual(transition.call_args.args[0],
+            ROOT / "build/v02/campaign15/original10/preflight.json")
+        self.assertEqual(transition.call_args.args[1],
+            ROOT / "build/v02/campaign15/original10/publication")
+        self.assertEqual(transition.call_args.args[2],
+            ROOT / "build/v02/campaign15/hosted-delivery-journal.json")
+        self.assertEqual(transition.call_args.kwargs["campaign_path"],
+            Path("build/v02/campaign15/campaign.json"))
+        self.assertEqual(transition.call_args.kwargs["campaign_sha256"],
+            "f309198a4f25fee9ffb017570e0900de70c199732d9880a4f375d70bc847aad1")
+        self.assertEqual(transition.call_args.kwargs["continuation_path"],
+            continuation.CURRENT_RETURN_RECORD)
+        self.assertEqual(write_json.call_args.args[1]["schema"],
+            "genewhip.v02-source-successor-transition.v1")
+        self.assertFalse(output.exists())
+        with mock.patch.object(coordinator, "_campaign_projection") as projection, \
+             mock.patch.object(coordinator, "source_successor_sanitized_source") as transition, \
+             contextlib.redirect_stderr(io.StringIO()) as errors:
+            invalid = list(argv)
+            purpose_index = invalid.index("current-native-return")
+            invalid[purpose_index] = "current-native-preparation"
+            self.assertEqual(coordinator.main(invalid), 1)
+        self.assertIn("current-native-purpose-requires-stage-public-prepare-only", errors.getvalue())
+        projection.assert_not_called()
+        transition.assert_not_called()
+        for invalid_mode in ("original17",):
+            with mock.patch.object(coordinator, "_campaign_projection") as projection, \
+                 mock.patch.object(coordinator, "source_successor_sanitized_source") as transition, \
+                 contextlib.redirect_stderr(io.StringIO()) as errors:
+                invalid = list(argv)
+                invalid[invalid.index("current-native-return")] = invalid_mode
+                self.assertEqual(coordinator.main(invalid), 1)
+            self.assertIn("source-successor-current-return-required", errors.getvalue())
+            projection.assert_not_called()
+            transition.assert_not_called()
+        with mock.patch.object(coordinator, "_campaign_projection") as projection, \
+             mock.patch.object(coordinator, "source_successor_sanitized_source") as transition, \
+             contextlib.redirect_stderr(io.StringIO()) as errors:
+            invalid = list(argv)
+            selection_index = invalid.index("--recovery-selection") + 1
+            invalid[selection_index] = "15"
+            self.assertEqual(coordinator.main(invalid), 1)
+        self.assertIn("continuation-input-requires-selection17", errors.getvalue())
+        projection.assert_not_called()
+        transition.assert_not_called()
+        failed = False
+        with mock.patch.object(coordinator, "_campaign_projection", return_value={"status": "started"}), \
+             mock.patch.object(coordinator, "source_successor_sanitized_source",
+                side_effect=ValueError("source-successor-prior-workflow-active-or-qualified")), \
+             mock.patch.object(coordinator, "_write_json") as write_json, \
+             contextlib.redirect_stderr(io.StringIO()) as errors:
+            failed = coordinator.main(argv)
+        self.assertEqual(failed, 1)
+        self.assertIn("source-successor-prior-workflow-active-or-qualified", errors.getvalue())
+        write_json.assert_not_called()
+
+    def test_output_collision_guard_rejects_resolved_inputs_and_candidate_bytes(self):
+        with tempfile.TemporaryDirectory(prefix="gw-output-collision-") as temporary:
+            root = Path(temporary).resolve()
+            campaign = root / "build/v02/campaign15"
+            campaign.mkdir(parents=True)
+            scope = root / "scope.json"
+            scope.write_text("{}", encoding="utf-8")
+            journal = campaign / "journal.json"
+            journal.write_text("journal", encoding="utf-8")
+            candidate = campaign / "publication"
+            candidate.mkdir()
+            candidate_file = candidate / "source.txt"
+            candidate_file.write_text("candidate", encoding="utf-8")
+
+            authorization = campaign / "authorization.json"
+            authorization.write_text("authorization", encoding="utf-8")
+
+            def args_for(output, *, mode="successor-source", prepare_only=False,
+                         preflight=None, authorize=None):
+                return SimpleNamespace(mode=mode, out=Path(output), prepare_only=prepare_only,
+                    scope=scope, campaign=campaign / "campaign.json", journal=journal,
+                    continuation=campaign / "return.json", authorization=authorize,
+                    preflight=preflight or campaign / "preflight.json",
+                    publication_copy=candidate, evidence=None, public_evidence=None)
+
+            with mock.patch.object(coordinator, "ROOT", root):
+                for output in (journal, candidate_file):
+                    with self.subTest(output=output), self.assertRaisesRegex(
+                            ValueError, "qualification-output-path-aliases"):
+                        coordinator._reject_output_collisions(args_for(output))
+                with self.assertRaisesRegex(ValueError, "qualification-output-path-aliases-input"):
+                    coordinator._reject_output_collisions(args_for(authorization,
+                        mode="stage-public", prepare_only=True, authorize=authorization))
+                with self.assertRaisesRegex(ValueError, "qualification-output-path-aliases-input"):
+                    coordinator._reject_output_collisions(args_for(campaign / "preflight.json",
+                        mode="stage-public", preflight=campaign / "preflight.json"))
+                coordinator._reject_output_collisions(args_for(campaign / "nested/result.json"))
+                alias = campaign / "journal-link.json"
+                alias.symlink_to(journal)
+                with self.assertRaisesRegex(ValueError, "qualification-output-path-aliases-input"):
+                    coordinator._reject_output_collisions(args_for(alias))
+                hardlink = campaign / "journal-hardlink.json"
+                os.link(journal, hardlink)
+                with self.assertRaisesRegex(ValueError, "qualification-output-path-aliases-input"):
+                    coordinator._reject_output_collisions(args_for(hardlink))
+                candidate_hardlink = campaign / "candidate-hardlink.txt"
+                os.link(candidate_file, candidate_hardlink)
+                with self.assertRaisesRegex(ValueError, "qualification-output-path-aliases-candidate"):
+                    coordinator._reject_output_collisions(args_for(candidate_hardlink))
+                prepare = args_for(campaign / "preflight.json", mode="stage-public",
+                    prepare_only=True, preflight=campaign / "preflight.json")
+                coordinator._reject_output_collisions(prepare)
+
+    def test_successor_cli_resumes_exact_unpublished_transition_after_output_failure(self):
+        repository = "szTheory/genewhip"
+        start = "2026-10-30T16:50:39.837827+00:00"
+        old_head, old_base, merge_sha, new_head = "a" * 40, "b" * 40, "c" * 40, "d" * 40
+        expected = {"journal_sha256": "", "source_head": old_head,
+            "public_base_sha": old_base, "merge_commit_sha": merge_sha,
+            "merge_tree_sha": "e" * 40, "pull_request": "21", "preview_run_id": "41163927669",
+            "candidate_root": "candidate-r10"}
+        packet = {"repository": repository, "public_identity":
+            {"head_sha": new_head, "base_sha": merge_sha}}
+        policy = {"repository": repository, "repository_observations": {"observations": {
+            "expected_identity": {"observed_default_branch_sha": merge_sha}}}}
+        merge = {"public_source_sha": merge_sha, "tree_sha": expected["merge_tree_sha"],
+            "pull_request": "21", "preview_run_id": expected["preview_run_id"],
+            "required_check": {"name": "required-ci", "status": "COMPLETED",
+                "conclusion": "SUCCESS"}}
+        with tempfile.TemporaryDirectory(prefix="gw-successor-cli-resume-") as temporary:
+            root = Path(temporary).resolve()
+            campaign_root = root / "build/v02/campaign15"
+            campaign_root.mkdir(parents=True)
+            journal = campaign_root / "hosted-delivery-journal.json"
+            previous = {"schema": "genewhip.v02-delivery-journal.v1", "started_at": start,
+                "repository": repository, "source_head": old_head, "public_base_sha": old_base,
+                "branch": "v0.2-source-" + old_head[:12], "push_performed": True}
+            original = (json.dumps(previous, sort_keys=True, indent=2) + "\n").encode()
+            expected["journal_sha256"] = hashlib.sha256(original).hexdigest()
+            journal.write_bytes(original)
+            (root / "scope.json").write_text("{}", encoding="utf-8")
+            output = campaign_root / "successor-result.json"
+            argv = ["--mode", "successor-source", "--out", str(output), "--preflight",
+                "build/v02/campaign15/preflight.json", "--publication-copy", "build/v02/candidate",
+                "--scope", str(root / "scope.json"), "--recovery-selection", "17", "--continuation",
+                ".planning/phases/GW-07-consolidated-compatibility-matrix-and-exact-byte-delivery/07-10-CURRENT-SOURCE-RETURN.json",
+                "--continuation-purpose", "current-native-return", "--campaign",
+                "build/v02/campaign15/campaign.json", "--campaign-sha256", "f" * 64,
+                "--journal", str(journal)]
+
+            def remote(argv, **_kwargs):
+                if argv[:3] == ["gh", "pr", "list"]:
+                    return subprocess.CompletedProcess(argv, 0, "[]", "")
+                if argv[:2] == ["gh", "api"]:
+                    return subprocess.CompletedProcess(argv, 0,
+                        '{"total_count":0,"workflow_runs":[]}', "")
+                raise AssertionError("resume made an unexpected subprocess call")
+
+            def verify(_repo, predecessor, raw, *, phase):
+                self.assertEqual(raw, original)
+                self.assertEqual(predecessor, previous)
+                self.assertEqual(phase, "preparation")
+                return merge
+
+            with mock.patch.object(coordinator, "ROOT", root), \
+                 mock.patch.object(coordinator, "_require_campaign_layout"), \
+                 mock.patch.object(coordinator, "_campaign_projection", return_value={"status": "started"}), \
+                 mock.patch.object(coordinator, "_require_campaign_for_journal"), \
+                 mock.patch.object(coordinator, "_valid_packet_for_delivery", return_value=packet), \
+                 mock.patch.object(coordinator, "_r10_successor_constants", return_value=expected), \
+                 mock.patch.object(coordinator, "_validate_r10_predecessor_artifacts", return_value=expected), \
+                 mock.patch.object(coordinator, "_fresh_public_policy", return_value=policy), \
+                 mock.patch.object(coordinator, "_verify_r10_merged_source", side_effect=verify), \
+                 mock.patch.object(coordinator, "_require_hosted_budget"), \
+                 mock.patch.object(coordinator, "_external", side_effect=remote), \
+                 mock.patch.object(coordinator, "_gh_json", return_value=[]), \
+                 mock.patch.object(coordinator, "_write_json", side_effect=OSError("result write failed")), \
+                 contextlib.redirect_stderr(io.StringIO()) as errors:
+                self.assertEqual(coordinator.main(argv), 1)
+            self.assertIn("result write failed", errors.getvalue())
+            transitioned = journal.read_bytes()
+            active = json.loads(transitioned)
+            self.assertIn("source_successor", active)
+            self.assertFalse(active["push_performed"])
+            self.assertFalse(output.exists())
+
+            with mock.patch.object(coordinator, "ROOT", root), \
+                 mock.patch.object(coordinator, "_require_campaign_layout"), \
+                 mock.patch.object(coordinator, "_campaign_projection", return_value={"status": "started"}), \
+                 mock.patch.object(coordinator, "_require_campaign_for_journal"), \
+                 mock.patch.object(coordinator, "_valid_packet_for_delivery", return_value=packet), \
+                 mock.patch.object(coordinator, "_r10_successor_constants", return_value=expected), \
+                 mock.patch.object(coordinator, "_validate_r10_predecessor_artifacts", return_value=expected), \
+                 mock.patch.object(coordinator, "_fresh_public_policy", return_value=policy), \
+                 mock.patch.object(coordinator, "_verify_r10_merged_source", side_effect=verify) as reverify, \
+                 mock.patch.object(coordinator, "_require_hosted_budget"), \
+                 mock.patch.object(coordinator, "_external", side_effect=remote) as external, \
+                 mock.patch.object(coordinator, "_gh_json", return_value=[]) as gh_json, \
+                 contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(coordinator.main(argv), 0)
+            self.assertTrue(output.is_file())
+            result = json.loads(output.read_bytes())
+            self.assertEqual(result["schema"], "genewhip.v02-source-successor-transition.v1")
+            self.assertEqual(result["source_head"], new_head)
+            self.assertEqual(journal.read_bytes(), transitioned)
+            reverify.assert_called_once()
+            self.assertEqual(len(external.call_args_list), 2)
+            gh_json.assert_called_once()
+
+            late_output = campaign_root / "late-successor-result.json"
+            late_argv = list(argv)
+            late_argv[late_argv.index(str(output))] = str(late_output)
+            with mock.patch.object(coordinator, "ROOT", root), \
+                 mock.patch.object(coordinator, "_require_campaign_layout"), \
+                 mock.patch.object(coordinator, "_campaign_projection", return_value={"status": "started"}), \
+                 mock.patch.object(coordinator, "_require_campaign_for_journal"), \
+                 mock.patch.object(coordinator, "_valid_packet_for_delivery", return_value=packet), \
+                 mock.patch.object(coordinator, "_r10_successor_constants", return_value=expected), \
+                 mock.patch.object(coordinator, "_validate_r10_predecessor_artifacts", return_value=expected), \
+                 mock.patch.object(coordinator, "_fresh_public_policy", return_value=policy), \
+                 mock.patch.object(coordinator, "_verify_r10_merged_source", side_effect=verify), \
+                 mock.patch.object(coordinator, "_require_hosted_budget",
+                    side_effect=[None, ValueError("hosted-budget-expired")]), \
+                 mock.patch.object(coordinator, "_external", side_effect=remote), \
+                 mock.patch.object(coordinator, "_gh_json", return_value=[]), \
+                 contextlib.redirect_stderr(io.StringIO()) as errors:
+                self.assertEqual(coordinator.main(late_argv), 1)
+            self.assertIn("hosted-budget-expired", errors.getvalue())
+            self.assertEqual(journal.read_bytes(), transitioned)
+            self.assertFalse(late_output.exists())
+
+            archive_path = root / active["source_successor"]["archive"]
+            predecessor_bytes = archive_path.read_bytes()
+            archive_path.write_bytes(b"changed predecessor archive")
+            with mock.patch.object(coordinator, "ROOT", root), \
+                 mock.patch.object(coordinator, "_require_campaign_for_journal"), \
+                 mock.patch.object(coordinator, "_valid_packet_for_delivery", return_value=packet), \
+                 mock.patch.object(coordinator, "_r10_successor_constants", return_value=expected), \
+                 self.assertRaisesRegex(ValueError,
+                    "hosted-delivery-journal-source-successor-archive-digest-mismatch"):
+                coordinator.source_successor_sanitized_source(Path("packet"), root / "candidate",
+                    journal, campaign_path=Path("campaign"), campaign_sha256="f" * 64,
+                    scope_path=root / "scope.json", recovery_selection="17",
+                    continuation_path=Path("continuation"),
+                    continuation_purpose="current-native-return")
+            archive_path.write_bytes(predecessor_bytes)
+
+            for altered in ({**active, "push_performed": True},
+                    {**active, "qualification_started_at": start}):
+                journal.write_text(json.dumps(altered), encoding="utf-8")
+                with mock.patch.object(coordinator, "ROOT", root), \
+                     mock.patch.object(coordinator, "_require_campaign_for_journal"), \
+                     mock.patch.object(coordinator, "_valid_packet_for_delivery", return_value=packet), \
+                     mock.patch.object(coordinator, "_r10_successor_constants", return_value=expected), \
+                     self.assertRaisesRegex(ValueError, "source-successor-resume-state-invalid"):
+                    coordinator.source_successor_sanitized_source(Path("packet"), root / "candidate",
+                        journal, campaign_path=Path("campaign"), campaign_sha256="f" * 64,
+                        scope_path=root / "scope.json", recovery_selection="17",
+                        continuation_path=Path("continuation"),
+                        continuation_purpose="current-native-return")
+
+    def test_successor_main_rejects_journal_output_alias_before_campaign_or_effects(self):
+        with tempfile.TemporaryDirectory(prefix="gw-successor-output-guard-") as temporary:
+            root = Path(temporary).resolve()
+            journal = root / "build/v02/campaign15/hosted-delivery-journal.json"
+            argv = ["--mode", "successor-source", "--out", str(journal),
+                "--preflight", "build/v02/campaign15/preflight.json",
+                "--publication-copy", "build/v02/campaign15/publication",
+                "--scope", "evidence/v02-execution.json", "--recovery-selection", "17",
+                "--continuation", continuation.CURRENT_RETURN_RECORD.as_posix(),
+                "--continuation-purpose", "current-native-return", "--campaign",
+                "build/v02/campaign15/campaign.json", "--campaign-sha256", "f" * 64,
+                "--journal", str(journal)]
+            with mock.patch.object(coordinator, "ROOT", root), \
+                 mock.patch.object(coordinator, "_campaign_projection") as projection, \
+                 mock.patch.object(coordinator, "source_successor_sanitized_source") as transition, \
+                 contextlib.redirect_stderr(io.StringIO()) as errors:
+                self.assertEqual(coordinator.main(argv), 1)
+            self.assertIn("qualification-output-path-aliases-input", errors.getvalue())
+            projection.assert_not_called()
+            transition.assert_not_called()
+            self.assertFalse(journal.exists())
+
     def test_current_return_selector_preserves_all_original17_api_defaults(self):
         import inspect
         for function in (coordinator._campaign_projection, coordinator._require_campaign_for_journal,
@@ -1720,7 +2314,7 @@ def main() -> int:
                 "test_current_native_return_operator_route_reaches_only_stubbed_publish_boundary")])
         else:
             selected_tests = unittest.defaultTestLoader.loadTestsFromTestCase(ContinuationContracts)
-            # This integration test consumes the fresh R2 candidate and six real reviews.
+            # This integration test consumes a fresh candidate and six real reviews.
             # Keep it an explicit post-preparation check so source-only contracts remain
             # runnable before that candidate exists; never treat omission as a pass.
             selected_tests = unittest.TestSuite(test for test in selected_tests

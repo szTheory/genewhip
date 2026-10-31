@@ -670,15 +670,18 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
             merge_sha = "c" * 40
             pr = {"state": "MERGED", "number": 7, "url": "https://example.invalid/pull/7",
                 "headRefOid": head, "baseRefName": "main", "mergeCommit": {"oid": merge_sha}}
-            exact = {"parents": [{"sha": base}], "commit": {"tree": {"sha": tree}}}
-            with mock.patch.object(module, "_gh_json", return_value=exact):
+            exact = {"sha": merge_sha, "parents": [{"sha": base}], "tree": {"sha": tree}}
+            with mock.patch.object(module, "_gh_json", return_value=exact) as remote:
                 receipt = module._verified_merge_receipt(pr, "szTheory/genewhip", candidate,
                     head, base, "v0.2-source-test")
+            remote.assert_called_once_with("szTheory/genewhip", f"git/commits/{merge_sha}",
+                phase="preparation")
             self.assertEqual(receipt["public_source_sha"], merge_sha)
             self.assertEqual(receipt["merge_strategy"], "squash")
             for bad_commit in (
-                {"parents": [{"sha": "d" * 40}], "commit": {"tree": {"sha": tree}}},
-                {"parents": [{"sha": base}], "commit": {"tree": {"sha": "e" * 40}}},
+                {"sha": merge_sha, "parents": [{"sha": "d" * 40}], "tree": {"sha": tree}},
+                {"sha": merge_sha, "parents": [{"sha": base}], "tree": {"sha": "e" * 40}},
+                {"sha": "f" * 40, "parents": [{"sha": base}], "tree": {"sha": tree}},
             ):
                 with mock.patch.object(module, "_gh_json", return_value=bad_commit), \
                         self.assertRaisesRegex(ValueError, "protected-merge-parents-or-tree-mismatch"):
@@ -732,7 +735,7 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
                  mock.patch.object(module, "_external", return_value=listing) as external, \
                  mock.patch.object(module, "_gh_json", side_effect=lambda _repo, endpoint, **_kwargs:
                      {"object": {"sha": merge_sha}} if endpoint == "git/ref/heads/main" else
-                     {"parents": [{"sha": base}], "commit": {"tree": {"sha": tree}}}) as remote:
+                     {"sha": merge_sha, "parents": [{"sha": base}], "tree": {"sha": tree}}) as remote:
                 receipt = module.publish_sanitized_source(Path("packet"), candidate, journal_path)
             external.assert_called_once()
             self.assertEqual(remote.call_count, 2)
@@ -741,8 +744,8 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
             with mock.patch.dict(os.environ), \
                  mock.patch.object(module, "_valid_packet_for_delivery", return_value=packet), \
                  mock.patch.object(module, "_external", return_value=listing), \
-                 mock.patch.object(module, "_gh_json", return_value={"parents": [{"sha": "d" * 40}],
-                     "commit": {"tree": {"sha": tree}}}), \
+                 mock.patch.object(module, "_gh_json", return_value={"sha": merge_sha,
+                     "parents": [{"sha": "d" * 40}], "tree": {"sha": tree}}), \
                  self.assertRaisesRegex(ValueError, "protected-merge-parents-or-tree-mismatch"):
                 module.publish_sanitized_source(Path("packet"), candidate, journal_path)
             archive_path.unlink(missing_ok=True)
