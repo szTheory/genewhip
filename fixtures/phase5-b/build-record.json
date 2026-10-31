@@ -1,0 +1,39 @@
+{
+  "build_config_sha256": "a8879be1c51783096812019af8b02c6d6ab199e9a01b0ce8d6aaf30c281e71df",
+  "build_image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+  "build_image_id": "sha256:a32ce20981559a42da0d7f21a56102ffc800c350f00156638dc9dcb26d09850e",
+  "build_recipe_sha256": "a8879be1c51783096812019af8b02c6d6ab199e9a01b0ce8d6aaf30c281e71df",
+  "canonical_rom_sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff",
+  "comparison": "byte-identical",
+  "enforcement_sha256": "5bd3da63448b80630ca08dac3c8d259178f3ba41bc70d26c78ac5d28428f6b58",
+  "linked_runtime_sha256": null,
+  "policy_sha256": "eb9d3e63906cd2b32ca26520cc569895bde3c932a0660c7350cae582b84081dc",
+  "promotion_build_invocations": 0,
+  "raw_outputs": [
+    {
+      "bytes": 1048576,
+      "ordinal": 1,
+      "sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff"
+    },
+    {
+      "bytes": 1048576,
+      "ordinal": 2,
+      "sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff"
+    }
+  ],
+  "rom_build_invocations_total": 2,
+  "schema": "genewhip-phase5-build-record-v1",
+  "source_build_summary": {
+    "path": "evidence/phase5-recursion-build-summary.json",
+    "sha256": "578ff1011299d4bf484f2f9343ce40b455cac730dc7fcbf63ffaea38c1316d3a"
+  },
+  "source_receipt": {
+    "path": "local-fixtures/phase5/recursion94/d114-attempt/receipts/recursion94-1396f9c91bf8d2de.json",
+    "sha256": "1396f9c91bf8d2deae6627f8a895993a3a06d19d97505da4bca9b30760ee4f86"
+  },
+  "source_receipt_sha256": "1396f9c91bf8d2deae6627f8a895993a3a06d19d97505da4bca9b30760ee4f86",
+  "source_revision": "ab73bc9c7d2bbc4fcd94b3e0e2b89756cb1dc0cd",
+  "status": "pass",
+  "title_id": "recursion94",
+  "tool_lock_sha256": "e79cf30fb5d5df87371f73eddbedf833bf46bb3a756b4f7dac495869c934b111"
+}

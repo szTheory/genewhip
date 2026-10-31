@@ -23,7 +23,7 @@ _Static_assert(sizeof(uint32_t) == 4 && sizeof(uint64_t) == 8, "Exact integer wi
 #endif
 
 typedef struct gw_cpu {
-    uint32_t d[8], a[8], pc;
+    uint32_t d[8], a[8], pc, usp;
     uint16_t sr;
     uint32_t instruction_address, opcode, fault_address, stop_reason;
 } gw_cpu;
@@ -53,6 +53,7 @@ struct gw_machine {
     uint64_t allocations;
     size_t owned_bytes_current;
     size_t owned_bytes_peak;
+    int fail_next_rom_allocation;
     gw_test_z80_arb_event z80_arb_events[256];
     size_t z80_arb_event_count;
     /* Bounded private test observations; never installed or used by the core. */
@@ -109,6 +110,7 @@ uint8_t gw_bus_peek(const gw_machine *m, uint32_t address);
 size_t gw_test_owned_bytes_current(const gw_machine *m);
 size_t gw_test_owned_bytes_peak(const gw_machine *m);
 uint64_t gw_test_allocation_count(const gw_machine *m);
+void gw_test_fail_next_rom_allocation(gw_machine *m);
 void gw_test_memory_reset(gw_machine *m);
 int gw_test_memory_set(gw_machine *m, uint32_t address, uint8_t value);
 int gw_test_memory_get(const gw_machine *m, uint32_t address, uint8_t *value);

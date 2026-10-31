@@ -1,0 +1,489 @@
+{
+  "build_config_sha256": "24055065bbc72ed81ad8f873930764e9024b1a8c0970af2e4441778fbd876443",
+  "build_image": "ghcr.io/stephane-d/sgdk@sha256:b0bb8a7171f8dcbf1625685b3a839d23c5c32000019a2023d0e039dd6eadcf31",
+  "build_image_id": "sha256:a32ce20981559a42da0d7f21a56102ffc800c350f00156638dc9dcb26d09850e",
+  "build_recipe_sha256": "24055065bbc72ed81ad8f873930764e9024b1a8c0970af2e4441778fbd876443",
+  "canonical_rom_sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723",
+  "comparison": "byte-identical",
+  "enforcement_sha256": "bbea6f39fb2d692eb2996abdfab849675090885dc55edc201d84d5bfb18e7a34",
+  "linked_member_inventory": [
+    {
+      "MegaWiFi_members": 0,
+      "archive_members": [
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "bmp.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "bmp_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "dma.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "dma_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_dpcm2.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_null.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_pcm.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_pcm4.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_xgm.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_xgm2.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "error_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "joy.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "kdebug.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "libres.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "maths.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "memory.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "memory_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "pal.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "pool.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "psg.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "smp_null.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "smp_null_dpcm.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "snd_dpcm2.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "snd_pcm.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "snd_pcm4.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "sound.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "sprite_eng.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "sram.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "string.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "sys.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "sys_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tab_cnv.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tab_log10.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tab_sqrt.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tab_vol.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "task.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "timer.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tools.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tools_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "types.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vdp.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vdp_bg.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vdp_spr.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vdp_tile.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vdp_tile_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vram.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "xgm.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "xgm2.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "ym2612.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "z80_ctrl.c.o"
+        },
+        {
+          "archive": "/usr/bin/../lib/gcc/m68k-elf/13.2.0/libgcc.a",
+          "member": "_divsi3.o"
+        },
+        {
+          "archive": "/usr/bin/../lib/gcc/m68k-elf/13.2.0/libgcc.a",
+          "member": "_modsi3.o"
+        },
+        {
+          "archive": "/usr/bin/../lib/gcc/m68k-elf/13.2.0/libgcc.a",
+          "member": "_mulsi3.o"
+        },
+        {
+          "archive": "/usr/bin/../lib/gcc/m68k-elf/13.2.0/libgcc.a",
+          "member": "_udivsi3.o"
+        },
+        {
+          "archive": "/usr/bin/../lib/gcc/m68k-elf/13.2.0/libgcc.a",
+          "member": "_umodsi3.o"
+        }
+      ],
+      "ordinal": 1
+    },
+    {
+      "MegaWiFi_members": 0,
+      "archive_members": [
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "bmp.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "bmp_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "dma.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "dma_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_dpcm2.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_null.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_pcm.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_pcm4.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_xgm.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "drv_xgm2.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "error_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "joy.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "kdebug.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "libres.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "maths.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "memory.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "memory_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "pal.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "pool.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "psg.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "smp_null.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "smp_null_dpcm.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "snd_dpcm2.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "snd_pcm.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "snd_pcm4.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "sound.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "sprite_eng.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "sram.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "string.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "sys.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "sys_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tab_cnv.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tab_log10.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tab_sqrt.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tab_vol.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "task.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "timer.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tools.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "tools_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "types.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vdp.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vdp_bg.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vdp_spr.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vdp_tile.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vdp_tile_a.s.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "vram.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "xgm.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "xgm2.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "ym2612.c.o"
+        },
+        {
+          "archive": "/sgdk/lib/libmd.a",
+          "member": "z80_ctrl.c.o"
+        },
+        {
+          "archive": "/usr/bin/../lib/gcc/m68k-elf/13.2.0/libgcc.a",
+          "member": "_divsi3.o"
+        },
+        {
+          "archive": "/usr/bin/../lib/gcc/m68k-elf/13.2.0/libgcc.a",
+          "member": "_modsi3.o"
+        },
+        {
+          "archive": "/usr/bin/../lib/gcc/m68k-elf/13.2.0/libgcc.a",
+          "member": "_mulsi3.o"
+        },
+        {
+          "archive": "/usr/bin/../lib/gcc/m68k-elf/13.2.0/libgcc.a",
+          "member": "_udivsi3.o"
+        },
+        {
+          "archive": "/usr/bin/../lib/gcc/m68k-elf/13.2.0/libgcc.a",
+          "member": "_umodsi3.o"
+        }
+      ],
+      "ordinal": 2
+    }
+  ],
+  "linked_runtime_sha256": "38d43d1fb6ea71a6530cb43e1ece8cb4493e61e7b91affbb21069d9693cc5eed",
+  "policy_sha256": "eb9d3e63906cd2b32ca26520cc569895bde3c932a0660c7350cae582b84081dc",
+  "promotion_build_invocations": 0,
+  "raw_outputs": [
+    {
+      "bytes": 524288,
+      "ordinal": 1,
+      "sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723"
+    },
+    {
+      "bytes": 524288,
+      "ordinal": 2,
+      "sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723"
+    }
+  ],
+  "rom_build_invocations_total": 2,
+  "schema": "genewhip-phase5-build-record-v1",
+  "source_build_summary": {
+    "path": "evidence/phase5-tank-build-summary.json",
+    "sha256": "7377d5ef9021e9212060395b4a5dbde10296ca1fa02998a6cfa6c4af98d6d18a"
+  },
+  "source_receipt_sha256": "7b2462ab40b2d94236e8b2ebaebb9798b9001cbada922b214a80414cb4bf7835",
+  "source_revision": "eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+  "status": "pass",
+  "title_id": "tank-battle",
+  "tool_lock_sha256": "bfb46f6392e7e5f6fb1a66ddee2f326343f743107905a03c071cd56b27a8e704"
+}

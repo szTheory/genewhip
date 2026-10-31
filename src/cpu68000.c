@@ -208,6 +208,31 @@ static int execute_lea(gw_machine *m, uint32_t op)
     return 1;
 }
 
+/* PEA computes a control effective address; it does not fetch the operand at
+ * that address. NXP M68000PRM p. 4-159, with the 68000 EA subset only. */
+static int execute_pea(gw_machine *m, uint32_t op)
+{
+    ea_t ea;
+    unsigned mode = (op >> 3) & 7u, reg = op & 7u;
+    unsigned ea_index = mode < 7u ? mode : 7u + reg;
+    static const uint8_t clocks_by_control_ea[12] = {
+        0, 0, 12, 0, 0, 16, 20, 16, 20, 16, 20, 0
+    };
+    uint64_t start_tick = m->tick;
+    if (!ea_legal(mode, reg, EA_CONTROL)) return unsupported_instruction(m);
+    if (!ea_address(m, mode, reg, 4, &ea)) return 0;
+    m->cpu.a[7] -= 4u;
+    if (!gw_bus_write(m, m->cpu.a[7], 4, ea.address)) return 0;
+    /* Fill the internal clocks not represented by the simplified bus model to
+     * the MC68000UM §8.9 Table 8-10 (16-bit bus) total.
+     * Bus ordering remains approximate. */
+    uint64_t target_ticks = (uint64_t)clocks_by_control_ea[ea_index] * GW_CPU_DIVIDER;
+    /* The dispatcher has already charged the four-clock opcode fetch. */
+    uint64_t elapsed_ticks = m->tick - start_tick + 4u * GW_CPU_DIVIDER;
+    if (elapsed_ticks < target_ticks) m->tick += target_ticks - elapsed_ticks;
+    return 1;
+}
+
 /* CLR does not model the 68000's read-before-write bus cycle. */
 static int execute_clr(gw_machine *m, uint32_t op)
 {
@@ -261,6 +286,26 @@ static int execute_arith(gw_machine *m, uint32_t op, int kind)
     if (!ea_address(m, mode, ereg, size, &ea) || !ea_read(m, &ea, size, &dst)) return 0;
     res = alu(&m->cpu, kind, m->cpu.d[reg] & mask, dst, size);
     return ea_write(m, &ea, size, res);
+}
+
+/* ADDX Dn,Dn: M68000PRM4-13/14. Read both old operands before writing
+ * (source may equal destination); Z is cumulative, unlike ordinary ADD. */
+static int execute_addx_dn(gw_machine *m, uint32_t op)
+{
+    unsigned src = op & 7u, dst = (op >> 9) & 7u;
+    unsigned size = op_size((op >> 6) & 3u);
+    uint32_t mask = size_mask(size), sign = size_sign(size);
+    uint32_t a = m->cpu.d[src] & mask, b = m->cpu.d[dst] & mask;
+    uint64_t sum = (uint64_t)a + b + ((m->cpu.sr & 0x10u) != 0);
+    uint32_t result = (uint32_t)sum & mask;
+    int carry = sum > mask;
+    int overflow = ((a ^ result) & (b ^ result) & sign) != 0;
+    int zero = (m->cpu.sr & 4u) && result == 0;
+    m->cpu.d[dst] = (m->cpu.d[dst] & ~mask) | result;
+    set_ccr(&m->cpu, carry, (result & sign) != 0, zero, overflow, carry, 0);
+    /* Original MC68000 register totals4BW/8L, including opcode fetch. */
+    if (size == 4) m->tick += 4u * GW_CPU_DIVIDER;
+    return 1;
 }
 
 /* ADDQ / SUBQ (group 0x5 with a size field). */
@@ -352,6 +397,29 @@ static int pop32(gw_machine *m, uint32_t *value)
     return 1;
 }
 
+/* M68000PRM4-111/4-194; MC68000UM table8-12: LINK.W16 clocks,
+ * UNLK12. A7 alias forms are deliberately unsupported pending an independent
+ * alias-order oracle. Failed transfers expose this model's partial state;
+ * physical exception sequencing is not implemented. */
+static int execute_frame(gw_machine *m, uint32_t op)
+{
+    unsigned reg = op & 7u;
+    uint32_t value;
+    if (reg == 7u) return unsupported_instruction(m);
+    if (!(op & 8u)) {
+        if (!fetch(m, 2, &value)) return 0;
+        m->cpu.a[7] -= 4u;
+        if (!gw_bus_write(m, m->cpu.a[7], 4, m->cpu.a[reg])) return 0;
+        m->cpu.a[reg] = m->cpu.a[7];
+        m->cpu.a[7] += sign16(value);
+    } else {
+        m->cpu.a[7] = m->cpu.a[reg];
+        if (!pop32(m, &value)) return 0;
+        m->cpu.a[reg] = value;
+    }
+    return 1;
+}
+
 /* Bcc / BRA / BSR (group 6). The displacement is relative to the address after
  * the opcode word. Idle ticks follow the BRA precedent: taken branches reach
  * ten cycles in total, not-taken branches eight (byte) or twelve (word). */
@@ -433,6 +501,72 @@ static int execute_bit(gw_machine *m, uint32_t op, int is_static)
 }
 
 enum { LOGIC_AND, LOGIC_OR, LOGIC_EOR };
+
+/* Original MC68000 word multiply: unsigned low words, full32 result.
+ * MC68000UM8.3: 38+2*popcount(source) clocks, plus word EA time.
+ * Opcode/read/extension bus cycles already charge four clocks each. */
+static int execute_mulu(gw_machine *m, uint32_t op)
+{
+    unsigned mode=(op>>3)&7u, reg=op&7u, dst=(op>>9)&7u, n=0;
+    uint32_t source,product;
+    ea_t ea;
+    if(!ea_legal(mode,reg,EA_DATA)) return unsupported_instruction(m);
+    if(!ea_address(m,mode,reg,2,&ea) || !ea_read(m,&ea,2,&source)) return 0;
+    for(unsigned bit=0;bit<16;bit++) n+=(source>>bit)&1u;
+    product=(m->cpu.d[dst]&0xffffu)*source;
+    m->cpu.d[dst]=product;
+    logic_flags(&m->cpu,product,4);
+    m->tick+=(34u+2u*n+((mode==4 || mode==6 || (mode==7 && reg==3))?2u:0u))*GW_CPU_DIVIDER;
+    return 1;
+}
+
+/* Original68000 signed word product, M68000PRM4-135/136.
+ * MC68000UM8.3 counts01/10 transitions after appending a zero LSB.
+ * Operand conversion uses representable positive pieces, never a narrowing
+ * unsigned-to-signed cast; every signed16 product fits int32_t. */
+static int execute_muls(gw_machine *m, uint32_t op)
+{
+    unsigned mode=(op>>3)&7u, reg=op&7u, dst=(op>>9)&7u, n=0;
+    uint32_t source,low,transitions,product;
+    int32_t multiplier,multiplicand;
+    ea_t ea;
+    if(!ea_legal(mode,reg,EA_DATA)) return unsupported_instruction(m);
+    if(!ea_address(m,mode,reg,2,&ea) || !ea_read(m,&ea,2,&source)) return 0;
+    low=m->cpu.d[dst]&0xffffu;
+    multiplier=(int32_t)(source&0x7fffu)-(int32_t)(source&0x8000u);
+    multiplicand=(int32_t)(low&0x7fffu)-(int32_t)(low&0x8000u);
+    transitions=source^(source<<1);
+    for(unsigned bit=0;bit<16;bit++) n+=(transitions>>bit)&1u;
+    product=(uint32_t)(multiplier*multiplicand);
+    m->cpu.d[dst]=product;
+    logic_flags(&m->cpu,product,4);
+    m->tick+=(34u+2u*n+((mode==4 || mode==6 || (mode==7 && reg==3))?2u:0u))*GW_CPU_DIVIDER;
+    return 1;
+}
+
+/* NXP M68000PRM4-96..97. Nonzero word divisor only; divide-by-zero
+ * exception frames remain outside this subset and stop explicitly.
+ * MC68000UM8.3 gives a140-clock maximum and operand variability, not
+ * its algorithm. Charge that maximum plus EA time as a stated approximation. */
+static int execute_divu(gw_machine *m, uint32_t op)
+{
+    unsigned mode=(op>>3)&7u,reg=op&7u,dst=(op>>9)&7u;
+    uint32_t source,dividend=m->cpu.d[dst],quotient,remainder;
+    ea_t ea;
+    if(!ea_legal(mode,reg,EA_DATA)) return unsupported_instruction(m);
+    if(!ea_address(m,mode,reg,2,&ea) || !ea_read(m,&ea,2,&source)) return 0;
+    if(!source) {m->cpu.stop_reason=GW_STOP_UNSUPPORTED_STATE;return 0;}
+    quotient=dividend/source;remainder=dividend%source;
+    if(quotient>0xffffu) {
+        /* N/Z undefined on overflow: preserve them by explicit model policy. */
+        m->cpu.sr=(uint16_t)((m->cpu.sr&~3u)|2u);
+    } else {
+        m->cpu.d[dst]=(remainder<<16)|quotient;
+        logic_flags(&m->cpu,quotient,2);
+    }
+    m->tick+=(136u+((mode==4 || mode==6 || (mode==7&&reg==3))?2u:0u))*GW_CPU_DIVIDER;
+    return 1;
+}
 
 static uint32_t logic_op(int kind, uint32_t a, uint32_t b)
 {
@@ -583,6 +717,54 @@ static int execute_ext(gw_machine *m, uint32_t op)
     return 1;
 }
 
+/* M68000PRM 4-128..130; MC68000UM table8-10. MOVEM owns the
+ * repeated EA updates: the generic single-operand helper must not apply an
+ * extra decrement/increment. All transfers use the existing ordered bus.
+ * Completed registers/words survive a fault; a failing predecrement is visible,
+ * while postincrement commits only after a complete operand transfer. */
+static int execute_movem(gw_machine *m, uint32_t op)
+{
+    unsigned mode = (op >> 3) & 7u, reg = op & 7u;
+    unsigned size = (op & 0x40u) ? 4u : 2u, bit;
+    int load = (op & 0x400u) != 0;
+    unsigned allowed = load ? EA_CONTROL | EA_BIT(3) :
+                               (EA_CONTROL & ~(EA_BIT(9) | EA_BIT(10))) | EA_BIT(4);
+    uint32_t mask, address, value, initial_base = m->cpu.a[reg];
+    ea_t ea;
+    if (!ea_legal(mode, reg, allowed)) return unsupported_instruction(m);
+    if (!fetch(m, 2, &mask)) return 0;
+    if (mode == 3 || mode == 4) address = initial_base;
+    else {
+        if (!ea_address(m, mode, reg, size, &ea)) return 0;
+        address = ea.address;
+    }
+    /* Opcode/mask/EA fetches and data bus cycles already charge their clocks.
+     * Indexed EAs add two idle clocks; loads add four. Prefetch is not modeled. */
+    m->tick += ((load ? 4u : 0u) + ((mode == 6 || (mode == 7 && reg == 3)) ? 2u : 0u)) * GW_CPU_DIVIDER;
+    for (bit = 0; bit < 16; ++bit) {
+        unsigned r;
+        if (!(mask & (1u << bit))) continue;
+        r = mode == 4 ? 15u - bit : bit;
+        if (mode == 4) {
+            address -= size;
+            m->cpu.a[reg] = address;
+        }
+        if (load) {
+            if (!gw_bus_read(m, address, size, &value)) return 0;
+            if (size == 2) value = sign16(value);
+            if (r < 8) m->cpu.d[r] = value;
+            else if (!(mode == 3 && r == reg + 8u)) m->cpu.a[r - 8u] = value;
+        } else {
+            value = r < 8 ? m->cpu.d[r] :
+                    mode == 4 && r == reg + 8u ? initial_base : m->cpu.a[r - 8u];
+            if (!gw_bus_write(m, address, size, value & size_mask(size))) return 0;
+        }
+        if (mode != 4) address += size;
+        if (mode == 3) m->cpu.a[reg] = address;
+    }
+    return 1;
+}
+
 void gw_cpu_reset(gw_machine *m)
 {
     memset(&m->cpu, 0, sizeof(m->cpu));
@@ -715,6 +897,8 @@ void gw_cpu_step(gw_machine *m)
         retired = execute_move(m, op);
     } else if ((op & 0xf1c0u) == 0x41c0u) {
         retired = execute_lea(m, op);
+    } else if ((op & 0xffc0u) == 0x4840u && (op & 0x0038u) != 0) {
+        retired = execute_pea(m, op);
     } else if ((op & 0xff00u) == 0x4200u && (op & 0xc0u) != 0xc0u) {
         retired = execute_clr(m, op);
     } else if ((op & 0xff00u) == 0x4a00u && (op & 0xc0u) != 0xc0u) {
@@ -725,14 +909,20 @@ void gw_cpu_step(gw_machine *m)
         retired = execute_move_sr(m, op);
     } else if ((op & 0xfff8u) == 0x4880u || (op & 0xfff8u) == 0x48c0u) {
         retired = execute_ext(m, op);
+    } else if ((op & 0xfb80u) == 0x4880u) {
+        retired = execute_movem(m, op);
     } else if ((op & 0xfff8u) == 0x4840u) {
         m->cpu.d[op & 7u] = (m->cpu.d[op & 7u] << 16) | (m->cpu.d[op & 7u] >> 16);
         logic_flags(&m->cpu, m->cpu.d[op & 7u], 4);
+    } else if ((op & 0xfff0u) == 0x4e50u) {
+        retired = execute_frame(m, op);
     } else if ((op & 0xffc0u) == 0x4e80u || (op & 0xffc0u) == 0x4ec0u) {
         retired = execute_jump(m, op, (op & 0x40u) == 0);
     } else if (op == 0x4e75u) {
         retired = pop32(m, &value) && jump_to(m, value);
         if (retired) m->tick += 4 * GW_CPU_DIVIDER;
+    } else if ((op & 0xf138u) == 0xd100u && (op & 0xc0u) != 0xc0u) {
+        retired = execute_addx_dn(m, op);
     } else if ((op >> 12) == 0xdu) {
         retired = execute_arith(m, op, ALU_ADD);
     } else if ((op >> 12) == 0x9u) {
@@ -741,14 +931,28 @@ void gw_cpu_step(gw_machine *m)
         unsigned opmode = (op >> 6) & 7u;
         if (opmode >= 4 && opmode <= 6 && ((op >> 3) & 7u) != 1u) retired = execute_eor(m, op);
         else retired = execute_arith(m, op, ALU_CMP);
+    } else if ((op & 0xf1c0u) == 0xc0c0u) {
+        retired = execute_mulu(m,op);
+    } else if ((op & 0xf1c0u) == 0xc1c0u) {
+        retired = execute_muls(m,op);
     } else if ((op >> 12) == 0xcu) {
         retired = execute_logic(m, op, LOGIC_AND);
+    } else if ((op & 0xf1c0u) == 0x80c0u) {
+        retired = execute_divu(m,op);
     } else if ((op >> 12) == 0x8u) {
         retired = execute_logic(m, op, LOGIC_OR);
     } else if ((op >> 12) == 0xeu) {
         retired = execute_shift(m, op);
     } else if ((op & 0xf0f8u) == 0x50c8u) {
         retired = execute_dbcc(m, op);
+    } else if ((op & 0xf0f8u) == 0x50c0u) {
+        /* Scc Dn: M68000PRM4-172/173, byte destination, CCR unchanged.
+         * MC68000UM8.5 table8-6: false4/true6 clocks, including opcode fetch.
+         * Memory forms remain unsupported; their read-before-write cycle is
+         * not introduced by this register-only repair. */
+        value = condition_true(m->cpu.sr, (op >> 8) & 15u) ? 0xffu : 0u;
+        m->cpu.d[op & 7u] = (m->cpu.d[op & 7u] & UINT32_C(0xffffff00)) | value;
+        if (value) m->tick += 2u * GW_CPU_DIVIDER;
     } else if ((op & 0xf000u) == 0x5000u && (op & 0xc0u) != 0xc0u) {
         retired = execute_quick(m, op);
     } else if (op == 0x003cu || op == 0x007cu || op == 0x023cu || op == 0x027cu ||
@@ -776,6 +980,11 @@ void gw_cpu_step(gw_machine *m)
         retired = execute_branch(m, op);
     } else if ((op & 0xfff0u) == 0x4e40u) {
         retired = trap(m, op & 15u);
+    } else if ((op & 0xfff0u) == 0x4e60u) {
+        /* Supervisor check already precedes fetch. A7 remains SSP: these
+         * explicit transfers do not enable user-mode stack switching. */
+        if(op & 8u) m->cpu.a[op&7u]=m->cpu.usp;
+        else m->cpu.usp=m->cpu.a[op&7u];
     } else if (op == 0x4e73u) {
         retired = return_exception(m);
     } else if (op == 0x4e70u) {

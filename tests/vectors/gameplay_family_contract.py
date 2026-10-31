@@ -92,7 +92,9 @@ def main() -> int:
         with tempfile.TemporaryDirectory(prefix="gw-gameplay-family-") as directory:
             temp = pathlib.Path(directory)
             for case in scenario["cases"]:
-                results.append(run_case(runner, scenario, case, temp))
+                case_work = temp / case["id"]
+                case_work.mkdir()
+                results.append(run_case(runner, scenario, case, case_work))
         if len(results) != len(scenario["cases"]):
             raise ValueError("scenario denominator changed during execution")
         print(json.dumps({"schema": "genewhip-gameplay-family-v1",

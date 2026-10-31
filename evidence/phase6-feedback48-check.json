@@ -1,0 +1,39 @@
+{
+  "schema": "genewhip-plan48-terminal-retained-check-v1",
+  "verification": "passed-truthful-partial",
+  "qualification": "rejected",
+  "qualified": false,
+  "source_review": {
+    "path": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/48-evidence/final-source-review-003.json",
+    "sha256": "ca536290c8a1bcbc43cc3b94ac91a467888b91edb7aa3d6076bdd8eed2345c32"
+  },
+  "independent_review": {
+    "path": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/48-evidence/final-retained-review-001.json",
+    "sha256": "d7c6d7ec042b152445bb567fa104008f5c085ac53108654938ddf9cc916a8dbc"
+  },
+  "consumer": {
+    "path": ".planning/phases/GW-06-shared-repairs-and-two-playable-routes/48-evidence/final-verify48.js",
+    "sha256": "b801c7fca39de6e5fafe9a43b2ed4aa50f09027496bd99af58a5954a1fb52b56"
+  },
+  "checked_hash_entries": 1674,
+  "tank_repeats": 2,
+  "byte_identical_native_reports": true,
+  "predicates": [
+    {
+      "id": "p1_score_one",
+      "active_tick": 336
+    },
+    {
+      "id": "p1_score_two",
+      "active_tick": 3099
+    }
+  ],
+  "accepted_control_rows": 0,
+  "required_control_rows": 12,
+  "finished_native_control_children": 6,
+  "native_tests": 7,
+  "sanitizer_tests": 7,
+  "native_cap_cases": 9,
+  "blocker": "Live disk walk raced successful temporary-directory cleanup; outer guard killed driver before final report. No second control or new complete qualification batch.",
+  "claim_limit": "Repeated bounded Tank STATE observations only; no accepted checkpoint, Tank PCM/frame comparison, whole-game compatibility or Phase6 completion."
+}

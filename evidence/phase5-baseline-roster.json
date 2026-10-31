@@ -1,0 +1,2580 @@
+{
+  "admission_eligibility": {
+    "bytes": 336227,
+    "path": "evidence/phase5-eligibility-v2.json",
+    "sha256": "ff8de88f094cfc306d8bea88d4906c99f8e5f72118ecbdafcea279978f75adaa"
+  },
+  "admission_validator": {
+    "bytes": 80130,
+    "path": "tools/evidence/phase5_records.py",
+    "sha256": "4ee60e1b737b114cc1b6f38e7bd94434aceb07b82f7426cc925cadc675b27e3e"
+  },
+  "baseline_validator": {
+    "bytes": 32841,
+    "path": "scripts/evidence/phase5_baseline.py",
+    "sha256": "ff3af31ba4f7cf48a31736ba85def5934a0ffa1b01bb7c54c0d2b17c71f336a9"
+  },
+  "case_count": 12,
+  "cases": [
+    {
+      "build": {
+        "bytes": 5371,
+        "path": "fixtures/independent-game-v2/build.sh",
+        "sha256": "15f321b986db3c2f7df6a6d55ff5b49d9415399bccd0a241f518351ead7356f4"
+      },
+      "case_id": "title-no-start",
+      "expectations": {
+        "geometry": {
+          "marker": {
+            "address": 49792,
+            "present": false
+          },
+          "title_row": {
+            "cells": 10,
+            "start": 49152,
+            "tile": 1
+          }
+        },
+        "play_state": 0,
+        "position_max": 0,
+        "position_min": 0,
+        "psg_writes": []
+      },
+      "fields": 12,
+      "fixture_id": "genewhip-independent-game-v2",
+      "input_events": [],
+      "input_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "kind": "control",
+      "materials": {
+        "license": "MIT",
+        "notice": {
+          "bytes": 1154,
+          "path": "fixtures/independent-game-v2/NOTICES.md",
+          "sha256": "ab969e7a01aa9f3f6c1beb6856eb6540e3f6a18fab3ac82e65be14cbd385bf97"
+        }
+      },
+      "oracle": {
+        "bytes": 3053,
+        "path": "fixtures/independent-game-v2/oracle.json",
+        "sha256": "1a9d99cb01496f26fe3dc33d0c1bcb0cf22bd9178088fa183e5bba37a8600f42"
+      },
+      "profile": "VA3-NTSC-U",
+      "reference_evidence": {
+        "bytes": 7951,
+        "path": "evidence/independent-game-v2.json",
+        "sha256": "50365004d85f95cf15e2dc10bb7887d2f77231c23996b3c996986687e0c08d95"
+      },
+      "rom": {
+        "bytes": 16384,
+        "path": "fixtures/independent-game-v2/game.bin",
+        "sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb"
+      },
+      "scenario": {
+        "bytes": 6188,
+        "path": "fixtures/independent-game-v2/scenario.json",
+        "sha256": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2"
+      },
+      "source": {
+        "bytes": 4399,
+        "path": "fixtures/independent-game-v2/src/game.s",
+        "sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe"
+      },
+      "source_revision": "802eebb590cd553e7fb83679a9bf22d985f9f076",
+      "stage_rows": [
+        "load",
+        "boot",
+        "interaction",
+        "sustained",
+        "completion"
+      ],
+      "title_id": "genewhip-independent-game-v2",
+      "toolchain": {
+        "bytes": 33866,
+        "path": "fixtures/independent-game-v2/toolchain.lock",
+        "sha256": "5592a0ea4761fb1a7b2efde52e6473ee42f2169bfb33e7c80f8ae2a8f14da7d9"
+      }
+    },
+    {
+      "build": {
+        "bytes": 5371,
+        "path": "fixtures/independent-game-v2/build.sh",
+        "sha256": "15f321b986db3c2f7df6a6d55ff5b49d9415399bccd0a241f518351ead7356f4"
+      },
+      "case_id": "start-idle",
+      "expectations": {
+        "geometry": {
+          "marker": {
+            "address": 49792,
+            "column": 0,
+            "tile": 2
+          },
+          "title_row": {
+            "cells": 10,
+            "start": 49152,
+            "tile": 0
+          }
+        },
+        "play_state": 1,
+        "position_max": 0,
+        "position_min": 0,
+        "psg_writes": []
+      },
+      "fields": 20,
+      "fixture_id": "genewhip-independent-game-v2",
+      "input_events": [
+        {
+          "asserted": true,
+          "control": "P1 Start",
+          "frame": 1
+        },
+        {
+          "asserted": false,
+          "control": "P1 Start",
+          "frame": 2
+        }
+      ],
+      "input_sha256": "b7fc825f6f68f33cee47e876fef78b955c6dadfbc6ff83659967a16ec736d4aa",
+      "kind": "control",
+      "materials": {
+        "license": "MIT",
+        "notice": {
+          "bytes": 1154,
+          "path": "fixtures/independent-game-v2/NOTICES.md",
+          "sha256": "ab969e7a01aa9f3f6c1beb6856eb6540e3f6a18fab3ac82e65be14cbd385bf97"
+        }
+      },
+      "oracle": {
+        "bytes": 3053,
+        "path": "fixtures/independent-game-v2/oracle.json",
+        "sha256": "1a9d99cb01496f26fe3dc33d0c1bcb0cf22bd9178088fa183e5bba37a8600f42"
+      },
+      "profile": "VA3-NTSC-U",
+      "reference_evidence": {
+        "bytes": 7951,
+        "path": "evidence/independent-game-v2.json",
+        "sha256": "50365004d85f95cf15e2dc10bb7887d2f77231c23996b3c996986687e0c08d95"
+      },
+      "rom": {
+        "bytes": 16384,
+        "path": "fixtures/independent-game-v2/game.bin",
+        "sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb"
+      },
+      "scenario": {
+        "bytes": 6188,
+        "path": "fixtures/independent-game-v2/scenario.json",
+        "sha256": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2"
+      },
+      "source": {
+        "bytes": 4399,
+        "path": "fixtures/independent-game-v2/src/game.s",
+        "sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe"
+      },
+      "source_revision": "802eebb590cd553e7fb83679a9bf22d985f9f076",
+      "stage_rows": [
+        "load",
+        "boot",
+        "interaction",
+        "sustained",
+        "completion"
+      ],
+      "title_id": "genewhip-independent-game-v2",
+      "toolchain": {
+        "bytes": 33866,
+        "path": "fixtures/independent-game-v2/toolchain.lock",
+        "sha256": "5592a0ea4761fb1a7b2efde52e6473ee42f2169bfb33e7c80f8ae2a8f14da7d9"
+      }
+    },
+    {
+      "build": {
+        "bytes": 5371,
+        "path": "fixtures/independent-game-v2/build.sh",
+        "sha256": "15f321b986db3c2f7df6a6d55ff5b49d9415399bccd0a241f518351ead7356f4"
+      },
+      "case_id": "start-move",
+      "expectations": {
+        "geometry": {
+          "marker": {
+            "address": 49792,
+            "column": "RAM:0xFF0002",
+            "tile": 2
+          },
+          "title_row": {
+            "cells": 10,
+            "start": 49152,
+            "tile": 0
+          }
+        },
+        "play_state": 1,
+        "position_max": 39,
+        "position_min": 1,
+        "psg_writes": []
+      },
+      "fields": 40,
+      "fixture_id": "genewhip-independent-game-v2",
+      "input_events": [
+        {
+          "asserted": true,
+          "control": "P1 Start",
+          "frame": 1
+        },
+        {
+          "asserted": false,
+          "control": "P1 Start",
+          "frame": 2
+        },
+        {
+          "asserted": true,
+          "control": "P1 Right",
+          "frame": 4
+        },
+        {
+          "asserted": false,
+          "control": "P1 Right",
+          "frame": 14
+        }
+      ],
+      "input_sha256": "ecbe537e7587997f0c6bf2bc911717c2a97e88347dbf2b60322c00a6d836d097",
+      "kind": "control",
+      "materials": {
+        "license": "MIT",
+        "notice": {
+          "bytes": 1154,
+          "path": "fixtures/independent-game-v2/NOTICES.md",
+          "sha256": "ab969e7a01aa9f3f6c1beb6856eb6540e3f6a18fab3ac82e65be14cbd385bf97"
+        }
+      },
+      "oracle": {
+        "bytes": 3053,
+        "path": "fixtures/independent-game-v2/oracle.json",
+        "sha256": "1a9d99cb01496f26fe3dc33d0c1bcb0cf22bd9178088fa183e5bba37a8600f42"
+      },
+      "profile": "VA3-NTSC-U",
+      "reference_evidence": {
+        "bytes": 7951,
+        "path": "evidence/independent-game-v2.json",
+        "sha256": "50365004d85f95cf15e2dc10bb7887d2f77231c23996b3c996986687e0c08d95"
+      },
+      "rom": {
+        "bytes": 16384,
+        "path": "fixtures/independent-game-v2/game.bin",
+        "sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb"
+      },
+      "scenario": {
+        "bytes": 6188,
+        "path": "fixtures/independent-game-v2/scenario.json",
+        "sha256": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2"
+      },
+      "source": {
+        "bytes": 4399,
+        "path": "fixtures/independent-game-v2/src/game.s",
+        "sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe"
+      },
+      "source_revision": "802eebb590cd553e7fb83679a9bf22d985f9f076",
+      "stage_rows": [
+        "load",
+        "boot",
+        "interaction",
+        "sustained",
+        "completion"
+      ],
+      "title_id": "genewhip-independent-game-v2",
+      "toolchain": {
+        "bytes": 33866,
+        "path": "fixtures/independent-game-v2/toolchain.lock",
+        "sha256": "5592a0ea4761fb1a7b2efde52e6473ee42f2169bfb33e7c80f8ae2a8f14da7d9"
+      }
+    },
+    {
+      "build": {
+        "bytes": 5371,
+        "path": "fixtures/independent-game-v2/build.sh",
+        "sha256": "15f321b986db3c2f7df6a6d55ff5b49d9415399bccd0a241f518351ead7356f4"
+      },
+      "case_id": "action-sound",
+      "expectations": {
+        "geometry": {
+          "marker": {
+            "address": 49792,
+            "column": 0,
+            "tile": 2
+          },
+          "title_row": {
+            "cells": 10,
+            "start": 49152,
+            "tile": 0
+          }
+        },
+        "play_state": 1,
+        "position_max": 0,
+        "position_min": 0,
+        "psg_writes": [
+          132,
+          2,
+          144
+        ],
+        "sound_trigger": "one PSG tone-0 note on B press edge"
+      },
+      "fields": 24,
+      "fixture_id": "genewhip-independent-game-v2",
+      "input_events": [
+        {
+          "asserted": true,
+          "control": "P1 Start",
+          "frame": 1
+        },
+        {
+          "asserted": false,
+          "control": "P1 Start",
+          "frame": 2
+        },
+        {
+          "asserted": true,
+          "control": "P1 B",
+          "frame": 4
+        },
+        {
+          "asserted": false,
+          "control": "P1 B",
+          "frame": 8
+        }
+      ],
+      "input_sha256": "f1141726cfbf5db16630cd3c3d9b02911fc9b3a72ca51a38b486a0edf701ce43",
+      "kind": "control",
+      "materials": {
+        "license": "MIT",
+        "notice": {
+          "bytes": 1154,
+          "path": "fixtures/independent-game-v2/NOTICES.md",
+          "sha256": "ab969e7a01aa9f3f6c1beb6856eb6540e3f6a18fab3ac82e65be14cbd385bf97"
+        }
+      },
+      "oracle": {
+        "bytes": 3053,
+        "path": "fixtures/independent-game-v2/oracle.json",
+        "sha256": "1a9d99cb01496f26fe3dc33d0c1bcb0cf22bd9178088fa183e5bba37a8600f42"
+      },
+      "profile": "VA3-NTSC-U",
+      "reference_evidence": {
+        "bytes": 7951,
+        "path": "evidence/independent-game-v2.json",
+        "sha256": "50365004d85f95cf15e2dc10bb7887d2f77231c23996b3c996986687e0c08d95"
+      },
+      "rom": {
+        "bytes": 16384,
+        "path": "fixtures/independent-game-v2/game.bin",
+        "sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb"
+      },
+      "scenario": {
+        "bytes": 6188,
+        "path": "fixtures/independent-game-v2/scenario.json",
+        "sha256": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2"
+      },
+      "source": {
+        "bytes": 4399,
+        "path": "fixtures/independent-game-v2/src/game.s",
+        "sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe"
+      },
+      "source_revision": "802eebb590cd553e7fb83679a9bf22d985f9f076",
+      "stage_rows": [
+        "load",
+        "boot",
+        "interaction",
+        "sustained",
+        "completion"
+      ],
+      "title_id": "genewhip-independent-game-v2",
+      "toolchain": {
+        "bytes": 33866,
+        "path": "fixtures/independent-game-v2/toolchain.lock",
+        "sha256": "5592a0ea4761fb1a7b2efde52e6473ee42f2169bfb33e7c80f8ae2a8f14da7d9"
+      }
+    },
+    {
+      "build": {
+        "bytes": 5371,
+        "path": "fixtures/independent-game-v2/build.sh",
+        "sha256": "15f321b986db3c2f7df6a6d55ff5b49d9415399bccd0a241f518351ead7356f4"
+      },
+      "case_id": "action-no-trigger",
+      "expectations": {
+        "geometry": {
+          "marker": {
+            "address": 49792,
+            "column": "RAM:0xFF0002",
+            "tile": 2
+          },
+          "title_row": {
+            "cells": 10,
+            "start": 49152,
+            "tile": 0
+          }
+        },
+        "play_state": 1,
+        "position_max": 39,
+        "position_min": 1,
+        "psg_writes": []
+      },
+      "fields": 24,
+      "fixture_id": "genewhip-independent-game-v2",
+      "input_events": [
+        {
+          "asserted": true,
+          "control": "P1 Start",
+          "frame": 1
+        },
+        {
+          "asserted": false,
+          "control": "P1 Start",
+          "frame": 2
+        },
+        {
+          "asserted": true,
+          "control": "P1 Right",
+          "frame": 4
+        },
+        {
+          "asserted": false,
+          "control": "P1 Right",
+          "frame": 8
+        }
+      ],
+      "input_sha256": "67d461cda22228c449c915ef4612c5bd31b95dfcd23769e89d13ec80695542c9",
+      "kind": "control",
+      "materials": {
+        "license": "MIT",
+        "notice": {
+          "bytes": 1154,
+          "path": "fixtures/independent-game-v2/NOTICES.md",
+          "sha256": "ab969e7a01aa9f3f6c1beb6856eb6540e3f6a18fab3ac82e65be14cbd385bf97"
+        }
+      },
+      "oracle": {
+        "bytes": 3053,
+        "path": "fixtures/independent-game-v2/oracle.json",
+        "sha256": "1a9d99cb01496f26fe3dc33d0c1bcb0cf22bd9178088fa183e5bba37a8600f42"
+      },
+      "profile": "VA3-NTSC-U",
+      "reference_evidence": {
+        "bytes": 7951,
+        "path": "evidence/independent-game-v2.json",
+        "sha256": "50365004d85f95cf15e2dc10bb7887d2f77231c23996b3c996986687e0c08d95"
+      },
+      "rom": {
+        "bytes": 16384,
+        "path": "fixtures/independent-game-v2/game.bin",
+        "sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb"
+      },
+      "scenario": {
+        "bytes": 6188,
+        "path": "fixtures/independent-game-v2/scenario.json",
+        "sha256": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2"
+      },
+      "source": {
+        "bytes": 4399,
+        "path": "fixtures/independent-game-v2/src/game.s",
+        "sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe"
+      },
+      "source_revision": "802eebb590cd553e7fb83679a9bf22d985f9f076",
+      "stage_rows": [
+        "load",
+        "boot",
+        "interaction",
+        "sustained",
+        "completion"
+      ],
+      "title_id": "genewhip-independent-game-v2",
+      "toolchain": {
+        "bytes": 33866,
+        "path": "fixtures/independent-game-v2/toolchain.lock",
+        "sha256": "5592a0ea4761fb1a7b2efde52e6473ee42f2169bfb33e7c80f8ae2a8f14da7d9"
+      }
+    },
+    {
+      "build": {
+        "bytes": 5371,
+        "path": "fixtures/independent-game-v2/build.sh",
+        "sha256": "15f321b986db3c2f7df6a6d55ff5b49d9415399bccd0a241f518351ead7356f4"
+      },
+      "case_id": "sustained-play",
+      "expectations": {
+        "geometry": {
+          "marker": {
+            "address": 49792,
+            "column": "RAM:0xFF0002",
+            "tile": 2
+          },
+          "title_row": {
+            "cells": 10,
+            "start": 49152,
+            "tile": 0
+          }
+        },
+        "play_state": 1,
+        "position_max": 39,
+        "position_min": 39,
+        "psg_writes": [
+          132,
+          2,
+          144
+        ],
+        "sound_trigger": "one PSG tone-0 note on B press edge"
+      },
+      "fields": 720,
+      "fixture_id": "genewhip-independent-game-v2",
+      "input_events": [
+        {
+          "asserted": true,
+          "control": "P1 Start",
+          "frame": 1
+        },
+        {
+          "asserted": false,
+          "control": "P1 Start",
+          "frame": 2
+        },
+        {
+          "asserted": true,
+          "control": "P1 Right",
+          "frame": 4
+        },
+        {
+          "asserted": false,
+          "control": "P1 Right",
+          "frame": 84
+        },
+        {
+          "asserted": true,
+          "control": "P1 B",
+          "frame": 121
+        },
+        {
+          "asserted": false,
+          "control": "P1 B",
+          "frame": 122
+        }
+      ],
+      "input_sha256": "9e327678b0fa64828bf7e12b9863659558d00f8e297a7802109d74e2d55a00aa",
+      "kind": "control",
+      "materials": {
+        "license": "MIT",
+        "notice": {
+          "bytes": 1154,
+          "path": "fixtures/independent-game-v2/NOTICES.md",
+          "sha256": "ab969e7a01aa9f3f6c1beb6856eb6540e3f6a18fab3ac82e65be14cbd385bf97"
+        }
+      },
+      "oracle": {
+        "bytes": 3053,
+        "path": "fixtures/independent-game-v2/oracle.json",
+        "sha256": "1a9d99cb01496f26fe3dc33d0c1bcb0cf22bd9178088fa183e5bba37a8600f42"
+      },
+      "profile": "VA3-NTSC-U",
+      "reference_evidence": {
+        "bytes": 7951,
+        "path": "evidence/independent-game-v2.json",
+        "sha256": "50365004d85f95cf15e2dc10bb7887d2f77231c23996b3c996986687e0c08d95"
+      },
+      "rom": {
+        "bytes": 16384,
+        "path": "fixtures/independent-game-v2/game.bin",
+        "sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb"
+      },
+      "scenario": {
+        "bytes": 6188,
+        "path": "fixtures/independent-game-v2/scenario.json",
+        "sha256": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2"
+      },
+      "source": {
+        "bytes": 4399,
+        "path": "fixtures/independent-game-v2/src/game.s",
+        "sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe"
+      },
+      "source_revision": "802eebb590cd553e7fb83679a9bf22d985f9f076",
+      "stage_rows": [
+        "load",
+        "boot",
+        "interaction",
+        "sustained",
+        "completion"
+      ],
+      "title_id": "genewhip-independent-game-v2",
+      "toolchain": {
+        "bytes": 33866,
+        "path": "fixtures/independent-game-v2/toolchain.lock",
+        "sha256": "5592a0ea4761fb1a7b2efde52e6473ee42f2169bfb33e7c80f8ae2a8f14da7d9"
+      }
+    },
+    {
+      "admission": {
+        "bytes": 5677,
+        "path": "evidence/phase5-admission-a.json",
+        "sha256": "558ac11e5aeeab2d209bfb41e1a3a6c2e23fdb749afcc294ffa167fb683766dd"
+      },
+      "build": {
+        "bytes": 12757,
+        "path": "fixtures/phase5-a/build-record.json",
+        "sha256": "2016b4909c24d742463bba894eb7df5b4133e905cb53edff5c68d9ff523477b9"
+      },
+      "case_id": "full-route",
+      "expectation_ref": {
+        "case_id": "full-route",
+        "oracle_sha256": "2bf285d507c3e7c917329f3c4601c48d17fcdc14f4c01c8665fb98bbfe94fc3e"
+      },
+      "fixture_id": "genewhip-phase5-a",
+      "input_events": [],
+      "input_program": {
+        "actions": [
+          {
+            "id": "align-early",
+            "max_fields": 600,
+            "steps": [
+              {
+                "id": "align-row",
+                "targets": [
+                  {
+                    "control": "P1 Up",
+                    "until": {
+                      "p1_y": 1
+                    }
+                  },
+                  {
+                    "control": "P2 Up",
+                    "until": {
+                      "p2_y": 1
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "orient-p1",
+                "targets": [
+                  {
+                    "control": "P1 Right",
+                    "until": {
+                      "p1_x": 4
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "position-p2",
+                "targets": [
+                  {
+                    "control": "P2 Left",
+                    "until": {
+                      "p2_x": 31
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "stationary-shot",
+                "targets": [
+                  {
+                    "control": "P1 B",
+                    "until": {
+                      "p1_score": 1
+                    }
+                  }
+                ]
+              }
+            ],
+            "when": {
+              "active_ticks_gte": 1,
+              "active_ticks_lt": 600,
+              "game_state": 1,
+              "p1_score": 0
+            }
+          },
+          {
+            "id": "align-late",
+            "max_fields": 800,
+            "steps": [
+              {
+                "id": "align-row",
+                "targets": [
+                  {
+                    "control": "P1 Up",
+                    "until": {
+                      "p1_y": 1
+                    }
+                  },
+                  {
+                    "control": "P2 Up",
+                    "until": {
+                      "p2_y": 1
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "orient-p1",
+                "targets": [
+                  {
+                    "control": "P1 Right",
+                    "until": {
+                      "p1_x": 4
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "position-p2",
+                "targets": [
+                  {
+                    "control": "P2 Left",
+                    "until": {
+                      "p2_x": 31
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "stationary-shot",
+                "targets": [
+                  {
+                    "control": "P1 B",
+                    "until": {
+                      "p1_score": 2
+                    }
+                  }
+                ]
+              }
+            ],
+            "when": {
+              "active_ticks_gte": 2760,
+              "active_ticks_lt": 3600,
+              "game_state": 1,
+              "p1_score": 1
+            }
+          }
+        ],
+        "cases": {
+          "full-route": [
+            "align-early",
+            "align-late"
+          ],
+          "withhold-early-hit": [],
+          "withhold-late-hit": [
+            "align-early"
+          ]
+        },
+        "kind": "read-only-guest-state-controller-v2",
+        "launch": {
+          "field": 60,
+          "press": "P1 A",
+          "release_after_fields": 1
+        },
+        "limits": {
+          "guest_writes": false,
+          "max_actions": 2,
+          "max_guest_reads_per_field": 16,
+          "max_steps_per_action": 4,
+          "timeout_action": "release-all-controls-and-fail-capture"
+        }
+      },
+      "input_sha256": "43a1bfca71f01830bcd74fab3fce34013986f8272bc3e9c36efd8aae7280faf1",
+      "kind": "candidate",
+      "materials": {
+        "bytes": 14962,
+        "path": "fixtures/phase5-a/materials.json",
+        "sha256": "4001838aed0967953916dbe4c1067cc8d3f72b48e3c70f92cde5aa9bc6407483"
+      },
+      "notices": {
+        "bytes": 294,
+        "path": "fixtures/phase5-a/notice-index.json",
+        "sha256": "0e63203a723de5c4a75ea11739eabf8d44c6085e26a0547bb6356bea14c2afc2"
+      },
+      "oracle": {
+        "bytes": 1053,
+        "path": "fixtures/phase5-a/oracle.json",
+        "sha256": "2bf285d507c3e7c917329f3c4601c48d17fcdc14f4c01c8665fb98bbfe94fc3e"
+      },
+      "profile": "VA3-NTSC-U",
+      "recipe": {
+        "bytes": 532,
+        "path": "fixtures/phase5-a/build-recipe.json",
+        "sha256": "599910bd324d00b17618ea37fadc22d62282f23213cc5dafa7fae40a5cb8e1b7"
+      },
+      "reference_build": {
+        "bytes": 964,
+        "path": "fixtures/phase5-a/reference-build-record.json",
+        "sha256": "464855118ecaddbb16224c545bcb65740cf0aee417400926e92f2d12d7f8ec18"
+      },
+      "reference_evidence": {
+        "bytes": 3631625,
+        "path": "evidence/phase5-reference-d118.json",
+        "sha256": "d1295806831a0d20586e83a75fd1f86ee52d543d27fe900cf6d79cf230e064bc"
+      },
+      "reference_executable": {
+        "bytes": 374,
+        "path": "fixtures/phase5-a/reference-executable-pin.json",
+        "sha256": "f07106d1eb6cd959df1e17f5c418e64923c5eeb29bc759c5229b93c98868a6a1"
+      },
+      "reference_script": {
+        "bytes": 6392,
+        "path": "fixtures/phase5-a/mame.lua",
+        "sha256": "2423e10c35b0b353dd39cb0129edc4617785df3f04d521f0ba5bec9e1d6e8143"
+      },
+      "rom": {
+        "bytes": 524288,
+        "path": "fixtures/phase5-a/game.bin",
+        "sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723"
+      },
+      "route_input_program": {
+        "bytes": 1325,
+        "path": "fixtures/phase5-a/input-program.json",
+        "sha256": "e3478d34dcd98a71265b97f33c56b9f5f0f858628a516a9034cc3dbe0b5c8ed2"
+      },
+      "route_input_schedule": {
+        "bytes": 3,
+        "path": "fixtures/phase5-a/input-schedule.json",
+        "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      },
+      "scenario": {
+        "bytes": 8663,
+        "path": "fixtures/phase5-a/scenario.json",
+        "sha256": "0df6c9a42d9ba90a96f681e8f4ab7396c1f8c56d47dc887f64cab5a766792bb1"
+      },
+      "source": {
+        "bytes": 24317,
+        "path": "fixtures/phase5-a/source.tar",
+        "sha256": "0751013a99631e08b0309bfde06c8ff578abeda0113c3b208aaf81951a1e6753"
+      },
+      "source_revision": "eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+      "stage_rows": [
+        "load",
+        "boot",
+        "interaction",
+        "sustained",
+        "completion"
+      ],
+      "title_id": "tank-battle",
+      "toolchain": {
+        "bytes": 19623,
+        "path": "fixtures/phase5-a/toolchain.lock",
+        "sha256": "afea8b6c5a633c073fe2f8ff837049d53277ecc700e3d7a11d2635a990310137"
+      }
+    },
+    {
+      "admission": {
+        "bytes": 5677,
+        "path": "evidence/phase5-admission-a.json",
+        "sha256": "558ac11e5aeeab2d209bfb41e1a3a6c2e23fdb749afcc294ffa167fb683766dd"
+      },
+      "build": {
+        "bytes": 12757,
+        "path": "fixtures/phase5-a/build-record.json",
+        "sha256": "2016b4909c24d742463bba894eb7df5b4133e905cb53edff5c68d9ff523477b9"
+      },
+      "case_id": "withhold-early-hit",
+      "expectation_ref": {
+        "case_id": "withhold-early-hit",
+        "oracle_sha256": "2bf285d507c3e7c917329f3c4601c48d17fcdc14f4c01c8665fb98bbfe94fc3e"
+      },
+      "fixture_id": "genewhip-phase5-a",
+      "input_events": [],
+      "input_program": {
+        "actions": [
+          {
+            "id": "align-early",
+            "max_fields": 600,
+            "steps": [
+              {
+                "id": "align-row",
+                "targets": [
+                  {
+                    "control": "P1 Up",
+                    "until": {
+                      "p1_y": 1
+                    }
+                  },
+                  {
+                    "control": "P2 Up",
+                    "until": {
+                      "p2_y": 1
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "orient-p1",
+                "targets": [
+                  {
+                    "control": "P1 Right",
+                    "until": {
+                      "p1_x": 4
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "position-p2",
+                "targets": [
+                  {
+                    "control": "P2 Left",
+                    "until": {
+                      "p2_x": 31
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "stationary-shot",
+                "targets": [
+                  {
+                    "control": "P1 B",
+                    "until": {
+                      "p1_score": 1
+                    }
+                  }
+                ]
+              }
+            ],
+            "when": {
+              "active_ticks_gte": 1,
+              "active_ticks_lt": 600,
+              "game_state": 1,
+              "p1_score": 0
+            }
+          },
+          {
+            "id": "align-late",
+            "max_fields": 800,
+            "steps": [
+              {
+                "id": "align-row",
+                "targets": [
+                  {
+                    "control": "P1 Up",
+                    "until": {
+                      "p1_y": 1
+                    }
+                  },
+                  {
+                    "control": "P2 Up",
+                    "until": {
+                      "p2_y": 1
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "orient-p1",
+                "targets": [
+                  {
+                    "control": "P1 Right",
+                    "until": {
+                      "p1_x": 4
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "position-p2",
+                "targets": [
+                  {
+                    "control": "P2 Left",
+                    "until": {
+                      "p2_x": 31
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "stationary-shot",
+                "targets": [
+                  {
+                    "control": "P1 B",
+                    "until": {
+                      "p1_score": 2
+                    }
+                  }
+                ]
+              }
+            ],
+            "when": {
+              "active_ticks_gte": 2760,
+              "active_ticks_lt": 3600,
+              "game_state": 1,
+              "p1_score": 1
+            }
+          }
+        ],
+        "cases": {
+          "full-route": [
+            "align-early",
+            "align-late"
+          ],
+          "withhold-early-hit": [],
+          "withhold-late-hit": [
+            "align-early"
+          ]
+        },
+        "kind": "read-only-guest-state-controller-v2",
+        "launch": {
+          "field": 60,
+          "press": "P1 A",
+          "release_after_fields": 1
+        },
+        "limits": {
+          "guest_writes": false,
+          "max_actions": 2,
+          "max_guest_reads_per_field": 16,
+          "max_steps_per_action": 4,
+          "timeout_action": "release-all-controls-and-fail-capture"
+        }
+      },
+      "input_sha256": "43a1bfca71f01830bcd74fab3fce34013986f8272bc3e9c36efd8aae7280faf1",
+      "kind": "candidate",
+      "materials": {
+        "bytes": 14962,
+        "path": "fixtures/phase5-a/materials.json",
+        "sha256": "4001838aed0967953916dbe4c1067cc8d3f72b48e3c70f92cde5aa9bc6407483"
+      },
+      "notices": {
+        "bytes": 294,
+        "path": "fixtures/phase5-a/notice-index.json",
+        "sha256": "0e63203a723de5c4a75ea11739eabf8d44c6085e26a0547bb6356bea14c2afc2"
+      },
+      "oracle": {
+        "bytes": 1053,
+        "path": "fixtures/phase5-a/oracle.json",
+        "sha256": "2bf285d507c3e7c917329f3c4601c48d17fcdc14f4c01c8665fb98bbfe94fc3e"
+      },
+      "profile": "VA3-NTSC-U",
+      "recipe": {
+        "bytes": 532,
+        "path": "fixtures/phase5-a/build-recipe.json",
+        "sha256": "599910bd324d00b17618ea37fadc22d62282f23213cc5dafa7fae40a5cb8e1b7"
+      },
+      "reference_build": {
+        "bytes": 964,
+        "path": "fixtures/phase5-a/reference-build-record.json",
+        "sha256": "464855118ecaddbb16224c545bcb65740cf0aee417400926e92f2d12d7f8ec18"
+      },
+      "reference_evidence": {
+        "bytes": 3631625,
+        "path": "evidence/phase5-reference-d118.json",
+        "sha256": "d1295806831a0d20586e83a75fd1f86ee52d543d27fe900cf6d79cf230e064bc"
+      },
+      "reference_executable": {
+        "bytes": 374,
+        "path": "fixtures/phase5-a/reference-executable-pin.json",
+        "sha256": "f07106d1eb6cd959df1e17f5c418e64923c5eeb29bc759c5229b93c98868a6a1"
+      },
+      "reference_script": {
+        "bytes": 6392,
+        "path": "fixtures/phase5-a/mame.lua",
+        "sha256": "2423e10c35b0b353dd39cb0129edc4617785df3f04d521f0ba5bec9e1d6e8143"
+      },
+      "rom": {
+        "bytes": 524288,
+        "path": "fixtures/phase5-a/game.bin",
+        "sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723"
+      },
+      "route_input_program": {
+        "bytes": 1325,
+        "path": "fixtures/phase5-a/input-program.json",
+        "sha256": "e3478d34dcd98a71265b97f33c56b9f5f0f858628a516a9034cc3dbe0b5c8ed2"
+      },
+      "route_input_schedule": {
+        "bytes": 3,
+        "path": "fixtures/phase5-a/input-schedule.json",
+        "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      },
+      "scenario": {
+        "bytes": 8663,
+        "path": "fixtures/phase5-a/scenario.json",
+        "sha256": "0df6c9a42d9ba90a96f681e8f4ab7396c1f8c56d47dc887f64cab5a766792bb1"
+      },
+      "source": {
+        "bytes": 24317,
+        "path": "fixtures/phase5-a/source.tar",
+        "sha256": "0751013a99631e08b0309bfde06c8ff578abeda0113c3b208aaf81951a1e6753"
+      },
+      "source_revision": "eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+      "stage_rows": [
+        "load",
+        "boot",
+        "interaction",
+        "sustained",
+        "completion"
+      ],
+      "title_id": "tank-battle",
+      "toolchain": {
+        "bytes": 19623,
+        "path": "fixtures/phase5-a/toolchain.lock",
+        "sha256": "afea8b6c5a633c073fe2f8ff837049d53277ecc700e3d7a11d2635a990310137"
+      }
+    },
+    {
+      "admission": {
+        "bytes": 5677,
+        "path": "evidence/phase5-admission-a.json",
+        "sha256": "558ac11e5aeeab2d209bfb41e1a3a6c2e23fdb749afcc294ffa167fb683766dd"
+      },
+      "build": {
+        "bytes": 12757,
+        "path": "fixtures/phase5-a/build-record.json",
+        "sha256": "2016b4909c24d742463bba894eb7df5b4133e905cb53edff5c68d9ff523477b9"
+      },
+      "case_id": "withhold-late-hit",
+      "expectation_ref": {
+        "case_id": "withhold-late-hit",
+        "oracle_sha256": "2bf285d507c3e7c917329f3c4601c48d17fcdc14f4c01c8665fb98bbfe94fc3e"
+      },
+      "fixture_id": "genewhip-phase5-a",
+      "input_events": [],
+      "input_program": {
+        "actions": [
+          {
+            "id": "align-early",
+            "max_fields": 600,
+            "steps": [
+              {
+                "id": "align-row",
+                "targets": [
+                  {
+                    "control": "P1 Up",
+                    "until": {
+                      "p1_y": 1
+                    }
+                  },
+                  {
+                    "control": "P2 Up",
+                    "until": {
+                      "p2_y": 1
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "orient-p1",
+                "targets": [
+                  {
+                    "control": "P1 Right",
+                    "until": {
+                      "p1_x": 4
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "position-p2",
+                "targets": [
+                  {
+                    "control": "P2 Left",
+                    "until": {
+                      "p2_x": 31
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "stationary-shot",
+                "targets": [
+                  {
+                    "control": "P1 B",
+                    "until": {
+                      "p1_score": 1
+                    }
+                  }
+                ]
+              }
+            ],
+            "when": {
+              "active_ticks_gte": 1,
+              "active_ticks_lt": 600,
+              "game_state": 1,
+              "p1_score": 0
+            }
+          },
+          {
+            "id": "align-late",
+            "max_fields": 800,
+            "steps": [
+              {
+                "id": "align-row",
+                "targets": [
+                  {
+                    "control": "P1 Up",
+                    "until": {
+                      "p1_y": 1
+                    }
+                  },
+                  {
+                    "control": "P2 Up",
+                    "until": {
+                      "p2_y": 1
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "orient-p1",
+                "targets": [
+                  {
+                    "control": "P1 Right",
+                    "until": {
+                      "p1_x": 4
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "position-p2",
+                "targets": [
+                  {
+                    "control": "P2 Left",
+                    "until": {
+                      "p2_x": 31
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "stationary-shot",
+                "targets": [
+                  {
+                    "control": "P1 B",
+                    "until": {
+                      "p1_score": 2
+                    }
+                  }
+                ]
+              }
+            ],
+            "when": {
+              "active_ticks_gte": 2760,
+              "active_ticks_lt": 3600,
+              "game_state": 1,
+              "p1_score": 1
+            }
+          }
+        ],
+        "cases": {
+          "full-route": [
+            "align-early",
+            "align-late"
+          ],
+          "withhold-early-hit": [],
+          "withhold-late-hit": [
+            "align-early"
+          ]
+        },
+        "kind": "read-only-guest-state-controller-v2",
+        "launch": {
+          "field": 60,
+          "press": "P1 A",
+          "release_after_fields": 1
+        },
+        "limits": {
+          "guest_writes": false,
+          "max_actions": 2,
+          "max_guest_reads_per_field": 16,
+          "max_steps_per_action": 4,
+          "timeout_action": "release-all-controls-and-fail-capture"
+        }
+      },
+      "input_sha256": "43a1bfca71f01830bcd74fab3fce34013986f8272bc3e9c36efd8aae7280faf1",
+      "kind": "candidate",
+      "materials": {
+        "bytes": 14962,
+        "path": "fixtures/phase5-a/materials.json",
+        "sha256": "4001838aed0967953916dbe4c1067cc8d3f72b48e3c70f92cde5aa9bc6407483"
+      },
+      "notices": {
+        "bytes": 294,
+        "path": "fixtures/phase5-a/notice-index.json",
+        "sha256": "0e63203a723de5c4a75ea11739eabf8d44c6085e26a0547bb6356bea14c2afc2"
+      },
+      "oracle": {
+        "bytes": 1053,
+        "path": "fixtures/phase5-a/oracle.json",
+        "sha256": "2bf285d507c3e7c917329f3c4601c48d17fcdc14f4c01c8665fb98bbfe94fc3e"
+      },
+      "profile": "VA3-NTSC-U",
+      "recipe": {
+        "bytes": 532,
+        "path": "fixtures/phase5-a/build-recipe.json",
+        "sha256": "599910bd324d00b17618ea37fadc22d62282f23213cc5dafa7fae40a5cb8e1b7"
+      },
+      "reference_build": {
+        "bytes": 964,
+        "path": "fixtures/phase5-a/reference-build-record.json",
+        "sha256": "464855118ecaddbb16224c545bcb65740cf0aee417400926e92f2d12d7f8ec18"
+      },
+      "reference_evidence": {
+        "bytes": 3631625,
+        "path": "evidence/phase5-reference-d118.json",
+        "sha256": "d1295806831a0d20586e83a75fd1f86ee52d543d27fe900cf6d79cf230e064bc"
+      },
+      "reference_executable": {
+        "bytes": 374,
+        "path": "fixtures/phase5-a/reference-executable-pin.json",
+        "sha256": "f07106d1eb6cd959df1e17f5c418e64923c5eeb29bc759c5229b93c98868a6a1"
+      },
+      "reference_script": {
+        "bytes": 6392,
+        "path": "fixtures/phase5-a/mame.lua",
+        "sha256": "2423e10c35b0b353dd39cb0129edc4617785df3f04d521f0ba5bec9e1d6e8143"
+      },
+      "rom": {
+        "bytes": 524288,
+        "path": "fixtures/phase5-a/game.bin",
+        "sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723"
+      },
+      "route_input_program": {
+        "bytes": 1325,
+        "path": "fixtures/phase5-a/input-program.json",
+        "sha256": "e3478d34dcd98a71265b97f33c56b9f5f0f858628a516a9034cc3dbe0b5c8ed2"
+      },
+      "route_input_schedule": {
+        "bytes": 3,
+        "path": "fixtures/phase5-a/input-schedule.json",
+        "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      },
+      "scenario": {
+        "bytes": 8663,
+        "path": "fixtures/phase5-a/scenario.json",
+        "sha256": "0df6c9a42d9ba90a96f681e8f4ab7396c1f8c56d47dc887f64cab5a766792bb1"
+      },
+      "source": {
+        "bytes": 24317,
+        "path": "fixtures/phase5-a/source.tar",
+        "sha256": "0751013a99631e08b0309bfde06c8ff578abeda0113c3b208aaf81951a1e6753"
+      },
+      "source_revision": "eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+      "stage_rows": [
+        "load",
+        "boot",
+        "interaction",
+        "sustained",
+        "completion"
+      ],
+      "title_id": "tank-battle",
+      "toolchain": {
+        "bytes": 19623,
+        "path": "fixtures/phase5-a/toolchain.lock",
+        "sha256": "afea8b6c5a633c073fe2f8ff837049d53277ecc700e3d7a11d2635a990310137"
+      }
+    },
+    {
+      "admission": {
+        "bytes": 5920,
+        "path": "evidence/phase5-admission-b.json",
+        "sha256": "6bc39c7b8c0a2fd43b9bef758db39ece99a7e72aadafcb82af5d5027c3c2cd8d"
+      },
+      "build": {
+        "bytes": 1848,
+        "path": "fixtures/phase5-b/build-record.json",
+        "sha256": "878a0574549ec07b8c4b8e34897a6bebcc8817d1f6eee97e11a39511a29a3e7b"
+      },
+      "case_id": "full-route",
+      "expectation_ref": {
+        "case_id": "full-route",
+        "oracle_sha256": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389"
+      },
+      "fixture_id": "genewhip-phase5-b",
+      "input_events": [],
+      "input_program": {
+        "attempt_address": "FF140E",
+        "clock": "engine_attempt_tick",
+        "dispatch": "Dispatch active events after a completed source step at or beyond declared attempt/tick; following source poll consumes input. Frame notifier handles only C/meta release while UI is paused. No guest writes.",
+        "events": [
+          {
+            "asserted": true,
+            "attempt": 0,
+            "cases": [
+              "full-route",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 1,
+            "order": 1,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": false,
+            "attempt": 0,
+            "cases": [
+              "full-route",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 23,
+            "order": 2,
+            "state": "active",
+            "tick": 22
+          },
+          {
+            "asserted": true,
+            "attempt": 1,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 721,
+            "order": 3,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": false,
+            "attempt": 1,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 743,
+            "order": 4,
+            "state": "active",
+            "tick": 22
+          },
+          {
+            "asserted": true,
+            "attempt": 2,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 1441,
+            "order": 5,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": false,
+            "attempt": 2,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 1463,
+            "order": 6,
+            "state": "active",
+            "tick": 22
+          },
+          {
+            "asserted": true,
+            "attempt": 2,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 C",
+            "field": 2161,
+            "order": 7,
+            "state": "terminal",
+            "tick": 720
+          },
+          {
+            "asserted": false,
+            "attempt": 3,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 C",
+            "field": 2162,
+            "order": 8,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": true,
+            "attempt": 3,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 2163,
+            "order": 9,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": false,
+            "attempt": 3,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 2183,
+            "order": 10,
+            "state": "active",
+            "tick": 22
+          },
+          {
+            "asserted": true,
+            "attempt": 3,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 C",
+            "field": 2881,
+            "order": 11,
+            "state": "terminal",
+            "tick": 720
+          },
+          {
+            "asserted": false,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 C",
+            "field": 2882,
+            "order": 12,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": true,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Up",
+            "field": 2883,
+            "order": 13,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": false,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Up",
+            "field": 2887,
+            "order": 14,
+            "state": "active",
+            "tick": 4
+          },
+          {
+            "asserted": true,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 3383,
+            "order": 15,
+            "state": "active",
+            "tick": 500
+          },
+          {
+            "asserted": false,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 3554,
+            "order": 16,
+            "state": "active",
+            "tick": 671
+          },
+          {
+            "asserted": true,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Down",
+            "field": 3555,
+            "order": 17,
+            "state": "active",
+            "tick": 671
+          },
+          {
+            "asserted": false,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Down",
+            "field": 3559,
+            "order": 18,
+            "state": "active",
+            "tick": 675
+          },
+          {
+            "asserted": true,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate"
+            ],
+            "control": "P1 B",
+            "field": 3577,
+            "order": 19,
+            "state": "active",
+            "tick": 695
+          }
+        ],
+        "render_when": {
+          "attempt": 4,
+          "state": "active",
+          "tick": 690
+        },
+        "state_address": "FF1408",
+        "state_values": {
+          "active": 1,
+          "terminal": 2
+        },
+        "tick_address": "FF1410",
+        "ticks_per_attempt": 720
+      },
+      "input_sha256": "67e81e5dbab490c621948b84cc8cc3bd6ef7ab98e7baeaa6a30febb621749bef",
+      "kind": "candidate",
+      "materials": {
+        "bytes": 225716,
+        "path": "fixtures/phase5-b/materials.json",
+        "sha256": "13efe0139b75ee1c66898614547a3143d944f5dba0d07f17855efa01e87fbd49"
+      },
+      "notices": {
+        "bytes": 611,
+        "path": "fixtures/phase5-b/notice-index.json",
+        "sha256": "011128832b5ef8f11cab97292748ae63a979751b9ceef974b49780b118a42b95"
+      },
+      "oracle": {
+        "bytes": 3412,
+        "path": "fixtures/phase5-b/oracle.json",
+        "sha256": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389"
+      },
+      "profile": "VA3-NTSC-U",
+      "recipe": {
+        "bytes": 1092,
+        "path": "fixtures/phase5-b/build-recipe.json",
+        "sha256": "b692069925c141109aeeccf1122b3b76b3787ad1ff90c6bb4fc39fdb861c255a"
+      },
+      "reference_build": {
+        "bytes": 964,
+        "path": "fixtures/phase5-b/reference-build-record.json",
+        "sha256": "38494c9cc46fa92e2d1e7c727d41265229dc20f2aa752c8ed6558bed3b0df48c"
+      },
+      "reference_evidence": {
+        "bytes": 3631625,
+        "path": "evidence/phase5-reference-d118.json",
+        "sha256": "d1295806831a0d20586e83a75fd1f86ee52d543d27fe900cf6d79cf230e064bc"
+      },
+      "reference_executable": {
+        "bytes": 374,
+        "path": "fixtures/phase5-b/reference-executable-pin.json",
+        "sha256": "f07106d1eb6cd959df1e17f5c418e64923c5eeb29bc759c5229b93c98868a6a1"
+      },
+      "reference_script": {
+        "bytes": 7491,
+        "path": "fixtures/phase5-b/mame.lua",
+        "sha256": "af58935f7993de92ce659381f367ab7578ecf1b57426b2e200a2c24efe1414f3"
+      },
+      "rom": {
+        "bytes": 1048576,
+        "path": "fixtures/phase5-b/game.bin",
+        "sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff"
+      },
+      "route_input_program": {
+        "bytes": 3536,
+        "path": "fixtures/phase5-b/input-program.json",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89"
+      },
+      "route_input_schedule": {
+        "bytes": 3,
+        "path": "fixtures/phase5-b/input-schedule.json",
+        "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      },
+      "scenario": {
+        "bytes": 25219,
+        "path": "fixtures/phase5-b/scenario.json",
+        "sha256": "31e9c22129a6ce1b3ac2d1980c325e86bfbefb4e2fda85ae018c311e2cb40700"
+      },
+      "source": {
+        "bytes": 5939200,
+        "path": "fixtures/phase5-b/source.tar",
+        "sha256": "d6302d23168fb7e20e643c97eed0c694ef702b23cea0b26897e0bb8152e3ad1b"
+      },
+      "source_revision": "ab73bc9c7d2bbc4fcd94b3e0e2b89756cb1dc0cd",
+      "stage_rows": [
+        "load",
+        "boot",
+        "interaction",
+        "sustained",
+        "completion"
+      ],
+      "title_id": "recursion94",
+      "toolchain": {
+        "bytes": 7674,
+        "path": "fixtures/phase5-b/toolchain.lock",
+        "sha256": "e79cf30fb5d5df87371f73eddbedf833bf46bb3a756b4f7dac495869c934b111"
+      }
+    },
+    {
+      "admission": {
+        "bytes": 5920,
+        "path": "evidence/phase5-admission-b.json",
+        "sha256": "6bc39c7b8c0a2fd43b9bef758db39ece99a7e72aadafcb82af5d5027c3c2cd8d"
+      },
+      "build": {
+        "bytes": 1848,
+        "path": "fixtures/phase5-b/build-record.json",
+        "sha256": "878a0574549ec07b8c4b8e34897a6bebcc8817d1f6eee97e11a39511a29a3e7b"
+      },
+      "case_id": "withhold-first-plate",
+      "expectation_ref": {
+        "case_id": "withhold-first-plate",
+        "oracle_sha256": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389"
+      },
+      "fixture_id": "genewhip-phase5-b",
+      "input_events": [],
+      "input_program": {
+        "attempt_address": "FF140E",
+        "clock": "engine_attempt_tick",
+        "dispatch": "Dispatch active events after a completed source step at or beyond declared attempt/tick; following source poll consumes input. Frame notifier handles only C/meta release while UI is paused. No guest writes.",
+        "events": [
+          {
+            "asserted": true,
+            "attempt": 0,
+            "cases": [
+              "full-route",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 1,
+            "order": 1,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": false,
+            "attempt": 0,
+            "cases": [
+              "full-route",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 23,
+            "order": 2,
+            "state": "active",
+            "tick": 22
+          },
+          {
+            "asserted": true,
+            "attempt": 1,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 721,
+            "order": 3,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": false,
+            "attempt": 1,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 743,
+            "order": 4,
+            "state": "active",
+            "tick": 22
+          },
+          {
+            "asserted": true,
+            "attempt": 2,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 1441,
+            "order": 5,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": false,
+            "attempt": 2,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 1463,
+            "order": 6,
+            "state": "active",
+            "tick": 22
+          },
+          {
+            "asserted": true,
+            "attempt": 2,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 C",
+            "field": 2161,
+            "order": 7,
+            "state": "terminal",
+            "tick": 720
+          },
+          {
+            "asserted": false,
+            "attempt": 3,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 C",
+            "field": 2162,
+            "order": 8,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": true,
+            "attempt": 3,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 2163,
+            "order": 9,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": false,
+            "attempt": 3,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 2183,
+            "order": 10,
+            "state": "active",
+            "tick": 22
+          },
+          {
+            "asserted": true,
+            "attempt": 3,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 C",
+            "field": 2881,
+            "order": 11,
+            "state": "terminal",
+            "tick": 720
+          },
+          {
+            "asserted": false,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 C",
+            "field": 2882,
+            "order": 12,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": true,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Up",
+            "field": 2883,
+            "order": 13,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": false,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Up",
+            "field": 2887,
+            "order": 14,
+            "state": "active",
+            "tick": 4
+          },
+          {
+            "asserted": true,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 3383,
+            "order": 15,
+            "state": "active",
+            "tick": 500
+          },
+          {
+            "asserted": false,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 3554,
+            "order": 16,
+            "state": "active",
+            "tick": 671
+          },
+          {
+            "asserted": true,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Down",
+            "field": 3555,
+            "order": 17,
+            "state": "active",
+            "tick": 671
+          },
+          {
+            "asserted": false,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Down",
+            "field": 3559,
+            "order": 18,
+            "state": "active",
+            "tick": 675
+          },
+          {
+            "asserted": true,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate"
+            ],
+            "control": "P1 B",
+            "field": 3577,
+            "order": 19,
+            "state": "active",
+            "tick": 695
+          }
+        ],
+        "render_when": {
+          "attempt": 4,
+          "state": "active",
+          "tick": 690
+        },
+        "state_address": "FF1408",
+        "state_values": {
+          "active": 1,
+          "terminal": 2
+        },
+        "tick_address": "FF1410",
+        "ticks_per_attempt": 720
+      },
+      "input_sha256": "67e81e5dbab490c621948b84cc8cc3bd6ef7ab98e7baeaa6a30febb621749bef",
+      "kind": "candidate",
+      "materials": {
+        "bytes": 225716,
+        "path": "fixtures/phase5-b/materials.json",
+        "sha256": "13efe0139b75ee1c66898614547a3143d944f5dba0d07f17855efa01e87fbd49"
+      },
+      "notices": {
+        "bytes": 611,
+        "path": "fixtures/phase5-b/notice-index.json",
+        "sha256": "011128832b5ef8f11cab97292748ae63a979751b9ceef974b49780b118a42b95"
+      },
+      "oracle": {
+        "bytes": 3412,
+        "path": "fixtures/phase5-b/oracle.json",
+        "sha256": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389"
+      },
+      "profile": "VA3-NTSC-U",
+      "recipe": {
+        "bytes": 1092,
+        "path": "fixtures/phase5-b/build-recipe.json",
+        "sha256": "b692069925c141109aeeccf1122b3b76b3787ad1ff90c6bb4fc39fdb861c255a"
+      },
+      "reference_build": {
+        "bytes": 964,
+        "path": "fixtures/phase5-b/reference-build-record.json",
+        "sha256": "38494c9cc46fa92e2d1e7c727d41265229dc20f2aa752c8ed6558bed3b0df48c"
+      },
+      "reference_evidence": {
+        "bytes": 3631625,
+        "path": "evidence/phase5-reference-d118.json",
+        "sha256": "d1295806831a0d20586e83a75fd1f86ee52d543d27fe900cf6d79cf230e064bc"
+      },
+      "reference_executable": {
+        "bytes": 374,
+        "path": "fixtures/phase5-b/reference-executable-pin.json",
+        "sha256": "f07106d1eb6cd959df1e17f5c418e64923c5eeb29bc759c5229b93c98868a6a1"
+      },
+      "reference_script": {
+        "bytes": 7491,
+        "path": "fixtures/phase5-b/mame.lua",
+        "sha256": "af58935f7993de92ce659381f367ab7578ecf1b57426b2e200a2c24efe1414f3"
+      },
+      "rom": {
+        "bytes": 1048576,
+        "path": "fixtures/phase5-b/game.bin",
+        "sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff"
+      },
+      "route_input_program": {
+        "bytes": 3536,
+        "path": "fixtures/phase5-b/input-program.json",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89"
+      },
+      "route_input_schedule": {
+        "bytes": 3,
+        "path": "fixtures/phase5-b/input-schedule.json",
+        "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      },
+      "scenario": {
+        "bytes": 25219,
+        "path": "fixtures/phase5-b/scenario.json",
+        "sha256": "31e9c22129a6ce1b3ac2d1980c325e86bfbefb4e2fda85ae018c311e2cb40700"
+      },
+      "source": {
+        "bytes": 5939200,
+        "path": "fixtures/phase5-b/source.tar",
+        "sha256": "d6302d23168fb7e20e643c97eed0c694ef702b23cea0b26897e0bb8152e3ad1b"
+      },
+      "source_revision": "ab73bc9c7d2bbc4fcd94b3e0e2b89756cb1dc0cd",
+      "stage_rows": [
+        "load",
+        "boot",
+        "interaction",
+        "sustained",
+        "completion"
+      ],
+      "title_id": "recursion94",
+      "toolchain": {
+        "bytes": 7674,
+        "path": "fixtures/phase5-b/toolchain.lock",
+        "sha256": "e79cf30fb5d5df87371f73eddbedf833bf46bb3a756b4f7dac495869c934b111"
+      }
+    },
+    {
+      "admission": {
+        "bytes": 5920,
+        "path": "evidence/phase5-admission-b.json",
+        "sha256": "6bc39c7b8c0a2fd43b9bef758db39ece99a7e72aadafcb82af5d5027c3c2cd8d"
+      },
+      "build": {
+        "bytes": 1848,
+        "path": "fixtures/phase5-b/build-record.json",
+        "sha256": "878a0574549ec07b8c4b8e34897a6bebcc8817d1f6eee97e11a39511a29a3e7b"
+      },
+      "case_id": "withhold-final-b",
+      "expectation_ref": {
+        "case_id": "withhold-final-b",
+        "oracle_sha256": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389"
+      },
+      "fixture_id": "genewhip-phase5-b",
+      "input_events": [],
+      "input_program": {
+        "attempt_address": "FF140E",
+        "clock": "engine_attempt_tick",
+        "dispatch": "Dispatch active events after a completed source step at or beyond declared attempt/tick; following source poll consumes input. Frame notifier handles only C/meta release while UI is paused. No guest writes.",
+        "events": [
+          {
+            "asserted": true,
+            "attempt": 0,
+            "cases": [
+              "full-route",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 1,
+            "order": 1,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": false,
+            "attempt": 0,
+            "cases": [
+              "full-route",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 23,
+            "order": 2,
+            "state": "active",
+            "tick": 22
+          },
+          {
+            "asserted": true,
+            "attempt": 1,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 721,
+            "order": 3,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": false,
+            "attempt": 1,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 743,
+            "order": 4,
+            "state": "active",
+            "tick": 22
+          },
+          {
+            "asserted": true,
+            "attempt": 2,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 1441,
+            "order": 5,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": false,
+            "attempt": 2,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 1463,
+            "order": 6,
+            "state": "active",
+            "tick": 22
+          },
+          {
+            "asserted": true,
+            "attempt": 2,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 C",
+            "field": 2161,
+            "order": 7,
+            "state": "terminal",
+            "tick": 720
+          },
+          {
+            "asserted": false,
+            "attempt": 3,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 C",
+            "field": 2162,
+            "order": 8,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": true,
+            "attempt": 3,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 2163,
+            "order": 9,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": false,
+            "attempt": 3,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 2183,
+            "order": 10,
+            "state": "active",
+            "tick": 22
+          },
+          {
+            "asserted": true,
+            "attempt": 3,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 C",
+            "field": 2881,
+            "order": 11,
+            "state": "terminal",
+            "tick": 720
+          },
+          {
+            "asserted": false,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 C",
+            "field": 2882,
+            "order": 12,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": true,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Up",
+            "field": 2883,
+            "order": 13,
+            "state": "active",
+            "tick": 0
+          },
+          {
+            "asserted": false,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Up",
+            "field": 2887,
+            "order": 14,
+            "state": "active",
+            "tick": 4
+          },
+          {
+            "asserted": true,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 3383,
+            "order": 15,
+            "state": "active",
+            "tick": 500
+          },
+          {
+            "asserted": false,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Right",
+            "field": 3554,
+            "order": 16,
+            "state": "active",
+            "tick": 671
+          },
+          {
+            "asserted": true,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Down",
+            "field": 3555,
+            "order": 17,
+            "state": "active",
+            "tick": 671
+          },
+          {
+            "asserted": false,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate",
+              "withhold-final-b"
+            ],
+            "control": "P1 Down",
+            "field": 3559,
+            "order": 18,
+            "state": "active",
+            "tick": 675
+          },
+          {
+            "asserted": true,
+            "attempt": 4,
+            "cases": [
+              "full-route",
+              "withhold-first-plate"
+            ],
+            "control": "P1 B",
+            "field": 3577,
+            "order": 19,
+            "state": "active",
+            "tick": 695
+          }
+        ],
+        "render_when": {
+          "attempt": 4,
+          "state": "active",
+          "tick": 690
+        },
+        "state_address": "FF1408",
+        "state_values": {
+          "active": 1,
+          "terminal": 2
+        },
+        "tick_address": "FF1410",
+        "ticks_per_attempt": 720
+      },
+      "input_sha256": "67e81e5dbab490c621948b84cc8cc3bd6ef7ab98e7baeaa6a30febb621749bef",
+      "kind": "candidate",
+      "materials": {
+        "bytes": 225716,
+        "path": "fixtures/phase5-b/materials.json",
+        "sha256": "13efe0139b75ee1c66898614547a3143d944f5dba0d07f17855efa01e87fbd49"
+      },
+      "notices": {
+        "bytes": 611,
+        "path": "fixtures/phase5-b/notice-index.json",
+        "sha256": "011128832b5ef8f11cab97292748ae63a979751b9ceef974b49780b118a42b95"
+      },
+      "oracle": {
+        "bytes": 3412,
+        "path": "fixtures/phase5-b/oracle.json",
+        "sha256": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389"
+      },
+      "profile": "VA3-NTSC-U",
+      "recipe": {
+        "bytes": 1092,
+        "path": "fixtures/phase5-b/build-recipe.json",
+        "sha256": "b692069925c141109aeeccf1122b3b76b3787ad1ff90c6bb4fc39fdb861c255a"
+      },
+      "reference_build": {
+        "bytes": 964,
+        "path": "fixtures/phase5-b/reference-build-record.json",
+        "sha256": "38494c9cc46fa92e2d1e7c727d41265229dc20f2aa752c8ed6558bed3b0df48c"
+      },
+      "reference_evidence": {
+        "bytes": 3631625,
+        "path": "evidence/phase5-reference-d118.json",
+        "sha256": "d1295806831a0d20586e83a75fd1f86ee52d543d27fe900cf6d79cf230e064bc"
+      },
+      "reference_executable": {
+        "bytes": 374,
+        "path": "fixtures/phase5-b/reference-executable-pin.json",
+        "sha256": "f07106d1eb6cd959df1e17f5c418e64923c5eeb29bc759c5229b93c98868a6a1"
+      },
+      "reference_script": {
+        "bytes": 7491,
+        "path": "fixtures/phase5-b/mame.lua",
+        "sha256": "af58935f7993de92ce659381f367ab7578ecf1b57426b2e200a2c24efe1414f3"
+      },
+      "rom": {
+        "bytes": 1048576,
+        "path": "fixtures/phase5-b/game.bin",
+        "sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff"
+      },
+      "route_input_program": {
+        "bytes": 3536,
+        "path": "fixtures/phase5-b/input-program.json",
+        "sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89"
+      },
+      "route_input_schedule": {
+        "bytes": 3,
+        "path": "fixtures/phase5-b/input-schedule.json",
+        "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      },
+      "scenario": {
+        "bytes": 25219,
+        "path": "fixtures/phase5-b/scenario.json",
+        "sha256": "31e9c22129a6ce1b3ac2d1980c325e86bfbefb4e2fda85ae018c311e2cb40700"
+      },
+      "source": {
+        "bytes": 5939200,
+        "path": "fixtures/phase5-b/source.tar",
+        "sha256": "d6302d23168fb7e20e643c97eed0c694ef702b23cea0b26897e0bb8152e3ad1b"
+      },
+      "source_revision": "ab73bc9c7d2bbc4fcd94b3e0e2b89756cb1dc0cd",
+      "stage_rows": [
+        "load",
+        "boot",
+        "interaction",
+        "sustained",
+        "completion"
+      ],
+      "title_id": "recursion94",
+      "toolchain": {
+        "bytes": 7674,
+        "path": "fixtures/phase5-b/toolchain.lock",
+        "sha256": "e79cf30fb5d5df87371f73eddbedf833bf46bb3a756b4f7dac495869c934b111"
+      }
+    }
+  ],
+  "client": {
+    "bytes": 183000,
+    "path": "build/phase5/tools/session/gw_headless",
+    "sha256": "3e42adaf9178d0131fcc2e5af8e496d7d83910abb6358d4f68c1a92134661892"
+  },
+  "cmake_configuration": {
+    "bytes": 20146,
+    "path": "build/phase5/CMakeCache.txt",
+    "sha256": "205f006d017c5208d7fe49aaf7a10796426a9409d476c6af3faa59e50faabab5"
+  },
+  "cmake_source": {
+    "bytes": 17909,
+    "path": "CMakeLists.txt",
+    "sha256": "e73bef3e3f076bfd8a4791a5e2ea8dd989892af3ac68ce9b867edcfeded2a684"
+  },
+  "consumer": {
+    "bytes": 1757,
+    "path": "scripts/fixtures/run_admitted.py",
+    "sha256": "8b79e6a2536d38604ccf2d4255eef469f2b71d0f02a0b23893aa35714d0f60f8"
+  },
+  "consumer_adapter": {
+    "bytes": 12920,
+    "path": "scripts/fixtures/source_provenance.py",
+    "sha256": "30e406f20f6b79729a0aed97d0801037de9dc22f9796dc8c725bb90c7cb9f5e2"
+  },
+  "control_runner": {
+    "bytes": 13237,
+    "path": "tests/fixtures/phase4_game.py",
+    "sha256": "0e12e7df67796383f8f051000e8c4e4a93e16226db32c037a9245b89c7c90832"
+  },
+  "current_reference": {
+    "bytes": 1012,
+    "path": "evidence/phase5-current-reference.json",
+    "sha256": "c283e02cbd683148764ee8fbae244f3677d6398cf53019f6518522bd7cd34ecf"
+  },
+  "manifest": {
+    "bytes": 25748,
+    "path": "fixtures/manifest.json",
+    "sha256": "a991555843748e48f0b6665bbd19b01eec0cc066ac608900cbeb4df680613587"
+  },
+  "process_helper": {
+    "bytes": 2868,
+    "path": "scripts/evidence/phase5_process.py",
+    "sha256": "be6dc660f74e26da5656f10852073d231d242befb38ce81370ec2f26e009d276"
+  },
+  "reference_report": {
+    "bytes": 3631625,
+    "path": "evidence/phase5-reference-d118.json",
+    "sha256": "d1295806831a0d20586e83a75fd1f86ee52d543d27fe900cf6d79cf230e064bc"
+  },
+  "repetitions": [
+    1,
+    2
+  ],
+  "runner": {
+    "bytes": 13221,
+    "path": "tests/fixtures/phase5_game.py",
+    "sha256": "5a13134012524e025c1a29871e6bbc5f068eed5aafd6a744aec49487e307ce98"
+  },
+  "schema": "genewhip-phase5-baseline-roster-v1",
+  "stages": [
+    "load",
+    "boot",
+    "interaction",
+    "sustained",
+    "completion"
+  ]
+}

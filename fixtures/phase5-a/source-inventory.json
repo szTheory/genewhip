@@ -1,0 +1,147 @@
+{
+  "archive_root": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+  "files": [
+    {
+      "bytes": 3359,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/.github/workflows/build.yml",
+      "sha256": "ec7cb9e7d27cded82b793f29236d115e675b81130d1a4e2f316d4794969fa9f9"
+    },
+    {
+      "bytes": 115,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/.gitignore",
+      "sha256": "f4f03e07e653554beba37662b5c0a4453057aa76ef973957bac219e1adbcd871"
+    },
+    {
+      "bytes": 1068,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/LICENSE",
+      "sha256": "31f78e8b90dcb80522bf1f767a65c03fad80953ed028dfa4334386c128a84df5"
+    },
+    {
+      "bytes": 3081,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/README.md",
+      "sha256": "1328df1bd43e38ef9eb4ff1cd84291250b8be1f0d92660917c1327e8114f0c56"
+    },
+    {
+      "bytes": 2906,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/build.sh",
+      "sha256": "28aeaefa08f31f4b277e29a726a1e42355f0709c3c3b2d632beb5c561368e234"
+    },
+    {
+      "bytes": 547,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/battle-4tris/README.md",
+      "sha256": "82ab3bb4c02992e2442d3428195cda69bb558c52966ff503ae1136bc1e91c8ed"
+    },
+    {
+      "bytes": 103,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/battle-4tris/res/resources.res",
+      "sha256": "0a74afd8550322dd42334359e538d13b38bc4ef769f0d6ede6bc0c22d726596a"
+    },
+    {
+      "bytes": 514,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/battle-4tris/src/boot/rom_head.c",
+      "sha256": "7cf1faca3b1e2918a4d4660bed251109c839bc5dac8f6fb195b0c91c68aa8859"
+    },
+    {
+      "bytes": 17996,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/battle-4tris/src/main.c",
+      "sha256": "f03a82c162a129ca2281a09ebabc808d6e0d411ee1c6d8e7bd1160698a6fdbf4"
+    },
+    {
+      "bytes": 21,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/breakout/res/resources.res",
+      "sha256": "897d6ea52d86fc9e0f08372b37943fd469dd1ab78edad706467f26ee18d8d6ad"
+    },
+    {
+      "bytes": 514,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/breakout/src/boot/rom_head.c",
+      "sha256": "202a75d98a64c9b3ba94baa4caaf918f5547bfb61869d5aba6b7235e5cac3f38"
+    },
+    {
+      "bytes": 14143,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/breakout/src/main.c",
+      "sha256": "014ce0ca40d628abcfc69a75818689a57750d85c8110ec3d0b1683dcc057500a"
+    },
+    {
+      "bytes": 17,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/pong/res/resources.res",
+      "sha256": "5d0fbe710e2d27d7bb62ff0e3ce9c4ace024a62d953c9551ca9816b165900286"
+    },
+    {
+      "bytes": 514,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/pong/src/boot/rom_head.c",
+      "sha256": "7bf0f567abbb4acd07769993294a232cd6f903d69eda737e28a846e1320676b3"
+    },
+    {
+      "bytes": 12743,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/pong/src/main.c",
+      "sha256": "23b53fae07413c7011018da8625fbab6f7bc1f34b46f042c3667271ef0781edf"
+    },
+    {
+      "bytes": 18,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/snake/res/resources.res",
+      "sha256": "1fbde9a4ec8d4679062f12bf90045de565690638b30b59471bb2960dfe8289f6"
+    },
+    {
+      "bytes": 514,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/snake/src/boot/rom_head.c",
+      "sha256": "9d0d253d8febeaa1292fe4aacbcb78af68b54b53dd7606e6ce13b8d8d1173c39"
+    },
+    {
+      "bytes": 14105,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/snake/src/main.c",
+      "sha256": "00302a6a20d245c32e8d164226c45dd6249a8b9597937b69079d38dd0e606d05"
+    },
+    {
+      "bytes": 26,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/space-shooter/res/resources.res",
+      "sha256": "1a084e355e0b61d78207378bc0c7a87bc85e8bc0ce1bec6711ba5462868a1a73"
+    },
+    {
+      "bytes": 514,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/space-shooter/src/boot/rom_head.c",
+      "sha256": "1877e3dcdefe12070e99f6f9fb847579a439a3d1c1d73dac924391783e138e1e"
+    },
+    {
+      "bytes": 17654,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/space-shooter/src/main.c",
+      "sha256": "60f15888d99878dfbed7ff2f8e0b7364e05e1508a6598ff80e51d2206672c98b"
+    },
+    {
+      "bytes": 780,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/tank-battle/README.md",
+      "sha256": "331d3a72796bea9f65c591c3e9775b6cdb51d1a88aec56d2762878450b64bbfd"
+    },
+    {
+      "bytes": 94,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/tank-battle/res/resources.res",
+      "sha256": "65d9b4fe274fcfda9419e224ec0decd814151e8e74cd4e043458eb00b4e0961d"
+    },
+    {
+      "bytes": 514,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/tank-battle/src/boot/rom_head.c",
+      "sha256": "bac9bdc1b1be77e3e2f1bc3f119f23120e499fdaea6b88bd542307569735957e"
+    },
+    {
+      "bytes": 19633,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/tank-battle/src/main.c",
+      "sha256": "a5c6c554372b0d23b8717326be9de8ca97bb69b92a85759115f7ca9a8398c9a9"
+    },
+    {
+      "bytes": 92,
+      "path": "retro-homebrew-games-eb7dc3044f9d2f76047f3b3573971bf86575ca52/genesis/version.h",
+      "sha256": "b577d50d26d5b9449f917eac715cc38aedef0b28a368ef450afdeb7f2daee086"
+    }
+  ],
+  "image_materials_note": "Image-origin compiler, runtime, converter, and library rows remain bound in materials.json and toolchain.lock; they are not archive members.",
+  "material_inventory_note": "Archive entries include upstream files only; reviewed workspace overrides are mapped separately in materials.json.",
+  "reviewed_material_count": 10,
+  "reviewed_material_inventory_sha256": "038ab13a6f39f042f1a30f363ffb398138a3a7e36789066d20632717674afca7",
+  "schema": "genewhip-phase5-content-inventory-v1",
+  "source_archive": {
+    "bytes": 24317,
+    "path": "fixtures/phase5-a/source.tar",
+    "sha256": "0751013a99631e08b0309bfde06c8ff578abeda0113c3b208aaf81951a1e6753"
+  },
+  "source_revision": "eb7dc3044f9d2f76047f3b3573971bf86575ca52",
+  "source_tree_identity": "8a793afc34c01ea6e20bd75dc09908183fb4cc1c"
+}

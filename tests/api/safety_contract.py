@@ -11,6 +11,99 @@ import sys
 from pathlib import Path
 
 
+# This is the bounded product roster selected by phase6_game's safety mode.
+# Keep it explicit: discovery is evidence only after these exact registered
+# tests have been compared with the live CTest JSON.
+REQUIRED_VARIANT_TESTS = (
+    "load_contract",
+    "time_contract",
+    "reset_contract",
+    "bus_boundary_contract",
+    "gameplay_bus_contract",
+    "movem_contract",
+    "phase6_repairs_contract",
+    "session_contract",
+    "input_log_contract",
+    "phase6_chunk_contract",
+    "phase6_safety",
+    "phase6_delivery_map_contract",
+)
+
+
+def _exact_int(value):
+    return type(value) is int
+
+
+def validate_phase6_safety_report(report):
+    """Validate actual three-variant Plan53 safety evidence, fail closed.
+
+    Expected shape is deliberately small and contains observed outcomes rather
+    than a producer-supplied `passed` flag. This function is safe to call from
+    the phase harness and from semantic mutation controls.
+    """
+    variants = report.get("variants") if isinstance(report, dict) else None
+    if not isinstance(variants, list) or len(variants) != 3:
+        return "variant-denominator"
+    expected = ("native", "sanitize", "hooks-off")
+    seen = set()
+    for row in variants:
+        if not isinstance(row, dict):
+            return "variant-row"
+        variant = row.get("variant")
+        if variant not in expected or variant in seen:
+            return "variant-identity"
+        seen.add(variant)
+        tests = row.get("selected_tests")
+        if not isinstance(tests, list) or any(not isinstance(name, str) for name in tests):
+            return "test-roster-type"
+        if len(tests) != len(REQUIRED_VARIANT_TESTS) or set(tests) != set(REQUIRED_VARIANT_TESTS):
+            return "test-roster"
+        for field, wanted in (("denominator", 12), ("pass", 12), ("fail", 0),
+                              ("unknown", 0), ("skipped", 0)):
+            value = row.get(field)
+            if not _exact_int(value) or value != wanted:
+                return f"{variant}-{field}"
+        for field in ("steps", "step_limit", "tick_budget", "max_tick", "returned_frames",
+                      "output_cap", "guards_checked", "allocation_count_peak",
+                      "steady_allocations", "owned_bytes_peak", "owned_bytes_limit"):
+            if not _exact_int(row.get(field)) or row[field] < 0:
+                return f"{variant}-{field}-type"
+        if row["step_limit"] == 0 or row["steps"] > row["step_limit"]:
+            return f"{variant}-step-bound"
+        if row["max_tick"] > row["tick_budget"]:
+            return f"{variant}-tick-bound"
+        if row["returned_frames"] > row["output_cap"]:
+            return f"{variant}-output-bound"
+        if row["owned_bytes_limit"] == 0 or row["owned_bytes_peak"] > row["owned_bytes_limit"]:
+            return f"{variant}-memory-bound"
+        if row["guards_checked"] < 1:
+            return f"{variant}-guards"
+        instrumented = row.get("allocation_instrumented")
+        if type(instrumented) is not bool:
+            return f"{variant}-allocation-identity"
+        if variant == "hooks-off":
+            if instrumented is not False:
+                return "hooks-off-allocation-identity"
+        elif instrumented is not True:
+            return f"{variant}-allocation-identity"
+        if instrumented and (row["allocation_count_peak"] > 2 or row["steady_allocations"] != 0):
+            return f"{variant}-allocation-bound"
+        fuzz = row.get("bounded_fuzz")
+        if not isinstance(fuzz, dict):
+            return f"{variant}-fuzz-summary"
+        for field, wanted in (("denominator", 4096), ("pass", 4096), ("fail", 0),
+                              ("unknown", 0), ("skipped", 0), ("tick_budget", 128)):
+            if not _exact_int(fuzz.get(field)) or fuzz[field] != wanted:
+                return f"{variant}-fuzz-{field}"
+        accepted, rejected = fuzz.get("accepted_loads"), fuzz.get("rejected_loads")
+        if (not _exact_int(accepted) or not _exact_int(rejected) or accepted <= 0 or rejected <= 0 or
+                accepted + rejected != 4096):
+            return f"{variant}-fuzz-load-counts"
+    if seen != set(expected):
+        return "variant-denominator"
+    return None
+
+
 def validate_summary(report, *, mode, cases, step_budget, tick_budget, output_cap,
                      require_allocations):
     if report.get("mode") != "safety":
@@ -66,7 +159,39 @@ def run_negative_controls():
             require_allocations=True)
         if observed != expected:
             raise RuntimeError(f"negative control {name}: expected {expected}, got {observed}")
-    return len(mutants)
+    phase6_base = {"variants": []}
+    for variant in ("native", "sanitize", "hooks-off"):
+        phase6_base["variants"].append({
+            "variant": variant,
+            "selected_tests": list(REQUIRED_VARIANT_TESTS),
+            "denominator": 12, "pass": 12, "fail": 0, "unknown": 0, "skipped": 0,
+            "steps": 4096, "step_limit": 4096, "tick_budget": 128, "max_tick": 128,
+            "returned_frames": 4096, "output_cap": 8192, "guards_checked": 12,
+            "allocation_instrumented": variant != "hooks-off",
+            "allocation_count_peak": 2, "steady_allocations": 0,
+            "owned_bytes_peak": 1048576, "owned_bytes_limit": 2097152,
+            "bounded_fuzz": {"denominator": 4096, "pass": 4096, "fail": 0,
+                "unknown": 0, "skipped": 0, "tick_budget": 128,
+                "accepted_loads": 2048, "rejected_loads": 2048},
+        })
+    if validate_phase6_safety_report(phase6_base) is not None:
+        raise RuntimeError("phase6 safety validator rejected its complete control fixture")
+    phase6_mutants = [
+        ("missing-test", lambda r: r["variants"][0]["selected_tests"].pop(), "test-roster"),
+        ("bool-count", lambda r: r["variants"][0].update({"pass": True}), "native-pass"),
+        ("memory-cap", lambda r: r["variants"][0].update(owned_bytes_peak=2097153), "native-memory-bound"),
+        ("work-cap", lambda r: r["variants"][0].update(steps=4097), "native-step-bound"),
+        ("fuzz-denominator", lambda r: r["variants"][0]["bounded_fuzz"].update(denominator=4095), "native-fuzz-denominator"),
+        ("hooks-identity", lambda r: r["variants"][2].update(allocation_instrumented=True), "hooks-off-allocation-identity"),
+    ]
+    for name, mutate, expected in phase6_mutants:
+        import copy
+        corrupted = copy.deepcopy(phase6_base)
+        mutate(corrupted)
+        observed = validate_phase6_safety_report(corrupted)
+        if observed != expected:
+            raise RuntimeError(f"phase6 negative control {name}: expected {expected}, got {observed}")
+    return len(mutants) + len(phase6_mutants)
 
 
 def run(command, timeout):
@@ -154,6 +279,8 @@ def main():
     check_generic_summary(audio, "audio-calls", 256)
     result = {"mode": args.mode, "seed": f"{seed:08x}", "cases": cases,
         "steps_per_case": steps, "tick_budget": ticks, "output_cap_frames": output_cap,
+        "steps": report["steps"], "max_tick": report["max_tick"],
+        "returned_frames": report["returned_frames"], "guards_checked": report["guards_checked"],
         "safety_pass": report["pass"], "audio_pass": audio["pass"],
         "negative_controls": mutants, "allocation_instrumented": report["allocation_instrumented"],
         "allocation_count_peak": report["allocation_count_peak"],

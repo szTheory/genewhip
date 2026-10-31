@@ -1,0 +1,41 @@
+{
+  "schema":"genewhip-phase5-oracle-v1",
+  "title_id":"recursion94",
+  "authority":"Pinned source semantics: the RECURSION source and generated B01 campaign profile define intended behavior; MAME is differential evidence, not hardware authority.",
+  "predicates":[
+    {
+      "id":"early_dependency_interaction",
+      "field_window":[1,600],
+      "signal":"campaign_dependency_event",
+      "equals":1,
+      "source":"src/gameplay/campaign_runtime.asm: CampaignEvaluateDependencies publishes VOCAB_CAMPAIGN_EVENT_DEPENDENCY at $FF16F7 on a rising generated plate-to-door dependency; CampaignResetAttemptState clears the event word. A current actor input enters the B01 x64 plate interval before the first timeout."
+    },
+    {
+      "id":"two_echoes_at_boot_cap",
+      "field_window":[1400,1800],
+      "signal":"echo_count",
+      "equals":2,
+      "source":"content/campaign.json BOOT.echo_cap=2; timeline commit appends each timeout replay until that exact cap."
+    },
+    {
+      "id":"crossed_generated_door",
+      "field_window":[3500,3600],
+      "signal":"current_x_px_hi",
+      "equals":1,
+      "source":"B01 room geometry places B01_DOOR_A at x160 and B01_COMMIT at x288. The current actor's 16.8 position is sourced from actor slot 6 at $FF18C4; the integer pixel high byte at $FF18C5 is 1 after crossing x256."
+    },
+    {
+      "id":"late_program_stable",
+      "field_window":[2821,3600],
+      "signal":"gameplay_result",
+      "equals":1,
+      "source":"campaign_runtime.asm: CampaignCheckCompletion accepts only the current actor's interaction with the generated completion object and its generated field predicate. B01 requires 24 uninterrupted held-B steps; result1 is published at terminal completion. gameplay_core.asm clears GAMEPLAY_RESULT on each nonterminal active step, so an earlier attempt result cannot persist as this late milestone."
+    }
+  ],
+  "controls":{
+    "withhold-first-plate":"The same later plate and terminal inputs are retained, but attempt0 omits Right. This must suppress early_dependency_interaction in fields1-600 while retaining two echoes and late_program_stable.",
+    "withhold-final-b":"All plate, echo, C replacement and final-attempt approach inputs are retained, but final-attempt B is omitted. This must preserve early_dependency_interaction, echo-cap progress and door crossing while suppressing late_program_stable; timeout result is not completion."
+  },
+  "replacement_contract":"At attempts2 and3 the engine is terminal at tick720 with echo_count=2. TimelineHandleMetaInput opens the replacement UI. Cursor defaults to ordinal0 after VocabularyResetOrdinary; P1 C invokes GameplaySelectReplacement(0), which rejects REPLAY_FLAG_PROTECTED before commit. The captured descriptor bytes and chronological echo order identify the selected records. Lua captures VOCAB_TIMELINE_UI_FLAGS at FF16FA on every transition, including WAIT_RELEASE bit2 after commit and its clearing after C is released, plus cursor FF16FC. Only unprotected ordinary replay records are created by this route; no source path sets REPLAY_FLAG_PROTECTED for these records.",
+  "visual_audio":"Capture the rendered B01 scene while the current actor is at the generated terminal approach (attempt4, observed tick at least690). Capture PCM from the source-authored BOOT MUS_BOOT_PULSE. Render/audio corroborate the source route and never stand in for gameplay progress."
+}
