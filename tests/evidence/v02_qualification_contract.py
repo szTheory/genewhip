@@ -100,6 +100,401 @@ def synthetic_qualified_reports(benchmark, identity, source_digest, scope_id, sc
 
 
 class QualificationCoordinatorContract(unittest.TestCase):
+    def test_native_private_handoff_reader_preserves_typed_read_failures(self):
+        module = load_module(self)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            missing = root / "missing.json"
+            self.assertEqual(module._read_native_private_handoff(missing), ("missing", None))
+            oversized = root / "oversized.json"
+            oversized.write_bytes(b" " * 65537)
+            self.assertEqual(module._read_native_private_handoff(oversized), ("oversized", None))
+            fifo = root / "handoff.fifo"
+            os.mkfifo(fifo)
+            self.assertEqual(module._read_native_private_handoff(fifo), ("unsafe", None))
+            invalid = root / "invalid.json"
+            invalid.write_text("not-json")
+            self.assertEqual(module._read_native_private_handoff(invalid), ("invalid", None))
+            valid = root / "valid.json"
+            valid.write_text('{"schema":"genewhip-phase7-one-case-diagnostic-handoff.v1"}')
+            self.assertEqual(module._read_native_private_handoff(valid), ("valid", {
+                "schema": "genewhip-phase7-one-case-diagnostic-handoff.v1"}))
+            link = root / "link.json"
+            link.symlink_to(valid)
+            self.assertEqual(module._read_native_private_handoff(link), ("unsafe", None))
+
+    def test_native_diagnostic_hosted_collects_one_result_and_rejects_substitution(self):
+        from unittest import mock
+        from types import SimpleNamespace
+        import copy
+        spec = importlib.util.spec_from_file_location("native_dispatch_fixture",
+            ROOT / "tests/evidence/phase7_native_diagnostic_contract.py")
+        fixtures = importlib.util.module_from_spec(spec); spec.loader.exec_module(fixtures)
+        case = fixtures.NativeDiagnosticContract("test_exact_three_stage_order_and_safe_output")
+        self.addCleanup(case.doCleanups)
+        passed, _, _, passed_root = case.run_pipeline()
+        failed, _, _, failed_root = case.run_pipeline(input_ok=False)
+        outer = {"returncode": 0, "launch_error": None, "process_group_cleanup": "confirmed",
+            "processes": [{"return_code": 0, "status": "completed", "bound_violation": False,
+                           "process_group_cleanup": "confirmed"}]}
+        actual_datetime = datetime.datetime
+        class Clock(actual_datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return actual_datetime(2026, 10, 31, 23, 0, tzinfo=datetime.timezone.utc)
+        for scenario in ("pass", "fail", "moved", "wrong-source", "unexpected-job", "extra-field", "unadmitted"):
+            with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp).resolve(); batch_root = root / "attempt"
+                batch_root.mkdir()
+                scope = root / "scope.json"; scope.write_bytes((ROOT / "evidence/v02-execution.json").read_bytes())
+                journal = batch_root / "journal.json"; journal.write_text('{"pull_request":"41"}')
+                latch = batch_root / "failure.json"; latch.write_text("intentional stop stays unchanged")
+                packet = batch_root / "assessment.json"
+                packet.write_text(json.dumps({"github": {"workflow_run": {"id": 17, "run_attempt": 1}}}))
+                source, base, nonce = "a" * 40, "c" * 40, "d" * 32
+                branch = "v0.2-source-" + source[:12]
+                admitted = {"batch_root": batch_root, "started_at": "2026-10-31T12:43:19+00:00",
+                    "authorization": {"repository": "szTheory/genewhip"},
+                    "admission": {"candidate": {"public_head": source, "public_base": base}},
+                    "native_diagnostic_readiness": {"diagnostic_assessment": {"path": str(packet.relative_to(root))}}}
+                run = {"id": 98, "run_attempt": 1, "event": "workflow_dispatch", "head_sha": source,
+                    "head_branch": branch, "path": ".github/workflows/ci.yml",
+                    "display_title": "Plan10 native diagnostic " + nonce,
+                    "repository": {"full_name": "szTheory/genewhip"}, "status": "completed",
+                    "conclusion": "failure" if scenario == "fail" else "success", "created_at": "2026-10-31T23:00:00Z"}
+                if scenario == "wrong-source": run["head_sha"] = "b" * 40
+                report = fixtures.NativeDiagnosticContract.public_report(failed if scenario == "fail" else passed,
+                    None if scenario == "fail" else outer, root=failed_root if scenario == "fail" else passed_root)
+                report["identity"] = {"source_sha": source, "head_sha": source, "base_sha": base,
+                                      "run_id": "98", "run_attempt": "1"}
+                if scenario == "extra-field": report["private_path"] = "/private/secret"
+                names = {"safety", "gameplay", "desktop", "package", "performance", "product-smoke", "phase7-fast",
+                    "v02-runtime", "extended", "attestation", "required-ci", "v02-benchmark-control",
+                    "v02-benchmark-recursion94", "v02-benchmark-tank-battle", "v02-package", "v02-release-qualification"}
+                rows = [{"name": name, "status": "completed", "conclusion": run["conclusion"]
+                    if name == "v02-runtime" else "skipped"} for name in sorted(names)]
+                if scenario == "unexpected-job": rows[0]["conclusion"] = "success"
+                def github(_repo, endpoint, **_kwargs):
+                    if endpoint.startswith("pulls/"):
+                        return {"state": "open", "merged": False, "head": {"sha": source, "ref": branch,
+                            "repo": {"full_name": "szTheory/genewhip"}}, "base": {"sha": base, "ref": "main"}}
+                    if endpoint.startswith("git/ref/"):
+                        return {"object": {"sha": "b" * 40 if scenario == "moved" else source}}
+                    if endpoint == "actions/runs/17":
+                        return {"event": "pull_request", "head_sha": source, "status": "completed",
+                                "conclusion": "success", "run_attempt": 1}
+                    return {"total_count": 16, "jobs": rows}
+                def download(_repo, run_id, attempt, prefix, target, **_kwargs):
+                    self.assertEqual((run_id, attempt, prefix), ("98", "1", "native-case-diagnostic"))
+                    target.mkdir(); (target / "native-diagnostic.json").write_text(json.dumps(report))
+                queries = []
+                def external(command, **_kwargs):
+                    if command[:2] == ["gh", "api"]:
+                        self.assertEqual(command[2], "repos/szTheory/genewhip/actions/workflows/ci.yml/runs?branch=" + branch + "&per_page=100")
+                        queries.append(command)
+                        return subprocess.CompletedProcess(command, 0, json.dumps({"workflow_runs": [] if len(queries) == 1 else [run]}), "")
+                    self.assertEqual(command[:3], ["gh", "workflow", "run"])
+                    return subprocess.CompletedProcess(command, 0, "", "")
+                module = load_module(self)
+                with mock.patch.object(module, "ROOT", root), mock.patch.object(module.datetime, "datetime", Clock), \
+                     mock.patch.object(module.time, "monotonic", side_effect=[0, 0, 0, 301] if scenario == "wrong-source" else None, return_value=0), \
+                     mock.patch.object(module.time, "sleep", side_effect=AssertionError("unexpected poll")), \
+                     mock.patch.object(module.uuid, "uuid4", return_value=SimpleNamespace(hex=nonce)), \
+                     mock.patch.object(module, "_fresh_batch_guard", return_value=admitted) as gate, \
+                     mock.patch.object(module, "_gh_json", side_effect=github), \
+                     mock.patch.object(module, "_external", side_effect=external) as effect, \
+                     mock.patch.object(module, "_load_runtime_module", return_value=fixtures.runner), \
+                     mock.patch.object(module, "_download_run_artifact", side_effect=download):
+                    if scenario == "unadmitted": gate.side_effect = ValueError("readiness-rejected")
+                    call = lambda: module.run_native_diagnostic_hosted(root / "prep", root / "publication", scope,
+                        batch_root / "native-diagnostic/result.json", journal, batch_authorization=root / "auth",
+                        batch_authorization_sha256="1" * 64, batch_admission=root / "admission",
+                        batch_admission_sha256="2" * 64, diagnostic_readiness=root / "readiness",
+                        diagnostic_readiness_sha256="3" * 64)
+                    if scenario in ("pass", "fail"):
+                        result = call(); self.assertEqual(result["status"], scenario)
+                        self.assertIs(result["qualification_accepted"], False)
+                        self.assertIs(result["assessment_required"], True)
+                    else:
+                        with self.assertRaises(ValueError): call()
+                    if scenario in ("moved", "unadmitted"): effect.assert_not_called()
+                    else:
+                        dispatched = [call.args[0] for call in effect.call_args_list
+                                      if call.args[0][:3] == ["gh", "workflow", "run"]]
+                        self.assertEqual(len(dispatched), 1)
+                        self.assertIn("native_diagnostic_case=recursion94-withhold-first-plate", dispatched[0])
+                        self.assertIn("diagnostic_source_sha=" + source, dispatched[0])
+                        self.assertEqual(len(queries), 2)
+                    self.assertEqual(gate.call_args.kwargs["stage"], "native-diagnostic")
+                self.assertEqual(journal.read_text(), '{"pull_request":"41"}')
+                self.assertEqual(latch.read_text(), "intentional stop stays unchanged")
+
+    def test_workflow_run_query_preserves_main_default_and_encodes_selected_branch(self):
+        from unittest import mock
+        module = load_module(self)
+        source = "a" * 40
+        response = {"workflow_runs": [{"head_sha": source}, {"head_sha": "b" * 40}]}
+        with mock.patch.object(module, "_external", return_value=subprocess.CompletedProcess([], 0, json.dumps(response), "")) as effect:
+            self.assertEqual(module._workflow_runs("szTheory/genewhip", source), [{"head_sha": source}])
+            self.assertIn("?branch=main&per_page=100", effect.call_args.args[0][2])
+            module._workflow_runs("szTheory/genewhip", source, branch="review/a&b")
+            self.assertIn("?branch=review%2Fa%26b&per_page=100", effect.call_args.args[0][2])
+
+    def test_native_diagnostic_workflow_excludes_qualification_jobs(self):
+        import re
+        from types import SimpleNamespace
+        text = (ROOT / ".github/workflows/ci.yml").read_text()
+        jobs = {}; current = None
+        for line in text[text.index("jobs:\n"):].splitlines():
+            match = re.fullmatch(r"  ([a-z0-9-]+):", line)
+            if match:
+                current = match.group(1); jobs[current] = []
+            elif current:
+                jobs[current].append(line)
+        self.assertEqual(len(jobs), 16)
+        ordinary = {"safety", "gameplay", "product-smoke", "phase7-fast", "desktop", "package", "performance", "required-aggregate"}
+        scenarios = [("pull_request", "refs/pull/1/merge", "", ordinary),
+            ("push", "refs/heads/main", "", ordinary | {"attestation"}),
+            ("workflow_dispatch", "refs/heads/main", "none", set(jobs) - {"extended"}),
+            ("workflow_dispatch", "refs/heads/reviewed", "recursion94-withhold-first-plate", {"v02-runtime"}),
+            ("workflow_dispatch", "refs/heads/main", "recursion94-withhold-first-plate", {"v02-runtime"}),
+            ("workflow_dispatch", "refs/heads/reviewed", "unrecognized", {"v02-runtime"})]
+        for event, ref, selector, expected in scenarios:
+            selected = set()
+            for name, lines in jobs.items():
+                expression = next(line.strip()[4:] for line in lines if line.startswith("    if: "))
+                expression = expression.replace("always()", "True").replace("&&", "and").replace("||", "or")
+                expression = re.sub(r"needs\.([a-z0-9-]+)\.result", r"needs_result['\1']", expression)
+                result = eval(compile(expression, "<trusted-workflow-condition>", "eval"), {"__builtins__": {}},
+                    {"github": SimpleNamespace(event_name=event, ref=ref),
+                     "inputs": SimpleNamespace(native_diagnostic_case=selector),
+                     "needs_result": {key: "success" for key in jobs}})
+                if result:
+                    selected.add(name)
+            with self.subTest(event=event, selector=selector):
+                self.assertEqual(selected, expected)
+        import shlex
+        from unittest import mock
+        runtime = jobs["v02-runtime"]
+        start = next(index for index, line in enumerate(runtime)
+                     if "name: Reject unsupported diagnostic selectors" in line)
+        command = []
+        for line in runtime[start + 2:]:
+            if not line.startswith("          "):
+                break
+            command.append(line.strip())
+        argv = shlex.split(" ".join(command))
+        self.assertEqual(argv[:3], ["python3", "-I", "-c"])
+        for selector in ("", "none", "recursion94-withhold-first-plate", "unrecognized"):
+            with mock.patch.dict(os.environ, {"GENEWHIP_NATIVE_DIAGNOSTIC_CASE": selector}):
+                if selector == "unrecognized":
+                    with self.assertRaisesRegex(AssertionError, "selector-invalid"):
+                        exec(compile(argv[3], "<trusted-workflow-selector-guard>", "exec"), {})
+                else:
+                    exec(compile(argv[3], "<trusted-workflow-selector-guard>", "exec"), {})
+
+    def test_native_hosted_cli_uses_its_own_guard_and_cannot_write_old_failure_latch(self):
+        from unittest import mock
+        from io import StringIO
+        module = load_module(self)
+        argv = ["--mode", "native-diagnostic-hosted", "--out", "build/v02/diagnostic-result.json",
+            "--journal", "build/v02/ci-continuation-20261031T124319Z/attempt-0015/hosted-delivery-journal.json",
+            "--publication-copy", "build/v02/ci-continuation-20261031T124319Z/attempt-0015/candidate/publication-copy",
+            "--batch-authorization", "build/v02/ci-continuation-20261031T124319Z/authorization.json",
+            "--batch-authorization-sha256", "a" * 64, "--batch-admission", "build/v02/admission.json",
+            "--batch-admission-sha256", "b" * 64, "--diagnostic-readiness", "build/v02/readiness.json",
+            "--diagnostic-readiness-sha256", "c" * 64]
+        for outcome in ({"status": "pass"}, {"status": "fail"}, ValueError("diagnostic-rejected")):
+            with mock.patch.object(module, "_fresh_batch_guard", side_effect=AssertionError("duplicate guard")), \
+                 mock.patch.object(module, "run_native_diagnostic_hosted") as owner, \
+                 mock.patch.object(module, "_write_fresh_batch_failure", side_effect=AssertionError("old latch written")), \
+                 mock.patch.object(module.sys, "stdout", StringIO()), mock.patch.object(module.sys, "stderr", StringIO()):
+                if isinstance(outcome, Exception): owner.side_effect = outcome
+                else: owner.return_value = outcome
+                result = module.main(argv)
+                self.assertEqual(result, 0 if outcome == {"status": "pass"} else 1)
+                self.assertEqual(owner.call_count, 1)
+
+    def test_native_diagnostic_driver_forwards_actual_outer_receipt_after_failure(self):
+        from unittest import mock
+        from types import SimpleNamespace
+        module = load_module(self)
+        scope_bytes = (ROOT / "evidence/v02-execution.json").read_bytes()
+        actual_datetime = datetime.datetime
+        class DiagnosticClock(actual_datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return actual_datetime(2026, 10, 31, 23, 0, tzinfo=datetime.timezone.utc)
+        for rejected in (False, True):
+            with self.subTest(rejected=rejected), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp).resolve()
+                scope = root / "evidence/v02-execution.json"
+                scope.parent.mkdir(); scope.write_bytes(scope_bytes)
+                out = root / "build/v02/native-diagnostic.json"
+                out.parent.mkdir(parents=True)
+                row = {"status": "completed", "return_code": 0, "bound_violation": False,
+                       "process_group_cleanup": "unconfirmed" if rejected else "confirmed"}
+                attempt = {"processes": [row], "process_group_cleanup": row["process_group_cleanup"],
+                           "returncode": 0, "launch_error": None}
+                handoff = {"schema": "genewhip-phase7-one-case-diagnostic-handoff.v1",
+                    "collector_status": "fail", "failure_category": "bounded-workload-failed", "stages": []}
+                def bounded(command, **kwargs):
+                    self.assertEqual(command[command.index("--mode") + 1], "native-diagnostic")
+                    self.assertEqual(kwargs["timeout"], 1800)
+                    self.assertEqual(kwargs["limits"]["wall_seconds"], 1800)
+                    self.assertEqual(len(kwargs["scratch_roots"]), 2)
+                    private_out = Path(command[command.index("--out") + 1])
+                    private_out.write_bytes(b"x" * (1024 * 1024 + 1))
+                    private_out.with_name(private_out.stem + "-handoff.json").write_text(json.dumps(handoff))
+                    kwargs["scratch"].mkdir()
+                    (kwargs["scratch"] / "native-diagnostic.attempt.json").write_text(json.dumps(attempt))
+                    if rejected:
+                        raise RuntimeError("qualification-child-failed:synthetic")
+                    return attempt
+                projection = mock.Mock(side_effect=lambda *args, **kwargs: {"status": "fail",
+                    "diagnostic_only": True, "qualification_accepted": False,
+                    "collector_read_status": "valid", "outer_rejection": kwargs["outer_rejection"]})
+                with mock.patch.object(module, "ROOT", root), \
+                     mock.patch.object(module.datetime, "datetime", DiagnosticClock), \
+                     mock.patch.object(module, "_bounded_command", side_effect=bounded) as launch, \
+                     mock.patch.object(module, "_load_runtime_module", return_value=SimpleNamespace(
+                         complete_native_diagnostic_handoff=projection)), \
+                     mock.patch.object(module, "_identity", return_value={"source_sha": "d" * 40,
+                         "head_sha": "d" * 40, "base_sha": "e" * 40, "run_id": "123", "run_attempt": "1"}), \
+                     mock.patch.dict(os.environ, {"GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_SHA": "d" * 40,
+                         "GENEWHIP_NATIVE_DIAGNOSTIC_CASE": "recursion94-withhold-first-plate",
+                         "GENEWHIP_NATIVE_DIAGNOSTIC_SOURCE_SHA": "d" * 40,
+                         "GENEWHIP_QUALIFICATION_STARTED_AT": "2026-10-31T12:43:19+00:00"}), \
+                     mock.patch.object(module, "_require_hosted_budget", return_value=50000):
+                    result = module.run_native_diagnostic(root / "build", scope, out)
+                projection.assert_called_once_with(handoff, attempt, "valid",
+                    identity={"source_sha": "d" * 40, "head_sha": "d" * 40, "base_sha": "e" * 40,
+                        "run_id": "123", "run_attempt": "1"},
+                    outer_rejection="outer-boundary-rejected" if rejected else None)
+                self.assertEqual(launch.call_count, 1)
+                self.assertIs(result["qualification_accepted"], False)
+                self.assertEqual(result["outer_rejection"], "outer-boundary-rejected" if rejected else None)
+                self.assertEqual(json.loads(out.read_text()), result)
+
+    def test_native_diagnostic_run_cannot_be_a_qualification_or_different_source(self):
+        module = load_module(self)
+        good = {"id": 87, "run_attempt": 1, "event": "workflow_dispatch", "head_sha": "a" * 40,
+            "head_branch": "v0.2-source-" + "a" * 12, "path": ".github/workflows/ci.yml",
+            "display_title": "Plan10 native diagnostic " + "b" * 32,
+            "repository": {"full_name": "szTheory/genewhip"},
+            "status": "completed", "conclusion": "success", "created_at": "2026-10-31T13:00:00Z"}
+        args = ("szTheory/genewhip", "a" * 40, good["head_branch"], "b" * 32, "2026-10-31T12:59:59Z")
+        module._validate_native_diagnostic_run(good, *args)
+        for key, value in (("display_title", "Plan10 qualification " + "b" * 32),
+                           ("head_sha", "c" * 40), ("head_branch", "main"),
+                           ("run_attempt", 2), ("conclusion", "cancelled"),
+                           ("created_at", "2026-10-31T12:00:00Z"), ("repository", None)):
+            with self.subTest(field=key), self.assertRaises((ValueError, TypeError)):
+                module._validate_native_diagnostic_run({**good, key: value}, *args)
+        with self.assertRaisesRegex(ValueError, "hosted-run-"):
+            module._validate_hosted_run(good, "szTheory/genewhip", "a" * 40,
+                expected_event="workflow_dispatch", expected_nonce="b" * 32)
+
+    def test_outer_failure_marker_distinguishes_rejections_after_persistence(self):
+        from importlib.machinery import ModuleSpec
+        from unittest import mock
+        from io import StringIO
+        import copy
+        module = load_module(self)
+        original_spec = importlib.util.spec_from_file_location
+        good = {"process_group_cleanup": "confirmed", "status": "completed", "bound_violation": False}
+        cases = (("receipt-shape", [], 1, False),
+                 ("cleanup-unconfirmed", [{**good, "process_group_cleanup": "unconfirmed"}], 1, False),
+                 ("bound-violation", [{**good, "bound_violation": True}], 1, False),
+                 ("nonzero-exit", [good], 1, False),
+                 ("launch-error", [good], None, True),
+                 (None, [good], 0, False))
+        for expected, rows, code, launch_error in cases:
+            with self.subTest(rejection=expected), tempfile.TemporaryDirectory() as temp:
+                scratch = Path(temp) / "attempts"
+                class FakeLoader:
+                    def create_module(self, _spec):
+                        return None
+                    def exec_module(self, boundary):
+                        def fake_client(_exe, argv, receipt, **_kwargs):
+                            receipt.extend(copy.deepcopy(rows))
+                            if launch_error:
+                                raise ValueError("synthetic-boundary-error")
+                            return subprocess.CompletedProcess(argv, code, "", "nested cleanup=confirmed")
+                        boundary._run_client = fake_client
+                def selected_spec(name, path):
+                    return ModuleSpec(name, FakeLoader()) if Path(path) == ROOT / "tests/session/phase6_route_contract.py" \
+                        else original_spec(name, path)
+                test = self
+                class PersistedMarkerStream(StringIO):
+                    def write(self, value):
+                        if value.startswith("GENEWHIP_COORDINATOR_FAILURE:"):
+                            saved = json.loads((scratch / "diagnostic.attempt.json").read_text())
+                            test.assertEqual(saved["processes"], rows)
+                        return super().write(value)
+                stream = PersistedMarkerStream()
+                with mock.patch.object(importlib.util, "spec_from_file_location", side_effect=selected_spec), \
+                     mock.patch.object(module.sys, "stderr", stream):
+                    if expected is None:
+                        module._bounded_command([sys.executable, "-c", "unused"],
+                            limits={"wall_seconds": 5}, scratch=scratch, timeout=5, label="diagnostic")
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "qualification-child-"):
+                            module._bounded_command([sys.executable, "-c", "unused"],
+                                limits={"wall_seconds": 5}, scratch=scratch, timeout=5, label="diagnostic")
+                lines = stream.getvalue().splitlines()
+                if expected is None:
+                    self.assertEqual(lines, [])
+                else:
+                    self.assertEqual(len(lines), 1)
+                    prefix = "GENEWHIP_COORDINATOR_FAILURE:"
+                    self.assertTrue(lines[0].startswith(prefix))
+                    value = json.loads(lines[0][len(prefix):])
+                    self.assertEqual(value["rejection"], expected)
+                    if expected == "cleanup-unconfirmed":
+                        self.assertEqual(value["cleanup"], "unconfirmed")
+                    self.assertLessEqual(len(lines[0].encode("utf-8")), 1024)
+                    for log_error in (BrokenPipeError("closed-pipe"), ValueError("closed-stream")):
+                        closed_stream = mock.Mock()
+                        closed_stream.write.side_effect = log_error
+                        with mock.patch.object(importlib.util, "spec_from_file_location", side_effect=selected_spec), \
+                             mock.patch.object(module.sys, "stderr", closed_stream):
+                            with self.assertRaisesRegex(RuntimeError, "qualification-child-"):
+                                module._bounded_command([sys.executable, "-c", "unused"],
+                                    limits={"wall_seconds": 5}, scratch=scratch / str(type(log_error).__name__),
+                                    timeout=5, label="diagnostic")
+        # A persistence failure must not emit a receipt-derived marker.
+        with tempfile.TemporaryDirectory() as temp, mock.patch.object(module, "_write_json", side_effect=OSError("persist-failed")), \
+             mock.patch.object(importlib.util, "spec_from_file_location", side_effect=selected_spec), \
+             mock.patch.object(module.sys, "stderr", StringIO()) as stream:
+            with self.assertRaisesRegex(OSError, "persist-failed"):
+                module._bounded_command([sys.executable, "-c", "unused"], limits={"wall_seconds": 5},
+                    scratch=Path(temp), timeout=5, label="diagnostic")
+            self.assertEqual(stream.getvalue(), "")
+
+    def test_outer_failure_marker_redacts_untyped_private_fields(self):
+        import copy
+        module = load_module(self)
+        secret = "PRIVATE_TOKEN /private/host/device"
+        good = {"process_group_cleanup": "confirmed", "status": "completed", "bound_violation": False,
+                "bound_violation_reason": None, "cleanup_reason": "group-inactive",
+                "cleanup_status_observation": "group-inactive", "cleanup_observation_attempts": 2,
+                "observer_failure_stage": "none", "observer_return_category": "zero",
+                "observer_error_category": "none", "cleanup_signal_phase": "status-probe"}
+        for field in good:
+            for malicious in (secret, [secret], {secret: secret}, True, -1, 10**100):
+                row = copy.deepcopy(good)
+                row[field] = malicious
+                text = module._coordinator_failure_diagnostic({"processes": [row], "returncode": malicious,
+                    "argv": [secret], "stderr_tail": secret}, malicious)
+                self.assertNotIn(secret, text)
+                self.assertLessEqual(len(text.encode("utf-8")), 1024)
+        for rows in (None, secret, {}, [secret], [], [good, good]):
+            text = module._coordinator_failure_diagnostic({"processes": rows, "returncode": True}, "receipt-shape")
+            value = json.loads(text.split(":", 1)[1])
+            self.assertNotIn(secret, text)
+            self.assertEqual(value["return"], "other")
+
     def test_nested_cancellation_fixture_is_durable_bounded_and_narrow(self):
         from types import SimpleNamespace
         source = inspect.getsource(
@@ -2130,7 +2525,16 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
                          "--base-sha \"$GITHUB_BASE_SHA\"", "--run-id \"$GITHUB_RUN_ID\"",
                          "--run-attempt \"$GITHUB_RUN_ATTEMPT\""):
             self.assertIn(argument, package_job, "semantic-mutant-identity-not-explicit:" + argument)
-        self.assertIn("timeout-minutes: 360", text)
+        import re
+        runtime_job = text.split("  v02-runtime:", 1)[1].split("\n  v02-benchmark-control:", 1)[0]
+        timeout = next(line.strip().split(": ", 1)[1] for line in runtime_job.splitlines()
+                       if line.startswith("    timeout-minutes: "))
+        conditional = re.fullmatch(r"\$\{\{\s*inputs\.native_diagnostic_case\s*==\s*'([^']+)'\s*&&\s*([0-9]+)\s*\|\|\s*([0-9]+)\s*\}\}", timeout)
+        self.assertIsNotNone(conditional, "runtime timeout must select fixed diagnostic and ordinary limits")
+        selected_case, diagnostic_minutes, ordinary_minutes = conditional.groups()
+        for selector, expected in (("", 360), ("none", 360), ("recursion94-withhold-first-plate", 45)):
+            with self.subTest(selector=selector):
+                self.assertEqual(int(diagnostic_minutes if selector == selected_case else ordinary_minutes), expected)
         for name in ("v02-benchmark-control", "v02-benchmark-recursion94", "v02-benchmark-tank-battle"):
             self.assertIn(name, text)
         self.assertIn("name: v02-runtime-${{ github.run_id }}-${{ github.run_attempt }}", text)
