@@ -153,7 +153,7 @@ class FakeFunction:
 class FakeLibProc:
     def __init__(self, count_bytes: int, copied_bytes: int, pids=(123,),
                  task_result=16, resident_by_pid=None, task_error=None, task_errno=0,
-                 task_results=None):
+                 task_results=None, resident_results=None):
         self.count_bytes = count_bytes
         self.copied_bytes = copied_bytes
         self.pids = tuple(pids)
@@ -162,6 +162,7 @@ class FakeLibProc:
         self.task_error = task_error
         self.task_errno = task_errno
         self.task_results = list(task_results or ())
+        self.resident_results = list(resident_results or ())
         self.pid_batches = None
         self._pid_batch_index = 0
         self._active_pid_batch = None
@@ -194,7 +195,9 @@ class FakeLibProc:
         real_ctypes.set_errno(self.task_errno)
         if self.task_error is not None:
             raise self.task_error
-        buffer.raw = b"\0" * 8 + self.resident_by_pid.get(pid, 8192).to_bytes(8, byteorder=sys.byteorder) + b"\0" * (capacity - 16)
+        resident = (self.resident_results.pop(0) if self.resident_results else
+                    self.resident_by_pid.get(pid, 8192))
+        buffer.raw = b"\0" * 8 + resident.to_bytes(8, byteorder=sys.byteorder) + b"\0" * (capacity - 16)
         return self.task_results.pop(0) if self.task_results else self.task_result
 
 
@@ -244,13 +247,13 @@ class RssEdgeContracts(unittest.TestCase):
         ALLOCATIONS.clear()
         self.module = load_production()
 
-    def observe(self, libproc, getpgid=None, diagnostics=None):
+    def observe(self, libproc, getpgid=None, diagnostics=None, *,
+                set_errno=real_ctypes.set_errno, get_errno=real_ctypes.get_errno):
         adapter = types.SimpleNamespace(CDLL=lambda *_args, **_kwargs: libproc,
             c_int=FakeCInt, c_uint=real_ctypes.c_uint, c_void_p=real_ctypes.c_void_p,
             c_uint64=real_ctypes.c_uint64,
             sizeof=lambda value: 4 if value is FakeCInt else value.size * 4,
-            create_string_buffer=FakeBuffer, get_errno=real_ctypes.get_errno,
-            set_errno=real_ctypes.set_errno)
+            create_string_buffer=FakeBuffer, get_errno=get_errno, set_errno=set_errno)
         pgid = getpgid or (lambda _pid: 1234)
         pgid_calls = []
         def counted_pgid(pid):
@@ -416,6 +419,104 @@ class RssEdgeContracts(unittest.TestCase):
                 self.assertEqual(diagnostics.get("result_size_category"), "oversized")
             ALLOCATIONS.clear()
         CASES.append("duplicate-permission-short-oversized-native-errors")
+
+    def test_esrch_task_info_rechecks_membership_and_fails_closed_when_uncertain(self):
+        size = real_ctypes.sizeof(real_ctypes.c_int)
+
+        def sequenced(*results):
+            calls = []
+            def getpgid(pid):
+                calls.append(pid)
+                value = results[len(calls) - 1]
+                if isinstance(value, BaseException):
+                    raise value
+                return value
+            return getpgid, calls
+
+        vanished = FakeLibProc(size, size, [10], task_result=0, task_errno=errno.ESRCH)
+        getpgid, calls = sequenced(1234, ProcessLookupError(10))
+        self.assertEqual(self.observe(vanished, getpgid), 0)
+        self.assertEqual(calls, [10, 10])
+        self.assertEqual(vanished.pidinfo_calls, [(10, 256)])
+
+        moved = FakeLibProc(size, size, [10], task_result=0, task_errno=errno.ESRCH)
+        getpgid, calls = sequenced(1234, 9)
+        self.assertEqual(self.observe(moved, getpgid), 0)
+        self.assertEqual(calls, [10, 10])
+
+        still_member = FakeLibProc(size, size, [10], task_result=0, task_errno=errno.ESRCH)
+        getpgid, calls = sequenced(1234, 1234)
+        diagnostics = {}
+        self.assertIsNone(self.observe(still_member, getpgid, diagnostics))
+        self.assertEqual(calls, [10, 10])
+        self.assertEqual(diagnostics.get("reason"), "task-info-unavailable")
+        self.assertEqual(diagnostics.get("errno_category"), "esrch")
+        self.assertEqual(diagnostics.get("result_size_category"), "missing")
+
+        for error, expected_errno in ((PermissionError(errno.EPERM, "private"), "permission"),
+                                      (OSError(errno.EIO, "private"), "other")):
+            with self.subTest(recheck_error=type(error).__name__):
+                uncertain = FakeLibProc(size, size, [10], task_result=0, task_errno=errno.ESRCH)
+                getpgid, calls = sequenced(1234, error)
+                diagnostics = {}
+                self.assertIsNone(self.observe(uncertain, getpgid, diagnostics))
+                self.assertEqual(calls, [10, 10])
+                self.assertEqual(diagnostics.get("reason"), "process-group-query-unavailable")
+                self.assertEqual(diagnostics.get("errno_category"), expected_errno)
+                self.assertNotIn("private", str(diagnostics))
+
+        untyped = FakeLibProc(size, size, [10], task_result=0, task_errno=errno.ESRCH)
+        getpgid, calls = sequenced(1234, True)
+        diagnostics = {}
+        self.assertIsNone(self.observe(untyped, getpgid, diagnostics))
+        self.assertEqual(diagnostics.get("reason"), "process-group-query-unavailable")
+        self.assertEqual(calls, [10, 10])
+
+        stale = FakeLibProc(size, size, [10], task_result=0, task_errno=0)
+        getpgid, calls = sequenced(1234)
+        real_ctypes.set_errno(errno.ESRCH)
+        diagnostics = {}
+        self.assertIsNone(self.observe(stale, getpgid, diagnostics))
+        self.assertEqual(calls, [10], "cleared native errno must supersede stale ESRCH")
+        self.assertEqual(diagnostics.get("reason"), "task-info-unavailable")
+        self.assertEqual(diagnostics.get("errno_category"), "absent")
+
+        uncleared = FakeLibProc(size, size, [10], task_result=0, task_errno=errno.ESRCH)
+        getpgid, calls = sequenced(1234)
+        diagnostics = {}
+        self.assertIsNone(self.observe(uncleared, getpgid, diagnostics, set_errno=None))
+        self.assertEqual(calls, [10], "without errno clear, ESRCH cannot authorize a recheck skip")
+        self.assertEqual(diagnostics.get("reason"), "task-info-unavailable")
+        self.assertNotIn("errno_category", diagnostics)
+
+        short = FakeLibProc(size, size, [10], task_result=15, task_errno=errno.ESRCH)
+        getpgid, calls = sequenced(1234)
+        diagnostics = {}
+        self.assertIsNone(self.observe(short, getpgid, diagnostics))
+        self.assertEqual(calls, [10], "short nonzero results are never treated as a vanished PID")
+        self.assertEqual(diagnostics.get("result_size_category"), "short")
+
+        pids = tuple(range(10000, 10000 + MAX_PIDS))
+        capped = FakeLibProc(MAX_PIDS * size, MAX_PIDS * size, pids,
+            task_result=0, task_errno=errno.ESRCH)
+        last_pid = pids[-1]
+        def capped_getpgid(pid): return 1234 if pid == last_pid else 9
+        diagnostics = {}
+        self.assertIsNone(self.observe(capped, capped_getpgid, diagnostics),
+            "a recheck cannot raise the fixed 4096 getpgid-query ceiling")
+        self.assertEqual(OBSERVATIONS[-1]["getpgid_calls"], MAX_PIDS)
+        self.assertEqual(capped.pidinfo_calls, [(last_pid, 256)])
+        self.assertEqual(diagnostics.get("reason"), "task-info-unavailable")
+        self.assertEqual(diagnostics.get("errno_category"), "esrch")
+
+        live = FakeLibProc(2 * size, 2 * size, [10, 11], task_results=[0, 16],
+            task_errno=errno.ESRCH, resident_results=[0, 12_000])
+        getpgid, calls = sequenced(1234, ProcessLookupError(10), 1234)
+        self.assertEqual(self.observe(live, getpgid), 12_000,
+            "a vanished PID cannot hide another still-live process's RSS")
+        self.assertEqual(live.pidinfo_calls, [(10, 256), (11, 256)])
+        self.assertEqual(calls, [10, 10, 11])
+        CASES.append("esrch-membership-recheck-vanish-move-uncertainty-and-shared-query-cap")
 
     def test_library_and_unsupported_platform_failures_use_fixed_reasons(self):
         diagnostics = {}
@@ -669,6 +770,81 @@ class ActualWrapperTracer(unittest.TestCase):
         self.assertEqual(retained["reason"], "client-process-failed")
         self.assertEqual(len(self.popen_calls), 1)
         CASES.append("actual-collect-case-rejects-unavailable-rss-with-receipt")
+
+    def test_failed_rss_sample_stays_coherent_after_postwait_zero_sample(self):
+        self.native.task_results = [16, 0, 16]
+        self.native.resident_results = [48_349_184, 0, 0]
+        self.native.task_errno = errno.ESRCH
+
+        class TwoSamplesThenExit:
+            pid = FakeOwnedProcess.pid
+            def __init__(self): self.poll_calls = 0
+            def poll(self):
+                self.poll_calls += 1
+                return None if self.poll_calls < 3 else 0
+            def wait(self, timeout=None): return 0
+
+        process = TwoSamplesThenExit()
+        self.patch(self.route.subprocess, "Popen", lambda *_args, **_kwargs: process)
+        result, receipt, _streams = self.game.shared_launch(
+            self.build / "missing-client", [str(self.build / "missing-client")],
+            self.work, self.work / "rss-coherence-report.json", 10)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(process.poll_calls, 2)
+        self.assertEqual(len(self.native.pidinfo_calls), 3,
+            "positive, failed, and post-wait zero samples reach the real RSS helper")
+        self.assertEqual(receipt["status"], "failed")
+        self.assertEqual(receipt["bound_violation_reason"], "phase7-rss-observation-unavailable")
+        self.assertIsNone(receipt["rss_bytes_observed"],
+            "later post-wait zero cannot overwrite the failed first observation")
+        self.assertEqual(receipt["rss_observation_reason"], "task-info-unavailable")
+        self.assertEqual(receipt["rss_observation_errno"], "esrch")
+        self.assertEqual(receipt["rss_observation_result"], "missing")
+        self.assertEqual(receipt["rss_bytes_peak"], 48_349_184,
+            "earlier valid peak remains independently available")
+        CASES.append("failed-rss-observation-remains-coherent-after-postwait-zero")
+
+    def test_vanished_pid_recheck_cannot_hide_live_peer_over_rss_limit(self):
+        self.native.pids = (10, 11)
+        self.native.count_bytes = 8
+        self.native.copied_bytes = 8
+        self.native.task_results = [0, 16, 0, 16]
+        self.native.resident_results = [0, 12_000, 0, 12_000]
+        self.native.task_errno = errno.ESRCH
+        self.limits["max_rss_bytes"] = 8192
+        pgid_results = [FakeOwnedProcess.pid, ProcessLookupError(10), FakeOwnedProcess.pid,
+                        FakeOwnedProcess.pid, ProcessLookupError(10), FakeOwnedProcess.pid]
+        pgid_calls = []
+        def sequenced_getpgid(pid):
+            pgid_calls.append(pid)
+            value = pgid_results[len(pgid_calls) - 1]
+            if isinstance(value, BaseException):
+                raise value
+            return value
+        self.patch(self.route.os, "getpgid", sequenced_getpgid)
+
+        class TwoSamplesThenExit:
+            pid = FakeOwnedProcess.pid
+            def __init__(self): self.poll_calls = 0
+            def poll(self):
+                self.poll_calls += 1
+                return None if self.poll_calls < 3 else 0
+            def wait(self, timeout=None): return 0
+
+        process = TwoSamplesThenExit()
+        self.patch(self.route.subprocess, "Popen", lambda *_args, **_kwargs: process)
+        result, receipt, _streams = self.game.shared_launch(
+            self.build / "missing-client", [str(self.build / "missing-client")],
+            self.work, self.work / "rss-peer-limit-report.json", 10)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(receipt["status"], "failed")
+        self.assertEqual(receipt["bound_violation_reason"], "phase7-rss-byte-limit")
+        self.assertEqual(receipt["rss_bytes_observed"], 12_000)
+        self.assertEqual(receipt["rss_bytes_peak"], 12_000)
+        self.assertNotIn("rss_observation_reason", receipt)
+        self.assertEqual(pgid_calls, [10, 10, 11, 10, 10, 11])
+        self.assertEqual(self.native.pidinfo_calls, [(10, 256), (11, 256), (10, 256), (11, 256)])
+        CASES.append("vanished-pid-does-not-hide-live-peer-over-rss-limit")
 
     def test_explicit_file_size_override_sets_both_rlimits_at_fake_popen_only(self):
         setrlimit_calls = []

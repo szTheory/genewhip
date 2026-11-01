@@ -136,7 +136,9 @@ def _fresh_batch_guard(*, batch_authorization: pathlib.Path | None,
                        batch_admission_sha256: str | None,
                        stage: str, scope_path: pathlib.Path,
                        journal_path: pathlib.Path, publication_copy: pathlib.Path,
-                       preflight_path: pathlib.Path, output_path: pathlib.Path) -> dict[str, Any] | None:
+                       preflight_path: pathlib.Path, output_path: pathlib.Path,
+                       diagnostic_readiness_path: pathlib.Path | None = None,
+                       diagnostic_readiness_sha256: str | None = None) -> dict[str, Any] | None:
     os.environ["GENEWHIP_FRESH_BATCH_ADMITTED"] = "0"
     os.environ["GENEWHIP_FRESH_BATCH_RUNTIME"] = "0"
     os.environ["GENEWHIP_FRESH_BATCH_STAGE"] = "unadmitted"
@@ -176,6 +178,11 @@ def _fresh_batch_guard(*, batch_authorization: pathlib.Path | None,
                            fresh_batch_scratch=safe_attempt_root / "coordinator-external-attempts")
         return result.returncode == 0
 
+    diagnostic_fields = {}
+    if diagnostic_readiness_path is not None or diagnostic_readiness_sha256 is not None:
+        diagnostic_fields = {"diagnostic_readiness_path": rooted(diagnostic_readiness_path)
+            if diagnostic_readiness_path is not None else None,
+            "diagnostic_readiness_sha256": diagnostic_readiness_sha256}
     result = module.validate_batch(ROOT, rooted(batch_authorization), batch_authorization_sha256,
         rooted(batch_admission), batch_admission_sha256, stage=stage, source_head=source_head,
         now=datetime.datetime.now(datetime.timezone.utc), scope_path=scope_path,
@@ -183,7 +190,7 @@ def _fresh_batch_guard(*, batch_authorization: pathlib.Path | None,
         preflight_path=rooted(preflight_path), output_path=rooted(output_path),
         source_is_ancestor=source_is_ancestor,
         expected_source_paths=set(_bounded_publication_paths(
-            ROOT, fresh_attempt_root=safe_attempt_root)))
+            ROOT, fresh_attempt_root=safe_attempt_root)), **diagnostic_fields)
     os.environ["GENEWHIP_QUALIFICATION_PHASE"] = "runtime"
     os.environ["GENEWHIP_FRESH_BATCH_RUNTIME"] = "1"
     os.environ["GENEWHIP_FRESH_BATCH_ADMITTED"] = "1"
@@ -3872,9 +3879,10 @@ def prepare_public_snapshot(publication_copy: pathlib.Path, scope: pathlib.Path,
     return packet
 
 
-def _workflow_runs(repository: str, source_sha: str) -> list[dict[str, Any]]:
+def _workflow_runs(repository: str, source_sha: str, *, branch: str = "main") -> list[dict[str, Any]]:
     owner, name = repository.split("/", 1)
-    response = _external(["gh", "api", f"repos/{owner}/{name}/actions/workflows/ci.yml/runs?branch=main&per_page=100"],
+    branch_query = urllib.parse.quote(branch, safe="")
+    response = _external(["gh", "api", f"repos/{owner}/{name}/actions/workflows/ci.yml/runs?branch={branch_query}&per_page=100"],
                          timeout=45)
     try:
         value = json.loads(response.stdout)
@@ -5005,6 +5013,63 @@ def _public_argv(command: list[str]) -> list[str]:
     return result
 
 
+def _coordinator_failure_diagnostic(attempt: Any, rejection: str) -> str:
+    """Project the outer receipt separately from any nested child's stderr."""
+    def enum(value: Any, choices: set[str]) -> str:
+        return value if type(value) is str and value in choices else (
+            "missing" if value is None else "other")
+
+    record = attempt if isinstance(attempt, dict) else {}
+    rows = record.get("processes")
+    row = rows[0] if isinstance(rows, list) and len(rows) == 1 and isinstance(rows[0], dict) else {}
+    count = ("none" if len(rows) == 0 else "one" if len(rows) == 1 else "multiple") \
+        if isinstance(rows, list) else "invalid"
+    code = record.get("returncode")
+    code_category = ("missing" if code is None else "other" if type(code) is not int else
+                     "zero" if code == 0 else "signal" if code < 0 else "nonzero")
+    bound = row.get("bound_violation")
+    cleanup_reasons = {"group-inactive", "group-observer-cleanup-unconfirmed",
+        "group-status-budget-exhausted", "cleanup-permission-denied", "group-cleanup-os-error",
+        "group-leader-reap-unconfirmed", "group-leader-wait-unconfirmed", "group-reported-active",
+        "group-signal-permission-denied", "group-signal-visible", "group-status-unavailable",
+        "cleanup-unclassified", "not-observed"}
+    queries = row.get("cleanup_observation_attempts")
+    diagnostic = {
+        "rejection": enum(rejection, {"launch-error", "receipt-shape", "cleanup-unconfirmed",
+                                       "bound-violation", "nonzero-exit"}),
+        "receipt_count": count,
+        "cleanup": enum(row.get("process_group_cleanup"), {"confirmed", "unconfirmed", "not-launched"}),
+        "status": enum(row.get("status"), {"completed", "failed", "timeout", "not-launched"}),
+        "bound": "true" if bound is True else "false" if bound is False else "missing" if bound is None else "other",
+        "bound_reason": enum(row.get("bound_violation_reason"), {
+            "phase7-wall-timeout", "phase7-stdout-stderr-byte-limit", "phase7-rss-observation-unavailable",
+            "phase7-rss-byte-limit", "phase7-scratch-tree-unsafe", "phase7-scratch-byte-limit",
+            "phase7-json-byte-limit", "phase7-capture-byte-limit", "phase7-retained-byte-limit",
+            "phase7-binary-file-byte-limit"}),
+        "return": code_category,
+        "cleanup_reason": enum(row.get("cleanup_reason"), cleanup_reasons),
+        "status_observation": enum(row.get("cleanup_status_observation"), cleanup_reasons),
+        "cleanup_queries": str(queries) if type(queries) is int and 0 <= queries <= 16 else "unavailable",
+        "observer_stage": enum(row.get("observer_failure_stage"), {"spawn", "pipe", "setup", "selector",
+            "select", "read", "deadline", "byte-limit", "wait", "nonzero-exit", "parse", "observer-cleanup", "none"}),
+        "observer_return": enum(row.get("observer_return_category"), {"zero", "nonzero", "signaled"}),
+        "observer_error": enum(row.get("observer_error_category"), {
+            "permission", "not-found", "interrupted", "timeout", "io", "none"}),
+        "cleanup_phase": enum(row.get("cleanup_signal_phase"), {"sigterm", "sigkill", "status-probe", "none"}),
+    }
+    text = "GENEWHIP_COORDINATOR_FAILURE:" + json.dumps(diagnostic, sort_keys=True, separators=(",", ":"))
+    return text if len(text.encode("utf-8")) <= 1024 else "GENEWHIP_COORDINATOR_FAILURE:diagnostic-unavailable"
+
+
+def _emit_coordinator_failure(attempt: Any, rejection: str) -> None:
+    try:
+        print(_coordinator_failure_diagnostic(attempt, rejection), file=sys.stderr)
+    except (OSError, ValueError):
+        # The private attempt is already durable; a closed log must not mask
+        # the original boundary failure.
+        pass
+
+
 def _bounded_command(command: list[str], *, limits: dict[str, Any], scratch: pathlib.Path,
                      timeout: int, label: str, env: dict[str, str] | None = None,
                      cwd: pathlib.Path = ROOT, check: bool = True,
@@ -5071,13 +5136,293 @@ def _bounded_command(command: list[str], *, limits: dict[str, Any], scratch: pat
             raise persistence_error from launch_exception
         raise
     if launch_error is not None:
+        _emit_coordinator_failure(attempt, "launch-error")
         raise RuntimeError("qualification-child-boundary-error:"+label+":"+launch_error) from launch_exception
     if (len(receipt) != 1 or
             receipt[0].get("process_group_cleanup") != "confirmed" or receipt[0].get("bound_violation")):
+        rejection = ("receipt-shape" if len(receipt) != 1 else "cleanup-unconfirmed"
+            if receipt[0].get("process_group_cleanup") != "confirmed" else "bound-violation")
+        _emit_coordinator_failure(attempt, rejection)
         raise RuntimeError(f"qualification-child-failed:{label}:{returncode}:{stderr[-2048:]}")
     if check and returncode != 0:
+        _emit_coordinator_failure(attempt, "nonzero-exit")
         raise RuntimeError(f"qualification-child-failed:{label}:{returncode}:{stderr[-2048:]}")
     return attempt
+
+
+NATIVE_DIAGNOSTIC_CASE = "recursion94-withhold-first-plate"
+
+
+def _validate_native_diagnostic_run(run: Any, repository: str, source: str,
+        branch: str, nonce: str, requested_at: str) -> None:
+    if (not isinstance(run, dict) or run.get("event") != "workflow_dispatch"
+            or run.get("head_sha") != source or run.get("head_branch") != branch
+            or not isinstance(run.get("path"), str)
+            or run["path"].split("@", 1)[0] != ".github/workflows/ci.yml"
+            or run.get("display_title") != "Plan10 native diagnostic " + nonce
+            or not isinstance(run.get("repository"), dict)
+            or run["repository"].get("full_name") != repository
+            or type(run.get("run_attempt")) is not int or run["run_attempt"] != 1
+            or type(run.get("id")) is not int or run["id"] <= 0
+            or run.get("status") not in ("queued", "in_progress", "completed", "waiting", "pending", "requested")
+            or (run.get("status") == "completed" and run.get("conclusion") not in ("success", "failure"))
+            or _parse_utc(run.get("created_at")) < _parse_utc(requested_at)
+            or _parse_utc(run.get("created_at")) > datetime.datetime.now(datetime.timezone.utc)):
+        raise ValueError("native-diagnostic-run-identity-invalid")
+
+
+def run_native_diagnostic_hosted(packet_path: pathlib.Path, publication_copy: pathlib.Path,
+        scope_path: pathlib.Path, out: pathlib.Path, journal_path: pathlib.Path,
+        *, batch_authorization: pathlib.Path, batch_authorization_sha256: str,
+        batch_admission: pathlib.Path, batch_admission_sha256: str,
+        diagnostic_readiness: pathlib.Path, diagnostic_readiness_sha256: str) -> dict[str, Any]:
+    """Dispatch one reviewed branch diagnostic, consuming only its assessed PR stop."""
+    batch = _fresh_batch_guard(batch_authorization=batch_authorization,
+        batch_authorization_sha256=batch_authorization_sha256,
+        batch_admission=batch_admission, batch_admission_sha256=batch_admission_sha256,
+        stage="native-diagnostic", scope_path=scope_path, journal_path=journal_path,
+        publication_copy=publication_copy, preflight_path=packet_path, output_path=out,
+        diagnostic_readiness_path=diagnostic_readiness,
+        diagnostic_readiness_sha256=diagnostic_readiness_sha256)
+    if batch is None or batch.get("native_diagnostic_readiness") is None:
+        raise ValueError("native-diagnostic-readiness-required")
+    ready = batch["native_diagnostic_readiness"]
+    candidate = batch["admission"]["candidate"]
+    source, base = candidate["public_head"], candidate["public_base"]
+    repository = batch["authorization"]["repository"]
+    scope = json.loads(scope_path.read_text(encoding="utf-8"))
+    started_at = batch["started_at"]
+    branch = "v0.2-source-" + source[:12]
+    journal = json.loads(journal_path.read_text(encoding="utf-8"))
+    pr_number = journal["pull_request"]
+    pr = _gh_json(repository, f"pulls/{pr_number}", phase="runtime")
+    ref = _gh_json(repository, "git/ref/heads/" + branch, phase="runtime")
+    if (pr.get("state") != "open" or pr.get("merged") is not False
+            or pr.get("head", {}).get("sha") != source
+            or pr.get("head", {}).get("ref") != branch
+            or pr.get("head", {}).get("repo", {}).get("full_name") != repository
+            or pr.get("base", {}).get("sha") != base or pr.get("base", {}).get("ref") != "main"
+            or ref.get("object", {}).get("sha") != source):
+        raise ValueError("native-diagnostic-reviewed-branch-moved")
+    assessment_path = ROOT / ready["diagnostic_assessment"]["path"]
+    assessed = json.loads(assessment_path.read_text(encoding="utf-8"))
+    preview = assessed["github"]["workflow_run"]
+    current = _gh_json(repository, "actions/runs/" + str(preview["id"]), phase="runtime")
+    if (current.get("event") != "pull_request" or current.get("head_sha") != source
+            or current.get("status") != "completed" or current.get("conclusion") != "success"
+            or current.get("run_attempt") != preview["run_attempt"]):
+        raise ValueError("native-diagnostic-preview-changed")
+    existing_runs = _workflow_runs(repository, source, branch=branch)
+    if any(row.get("event") == "workflow_dispatch" for row in existing_runs):
+        raise ValueError("native-diagnostic-source-already-dispatched")
+    now = datetime.datetime.now(datetime.timezone.utc)
+    _require_hosted_budget(started_at, now.isoformat(), scope, phase="runtime")
+    if ((_parse_utc(started_at) + datetime.timedelta(seconds=scope["qualification_batch"]["runtime_wall_seconds"]))
+            - now).total_seconds() < 2700:
+        raise ValueError("native-diagnostic-job-window-unavailable")
+    execution_root = batch["batch_root"] / "native-diagnostic"
+    if execution_root.exists() or execution_root.is_symlink():
+        raise ValueError("native-diagnostic-one-shot-already-claimed")
+    execution_root.mkdir(mode=0o700)
+    dispatch_path = execution_root / "dispatch.json"
+    nonce = uuid.uuid4().hex
+    execution = {"schema": "genewhip.phase7-native-diagnostic-dispatch.v1", "source_sha": source,
+        "branch": branch, "repository": repository, "nonce": nonce,
+        "requested_at": now.replace(microsecond=0).isoformat(),
+        "started_at": started_at, "readiness_sha256": diagnostic_readiness_sha256,
+        "qualification_accepted": False, "status": "dispatch-requested", "dispatches": 1}
+    _write_json(dispatch_path, execution)
+    overall_deadline = time.monotonic() + 2640
+    try:
+        _external(["gh", "workflow", "run", ".github/workflows/ci.yml", "--repo", repository,
+            "--ref", branch, "--field", "qualification_started_at=" + started_at,
+            "--field", "qualification_base_sha=" + base,
+            "--field", "qualification_nonce=" + nonce,
+            "--field", "native_diagnostic_case=" + NATIVE_DIAGNOSTIC_CASE,
+            "--field", "diagnostic_source_sha=" + source], timeout=60, phase="runtime")
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+        execution["status"] = "dispatch-unconfirmed"
+        _write_json(dispatch_path, execution)
+        raise ValueError("native-diagnostic-dispatch-unconfirmed-no-retry") from None
+    execution["status"] = "dispatch-submitted"
+    _write_json(dispatch_path, execution)
+    discovery_deadline = time.monotonic() + 300
+    selected_id = None
+    while True:
+        _require_hosted_budget(started_at, datetime.datetime.now(datetime.timezone.utc).isoformat(), scope, phase="runtime")
+        if time.monotonic() >= overall_deadline:
+            execution["status"] = "deadline-exhausted-assessment-required"
+            _write_json(dispatch_path, execution)
+            if selected_id is not None:
+                owned_run = _gh_json(repository, "actions/runs/" + str(selected_id), phase="runtime")
+                _validate_native_diagnostic_run(owned_run, repository, source, branch, nonce, execution["requested_at"])
+                if owned_run["status"] != "completed":
+                    _external(["gh", "run", "cancel", str(selected_id), "--repo", repository], timeout=60, phase="runtime")
+            raise ValueError("native-diagnostic-deadline-exhausted-no-retry")
+        matching = [row for row in _workflow_runs(repository, source, branch=branch)
+            if row.get("event") == "workflow_dispatch"
+            and row.get("display_title") == "Plan10 native diagnostic " + nonce]
+        if len(matching) > 1:
+            raise ValueError("native-diagnostic-run-ambiguous")
+        if matching:
+            run = matching[0]
+            _validate_native_diagnostic_run(run, repository, source, branch, nonce, execution["requested_at"])
+            if selected_id is not None and run["id"] != selected_id:
+                raise ValueError("native-diagnostic-selected-run-changed")
+            selected_id = run["id"]
+            execution.update({"run_id": selected_id, "status": run["status"]})
+            _write_json(dispatch_path, execution)
+            if run["status"] == "completed":
+                break
+        elif selected_id is not None:
+            raise ValueError("native-diagnostic-selected-run-disappeared")
+        elif time.monotonic() >= discovery_deadline:
+            raise ValueError("native-diagnostic-run-not-found-no-retry")
+        time.sleep(30)
+    jobs = _gh_json(repository, f"actions/runs/{selected_id}/jobs?filter=latest&per_page=100", phase="runtime")
+    rows = jobs.get("jobs")
+    expected = {"safety", "gameplay", "desktop", "package", "performance", "product-smoke", "phase7-fast",
+        "v02-runtime", "extended", "attestation", "required-ci", "v02-benchmark-control",
+        "v02-benchmark-recursion94", "v02-benchmark-tank-battle", "v02-package", "v02-release-qualification"}
+    if (jobs.get("total_count") != 16 or not isinstance(rows, list) or len(rows) != 16
+            or not all(isinstance(row, dict) for row in rows)
+            or {row.get("name") for row in rows} != expected
+            or any(row.get("status") != "completed" or row.get("conclusion") !=
+                (run["conclusion"] if row.get("name") == "v02-runtime" else "skipped") for row in rows)):
+        raise ValueError("native-diagnostic-workload-roster-invalid")
+    downloaded = execution_root / "download"
+    _download_run_artifact(repository, str(selected_id), "1", "native-case-diagnostic", downloaded, phase="runtime")
+    files = list(downloaded.iterdir())
+    report_path = downloaded / "native-diagnostic.json"
+    if (files != [report_path] or report_path.is_symlink() or not report_path.is_file()
+            or report_path.stat().st_size > 65536 or report_path.stat().st_nlink != 1
+            or report_path.stat().st_uid != os.getuid()):
+        raise ValueError("native-diagnostic-downloaded-report-invalid")
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    identity = report.get("identity")
+    if (report.get("schema") != "genewhip-phase7-one-case-diagnostic-v2"
+            or report.get("qualification_accepted") is not False or report.get("diagnostic_only") is not True
+            or not isinstance(identity, dict) or identity.get("source_sha") != source
+            or identity.get("head_sha") != source or identity.get("base_sha") != base
+            or identity.get("run_id") != str(selected_id) or identity.get("run_attempt") != "1"
+            or report.get("fixture") != "recursion94" or report.get("case") != "withhold-first-plate"
+            or report.get("status") not in ("pass", "fail")
+            or (report["status"] == "pass") != (run["conclusion"] == "success")):
+        raise ValueError("native-diagnostic-downloaded-identity-invalid")
+    expected_identity = {"source_sha": source, "head_sha": source, "base_sha": base,
+                         "run_id": str(selected_id), "run_attempt": "1"}
+    if _load_runtime_module().validate_native_diagnostic_public(report, expected_identity) is not True:
+        raise ValueError("native-diagnostic-downloaded-report-invalid")
+    result = {"schema": "genewhip.phase7-native-diagnostic-result.v1", "status": report["status"],
+        "qualification_accepted": False, "assessment_required": True, "run_id": str(selected_id),
+        "source_sha": source, "run_attempt": "1", "report_sha256": _sha(report_path),
+        "report_path": str(report_path.relative_to(ROOT)), "branch": branch}
+    execution["status"] = "completed-assessment-required"
+    _write_json(dispatch_path, execution)
+    _write_json(out, result)
+    return result
+
+
+def _read_native_private_handoff(path: pathlib.Path) -> tuple[str, dict[str, Any] | None]:
+    """Read only the collector's compact fixed-schema handoff, never the raw workload record."""
+    try:
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+        descriptor = os.open(path, flags)
+    except FileNotFoundError:
+        return "missing", None
+    except OSError:
+        return "unsafe", None
+    try:
+        info = os.fstat(descriptor)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1):
+            return "unsafe", None
+        if info.st_size > 65536:
+            return "oversized", None
+        with os.fdopen(descriptor, "rb") as stream:
+            descriptor = -1
+            raw = stream.read(65537)
+        if len(raw) > 65536:
+            return "oversized", None
+        value = json.loads(raw.decode("utf-8"))
+        return ("valid", value) if isinstance(value, dict) else ("invalid", None)
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return "invalid", None
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _read_native_private_record(path: pathlib.Path) -> dict[str, Any] | None:
+    """Read a bounded coordinator receipt; collector workload data uses its compact handoff."""
+    try:
+        info = path.lstat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                or info.st_nlink != 1 or info.st_size > 1024 * 1024):
+            return None
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) else None
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+
+
+def run_native_diagnostic(build: pathlib.Path, scope: pathlib.Path, out: pathlib.Path) -> dict[str, Any]:
+    """Run one diagnostic collector; persist the actual outer receipt separately."""
+    if (os.environ.get("GITHUB_EVENT_NAME") != "workflow_dispatch"
+            or os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_CASE") != NATIVE_DIAGNOSTIC_CASE
+            or not re.fullmatch(r"[0-9a-f]{40}", os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_SOURCE_SHA", ""))
+            or os.environ.get("GITHUB_SHA") != os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_SOURCE_SHA")):
+        raise ValueError("native-diagnostic-explicit-hosted-selector-required")
+    if (scope.resolve(strict=True) != ROOT / "evidence/v02-execution.json"
+            or _sha(scope) != "05eb7f5fa91d759fbef8fb86bbc9db402dc41812261235bcf5085a0e2aa9b1a5"):
+        raise ValueError("native-diagnostic-approved-scope-required")
+    scope_data = json.loads(scope.read_text(encoding="utf-8"))
+    started_at = os.environ.get("GENEWHIP_QUALIFICATION_STARTED_AT")
+    if not isinstance(started_at, str):
+        raise ValueError("native-diagnostic-carried-clock-required")
+    now = datetime.datetime.now(datetime.timezone.utc)
+    _require_hosted_budget(started_at, now.isoformat(), scope_data, phase="runtime")
+    limits = dict(scope_data["per_child_limits"])
+    # This is the existing outer runtime-driver allowance, narrowed to three
+    # workload ceilings; each nested workload keeps its unchanged child cap.
+    aggregate = 3 * limits["wall_seconds"]
+    elapsed = (now - _parse_utc(started_at)).total_seconds()
+    remaining = scope_data["qualification_batch"]["runtime_wall_seconds"] - elapsed
+    if aggregate != 1800 or remaining < aggregate + limits["cleanup_grace_seconds"]:
+        raise ValueError("native-diagnostic-aggregate-window-unavailable")
+    if out.exists() or out.is_symlink():
+        raise ValueError("native-diagnostic-output-collision")
+    private_root = out.parent / (out.stem + "-private")
+    if private_root.exists() or private_root.is_symlink():
+        raise ValueError("native-diagnostic-private-output-collision")
+    private_root.mkdir(parents=True)
+    input_root = ROOT / "build/v02/runtime/input-contract"
+    if input_root.exists() or input_root.is_symlink():
+        raise ValueError("native-diagnostic-input-scratch-collision")
+    input_root.mkdir(parents=True, mode=0o700)
+    private_out = private_root / "collector.json"
+    scratch = private_root / "outer"
+    limits["wall_seconds"] = aggregate
+    attempt = None
+    rejection = None
+    try:
+        attempt = _bounded_command([sys.executable, "-I", str(ROOT / "scripts/evidence/v02_run.py"),
+            "--mode", "native-diagnostic", "--build", str(build), "--scope", str(scope),
+            "--out", str(private_out)], limits=limits, scratch=scratch, timeout=aggregate,
+            label="native-diagnostic", check=False, scratch_roots=(private_root, input_root))
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+        rejection = "outer-boundary-rejected"
+        receipt_path = scratch / "native-diagnostic.attempt.json"
+        attempt = _read_native_private_record(receipt_path)
+    handoff_path = private_out.with_name(private_out.stem + "-handoff.json")
+    handoff_status, handoff = _read_native_private_handoff(handoff_path)
+    runtime = _load_runtime_module()
+    identity = _identity()
+    result = runtime.complete_native_diagnostic_handoff(handoff, attempt, handoff_status,
+        identity=identity, outer_rejection=rejection)
+    if len(json.dumps(result, ensure_ascii=True).encode("utf-8")) > 65536:
+        raise ValueError("native-diagnostic-public-report-byte-limit")
+    _write_json(out, result)
+    return result
 
 
 def run_runtime(build: pathlib.Path, scope: pathlib.Path, out: pathlib.Path) -> dict[str, Any]:
@@ -5493,7 +5838,7 @@ def _semantic_mutant_receipt_error(expected: dict[str, Any]) -> str | None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", required=True, choices=("plan", "runtime", "package", "validate", "semantic-mutants", "semantic-mutants-worker", "stage-public", "retry-source", "successor-source", "failed-hosted-successor-source", "hosted", "close"))
+    parser.add_argument("--mode", required=True, choices=("plan", "runtime", "native-diagnostic", "native-diagnostic-hosted", "package", "validate", "semantic-mutants", "semantic-mutants-worker", "stage-public", "retry-source", "successor-source", "failed-hosted-successor-source", "hosted", "close"))
     parser.add_argument("--build", type=pathlib.Path, default=ROOT / "build/phase6")
     parser.add_argument("--scope", type=pathlib.Path, default=ROOT / "evidence/v02-execution.json")
     parser.add_argument("--out", type=pathlib.Path, required=True)
@@ -5529,6 +5874,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="review-bound source-preparation or public-effects admission record")
     parser.add_argument("--batch-admission-sha256",
                         help="expected digest of the fresh-batch admission record")
+    parser.add_argument("--diagnostic-readiness", type=pathlib.Path)
+    parser.add_argument("--diagnostic-readiness-sha256")
     parser.add_argument("--contracts-only", action="store_true")
     parser.add_argument("--source-sha")
     parser.add_argument("--head-sha")
@@ -5538,13 +5885,18 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     batch_failure_stage: str | None = None
     try:
+        native_hosted = args.mode == "native-diagnostic-hosted"
+        if native_hosted and (args.diagnostic_readiness is None or args.diagnostic_readiness_sha256 is None):
+            raise ValueError("native-diagnostic-readiness-required")
+        if not native_hosted and (args.diagnostic_readiness is not None or args.diagnostic_readiness_sha256 is not None):
+            raise ValueError("native-diagnostic-readiness-route-invalid")
         if args.prepare_only and args.mode != "stage-public":
             raise ValueError("prepare-only-is-only-valid-for-stage-public")
         batch_fields = (args.batch_authorization, args.batch_authorization_sha256,
                         args.batch_admission, args.batch_admission_sha256)
         batch_requested = any(item is not None for item in batch_fields)
         if batch_requested:
-            if (args.mode not in ("stage-public", "hosted")
+            if (args.mode not in ("stage-public", "hosted", "native-diagnostic-hosted")
                     or args.campaign is not None or args.campaign_sha256 is not None
                     or args.continuation is not None or args.recovery_selection != "15"):
                 raise ValueError("fresh-batch-route-conflicts-with-legacy-recovery")
@@ -5552,17 +5904,18 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("stage-public-publication-copy-required")
             if any(item is None for item in batch_fields):
                 raise ValueError("fresh-batch-authorization-and-admission-required")
-            _fresh_batch_guard(batch_authorization=args.batch_authorization,
-                batch_authorization_sha256=args.batch_authorization_sha256,
-                batch_admission=args.batch_admission,
-                batch_admission_sha256=args.batch_admission_sha256,
-                stage="source-preparation" if args.prepare_only else "public-effects",
-                scope_path=args.scope, journal_path=args.journal,
-                publication_copy=args.publication_copy,
-                preflight_path=args.out if args.prepare_only else args.preflight,
-                output_path=args.out)
-            batch_failure_stage = ("preparation" if args.prepare_only else
-                                   "qualification" if args.mode == "hosted" else "publication")
+            if args.mode != "native-diagnostic-hosted":
+                _fresh_batch_guard(batch_authorization=args.batch_authorization,
+                    batch_authorization_sha256=args.batch_authorization_sha256,
+                    batch_admission=args.batch_admission,
+                    batch_admission_sha256=args.batch_admission_sha256,
+                    stage="source-preparation" if args.prepare_only else "public-effects",
+                    scope_path=args.scope, journal_path=args.journal,
+                    publication_copy=args.publication_copy,
+                    preflight_path=args.out if args.prepare_only else args.preflight,
+                    output_path=args.out)
+                batch_failure_stage = ("preparation" if args.prepare_only else
+                                       "qualification" if args.mode == "hosted" else "publication")
         else:
             protected_roots = tuple((ROOT / relative).resolve(strict=False)
                                     for relative in LEGACY_BATCH_ROOTS)
@@ -5692,6 +6045,21 @@ def main(argv: list[str] | None = None) -> int:
             value = run_package(args.public_evidence, args.out)
             _check_environment_clock(package_scope, "package")
             print("qualification-package: " + str(len(value["archives"])) + " exact archives; inventory=" + value["inventory_sha256"])
+        elif args.mode == "native-diagnostic-hosted":
+            if not batch_requested:
+                raise ValueError("native-diagnostic-batch-admission-required")
+            value = run_native_diagnostic_hosted(args.preflight, args.publication_copy,
+                args.scope, args.out, args.journal, batch_authorization=args.batch_authorization,
+                batch_authorization_sha256=args.batch_authorization_sha256,
+                batch_admission=args.batch_admission, batch_admission_sha256=args.batch_admission_sha256,
+                diagnostic_readiness=args.diagnostic_readiness,
+                diagnostic_readiness_sha256=args.diagnostic_readiness_sha256)
+            print("native-diagnostic-hosted: " + value["status"] + "; assessment_required=true; qualification_accepted=false")
+            return 0 if value["status"] == "pass" else 1
+        elif args.mode == "native-diagnostic":
+            value = run_native_diagnostic(args.build, args.scope, args.out)
+            print("native-diagnostic: " + value["status"] + "; qualification_accepted=false")
+            return 0 if value["status"] == "pass" else 1
         elif args.mode == "hosted":
             if args.publication_copy is None:
                 raise ValueError("hosted-publication-copy-required")
