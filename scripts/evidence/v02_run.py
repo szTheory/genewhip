@@ -13,6 +13,7 @@ import tempfile
 import shutil
 import subprocess
 import datetime
+import time
 from subprocess import CompletedProcess
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -725,6 +726,14 @@ _SAFE_HOST_BATCH_CASES = frozenset({
     ("recursion94", "withhold-final-b"), ("tank-battle", "full-route"),
     ("tank-battle", "withhold-early-hit"), ("tank-battle", "withhold-late-hit"),
 })
+_SAFE_HOST_BATCH_INPUT_COUNTS = {
+    ("recursion94", "full-route"): 20,
+    ("recursion94", "withhold-first-plate"): 18,
+    ("recursion94", "withhold-final-b"): 18,
+    ("tank-battle", "full-route"): 22,
+    ("tank-battle", "withhold-early-hit"): 2,
+    ("tank-battle", "withhold-late-hit"): 12,
+}
 _SAFE_HOST_BATCH_CLEANUP = frozenset({"confirmed", "unconfirmed", "not-launched"})
 _SAFE_HOST_BATCH_REASONS = frozenset({
     "group-inactive", "group-observer-cleanup-unconfirmed", "group-status-budget-exhausted",
@@ -785,6 +794,17 @@ def _safe_host_batch_failure(backend: str, return_code: object, host: object) ->
             return "zero" if value == 0 else "positive"
         return "in-range"
 
+    def bounded_integer(value, maximum, *, minimum=0):
+        if value is None:
+            return "missing"
+        if type(value) is not int:
+            return "untyped"
+        if value < minimum:
+            return "negative"
+        if value > maximum:
+            return "overrange"
+        return value
+
     cleanup = enum(process.get("process_group_cleanup"), _SAFE_HOST_BATCH_CLEANUP)
     bound = enum(process.get("bound_violation_reason"), _SAFE_HOST_BATCH_BOUNDS)
     if bound == "missing":
@@ -821,6 +841,74 @@ def _safe_host_batch_failure(backend: str, return_code: object, host: object) ->
     clocks = failed.get("observed_clocks") if failed is not None else None
     clocks = clocks if isinstance(clocks, dict) else {}
     fixture = failed.get("fixture") if failed is not None else None
+    case_pair = (failed.get("fixture"), failed.get("case")) if failed is not None else None
+    input_row_limit = (_SAFE_HOST_BATCH_INPUT_COUNTS.get(case_pair, 0)
+        if isinstance(case_pair, tuple) and all(isinstance(part, str) for part in case_pair) else 0)
+    input_facts = comparisons.get("inputs")
+    input_facts = input_facts if isinstance(input_facts, dict) else {}
+    input_rows = input_facts.get("rows")
+    first_mismatch = {"state": "unavailable", "index": "missing",
+        "expected_mask": "missing", "retained_desired": "missing", "retained_effective": "missing"}
+    if isinstance(input_rows, list) and 0 < input_row_limit and len(input_rows) <= input_row_limit:
+        mismatch = next((item for item in input_rows if isinstance(item, dict) and item.get("equal") is False), None)
+        if mismatch is None:
+            # "none" means a complete, checked roster with no mismatch, not
+            # merely a producer-level equal=True flag. Only this fixed case has
+            # a retained expected-mask map; other cases cannot prove absence.
+            complete_first_plate = (
+                case_pair == ("recursion94", "withhold-first-plate")
+                and len(input_rows) == input_row_limit
+                and input_facts.get("equal") is True
+                and type(input_facts.get("core_count")) is int
+                and input_facts.get("core_count") == input_row_limit
+                and type(input_facts.get("host_count")) is int
+                and input_facts.get("host_count") == input_row_limit
+            )
+            route_masks = globals().get("_NATIVE_DIAGNOSTIC_ROUTE_MASKS", ())
+            complete_first_plate = complete_first_plate and len(route_masks) == input_row_limit
+            if complete_first_plate:
+                for expected_index, row in enumerate(input_rows):
+                    if (not isinstance(row, dict)
+                            or type(row.get("index")) is not int
+                            or row.get("index") != expected_index
+                            or type(row.get("equal")) is not bool
+                            or row.get("equal") is not True
+                            or type(row.get("port")) is not int
+                            or row.get("port") != 0
+                            or type(row.get("desired")) is not int
+                            or row.get("desired") != route_masks[expected_index]
+                            or type(row.get("effective")) is not int
+                            or row.get("effective") != route_masks[expected_index]):
+                        complete_first_plate = False
+                        break
+            if complete_first_plate:
+                first_mismatch["state"] = "none"
+            elif any(not isinstance(item, dict) or type(item.get("equal")) is not bool
+                     for item in input_rows):
+                first_mismatch["state"] = "malformed"
+            else:
+                first_mismatch["state"] = "unavailable"
+        else:
+            first_mismatch["state"] = "found"
+            mismatch_index = bounded_integer(mismatch.get("index"), input_row_limit - 1)
+            first_mismatch["index"] = mismatch_index
+            if (type(mismatch_index) is int and case_pair ==
+                    ("recursion94", "withhold-first-plate")):
+                route_masks = globals().get("_NATIVE_DIAGNOSTIC_ROUTE_MASKS", ())
+                first_mismatch["expected_mask"] = (route_masks[mismatch_index]
+                    if mismatch_index < len(route_masks) else "unavailable")
+            elif type(mismatch_index) is int:
+                first_mismatch["expected_mask"] = "unavailable"
+            # _input_join currently retains the core row values, not the host's
+            # raw requested/effective values. Label those honestly; do not infer
+            # or reconstruct the missing host observation.
+            first_mismatch["retained_desired"] = bounded_integer(mismatch.get("desired"), 255)
+            first_mismatch["retained_effective"] = bounded_integer(mismatch.get("effective"), 255)
+    elif input_rows is None:
+        first_mismatch["state"] = "missing"
+    else:
+        first_mismatch["state"] = ("overrange" if isinstance(input_rows, list) else
+            "untyped" if input_rows is not None else "missing")
     if fixture == "recursion94":
         field_max, call_max = 7200, 100_000_000
     elif fixture == "tank-battle":
@@ -828,7 +916,7 @@ def _safe_host_batch_failure(backend: str, return_code: object, host: object) ->
     else:
         field_max, call_max = 7200, 100_000_000
     fields = {
-        "schema": "genewhip.v02-host-batch-failure.v1",
+        "schema": "genewhip.v02-host-batch-failure.v2",
         "backend": backend_value, "report": report_status, "case": case_value, "row": row_status,
         "batch_return": code_value, "child_exit": child_exit, "cleanup": cleanup, "bound": bound,
         "cleanup_reason": reason, "status_observation": observation, "cleanup_queries": attempts_value,
@@ -847,9 +935,21 @@ def _safe_host_batch_failure(backend: str, return_code: object, host: object) ->
         "native_status": ("missing" if clocks.get("status") is None else
                           "untyped" if type(clocks.get("status")) is not int else
                           "zero" if clocks.get("status") == 0 else "nonzero"),
+        "native_status_value": bounded_integer(clocks.get("status"), 255),
         "active_ticks": counter(clocks.get("active_ticks"), 3600, expected=3600),
+        # Active ticks are expected to be exactly 3600 for these fixed cases;
+        # retain any smaller observed value, but do not export beyond that bound.
+        "active_ticks_value": bounded_integer(clocks.get("active_ticks"), 3600),
         "fields": counter(clocks.get("fields"), field_max),
+        "fields_value": bounded_integer(clocks.get("fields"), field_max),
         "boundary_calls": counter(clocks.get("boundary_calls"), call_max),
+        "boundary_calls_value": bounded_integer(clocks.get("boundary_calls"), call_max),
+        "child_return_value": bounded_integer(process.get("return_code"), 255, minimum=-255),
+        "input_core_count": bounded_integer(input_facts.get("core_count"), input_row_limit),
+        "input_host_count": bounded_integer(input_facts.get("host_count"), input_row_limit),
+        "input_row_count": bounded_integer(len(input_rows) if isinstance(input_rows, list) else None,
+            input_row_limit),
+        "first_input_mismatch": first_mismatch,
         "audio_submitted_frames": counter(audio.get("audio_submitted_frames"), 28_800_000, positive=True),
         "audio_consumed_frames": counter(audio.get("audio_device_consumed_frames"), 28_800_000, positive=True),
     }
@@ -1051,6 +1151,22 @@ _NATIVE_DIAGNOSTIC_STAGES = ("input-contract", "headless-reference", "native-sdl
 _NATIVE_DIAGNOSTIC_INPUT_MASKS = (8, 0, 8, 0, 8, 0, 32, 0, 8, 0, 32, 0, 1, 0, 8, 0, 2, 0, 16,
     2, 0, 16, 0)
 _NATIVE_DIAGNOSTIC_ROUTE_MASKS = (8, 0, 8, 0, 32, 0, 8, 0, 32, 0, 1, 0, 8, 0, 2, 0, 16, 0)
+_NATIVE_PREFIX_CASES = ("full-route", "withhold-first-plate")
+_NATIVE_PREFIX_STAGES = ("input-contract", "headless-reference", "native-comparison")
+_NATIVE_PREFIX_ROUTE_MASKS = {
+    "full-route": (8, 0, 8, 0, 8, 0, 32, 0, 8, 0, 32, 0, 1, 0, 8, 0, 2, 0, 16, 0),
+    "withhold-first-plate": _NATIVE_DIAGNOSTIC_ROUTE_MASKS,
+}
+_NATIVE_PREFIX_INPUT_COUNTS = {"full-route": 20, "withhold-first-plate": 18}
+_NATIVE_PREFIX_EXPECTED_PREDICATES = {
+    "full-route": {"early_dependency_interaction": (True, 1, 17),
+        "two_echoes_at_boot_cap": (True, 2, 1441), "crossed_generated_door": (True, 1, 3530),
+        "late_program_stable": (True, 1, 3600)},
+    "withhold-first-plate": {"early_dependency_interaction": (False, 0, 0),
+        "two_echoes_at_boot_cap": (True, 2, 1441), "crossed_generated_door": (True, 1, 3530),
+        "late_program_stable": (True, 1, 3600)},
+}
+_NATIVE_PREFIX_SELECTOR = "recursion94-native-prefix"
 
 
 def _diagnostic_process_projection(process: object) -> dict:
@@ -1623,6 +1739,514 @@ def _safe_host_facts(facts: dict) -> dict:
             if isinstance(row.get("audio"), dict) else None)}
 
 
+def _safe_prefix_input_stage(stage: object) -> dict:
+    stage = stage if isinstance(stage, dict) else {}
+    proof = stage.get("proof") if isinstance(stage.get("proof"), dict) else {}
+    masks = proof.get("masks") if isinstance(proof.get("masks"), list) else []
+    observations = proof.get("observations") if isinstance(proof.get("observations"), list) else []
+    return {"name": "input-contract",
+        "status": stage.get("status") if stage.get("name") == "input-contract"
+            and stage.get("status") in ("pass", "fail") else "unavailable",
+        "process": _diagnostic_process_projection(stage.get("process")),
+        "input": {"requested_count": proof.get("requested_count") if
+                type(proof.get("requested_count")) is int and 0 <= proof["requested_count"] <= 23 else
+                "missing" if "requested_count" not in proof else "untyped-or-out-of-range",
+            "outcome": proof.get("outcome") if proof.get("outcome") in ("pass", "fail") else "unavailable",
+            "port_isolation_verified": proof.get("port_isolation_verified") if
+                type(proof.get("port_isolation_verified")) is bool else None,
+            "masks": [value if type(value) is int and 0 <= value <= 255 else
+                "untyped" if type(value) is not int else "out-of-range" for value in masks[:23]],
+            "mask_validity": [type(value) is int and 0 <= value <= 255 for value in masks[:23]],
+            "mask_count": len(masks) if len(masks) <= 100000 else "overrange",
+            "observations_count": len(observations) if len(observations) <= 100000 else "overrange",
+            "observations_truncated": len(observations) > 23,
+            "observations": [{key: item[key] if type(item.get(key)) is int and 0 <= item[key] <= 255 else
+                "missing" if item.get(key) is None else
+                "untyped" if type(item.get(key)) is not int else "out-of-range"
+                for key in ("requested_mask", "effective_mask", "joystick_mask") if key in item}
+                for item in observations[:23] if isinstance(item, dict)]}}
+
+
+def safe_native_prefix_diagnostic(record: object, outer_attempt: object = None,
+                                  identity: object = None, outer_rejection: str | None = None,
+                                  collector_read_status: str = "valid") -> dict:
+    """Project the fixed two-case prefix collector without exposing raw artifacts."""
+    record = record if isinstance(record, dict) else {}
+    raw_stages = record.get("stages") if isinstance(record.get("stages"), list) else []
+    raw_shape_valid = len(raw_stages) == len(_NATIVE_PREFIX_STAGES)
+    if raw_shape_valid:
+        for index, expected_name in enumerate(_NATIVE_PREFIX_STAGES):
+            raw = raw_stages[index]
+            if not isinstance(raw, dict) or raw.get("name") != expected_name:
+                raw_shape_valid = False
+                break
+            if index in (1, 2):
+                cases = raw.get("cases")
+                if (not isinstance(cases, list) or len(cases) != len(_NATIVE_PREFIX_CASES)
+                        or any(not isinstance(item, dict) or item.get("case") != expected_case
+                            for item, expected_case in zip(cases, _NATIVE_PREFIX_CASES))):
+                    raw_shape_valid = False
+                    break
+    stages: list[dict] = []
+    for index, name in enumerate(_NATIVE_PREFIX_STAGES):
+        raw = raw_stages[index] if index < len(raw_stages) and isinstance(raw_stages[index], dict) else {}
+        raw_status = raw.get("status")
+        status = (raw_status if raw.get("name") == name and isinstance(raw_status, str) and raw_status in ("pass", "fail")
+            else "unavailable")
+        if index == 0:
+            stages.append(_safe_prefix_input_stage(raw))
+            continue
+        member = "route" if index == 1 else "comparison"
+        cases = raw.get("cases") if isinstance(raw.get("cases"), list) else []
+        safe_cases = []
+        for case_index, expected_case in enumerate(_NATIVE_PREFIX_CASES):
+            item = cases[case_index] if case_index < len(cases) and isinstance(cases[case_index], dict) else {}
+            raw_case = item.get("case")
+            case_name = raw_case if isinstance(raw_case, str) and raw_case in _NATIVE_PREFIX_CASES else expected_case
+            raw_item_status = item.get("status")
+            item_status = raw_item_status if isinstance(raw_item_status, str) and raw_item_status in ("pass", "fail") else "unavailable"
+            if case_name != expected_case:
+                case_name = expected_case
+            if not raw_shape_valid:
+                item_status = "unavailable"
+            facts = item.get("facts") if isinstance(item.get("facts"), dict) else {}
+            safe_facts = _safe_route_facts(facts) if index == 1 else _safe_host_facts(facts)
+            safe_cases.append({"case": case_name, "status": item_status,
+                "process": _diagnostic_process_projection(item.get("process")), member: safe_facts})
+        stages.append({"name": name, "status": status, "cases": safe_cases})
+    processes = outer_attempt.get("processes") if isinstance(outer_attempt, dict) else None
+    outer_raw = processes[0] if isinstance(processes, list) and len(processes) == 1 else None
+    outer = _diagnostic_process_projection(outer_raw)
+    report = {"schema": "genewhip-phase7-native-prefix-diagnostic-v1",
+        "status": "fail", "diagnostic_only": True, "qualification_accepted": False,
+        "fixture": "recursion94", "case_order": list(_NATIVE_PREFIX_CASES),
+        "failure_category": ("evidence-shape-invalid" if not raw_shape_valid else
+            record.get("failure_category") if isinstance(record.get("failure_category"), str) and record.get("failure_category") in {
+            "input-or-evidence-invalid", "bounded-workload-failed", "bounded-workload-timeout",
+            "bounded-workload-io-failed", "required-evidence-missing", "evidence-shape-invalid",
+            "native-sdl-comparison-failed", "diagnostic-stage-failed"} else None),
+        "stages": stages, "outer_process": outer, "outer_rejection": outer_rejection,
+        "collector_read_status": collector_read_status, "identity": identity}
+    if (raw_shape_valid and record.get("status") == "pass" and collector_read_status == "valid"
+            and outer_rejection is None and _native_prefix_stages_pass(stages)
+            and _native_prefix_outer_pass(outer_attempt, outer)):
+        report["status"] = "pass"
+    return report
+
+
+def _native_prefix_outer_pass(outer_attempt: object, outer: dict) -> bool:
+    return (outer.get("status") == "completed" and outer.get("return_code") == "zero"
+        and outer.get("cleanup") == "confirmed" and outer.get("bound_violation") is False
+        and isinstance(outer_attempt, dict) and type(outer_attempt.get("returncode")) is int
+        and outer_attempt["returncode"] == 0 and outer_attempt.get("launch_error") is None
+        and outer_attempt.get("process_group_cleanup") == "confirmed")
+
+
+def _native_prefix_stages_pass(stages: object) -> bool:
+    if not isinstance(stages, list) or len(stages) != 3:
+        return False
+    input_stage, headless, native = stages
+    input_facts = input_stage.get("input", {}) if isinstance(input_stage, dict) else {}
+    input_expected = list(_NATIVE_DIAGNOSTIC_INPUT_MASKS)
+    observations = input_facts.get("observations") if isinstance(input_facts, dict) else None
+    input_ok = (input_stage.get("status") == "pass"
+        and input_stage["process"].get("status") == "completed"
+        and input_stage["process"].get("return_code") == "zero"
+        and input_stage["process"].get("cleanup") == "confirmed"
+        and input_stage["process"].get("bound_violation") is False
+        and input_facts.get("outcome") == "pass" and input_facts.get("requested_count") == 23
+        and input_facts.get("port_isolation_verified") is True
+        and input_facts.get("masks") == list(_NATIVE_DIAGNOSTIC_INPUT_MASKS)
+        and input_facts.get("mask_validity") == [True] * 23
+        and input_facts.get("mask_count") == 23 and input_facts.get("observations_count") == 23
+        and input_facts.get("observations_truncated") is False
+        and isinstance(observations, list) and len(observations) == 23
+        and all(isinstance(row, dict)
+            and type(row.get("requested_mask")) is int and row["requested_mask"] == input_expected[index]
+            and type(row.get("effective_mask")) is int and row["effective_mask"] == input_expected[index]
+            and type(row.get("joystick_mask")) is int and row["joystick_mask"] == input_expected[index]
+            for index, row in enumerate(observations)))
+    if not input_ok:
+        return False
+    for stage, kind in ((headless, "route"), (native, "comparison")):
+        if (not isinstance(stage, dict) or stage.get("status") != "pass"
+                or not isinstance(stage.get("cases"), list)
+                or len(stage["cases"]) != len(_NATIVE_PREFIX_CASES)):
+            return False
+        for case_name, case_row in zip(_NATIVE_PREFIX_CASES, stage["cases"]):
+            expected_count = _NATIVE_PREFIX_INPUT_COUNTS[case_name]
+            expected_masks = _NATIVE_PREFIX_ROUTE_MASKS[case_name]
+            if (not isinstance(case_row, dict) or case_row.get("case") != case_name
+                    or case_row.get("status") != "pass"):
+                return False
+            process = case_row.get("process")
+            if (not isinstance(process, dict) or process.get("status") != "completed"
+                    or process.get("return_code") != "zero" or process.get("cleanup") != "confirmed"
+                    or process.get("bound_violation") is not False):
+                return False
+            facts = case_row.get(kind)
+            if not isinstance(facts, dict):
+                return False
+            if kind == "route":
+                events = facts.get("input_events")
+                expected_predicates = _NATIVE_PREFIX_EXPECTED_PREDICATES[case_name]
+                predicates = facts.get("predicates")
+                predicate_map = ({item.get("id"): item for item in predicates
+                    if isinstance(item, dict)} if isinstance(predicates, list) else {})
+                if (type(facts.get("status")) is not int or facts.get("status") != 0
+                        or type(facts.get("active_ticks")) is not int or facts.get("active_ticks") != 3600
+                        or type(facts.get("fields")) is not int or not 0 < facts["fields"] <= 7200
+                        or type(facts.get("boundary_calls")) is not int
+                            or not 0 < facts["boundary_calls"] <= 100_000_000
+                        or facts.get("input_event_count") != expected_count
+                        or facts.get("input_events_truncated") is not False
+                        or not isinstance(events, list) or len(events) != expected_count
+                        or [item.get("requested_mask") for item in events] != list(expected_masks)
+                        or [item.get("effective_mask") for item in events] != list(expected_masks)
+                        or any(type(item.get("index")) is not int or item["index"] != idx
+                            or type(item.get("port")) is not int or item["port"] != 0
+                            or item.get("requested_mask_valid") is not True
+                            or item.get("effective_mask_valid") is not True
+                            or item.get("joystick_mask_valid") is not None
+                            for idx, item in enumerate(events))
+                        or type(facts.get("predicate_count")) is not int or facts["predicate_count"] != 4
+                        or set(predicate_map) != set(expected_predicates)
+                        or any((predicate_map[key].get("reached"), predicate_map[key].get("value"),
+                            predicate_map[key].get("field")) != expected for key, expected in expected_predicates.items())):
+                    return False
+            else:
+                native_events = facts.get("native_input_events")
+                host_events = facts.get("host_input_events")
+                rows = facts.get("input_rows")
+                if (facts.get("status") != "pass" or facts.get("core_outcome") != "pass"
+                        or facts.get("host_outcome") != "pass-diagnostic"
+                        or facts.get("input_equal") is not True
+                        or facts.get("source_samples_equal") is not True
+                        or facts.get("renderer_pixel_equal") is not True
+                        or facts.get("full_pcm_equal") is not True
+                        or facts.get("renderer_readback") is not True
+                        or facts.get("audio_device_activity") is not True
+                        or type(facts.get("audio_submitted_frames")) is not int or facts["audio_submitted_frames"] <= 0
+                        or type(facts.get("audio_consumed_frames")) is not int or facts["audio_consumed_frames"] <= 0
+                        or type(facts.get("native_status")) is not int or facts["native_status"] != 0
+                        or not isinstance(facts.get("observed_clocks"), dict)
+                        or type(facts["observed_clocks"].get("active_ticks")) is not int
+                            or facts["observed_clocks"]["active_ticks"] != 3600
+                        or type(facts["observed_clocks"].get("fields")) is not int
+                            or not 0 < facts["observed_clocks"]["fields"] <= 7200
+                        or type(facts["observed_clocks"].get("boundary_calls")) is not int
+                            or not 0 < facts["observed_clocks"]["boundary_calls"] <= 100_000_000
+                        or facts.get("core_input_count") != expected_count
+                        or facts.get("host_input_count") != expected_count
+                        or not isinstance(native_events, list) or len(native_events) != expected_count
+                        or not isinstance(host_events, list) or len(host_events) != expected_count
+                        or facts.get("native_input_events_truncated") is not False
+                        or facts.get("host_input_events_truncated") is not False
+                        or not isinstance(rows, list) or len(rows) != expected_count
+                        or any(not isinstance(row, dict) or type(row.get("index")) is not int
+                            or row.get("index") != idx or row.get("equal") is not True
+                            or type(row.get("port")) is not int or row.get("port") != 0
+                            or type(row.get("desired")) is not int or row.get("desired") != expected_masks[idx]
+                            or type(row.get("effective")) is not int or row.get("effective") != expected_masks[idx]
+                            for idx, row in enumerate(rows))
+                        or any(type(event.get("index")) is not int or event["index"] != idx
+                            or type(event.get("requested_mask")) is not int or event["requested_mask"] != expected_masks[idx]
+                            or type(event.get("effective_mask")) is not int or event["effective_mask"] != expected_masks[idx]
+                            or type(event.get("port")) is not int or event["port"] != 0
+                            or event.get("requested_mask_valid") is not True
+                            or event.get("effective_mask_valid") is not True
+                            for idx, event in enumerate(native_events))
+                        or any(type(event.get("index")) is not int or event["index"] != idx
+                            or type(event.get("requested_mask")) is not int or event["requested_mask"] != expected_masks[idx]
+                            or type(event.get("effective_mask")) is not int or event["effective_mask"] != expected_masks[idx]
+                            or type(event.get("joystick_mask")) is not int or event["joystick_mask"] != expected_masks[idx]
+                            or type(event.get("port")) is not int or event["port"] != 0
+                            or event.get("requested_mask_valid") is not True
+                            or event.get("effective_mask_valid") is not True
+                            or event.get("joystick_mask_valid") is not True
+                            or event.get("handler") != "sdl-gamepad-sample-port"
+                            for idx, event in enumerate(host_events))):
+                    return False
+    return True
+
+
+_NATIVE_PREFIX_HANDOFF_SCHEMA = "genewhip-phase7-native-prefix-diagnostic-handoff.v1"
+_NATIVE_PREFIX_HANDOFF_STATES = ("valid", "missing", "oversized", "unsafe", "invalid")
+
+
+def _unavailable_native_prefix_stages() -> list[dict]:
+    return [{"name": "input-contract", "status": "unavailable",
+        "process": _diagnostic_process_projection(None),
+        "input": {"requested_count": "missing", "outcome": "unavailable",
+            "port_isolation_verified": None, "masks": [], "mask_validity": [],
+            "mask_count": "missing", "observations_count": "missing",
+            "observations_truncated": False, "observations": []}},
+        {"name": "headless-reference", "status": "unavailable", "cases": [
+            {"case": case, "status": "unavailable", "process": _diagnostic_process_projection(None),
+                "route": _safe_route_facts({})} for case in _NATIVE_PREFIX_CASES]},
+        {"name": "native-comparison", "status": "unavailable", "cases": [
+            {"case": case, "status": "unavailable", "process": _diagnostic_process_projection(None),
+                "comparison": _safe_host_facts({})} for case in _NATIVE_PREFIX_CASES]}]
+
+
+def native_prefix_diagnostic_handoff(record: object) -> dict:
+    projected = safe_native_prefix_diagnostic(record)
+    collector_pass = (isinstance(record, dict) and record.get("status") == "pass"
+        and projected["failure_category"] is None
+        and _native_prefix_stages_pass(projected["stages"]))
+    return {"schema": _NATIVE_PREFIX_HANDOFF_SCHEMA,
+        "collector_status": "pass" if collector_pass else "fail",
+        "failure_category": projected["failure_category"], "stages": projected["stages"]}
+
+
+def complete_native_prefix_diagnostic_handoff(handoff: object, outer_attempt: object,
+        read_status: str = "valid", identity: object = None,
+        outer_rejection: str | None = None) -> dict:
+    if read_status not in _NATIVE_PREFIX_HANDOFF_STATES:
+        read_status = "invalid"
+    failure_categories = {"input-or-evidence-invalid", "bounded-workload-failed",
+        "bounded-workload-timeout", "bounded-workload-io-failed", "required-evidence-missing",
+        "evidence-shape-invalid", "native-sdl-comparison-failed", "diagnostic-stage-failed"}
+    valid = (read_status == "valid" and isinstance(handoff, dict)
+        and set(handoff) == {"schema", "collector_status", "failure_category", "stages"}
+        and handoff.get("schema") == _NATIVE_PREFIX_HANDOFF_SCHEMA
+        and handoff.get("collector_status") in ("pass", "fail")
+        and (handoff.get("failure_category") is None or
+            (type(handoff.get("failure_category")) is str and handoff["failure_category"] in failure_categories))
+        and isinstance(handoff.get("stages"), list) and len(handoff["stages"]) == 3)
+    stages = handoff["stages"] if valid else _unavailable_native_prefix_stages()
+    outer_report = safe_native_diagnostic({"status": "fail", "stages": []}, outer_attempt)
+    outer = outer_report["outer_process"]
+    category = handoff.get("failure_category") if valid else None
+    if read_status != "valid":
+        category = {"missing": "collector-handoff-missing", "oversized": "collector-handoff-oversized",
+            "unsafe": "collector-handoff-unsafe", "invalid": "collector-handoff-invalid"}[read_status]
+    report = {"schema": "genewhip-phase7-native-prefix-diagnostic-v1", "status": "fail",
+        "diagnostic_only": True, "qualification_accepted": False, "fixture": "recursion94",
+        "case_order": list(_NATIVE_PREFIX_CASES), "failure_category": category,
+        "stages": stages, "outer_process": outer, "outer_rejection": outer_rejection,
+        "collector_read_status": read_status, "identity": identity}
+    if (valid and read_status == "valid" and handoff["collector_status"] == "pass"
+            and category is None and outer_rejection is None
+            and _native_prefix_stages_pass(stages)
+            and _native_prefix_outer_pass(outer_attempt, outer)):
+        report["status"] = "pass"
+    try:
+        validate_native_prefix_diagnostic_public(report, identity)
+    except (TypeError, ValueError, KeyError, RecursionError):
+        report.update({"status": "fail", "failure_category": "collector-handoff-invalid",
+            "collector_read_status": "invalid", "stages": _unavailable_native_prefix_stages()})
+        validate_native_prefix_diagnostic_public(report, identity)
+    return report
+
+
+def validate_native_prefix_diagnostic_public(report: object, expected_identity: object) -> bool:
+    """Strictly validate the fixed two-case prefix report; never sanitize downloaded data."""
+    label = "phase7-native-prefix-diagnostic-public-report-invalid"
+    identity_keys = {"source_sha", "head_sha", "base_sha", "run_id", "run_attempt"}
+    top_keys = {"schema", "status", "diagnostic_only", "qualification_accepted", "fixture",
+        "case_order", "failure_category", "stages", "outer_process", "outer_rejection",
+        "collector_read_status", "identity"}
+    if (not isinstance(report, dict) or set(report) != top_keys
+            or not isinstance(expected_identity, dict) or set(expected_identity) != identity_keys
+            or not isinstance(report.get("identity"), dict) or set(report["identity"]) != identity_keys
+            or report["identity"] != expected_identity
+            or any(not isinstance(expected_identity.get(key), str) or not expected_identity[key]
+                for key in identity_keys)
+            or any(re.fullmatch(r"[0-9a-f]{40}", expected_identity[key]) is None
+                for key in ("source_sha", "head_sha", "base_sha"))
+            or re.fullmatch(r"[0-9]+", expected_identity["run_id"]) is None
+            or expected_identity["run_attempt"] != "1"):
+        raise ValueError(label)
+    if (report.get("schema") != "genewhip-phase7-native-prefix-diagnostic-v1"
+            or report.get("status") not in ("pass", "fail")
+            or report.get("diagnostic_only") is not True
+            or report.get("qualification_accepted") is not False
+            or report.get("fixture") != "recursion94"
+            or report.get("case_order") != list(_NATIVE_PREFIX_CASES)
+            or report.get("collector_read_status") not in _NATIVE_PREFIX_HANDOFF_STATES
+            or report.get("outer_rejection") not in (None, "outer-boundary-rejected")
+            or report.get("failure_category") not in (None, *{
+                "input-or-evidence-invalid", "bounded-workload-failed", "bounded-workload-timeout",
+                "bounded-workload-io-failed", "required-evidence-missing", "evidence-shape-invalid",
+                "native-sdl-comparison-failed", "diagnostic-stage-failed", "collector-handoff-missing",
+                "collector-handoff-oversized", "collector-handoff-unsafe", "collector-handoff-invalid"})):
+        raise ValueError(label)
+    try:
+        if len(json.dumps(report, ensure_ascii=True, separators=(",", ":")).encode("utf-8")) > 65536:
+            raise ValueError(label)
+    except (TypeError, ValueError, UnicodeError, RecursionError):
+        raise ValueError(label) from None
+
+    def count(value: object, maximum: int = 100_000_000) -> bool:
+        return type(value) is int and 0 <= value <= maximum
+
+    def process(value: object) -> bool:
+        return (isinstance(value, dict) and set(value) == {"return_code", "status", "cleanup", "bound_violation"}
+            and type(value.get("return_code")) is str and value["return_code"] in
+                ("zero", "nonzero", "signaled", "missing", "untyped")
+            and value.get("status") in ("completed", "failed", "timeout", "unconfirmed", "unavailable")
+            and value.get("cleanup") in ("confirmed", "unconfirmed", "unavailable")
+            and (type(value.get("bound_violation")) is bool or value.get("bound_violation") is None))
+
+    outer = report.get("outer_process")
+    stages = report.get("stages")
+    if not process(outer) or not isinstance(stages, list) or len(stages) != 3:
+        raise ValueError(label)
+    first = stages[0]
+    input_keys = {"requested_count", "outcome", "port_isolation_verified", "masks", "mask_validity",
+        "mask_count", "observations_count", "observations_truncated", "observations"}
+    if (not isinstance(first, dict) or set(first) != {"name", "status", "process", "input"}
+            or first.get("name") != "input-contract"
+            or first.get("status") not in ("pass", "fail", "unavailable")
+            or not process(first.get("process"))):
+        raise ValueError(label)
+    value = first.get("input")
+    sentinels = ("missing", "untyped-or-out-of-range")
+    if (not isinstance(value, dict) or set(value) != input_keys
+            or not (count(value.get("requested_count"), 23) or value.get("requested_count") in sentinels)
+            or value.get("outcome") not in ("pass", "fail", "unavailable")
+            or (type(value.get("port_isolation_verified")) is not bool and value.get("port_isolation_verified") is not None)
+            or not isinstance(value.get("masks"), list) or len(value["masks"]) > 23
+            or any(not ((type(item) is int and 0 <= item <= 255) or item in ("untyped", "out-of-range")) for item in value["masks"])
+            or not isinstance(value.get("mask_validity"), list) or len(value["mask_validity"]) != len(value["masks"])
+            or any(type(item) is not bool for item in value["mask_validity"])
+            or not (count(value.get("mask_count"), 100_000) or value.get("mask_count") in ("missing", "untyped", "overrange"))
+            or not (count(value.get("observations_count"), 100_000) or value.get("observations_count") in ("missing", "untyped", "overrange"))
+            or type(value.get("observations_truncated")) is not bool
+            or not isinstance(value.get("observations"), list) or len(value["observations"]) > 23):
+        raise ValueError(label)
+    for observation in value["observations"]:
+        if (not isinstance(observation, dict)
+                or not set(observation).issubset({"requested_mask", "effective_mask", "joystick_mask"})
+                or any(not ((type(item) is int and 0 <= item <= 255) or item in
+                    ("missing", "untyped", "out-of-range")) for item in observation.values())):
+            raise ValueError(label)
+
+    for stage_index, expected_name in ((1, "headless-reference"), (2, "native-comparison")):
+        stage = stages[stage_index]
+        member = "route" if stage_index == 1 else "comparison"
+        if (not isinstance(stage, dict) or set(stage) != {"name", "status", "cases"}
+                or stage.get("name") != expected_name
+                or stage.get("status") not in ("pass", "fail", "unavailable")
+                or not isinstance(stage.get("cases"), list) or len(stage["cases"]) != 2):
+            raise ValueError(label)
+        for case, row in zip(_NATIVE_PREFIX_CASES, stage["cases"]):
+            if (not isinstance(row, dict) or set(row) != {"case", "status", "process", member}
+                    or (row.get("case") != case and row.get("case") != "unrecognized")
+                    or (row.get("case") == "unrecognized" and row.get("status") != "unavailable")
+                    or row.get("status") not in ("pass", "fail", "unavailable")
+                    or not process(row.get("process")) or not isinstance(row.get(member), dict)):
+                raise ValueError(label)
+            facts = row[member]
+            if member == "route":
+                route_keys = {"status", "active_ticks", "fields", "boundary_calls", "input_event_count",
+                    "input_events", "input_events_truncated", "predicate_count", "predicates"}
+                if (set(facts) != route_keys
+                        or facts.get("status") not in (0, 1, "unavailable")
+                        or any(item is not None and not count(item) for item in
+                            (facts.get("active_ticks"), facts.get("fields"), facts.get("boundary_calls")))
+                        or not (count(facts.get("input_event_count"), 100_000) or facts.get("input_event_count") in ("missing", "untyped", "overrange"))
+                        or not isinstance(facts.get("input_events"), list) or len(facts["input_events"]) > 64
+                        or type(facts.get("input_events_truncated")) is not bool
+                        or not (count(facts.get("predicate_count"), 100_000) or facts.get("predicate_count") in ("missing", "untyped", "overrange"))
+                        or not isinstance(facts.get("predicates"), list) or len(facts["predicates"]) != 4):
+                    raise ValueError(label)
+                for event in facts["input_events"]:
+                    if (not isinstance(event, dict) or set(event) != {"index", "port", "requested_mask",
+                            "requested_mask_valid", "effective_mask", "effective_mask_valid", "joystick_mask",
+                            "joystick_mask_valid", "handler"}
+                            or not count(event.get("index"), 63)
+                            or not ((type(event.get("port")) is int and event["port"] in (0, 1)) or
+                                event.get("port") in ("missing", "untyped", "out-of-range"))
+                            or any(not ((type(event.get(key)) is int and 0 <= event[key] <= 255) or
+                                event.get(key) in ("missing", "untyped", "out-of-range", "not-reported"))
+                                for key in ("requested_mask", "effective_mask", "joystick_mask"))
+                            or type(event.get("requested_mask_valid")) is not bool
+                            or type(event.get("effective_mask_valid")) is not bool
+                            or (type(event.get("joystick_mask_valid")) is not bool and event.get("joystick_mask_valid") is not None)
+                            or event.get("handler") != "not-reported"):
+                        raise ValueError(label)
+                predicate_ids = {"early_dependency_interaction", "two_echoes_at_boot_cap",
+                    "crossed_generated_door", "late_program_stable"}
+                if (any(not isinstance(item, dict) or set(item) != {"id", "reached", "value", "field"}
+                        or item.get("id") not in predicate_ids
+                        or (type(item.get("reached")) is not bool and item.get("reached") is not None)
+                        or not (count(item.get("value")) or item.get("value") in ("missing", "untyped", "overrange"))
+                        or not (count(item.get("field")) or item.get("field") in ("missing", "untyped", "overrange"))
+                        for item in facts["predicates"])
+                        or {item["id"] for item in facts["predicates"] if isinstance(item, dict)} != predicate_ids):
+                    raise ValueError(label)
+            else:
+                # The established one-case comparison projector defines this exact
+                # bounded comparison schema; reuse its field-level validator shape.
+                expected_comparison = {"status", "core_outcome", "host_outcome", "input_equal", "input_rows",
+                    "native_status", "observed_clocks", "core_input_count", "host_input_count",
+                    "native_input_events", "native_input_events_truncated", "host_input_events",
+                    "host_input_events_truncated", "reason", "failure_presence", "source_samples_equal",
+                    "renderer_pixel_equal", "full_pcm_equal", "renderer_readback", "audio_device_activity",
+                    "audio_submitted_frames", "audio_consumed_frames"}
+                if (set(facts) != expected_comparison
+                        or facts.get("status") not in ("pass", "fail", "unavailable")
+                        or facts.get("core_outcome") not in ("pass", "fail", "unavailable")
+                        or facts.get("host_outcome") not in ("pass-diagnostic", "fail-diagnostic", "fail", "unavailable")
+                        or (type(facts.get("input_equal")) is not bool and facts.get("input_equal") is not None)
+                        or not isinstance(facts.get("input_rows"), list) or len(facts["input_rows"]) > 64
+                        or facts.get("native_status") not in (0, 1, "unavailable")
+                        or not isinstance(facts.get("observed_clocks"), dict)
+                        or set(facts["observed_clocks"]) != {"active_ticks", "fields", "boundary_calls"}
+                        or any(item is not None and not count(item) for item in facts["observed_clocks"].values())
+                        or any(not (count(facts.get(key), 100_000) or facts.get(key) in ("missing", "untyped", "overrange"))
+                            for key in ("core_input_count", "host_input_count"))
+                        or not isinstance(facts.get("native_input_events"), list) or len(facts["native_input_events"]) > 64
+                        or not isinstance(facts.get("host_input_events"), list) or len(facts["host_input_events"]) > 64
+                        or type(facts.get("native_input_events_truncated")) is not bool
+                        or type(facts.get("host_input_events_truncated")) is not bool
+                        or facts.get("reason") not in (None, "core-input-progress-or-common-boundary-mismatch", "host-renderer-pcm-or-device-mismatch", "other")
+                        or not isinstance(facts.get("failure_presence"), dict)
+                        or set(facts["failure_presence"]) != {"capture_field_matches", "renderer_named", "video_driver_named", "audio_driver_named"}
+                        or any(type(item) is not bool and item is not None for item in facts["failure_presence"].values())
+                        or any(type(facts.get(key)) is not bool and facts.get(key) is not None for key in
+                            ("source_samples_equal", "renderer_pixel_equal", "full_pcm_equal", "renderer_readback", "audio_device_activity"))
+                        or any(item is not None and not count(item) for item in
+                            (facts.get("audio_submitted_frames"), facts.get("audio_consumed_frames")))):
+                    raise ValueError(label)
+                for input_row in facts["input_rows"]:
+                    if (not isinstance(input_row, dict) or not {"index", "equal"}.issubset(input_row)
+                            or not set(input_row).issubset({"index", "equal", "port", "desired", "effective"})
+                            or not count(input_row.get("index"), 63) or type(input_row.get("equal")) is not bool
+                            or any(key in input_row and not count(input_row[key], 255)
+                                for key in ("port", "desired", "effective"))):
+                        raise ValueError(label)
+                for client, key in (("native-host", "native_input_events"), ("host", "host_input_events")):
+                    for event in facts[key]:
+                        if (not isinstance(event, dict) or set(event) != {"index", "port", "requested_mask",
+                                "requested_mask_valid", "effective_mask", "effective_mask_valid", "joystick_mask",
+                                "joystick_mask_valid", "handler"}
+                                or not count(event.get("index"), 63)
+                                or not ((type(event.get("port")) is int and event["port"] in (0, 1)) or
+                                    event.get("port") in ("missing", "untyped", "out-of-range"))
+                                or any(not ((type(event.get(key2)) is int and 0 <= event[key2] <= 255) or
+                                    event.get(key2) in ("missing", "untyped", "out-of-range", "not-reported"))
+                                    for key2 in ("requested_mask", "effective_mask", "joystick_mask"))
+                                or type(event.get("requested_mask_valid")) is not bool
+                                or type(event.get("effective_mask_valid")) is not bool
+                                or (type(event.get("joystick_mask_valid")) is not bool and event.get("joystick_mask_valid") is not None)
+                                or (event.get("handler") != "not-reported" if client == "native-host"
+                                    else event.get("handler") not in ("sdl-gamepad-sample-port", "other", "missing"))):
+                            raise ValueError(label)
+
+    if report["status"] == "pass":
+        if (report["collector_read_status"] != "valid" or report["failure_category"] is not None
+                or report["outer_rejection"] is not None or outer.get("status") != "completed"
+                or outer.get("return_code") != "zero" or outer.get("cleanup") != "confirmed"
+                or outer.get("bound_violation") is not False or not _native_prefix_stages_pass(stages)
+                or any(stage.get("status") != "pass" for stage in stages)
+                or any(row.get("status") != "pass" for stage in stages[1:] for row in stage["cases"])):
+            raise ValueError(label)
+    return True
+
+
 def _safe_mask_events(events: list, client: str) -> dict:
     safe = []
     for index, item in enumerate(events[:64]):
@@ -1947,6 +2571,295 @@ def run_native_diagnostic(build: pathlib.Path, scope_path: pathlib.Path, out: pa
     return record
 
 
+def run_native_prefix_diagnostic(build: pathlib.Path, scope_path: pathlib.Path,
+                                 out: pathlib.Path) -> dict:
+    """Compare two fixed recursion94 routes under one shared budget per stage."""
+    if (os.environ.get("GITHUB_EVENT_NAME") != "workflow_dispatch"
+            or os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_CASE") != _NATIVE_PREFIX_SELECTOR
+            or not re.fullmatch(r"[0-9a-f]{40}", os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_SOURCE_SHA", ""))
+            or os.environ.get("GITHUB_SHA") != os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_SOURCE_SHA")):
+        raise ValueError("phase7-native-prefix-diagnostic-fixed-selector-required")
+    scope, limits = validate_execution_scope(scope_path, "full")
+    build = build.resolve(strict=True)
+    out = pathlib.Path(out).absolute()
+    if out.exists() or out.is_symlink() or out.resolve() != out:
+        raise ValueError("phase7-native-prefix-diagnostic-output-collision")
+    roots = resolve_owned_output_roots(scope)
+    runtime = out.parent / out.stem
+    resolved_runtime = runtime.resolve()
+    if not any(resolved_runtime.is_relative_to(root) for root in roots):
+        raise ValueError("phase7-native-prefix-diagnostic-output-unowned")
+    if runtime.exists() or runtime.is_symlink():
+        raise ValueError("phase7-native-prefix-diagnostic-output-collision")
+    started_value = os.environ.get("GENEWHIP_QUALIFICATION_STARTED_AT")
+    if not isinstance(started_value, str) or not started_value:
+        raise ValueError("phase7-native-prefix-diagnostic-start-required")
+    try:
+        started = datetime.datetime.fromisoformat(started_value.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise ValueError("phase7-common-batch-start-invalid") from error
+    if started.tzinfo is None:
+        raise ValueError("phase7-common-batch-start-invalid")
+    now = datetime.datetime.now(datetime.timezone.utc)
+    if (now - started).total_seconds() < 0:
+        raise ValueError("phase7-common-batch-start-in-future")
+    deadline = started + datetime.timedelta(seconds=scope["qualification_batch"]["runtime_wall_seconds"])
+
+    def remaining_seconds() -> int:
+        remaining = (deadline - datetime.datetime.now(datetime.timezone.utc)).total_seconds()
+        whole = int(remaining)
+        if remaining <= 0 or whole <= 0:
+            raise ValueError("phase7-native-prefix-diagnostic-runtime-deadline-exhausted")
+        return whole
+
+    remaining_seconds()
+    runtime.mkdir(parents=True, mode=0o700)
+    private_path = runtime / "private-workload.json"
+    handoff_path = out.with_name(out.stem + "-handoff.json")
+    if handoff_path.exists() or handoff_path.is_symlink():
+        raise ValueError("phase7-native-prefix-diagnostic-handoff-collision")
+    mapping_path = ROOT / "fixtures/phase6/recursion94-consumed-map-v1.json"
+    fixture = desktop = host_boundary = None
+    stages: list[dict] = []
+    record = {"schema": "genewhip-phase7-native-prefix-collector.v1", "status": "fail",
+        "diagnostic_only": True, "qualification_accepted": False,
+        "fixture": "recursion94", "case_order": list(_NATIVE_PREFIX_CASES), "stages": stages}
+    prior_deadline = None
+    prior_deadline_present = False
+    try:
+        fixture = _module(ROOT / "tests/fixtures/phase6_game.py", "gw_v02_native_prefix_fixture")
+        desktop = _module(ROOT / "tests/desktop/phase6_routes.py", "gw_v02_native_prefix_desktop")
+        route_contract = _module(ROOT / "tests/session/phase6_route_contract.py", "gw_v02_native_prefix_process")
+        isolation = _isolation_preflight(route_contract, limits)
+        if isolation.get("production_child_starts") != 0:
+            raise ValueError("phase7-synthetic-isolation-exposure")
+        runtime_scope = {**scope, "qualification_started_at": started.isoformat(),
+            "qualification_deadline": deadline.isoformat()}
+        scope_copy = runtime / "execution-scope.json"
+        scope_copy.write_text(json.dumps(runtime_scope, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        scoped = {**runtime_scope, "_scope_path": str(scope_copy.resolve(strict=True))}
+        fixture.set_execution_scope(scoped)
+        desktop.set_execution_scope(scoped)
+        candidate_path = runtime / "candidate.json"
+        candidate = fixture.freeze_candidate(build, mapping_path, candidate_path)
+        mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
+        core_routes = fixture.compiler.compile_routes()["routes"]
+        host_routes = desktop.compiler.compile_routes(mapping, "sdl")["routes"]
+        core_by_case = {item.get("case", {}).get("id"): item for item in core_routes
+            if item.get("fixture") == "recursion94" and isinstance(item.get("case"), dict)}
+        host_by_case = {item.get("case", {}).get("id"): item for item in host_routes
+            if item.get("fixture") == "recursion94" and isinstance(item.get("case"), dict)}
+        if any(case not in core_by_case or case not in host_by_case for case in _NATIVE_PREFIX_CASES):
+            raise ValueError("phase7-native-prefix-diagnostic-fixed-routes-missing")
+        desktop_bin = build / "tools/desktop/genewhip-desktop"
+        if not desktop_bin.is_file():
+            raise ValueError("phase7-current-desktop-client-missing")
+        for path_part in (ROOT / "build", ROOT / "build/v02", ROOT / "build/v02/runtime",
+                          ROOT / "build/v02/runtime/input-contract"):
+            if path_part.is_symlink() or (path_part.exists() and not path_part.is_dir()):
+                raise ValueError("phase7-native-prefix-diagnostic-input-root-invalid")
+        input_path = runtime / "input-contract" / "native.json"
+        input_path.parent.mkdir(mode=0o700)
+        if input_path.exists() or input_path.is_symlink():
+            raise ValueError("phase7-native-prefix-diagnostic-input-collision")
+        input_stage = {"name": "input-contract", "status": "unavailable", "process": None,
+            "proof": {}}
+        stages.append(input_stage)
+        remaining_seconds()
+        try:
+            input_result = desktop.input_contract(build, mapping_path, input_path, candidate_path, "native")
+            input_proof = json.loads(input_path.read_text(encoding="utf-8")) if input_path.is_file() else {}
+        except Exception:
+            try:
+                input_proof = json.loads(input_path.read_text(encoding="utf-8")) if input_path.is_file() else {}
+            except (OSError, ValueError, json.JSONDecodeError):
+                input_proof = {}
+            input_process = input_proof.get("process") if isinstance(input_proof, dict) else None
+            input_stage.update({"status": "fail", "process": input_process,
+                "proof": {key: input_proof.get(key) for key in
+                    ("outcome", "requested_count", "port_isolation_verified", "masks", "observations")}})
+            raise
+        input_process = input_proof.get("process") if isinstance(input_proof, dict) else None
+        expected_input = [(0, item["effective_mask"]) for item in mapping.get("events", [])]
+        expected_input.extend(((1, 2), (1, 0), (1, 16), (1, 0)))
+        observations = input_proof.get("observations") if isinstance(input_proof, dict) else None
+        masks_match = (isinstance(observations, list) and len(observations) == 23 and
+            len(expected_input) == 23 and all(isinstance(item, dict)
+                and item.get("port") == expected[0]
+                and item.get("requested_mask") == expected[1]
+                and item.get("effective_mask") == expected[1]
+                and item.get("joystick_mask") == expected[1]
+                for item, expected in zip(observations, expected_input)))
+        input_valid = (isinstance(input_proof, dict)
+            and input_proof.get("schema") == "genewhip-phase6-sdl-virtual-input-contract-v1"
+            and input_proof.get("backend") == "native" and input_proof.get("video_driver") == "cocoa"
+            and input_proof.get("rom_used") is False and input_proof.get("outcome") == "pass"
+            and input_proof.get("requested_count") == 23 and input_proof.get("port_isolation_verified") is True
+            and input_proof.get("delivery_map_sha256") == fixture.compiler.canonical_digest(mapping)
+            and input_proof.get("desktop_sha256") == sha(desktop_bin)
+            and input_proof.get("desktop_source_sha256") == sha(ROOT / "tools/desktop/main_sdl.c")
+            and masks_match and isinstance(input_process, dict)
+            and input_process.get("status") == "completed" and input_process.get("return_code") == 0
+            and input_process.get("process_group_cleanup") == "confirmed"
+            and input_process.get("bound_violation") is False)
+        input_stage.update({"status": "pass" if type(input_result) is int and input_result == 0 and input_valid else "fail",
+            "process": input_process, "proof": {"outcome": input_proof.get("outcome") if isinstance(input_proof, dict) else None,
+                "requested_count": input_proof.get("requested_count") if isinstance(input_proof, dict) else None,
+                "port_isolation_verified": input_proof.get("port_isolation_verified") if isinstance(input_proof, dict) else None,
+                "masks": [row.get("requested_mask") for row in observations if isinstance(row, dict)]
+                    if isinstance(observations, list) else [], "observations": observations if isinstance(observations, list) else []}})
+        if input_stage["status"] != "pass":
+            raise ValueError("phase7-native-prefix-diagnostic-input-contract-failed")
+
+        headless_stage = {"name": "headless-reference", "status": "unavailable", "cases": []}
+        stages.append(headless_stage)
+        headless_deadline = time.monotonic() + 600
+        core_rows: list[dict] = []
+        headless_reports: dict[str, dict] = {}
+        for case in _NATIVE_PREFIX_CASES:
+            case_work = runtime / "headless-reference" / case
+            remaining = min(600, int(headless_deadline - time.monotonic()))
+            if remaining <= 0:
+                raise TimeoutError("phase7-native-prefix-headless-aggregate-deadline")
+            core_binary, _ = fixture.compiler.lower_route(core_by_case[case],
+                boundary_call_limit=100_000_000, delivery_map=mapping, client="public-core")
+            try:
+                core_row = fixture.collect_case(build, core_by_case[case], mapping, candidate,
+                    case_work, 1, remaining, compiled_binary=core_binary)
+            except Exception:
+                retained = _read_owned_diagnostic_json(case_work / "run.json", case_work)
+                native_facts = _read_owned_diagnostic_json(case_work / "native.json", case_work)
+                process_receipt = _read_owned_diagnostic_json(case_work / "process.json", case_work)
+                process_rows = process_receipt.get("processes")
+                proc = (process_rows[-1] if isinstance(process_rows, list) and process_rows
+                    and isinstance(process_rows[-1], dict) else retained.get("process"))
+                headless_stage["cases"].append({"case": case, "status": "fail", "process": proc,
+                    "facts": {"native": native_facts, "row": {"predicate_results": retained.get("predicate_results")}}})
+                raise
+            native_path = ROOT / core_row["native_report"]["path"]
+            native_facts = json.loads(native_path.read_text(encoding="utf-8")) if native_path.is_file() else {}
+            proc = core_row.get("process") if isinstance(core_row.get("process"), dict) else {}
+            expected_count = _NATIVE_PREFIX_INPUT_COUNTS[case]
+            expected_masks = _NATIVE_PREFIX_ROUTE_MASKS[case]
+            events = native_facts.get("inputs") if isinstance(native_facts, dict) else None
+            core_valid = (core_row.get("fixture") == "recursion94" and core_row.get("case") == case
+                and core_row.get("repetition") == 1 and core_row.get("client") == "public-core"
+                and core_row.get("status") == "pass" and proc.get("status") == "completed"
+                and proc.get("return_code") == 0 and proc.get("process_group_cleanup") == "confirmed"
+                and proc.get("bound_violation") is False and isinstance(events, list)
+                and len(events) == expected_count and native_facts.get("status") == 0
+                and native_facts.get("active_ticks") == 3600
+                and [item.get("desired") for item in events] == list(expected_masks)
+                and [item.get("effective") for item in events] == list(expected_masks)
+                and all(item.get("port") == 0 for item in events))
+            headless_reports[case] = {"fixture": "recursion94", "case": case,
+                "repetition": 1, "client": "public-core", "status": core_row.get("status"),
+                "process": proc, "native_report": core_row.get("native_report"),
+                "predicate_results": core_row.get("predicate_results")}
+            headless_stage["cases"].append({"case": case, "status": "pass" if core_valid else "fail",
+                "process": proc, "facts": {"native": native_facts, "row": core_row}})
+            core_rows.append(headless_reports[case])
+            if not core_valid or time.monotonic() > headless_deadline:
+                raise ValueError("phase7-native-prefix-diagnostic-headless-reference-failed")
+        core_report_path = runtime / "headless-report.json"
+        core_report = {"schema": "genewhip-phase6-product-report-v1",
+            "candidate_sha256": fixture.canonical_sha(candidate), "runs": core_rows}
+        core_report_path.write_text(json.dumps(core_report, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        headless_stage["status"] = "pass"
+
+        native_stage = {"name": "native-comparison", "status": "unavailable", "cases": []}
+        stages.append(native_stage)
+        native_deadline = time.monotonic() + 600
+        host_boundary = getattr(desktop, "phase6_game", None)
+        prior_deadline_present = host_boundary is not None and hasattr(host_boundary, "_V02_DEADLINE")
+        prior_deadline = getattr(host_boundary, "_V02_DEADLINE", None)
+        if host_boundary is not None:
+            host_boundary._V02_DEADLINE = (min(prior_deadline, native_deadline)
+                if prior_deadline is not None else native_deadline)
+        for case in _NATIVE_PREFIX_CASES:
+            remaining_seconds()
+            if time.monotonic() >= native_deadline:
+                raise TimeoutError("phase7-native-prefix-comparison-aggregate-deadline")
+            case_work = runtime / "native-comparison" / case
+            case_work.mkdir(parents=True, mode=0o700)
+            try:
+                host_row = desktop._retained_host_case(build, desktop_bin, host_by_case[case], mapping,
+                    core_report, core_report_path, "native", case_work, candidate)
+            except Exception:
+                proc = None
+                receipt_paths = sorted(case_work.glob("**/process.json"))
+                if receipt_paths:
+                    try:
+                        receipt = _read_owned_diagnostic_json(receipt_paths[-1], case_work)
+                        processes = receipt.get("processes")
+                        proc = processes[-1] if isinstance(processes, list) and processes else None
+                    except (OSError, ValueError, json.JSONDecodeError):
+                        proc = None
+                native_stage["cases"].append({"case": case, "status": "fail", "process": proc,
+                    "facts": {"row": {"status": "fail", "process": proc}}})
+                raise
+            proc = host_row.get("process") if isinstance(host_row.get("process"), dict) else {}
+            case_ok = (host_row.get("fixture") == "recursion94" and host_row.get("case") == case
+                and host_row.get("backend") == "native" and host_row.get("status") == "pass"
+                and proc.get("status") == "completed" and proc.get("return_code") == 0
+                and proc.get("process_group_cleanup") == "confirmed" and proc.get("bound_violation") is False)
+            native_stage["cases"].append({"case": case, "status": "pass" if case_ok else "fail",
+                "process": proc, "facts": {"row": host_row}})
+            if not case_ok or time.monotonic() > native_deadline:
+                raise ValueError("phase7-native-prefix-diagnostic-comparison-failed")
+        native_stage["status"] = "pass"
+        record["status"] = "pass"
+        record["private_workload"] = {"input_proof": input_proof,
+            "headless_rows": core_rows, "native_rows": [item.get("facts", {}).get("row") for item in native_stage["cases"]],
+            "scope": runtime_scope, "candidate": candidate, "isolation": isolation}
+    except Exception as error:
+        record["status"] = "fail"
+        record["failure_category"] = _native_diagnostic_failure_category(error)
+        for name in _NATIVE_PREFIX_STAGES[len(stages):]:
+            if name == "headless-reference":
+                stages.append({"name": name, "status": "unavailable", "cases": [
+                    {"case": case, "status": "unavailable", "process": None, "facts": {}}
+                    for case in _NATIVE_PREFIX_CASES]})
+            elif name == "native-comparison":
+                stages.append({"name": name, "status": "unavailable", "cases": [
+                    {"case": case, "status": "unavailable", "process": None, "facts": {}}
+                    for case in _NATIVE_PREFIX_CASES]})
+    finally:
+        if host_boundary is not None:
+            if prior_deadline_present:
+                host_boundary._V02_DEADLINE = prior_deadline
+            elif hasattr(host_boundary, "_V02_DEADLINE"):
+                delattr(host_boundary, "_V02_DEADLINE")
+        if desktop is not None:
+            desktop.set_execution_scope(None)
+        if fixture is not None:
+            fixture.set_execution_scope(None)
+        for name in _NATIVE_PREFIX_STAGES[len(stages):]:
+            if name in ("headless-reference", "native-comparison"):
+                stages.append({"name": name, "status": "unavailable", "cases": [
+                    {"case": case, "status": "unavailable", "process": None, "facts": {}}
+                    for case in _NATIVE_PREFIX_CASES]})
+        for stage in stages[1:]:
+            if not isinstance(stage.get("cases"), list):
+                stage["cases"] = []
+            known = {row.get("case") for row in stage["cases"] if isinstance(row, dict)}
+            for case in _NATIVE_PREFIX_CASES:
+                if case not in known:
+                    stage["cases"].append({"case": case, "status": "unavailable",
+                        "process": None, "facts": {}})
+        private_path.write_text(json.dumps(record, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        handoff = native_prefix_diagnostic_handoff(record)
+        handoff_bytes = (json.dumps(handoff, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+        if len(handoff_bytes) > 65536:
+            raise ValueError("phase7-native-prefix-diagnostic-handoff-byte-limit")
+        descriptor = os.open(handoff_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(handoff_bytes)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(record, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    return record
+
+
 def _native_diagnostic_failure_category(error: BaseException) -> str:
     allowed = {"ValueError": "input-or-evidence-invalid", "RuntimeError": "bounded-workload-failed",
         "TimeoutError": "bounded-workload-timeout", "TimeoutExpired": "bounded-workload-timeout",
@@ -2103,7 +3016,8 @@ def run_control(build: pathlib.Path, scope_path: pathlib.Path, out: pathlib.Path
 def main(argv=None) -> int:
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=("control-tracer", "smoke", "full", "safety", "chunk", "native-diagnostic"), required=True)
+    parser.add_argument("--mode", choices=("control-tracer", "smoke", "full", "safety", "chunk",
+        "native-diagnostic", "native-prefix-diagnostic"), required=True)
     parser.add_argument("--build", type=pathlib.Path, required=True)
     parser.add_argument("--scope", type=pathlib.Path, required=True)
     parser.add_argument("--plan-only", action="store_true")
@@ -2111,7 +3025,7 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.plan_only:
-            if args.mode in ("control-tracer", "native-diagnostic"):
+            if args.mode in ("control-tracer", "native-diagnostic", "native-prefix-diagnostic"):
                 raise ValueError("selected-mode-does-not-support-plan-only")
             plan = plan_mode(args.mode, args.build, args.scope, args.out)
             args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -2127,6 +3041,11 @@ def main(argv=None) -> int:
             print(f"native_diagnostic_status={result['status']}")
             print("qualification_accepted=false")
             return 0 if result["status"] == "pass" else 1
+        if args.mode == "native-prefix-diagnostic":
+            result = run_native_prefix_diagnostic(args.build, args.scope, args.out)
+            print(f"native_prefix_diagnostic_status={result['status']}")
+            print("qualification_accepted=false")
+            return 0 if result["status"] == "pass" else 1
         if args.mode == "smoke":
             result = run_smoke(args.build, args.scope, args.out)
             print(f"smoke_status={result['status']}")
@@ -2139,7 +3058,7 @@ def main(argv=None) -> int:
         print(f"observed_dimensions={len(result['observed'])}")
         return 0 if result["status"] == "pass" else 1
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
-        if args.mode == "native-diagnostic":
+        if args.mode in ("native-diagnostic", "native-prefix-diagnostic"):
             print("BLOCKED: native diagnostic validation or bounded stage failed", file=sys.stderr)
         else:
             print("BLOCKED: " + str(sys.exc_info()[1]), file=sys.stderr)

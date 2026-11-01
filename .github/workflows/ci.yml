@@ -21,16 +21,16 @@ on:
         required: true
         type: string
       native_diagnostic_case:
-        description: Fixed non-qualifying native case diagnostic
+        description: Fixed non-qualifying native diagnostic
         required: false
         default: none
         type: choice
-        options: [none, recursion94-withhold-first-plate]
+        options: [none, recursion94-withhold-first-plate, recursion94-native-prefix]
       diagnostic_source_sha:
         description: Exact reviewed source for the fixed native diagnostic
         required: false
         type: string
-run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic_case == 'recursion94-withhold-first-plate' && format('Plan10 native diagnostic {0}', inputs.qualification_nonce) || github.event_name == 'workflow_dispatch' && format('Plan10 qualification {0}', inputs.qualification_nonce) || github.workflow }}
+run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic_case == 'recursion94-native-prefix' && format('Plan10 native prefix diagnostic {0}', inputs.qualification_nonce) || github.event_name == 'workflow_dispatch' && inputs.native_diagnostic_case == 'recursion94-withhold-first-plate' && format('Plan10 native diagnostic {0}', inputs.qualification_nonce) || github.event_name == 'workflow_dispatch' && format('Plan10 qualification {0}', inputs.qualification_nonce) || github.workflow }}
 permissions:
   contents: read
   actions: read
@@ -363,7 +363,7 @@ jobs:
   v02-runtime:
     if: github.event_name == 'workflow_dispatch'
     runs-on: macos-26
-    timeout-minutes: ${{ inputs.native_diagnostic_case == 'recursion94-withhold-first-plate' && 45 || 360 }}
+    timeout-minutes: ${{ (inputs.native_diagnostic_case == 'recursion94-withhold-first-plate' || inputs.native_diagnostic_case == 'recursion94-native-prefix') && 45 || 360 }}
     env:
       GENEWHIP_QUALIFICATION_PHASE: runtime
       GITHUB_BASE_SHA: ${{ inputs.qualification_base_sha }}
@@ -385,9 +385,12 @@ jobs:
       - name: Reject unsupported diagnostic selectors before setup
         run: >-
           python3 -I -c 'import os; value=os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_CASE", "");
-          assert value in ("", "none", "recursion94-withhold-first-plate"), "native-diagnostic-selector-invalid"'
+          assert value in ("", "none", "recursion94-withhold-first-plate", "recursion94-native-prefix"), "native-diagnostic-selector-invalid"'
       - name: Require the reviewed diagnostic source before setup
         if: inputs.native_diagnostic_case == 'recursion94-withhold-first-plate'
+        run: test "$GITHUB_SHA" = "$GENEWHIP_NATIVE_DIAGNOSTIC_SOURCE_SHA"
+      - name: Require the reviewed native prefix source before setup
+        if: inputs.native_diagnostic_case == 'recursion94-native-prefix'
         run: test "$GITHUB_SHA" = "$GENEWHIP_NATIVE_DIAGNOSTIC_SOURCE_SHA"
       - name: Prepare pinned evidence dependencies
         run: bash scripts/ci/prepare_evidence_dependencies.sh
@@ -397,7 +400,7 @@ jobs:
           cmake -S . -B build/v02/runtime-build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=ON -DGENEWHIP_TEST_HOOKS=ON
           cmake --build build/v02/runtime-build --parallel 2
       - name: Run complete current-source product safety and chunk roster
-        if: inputs.native_diagnostic_case != 'recursion94-withhold-first-plate'
+        if: inputs.native_diagnostic_case != 'recursion94-withhold-first-plate' && inputs.native_diagnostic_case != 'recursion94-native-prefix'
         run: >-
           python3 -I scripts/release/v02_qualification.py --mode runtime
           --build build/v02/runtime-build --scope evidence/v02-execution.json
@@ -408,8 +411,14 @@ jobs:
           python3 -I scripts/release/v02_qualification.py --mode native-diagnostic
           --build build/v02/runtime-build --scope evidence/v02-execution.json
           --out build/v02/native-diagnostic.json
+      - name: Diagnose the fixed native prefix without qualification
+        if: inputs.native_diagnostic_case == 'recursion94-native-prefix'
+        run: >-
+          python3 -I scripts/release/v02_qualification.py --mode native-prefix-diagnostic
+          --build build/v02/runtime-build --scope evidence/v02-execution.json
+          --out build/v02/native-prefix-diagnostic.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: inputs.native_diagnostic_case != 'recursion94-withhold-first-plate'
+        if: inputs.native_diagnostic_case != 'recursion94-withhold-first-plate' && inputs.native_diagnostic_case != 'recursion94-native-prefix'
         with:
           name: v02-runtime-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -423,6 +432,14 @@ jobs:
         with:
           name: native-case-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
           path: build/v02/native-diagnostic.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Retain sanitized native prefix diagnostic on success or failure
+        if: always() && inputs.native_diagnostic_case == 'recursion94-native-prefix'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-prefix-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/v02/native-prefix-diagnostic.json
           if-no-files-found: error
           retention-days: 30
   v02-benchmark-control:
