@@ -53,6 +53,8 @@ def main():
                    run_name="__main__")
     runpy.run_path(str(ROOT / "tests/evidence/phase7_host_failure_diagnostic_contract.py"),
                    run_name="__main__")
+    runpy.run_path(str(ROOT / "tests/evidence/phase7_native_diagnostic_contract.py"),
+                   run_name="__main__")
     sticky.self_test("after-diagnostic-contracts")
     native_self_test()
     process_receipt = sticky.receipt()
