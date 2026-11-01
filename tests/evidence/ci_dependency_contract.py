@@ -182,6 +182,8 @@ class CIDependencyContract(unittest.TestCase):
             ctest = tools / "ctest"
             ctest.write_text("""#!/bin/sh
 printf 'ctest\\n' >> "$EVENTS"
+test "$ASAN_OPTIONS" = detect_leaks=0 || exit 96
+test "$UBSAN_OPTIONS" = halt_on_error=1 || exit 97
 for arg in "$@"; do
   if [ "$arg" = --output-on-failure ]; then printf 'PRIVATE_TEST_OUTPUT_MARKER\\n'; fi
 done
@@ -221,12 +223,14 @@ esac
             source = (helper.group(0) + "\nset -euo pipefail\n"
                 + 'run_required_ctest "$1" "$2" 0 || exit $?\n'
                 + 'printf "continued\\n" >> "$EVENTS"\n')
-            result = subprocess.run(["bash", "-c", source, "test", "native", str(junit)],
+            # Exercise the system Bash used by macOS CI (3.2), even when PATH has Bash 5.
+            result = subprocess.run(["/bin/bash", "-c", source, "test", "native", str(junit)],
                 cwd=root, text=True, capture_output=True,
                 env={**os.environ, "PATH": str(tools) + os.pathsep + os.environ.get("PATH", ""),
                      "EVENTS": str(events), "REAL_PYTHON": sys.executable,
                      "REPORT_SCRIPT": str(ROOT / "scripts/evidence/phase4_report.py")})
             self.assertEqual(result.returncode, 7, result.stderr)
+            self.assertRegex(result.stderr, r"ci-stage native-ctest [0-9.]+ seconds")
             self.assertNotIn("PRIVATE_TEST_OUTPUT_MARKER", result.stdout + result.stderr)
             self.assertIn("NativeParserContract.test_bounded_malformed_route_matrix_both_clients [failure]",
                           result.stdout)
