@@ -523,7 +523,22 @@ def _retained_host_case(build: pathlib.Path, desktop: pathlib.Path, route: dict,
         "streams": {name: {k: v for k, v in item.items() if k != "text"} for name, item in streams.items()},
         "attempt_directory": _owned_relative(attempt_dir), "attempt_number": len(attempts) + 1,
         "error": _scrub_local_paths(result.stderr[:1000]) if result.returncode else None}
+    if row["status"] != "pass":
+        # These booleans expose whether the expected evidence fields existed and
+        # matched, without copying renderer/driver names or any raw host output.
+        row["failure_diagnostic"] = _host_failure_presence(host, scene_field)
     return row
+
+
+def _host_failure_presence(host: object, scene_field: int) -> dict:
+    """Project only fixed presence/match booleans from a failed SDL case."""
+    host = host if isinstance(host, dict) else {}
+    return {
+        "capture_field_matches": host.get("renderer_capture_field") == scene_field,
+        "renderer_named": bool(host.get("renderer")),
+        "video_driver_named": bool(host.get("video_driver")),
+        "audio_driver_named": bool(host.get("audio_driver")),
+    }
 
 
 def _reconcile_host_row(row: dict, build: pathlib.Path, mapping: dict, core: dict) -> dict:
