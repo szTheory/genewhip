@@ -1011,11 +1011,13 @@ def _run_client_owned(client: pathlib.Path, command: list[str], runs: list[dict[
                         return
                     rss_diagnostics: dict[str, str] = {}
                     rss_bytes = _process_group_rss_bytes(process.pid, rss_diagnostics)
-                    process_entry["rss_bytes_observed"] = rss_bytes
                     if rss_bytes is None:
                         # Keep only a bounded, fixed reason code in the durable
-                        # receipt. If a later sample also fails, retain the first.
+                        # receipt. Preserve the first failed sample as one tuple;
+                        # a later post-wait zero must not replace its missing
+                        # observation while leaving the earlier reason behind.
                         if "rss_observation_reason" not in process_entry:
+                            process_entry["rss_bytes_observed"] = None
                             process_entry["rss_observation_reason"] = rss_diagnostics.get(
                                 "reason", "observation-unclassified")
                             for diagnostic_key, receipt_key in (
@@ -1025,6 +1027,8 @@ def _run_client_owned(client: pathlib.Path, command: list[str], runs: list[dict[
                                     process_entry[receipt_key] = rss_diagnostics[diagnostic_key]
                         bound_violation = "phase7-rss-observation-unavailable"
                         return
+                    if "rss_observation_reason" not in process_entry:
+                        process_entry["rss_bytes_observed"] = rss_bytes
                     process_entry["rss_bytes_peak"] = max(
                         int(process_entry.get("rss_bytes_peak", 0)), rss_bytes)
                     if rss_bytes > limits["max_rss_bytes"]:
@@ -1324,6 +1328,7 @@ def _process_group_rss_bytes(group_id: int, diagnostics: dict[str, str] | None =
                                    result_size_category=result_category)
             total = 0
             seen_pids: set[int] = set()
+            getpgid_queries = 0
             task_info = ctypes.create_string_buffer(256)
             for index in range(copied // int_size):
                 pid = int(pids[index])
@@ -1332,6 +1337,9 @@ def _process_group_rss_bytes(group_id: int, diagnostics: dict[str, str] | None =
                 if pid in seen_pids:
                     return unavailable("duplicate-pid")
                 seen_pids.add(pid)
+                if getpgid_queries >= DARWIN_RSS_MAX_PIDS:
+                    return unavailable("process-group-query-unavailable")
+                getpgid_queries += 1
                 try:
                     if os.getpgid(pid) != group_id:
                         continue
@@ -1341,15 +1349,39 @@ def _process_group_rss_bytes(group_id: int, diagnostics: dict[str, str] | None =
                     return unavailable("process-group-query-unavailable", error=error)
                 try:
                     errno_setter = getattr(ctypes, "set_errno", None)
-                    if callable(errno_setter):
+                    errno_cleared = callable(errno_setter)
+                    if errno_cleared:
                         errno_setter(0)
                     actual = libproc.proc_pidinfo(pid, 4, 0, task_info, len(task_info))
                 except OSError as error:
                     return unavailable("darwin-libproc-query-unavailable", error=error)
+                errno_number = None
+                errno_getter = getattr(ctypes, "get_errno", None)
+                if type(actual) is not int:
+                    return unavailable("task-info-unavailable", result_size_category="invalid")
                 if actual < 16:
-                    errno_getter = getattr(ctypes, "get_errno", None)
-                    error_number = errno_getter() if callable(errno_getter) else None
-                    error = OSError(error_number or 0, "")
+                    # Capture errno immediately after the native call. ESRCH
+                    # can mean the listed PID vanished after the group query;
+                    # recheck membership before treating only that PID as gone.
+                    if errno_cleared and callable(errno_getter):
+                        errno_number = errno_getter()
+                    error = OSError(errno_number or 0, "") if errno_number is not None else None
+                    if (actual == 0 and errno_cleared and callable(errno_getter)
+                            and type(errno_number) is int and errno_number == errno.ESRCH):
+                        if getpgid_queries >= DARWIN_RSS_MAX_PIDS:
+                            return unavailable("task-info-unavailable", error=error,
+                                               result_size_category="missing")
+                        getpgid_queries += 1
+                        try:
+                            current_group = os.getpgid(pid)
+                        except ProcessLookupError:
+                            continue
+                        except (PermissionError, OSError, ValueError) as recheck_error:
+                            return unavailable("process-group-query-unavailable", error=recheck_error)
+                        if type(current_group) is not int:
+                            return unavailable("process-group-query-unavailable")
+                        if current_group != group_id:
+                            continue
                     return unavailable("task-info-unavailable", error=error,
                                        result_size_category="missing" if actual == 0 else "short")
                 if actual > len(task_info):
