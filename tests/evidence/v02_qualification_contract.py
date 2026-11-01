@@ -257,7 +257,9 @@ class QualificationCoordinatorContract(unittest.TestCase):
             ("push", "refs/heads/main", "", ordinary | {"attestation"}),
             ("workflow_dispatch", "refs/heads/main", "none", set(jobs) - {"extended"}),
             ("workflow_dispatch", "refs/heads/reviewed", "recursion94-withhold-first-plate", {"v02-runtime"}),
+            ("workflow_dispatch", "refs/heads/reviewed", "recursion94-native-prefix", {"v02-runtime"}),
             ("workflow_dispatch", "refs/heads/main", "recursion94-withhold-first-plate", {"v02-runtime"}),
+            ("workflow_dispatch", "refs/heads/main", "recursion94-native-prefix", {"v02-runtime"}),
             ("workflow_dispatch", "refs/heads/reviewed", "unrecognized", {"v02-runtime"})]
         for event, ref, selector, expected in scenarios:
             selected = set()
@@ -285,13 +287,239 @@ class QualificationCoordinatorContract(unittest.TestCase):
             command.append(line.strip())
         argv = shlex.split(" ".join(command))
         self.assertEqual(argv[:3], ["python3", "-I", "-c"])
-        for selector in ("", "none", "recursion94-withhold-first-plate", "unrecognized"):
+        for selector in ("", "none", "recursion94-withhold-first-plate", "recursion94-native-prefix", "unrecognized"):
             with mock.patch.dict(os.environ, {"GENEWHIP_NATIVE_DIAGNOSTIC_CASE": selector}):
                 if selector == "unrecognized":
                     with self.assertRaisesRegex(AssertionError, "selector-invalid"):
                         exec(compile(argv[3], "<trusted-workflow-selector-guard>", "exec"), {})
                 else:
                     exec(compile(argv[3], "<trusted-workflow-selector-guard>", "exec"), {})
+
+    def test_native_prefix_hosted_cli_uses_reviewed_guard_route_only(self):
+        from unittest import mock
+        from io import StringIO
+        module = load_module(self)
+        argv = ["--mode", "native-prefix-diagnostic-hosted", "--out", "build/v02/prefix-result.json",
+            "--journal", "build/v02/ci-continuation-20261031T124319Z/attempt-0016/hosted-delivery-journal.json",
+            "--publication-copy", "build/v02/ci-continuation-20261031T124319Z/attempt-0016/candidate/publication-copy",
+            "--batch-authorization", "build/v02/ci-continuation-20261031T124319Z/authorization.json",
+            "--batch-authorization-sha256", "a" * 64, "--batch-admission", "build/v02/admission.json",
+            "--batch-admission-sha256", "b" * 64, "--diagnostic-readiness", "build/v02/prefix-readiness.json",
+            "--diagnostic-readiness-sha256", "c" * 64]
+        for outcome in ({"status": "pass"}, {"status": "fail"}):
+            with mock.patch.object(module, "_fresh_batch_guard", side_effect=AssertionError("duplicate main guard")), \
+                 mock.patch.object(module, "run_native_prefix_diagnostic_hosted") as owner, \
+                 mock.patch.object(module, "_write_fresh_batch_failure", side_effect=AssertionError("old latch written")), \
+                 mock.patch.object(module.sys, "stdout", StringIO()), mock.patch.object(module.sys, "stderr", StringIO()):
+                owner.return_value = outcome
+                result = module.main(argv)
+                self.assertEqual(result, 0 if outcome == {"status": "pass"} else 1)
+                self.assertEqual(owner.call_count, 1)
+        wrong_route = ["--mode", "native-diagnostic", "--out", "build/v02/prefix-result.json",
+            "--diagnostic-readiness", "build/v02/prefix-readiness.json",
+            "--diagnostic-readiness-sha256", "c" * 64]
+        with mock.patch.object(module, "run_native_prefix_diagnostic_hosted") as owner, \
+             mock.patch.object(module.sys, "stdout", StringIO()), mock.patch.object(module.sys, "stderr", StringIO()):
+            self.assertEqual(module.main(wrong_route), 1)
+            owner.assert_not_called()
+
+    def test_native_prefix_hosted_controller_uses_real_batch_validator(self):
+        from types import SimpleNamespace
+        from unittest import mock
+        from io import StringIO
+        import copy
+
+        if os.environ.get("GENEWHIP_PREFIX_REAL_GUARD_CHILD") != "1":
+            module = load_module(self)
+            require_process_context()
+            scope = json.loads((ROOT / "evidence/v02-execution.json").read_bytes())
+            code = (
+                "import importlib.util,sys,unittest\n"
+                f"root={str(ROOT)!r}\n"
+                "spec=importlib.util.spec_from_file_location('qcontracts_child', root + '/tests/evidence/v02_qualification_contract.py')\n"
+                "m=importlib.util.module_from_spec(spec); sys.modules[spec.name]=m; spec.loader.exec_module(m)\n"
+                "test=unittest.defaultTestLoader.loadTestsFromName('test_native_prefix_hosted_controller_uses_real_batch_validator', m.QualificationCoordinatorContract)\n"
+                "result=unittest.TextTestRunner(verbosity=2).run(test)\n"
+                "raise SystemExit(0 if result.wasSuccessful() else 1)\n")
+            with tempfile.TemporaryDirectory(prefix="native-prefix-real-guard-", dir=ROOT / "build/v02") as temp:
+                scratch = Path(temp).resolve()
+                attempt = module._bounded_command([sys.executable, "-I", "-c", code],
+                    limits=scope["per_child_limits"], scratch=scratch, timeout=180,
+                    label="native-prefix-real-guard-contract", check=False,
+                    env={**os.environ, "GENEWHIP_PREFIX_REAL_GUARD_CHILD": "1"},
+                    scratch_roots=(scratch,))
+                retain_control_receipt("native-prefix-real-guard", attempt)
+                self.assertEqual(attempt.get("returncode"), 0,
+                    "isolated real-guard contract failed: " + str(attempt.get("streams", {}).get("stderr", {}).get("text", ""))[-1000:])
+                self.assertEqual(attempt.get("process_group_cleanup"), "confirmed")
+                self.assertEqual(attempt.get("processes", [{}])[0].get("bound_violation"), False)
+            return
+
+        def load_contract(path, name):
+            spec = importlib.util.spec_from_file_location(name, path)
+            loaded = importlib.util.module_from_spec(spec)
+            sys.modules[name] = loaded
+            spec.loader.exec_module(loaded)
+            return loaded
+        fixture_module = load_contract(ROOT / "tests/evidence/phase7_fresh_batch_contract.py",
+            "gw_native_prefix_hosted_real_guard_fixture")
+        fixture_module.FreshBatchContracts.setUpClass()
+        module = load_module(self)
+        fixed_now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+        actual_datetime = datetime.datetime
+        class FixedCoordinatorClock(actual_datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return fixed_now if tz is not None else fixed_now.replace(tzinfo=None)
+        nonce = "e" * 32
+        for runtime_conclusion in ("success", "failure"):
+            case = fixture_module.FreshBatchContracts(
+                "test_native_prefix_stage_uses_full_production_guard_and_disallows_legacy_route")
+            case.setUp()
+            self.addCleanup(case.doCleanups)
+            fixture = case._native_prefix_readiness_successor()
+            attempt = fixture["root"]
+            scope_path = case.root / fixture_module.BATCH.SCOPE_PATH
+            publication = attempt / "candidate/publication-copy"
+            preparation = attempt / "candidate/preparation.json"
+            journal = attempt / "hosted-delivery-journal.json"
+            output = attempt / "native-prefix-diagnostic/result.json"
+            auth_sha = fixture_module.BATCH.AUTH_SHA256
+            source = json.loads(fixture["admission_path"].read_bytes())["candidate"]["public_head"]
+            base = json.loads(fixture["admission_path"].read_bytes())["candidate"]["public_base"]
+            branch = "v0.2-source-" + source[:12]
+            pr_number = int(json.loads(journal.read_bytes())["pull_request"])
+            readiness = json.loads(fixture["readiness_path"].read_bytes())
+            assessment_path = case.root / readiness["diagnostic_assessment"]["path"]
+            assessment = json.loads(assessment_path.read_bytes())
+            preview = assessment["github"]["workflow_run"]
+            run_id = 87654321 if runtime_conclusion == "success" else 87654322
+            run = {"id": run_id, "run_attempt": 1, "event": "workflow_dispatch",
+                "head_sha": source, "head_branch": branch, "path": ".github/workflows/ci.yml",
+                "display_title": "Plan10 native prefix diagnostic " + nonce,
+                "repository": {"full_name": "szTheory/genewhip"}, "status": "completed",
+                "conclusion": runtime_conclusion, "created_at": fixed_now.isoformat().replace("+00:00", "Z")}
+            job_names = {"safety", "gameplay", "desktop", "package", "performance", "product-smoke",
+                "phase7-fast", "v02-runtime", "extended", "attestation", "required-ci",
+                "v02-benchmark-control", "v02-benchmark-recursion94", "v02-benchmark-tank-battle",
+                "v02-package", "v02-release-qualification"}
+            jobs = {"total_count": 16, "jobs": [{"name": name, "status": "completed",
+                "conclusion": runtime_conclusion if name == "v02-runtime" else "skipped"}
+                for name in sorted(job_names)]}
+            dispatches = []
+            workflow_checks = [[], [run]]
+
+            def real_guard(**kwargs):
+                return fixture_module.BATCH.validate_batch(case.root, case.auth, auth_sha,
+                    kwargs["batch_admission"], kwargs["batch_admission_sha256"],
+                    stage=kwargs["stage"], source_head=case.source_head,
+                    now=datetime.datetime.fromisoformat("2026-10-31T12:50:00+00:00"),
+                    scope_path=scope_path, journal_path=kwargs["journal_path"],
+                    publication_copy=kwargs["publication_copy"],
+                    preflight_path=kwargs["preflight_path"], output_path=kwargs["output_path"],
+                    source_is_ancestor=lambda _ancestor, _descendant: True,
+                    expected_source_paths=set(case.source_paths),
+                    diagnostic_readiness_path=kwargs["diagnostic_readiness_path"],
+                    diagnostic_readiness_sha256=kwargs["diagnostic_readiness_sha256"])
+
+            def github(_repository, endpoint, **_kwargs):
+                if endpoint == f"pulls/{pr_number}":
+                    return {"state": "open", "merged": False,
+                        "head": {"sha": source, "ref": branch, "repo": {"full_name": "szTheory/genewhip"}},
+                        "base": {"sha": base, "ref": "main"}}
+                if endpoint == "git/ref/heads/" + branch:
+                    return {"object": {"sha": source}}
+                if endpoint == "actions/runs/" + str(preview["id"]):
+                    return {"event": "pull_request", "head_sha": source, "status": "completed",
+                        "conclusion": "success", "run_attempt": preview["run_attempt"]}
+                if endpoint == f"actions/runs/{run_id}/jobs?filter=latest&per_page=100":
+                    return jobs
+                raise AssertionError("unexpected GitHub endpoint: " + endpoint)
+
+            native_module = load_contract(ROOT / "tests/evidence/phase7_native_diagnostic_contract.py",
+                "gw_native_prefix_report_fixture")
+            report_case = native_module.NativePrefixDiagnosticContract(
+                "test_fixed_two_case_projector_passes_and_checks_both_port_observations")
+            self.addCleanup(report_case.doCleanups)
+            report = report_case.public()
+            if runtime_conclusion == "failure":
+                record = report_case.passing_record()
+                record["status"] = "fail"
+                record["failure_category"] = "bounded-workload-failed"
+                record["stages"][1]["cases"][0]["status"] = "fail"
+                record["stages"][1]["status"] = "fail"
+                report = report_case.public(record)
+            report["identity"] = {"source_sha": source, "head_sha": source, "base_sha": base,
+                "run_id": str(run_id), "run_attempt": "1"}
+
+            def download(_repo, selected, attempt_number, artifact, destination, **_kwargs):
+                self.assertEqual((selected, attempt_number, artifact), (str(run_id), "1", "native-prefix-diagnostic"))
+                destination.mkdir(parents=True)
+                (destination / "native-prefix-diagnostic.json").write_text(json.dumps(report))
+
+            argv = ["gh", "workflow", "run"]
+            def external(command, **_kwargs):
+                dispatches.append(list(command))
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            def workflow_runs(*_args, **_kwargs):
+                return workflow_checks.pop(0)
+
+            with mock.patch.object(module, "ROOT", case.root), \
+                 mock.patch.object(module.datetime, "datetime", FixedCoordinatorClock), \
+                 mock.patch.object(module, "_fresh_batch_guard", side_effect=real_guard), \
+                 mock.patch.object(module, "_load_runtime_module", return_value=native_module.runner), \
+                 mock.patch.object(module, "_gh_json", side_effect=github), \
+                 mock.patch.object(module, "_workflow_runs", side_effect=workflow_runs), \
+                 mock.patch.object(module, "_external", side_effect=external), \
+                 mock.patch.object(module, "_download_run_artifact", side_effect=download), \
+                 mock.patch.object(module.uuid, "uuid4", return_value=SimpleNamespace(hex=nonce)), \
+                 mock.patch.object(fixture_module.BATCH, "NATIVE_PREFIX_ATTEMPT20_ROOT",
+                     fixture["predecessor"]["attempt_root"]), \
+                 mock.patch.object(fixture_module.BATCH, "NATIVE_PREFIX_ATTEMPT20_EVIDENCE_PATHS",
+                     fixture["attempt20_paths"]), \
+                 mock.patch.object(fixture_module.BATCH, "NATIVE_PREFIX_ATTEMPT20_EVIDENCE_SHA256",
+                     fixture["attempt20_hashes"]), \
+                 mock.patch.object(module.time, "monotonic", return_value=100.0), \
+                 mock.patch.object(module.time, "sleep", side_effect=AssertionError("completed run must not sleep")):
+                result = module.run_native_prefix_diagnostic_hosted(preparation, publication, scope_path,
+                    output, journal, batch_authorization=case.auth,
+                    batch_authorization_sha256=auth_sha, batch_admission=fixture["admission_path"],
+                    batch_admission_sha256=fixture["admission_sha"], prefix_readiness=fixture["readiness_path"],
+                    prefix_readiness_sha256=fixture["readiness_sha"])
+                self.assertEqual(result["status"], "pass" if runtime_conclusion == "success" else "fail")
+                self.assertFalse(result["qualification_accepted"])
+                self.assertTrue(result["assessment_required"])
+                self.assertEqual(len(dispatches), 1)
+                self.assertEqual(dispatches[0][dispatches[0].index("--field") + 1],
+                    "qualification_started_at=" + case.started)
+                self.assertIn("native_diagnostic_case=recursion94-native-prefix", dispatches[0])
+                self.assertIn("qualification_base_sha=" + base, dispatches[0])
+                self.assertIn("diagnostic_source_sha=" + source, dispatches[0])
+                with self.assertRaises(ValueError):
+                    module.run_native_prefix_diagnostic_hosted(preparation, publication, scope_path,
+                        output, journal, batch_authorization=case.auth,
+                        batch_authorization_sha256=auth_sha, batch_admission=fixture["admission_path"],
+                        batch_admission_sha256=fixture["admission_sha"], prefix_readiness=fixture["readiness_path"],
+                        prefix_readiness_sha256=fixture["readiness_sha"])
+                self.assertEqual(len(dispatches), 1)
+
+    def test_native_prefix_runtime_cli_dispatches_only_fixed_collector(self):
+        from unittest import mock
+        from io import StringIO
+        module = load_module(self)
+        with tempfile.TemporaryDirectory() as temp:
+            out = Path(temp) / "native-prefix.json"
+            argv = ["--mode", "native-prefix-diagnostic", "--build", str(ROOT / "build/phase6"),
+                "--scope", str(ROOT / "evidence/v02-execution.json"), "--out", str(out)]
+            for status in ("pass", "fail"):
+                with mock.patch.object(module, "run_native_prefix_diagnostic",
+                        return_value={"status": status, "qualification_accepted": False}) as owner, \
+                     mock.patch.object(module.sys, "stdout", StringIO()), \
+                     mock.patch.object(module.sys, "stderr", StringIO()):
+                    self.assertEqual(module.main(argv), 0 if status == "pass" else 1)
+                    owner.assert_called_once_with(Path(ROOT / "build/phase6"),
+                        Path(ROOT / "evidence/v02-execution.json"), out)
 
     def test_native_hosted_cli_uses_its_own_guard_and_cannot_write_old_failure_latch(self):
         from unittest import mock
@@ -304,16 +532,28 @@ class QualificationCoordinatorContract(unittest.TestCase):
             "--batch-authorization-sha256", "a" * 64, "--batch-admission", "build/v02/admission.json",
             "--batch-admission-sha256", "b" * 64, "--diagnostic-readiness", "build/v02/readiness.json",
             "--diagnostic-readiness-sha256", "c" * 64]
-        for outcome in ({"status": "pass"}, {"status": "fail"}, ValueError("diagnostic-rejected")):
-            with mock.patch.object(module, "_fresh_batch_guard", side_effect=AssertionError("duplicate guard")), \
-                 mock.patch.object(module, "run_native_diagnostic_hosted") as owner, \
-                 mock.patch.object(module, "_write_fresh_batch_failure", side_effect=AssertionError("old latch written")), \
-                 mock.patch.object(module.sys, "stdout", StringIO()), mock.patch.object(module.sys, "stderr", StringIO()):
-                if isinstance(outcome, Exception): owner.side_effect = outcome
-                else: owner.return_value = outcome
-                result = module.main(argv)
-                self.assertEqual(result, 0 if outcome == {"status": "pass"} else 1)
-                self.assertEqual(owner.call_count, 1)
+        for mode, owner_name in (("native-diagnostic-hosted", "run_native_diagnostic_hosted"),
+                                 ("native-prefix-diagnostic-hosted", "run_native_prefix_diagnostic_hosted")):
+            mode_argv = list(argv)
+            mode_argv[mode_argv.index("--mode") + 1] = mode
+            if mode.startswith("native-prefix"):
+                mode_argv[mode_argv.index("--journal") + 1] = mode_argv[mode_argv.index("--journal") + 1].replace(
+                    "attempt-0015", "attempt-0016")
+            for outcome in ({"status": "pass"}, {"status": "fail"}, ValueError("diagnostic-rejected")):
+                with self.subTest(mode=mode, outcome=repr(outcome)), \
+                     mock.patch.object(module, "_fresh_batch_guard", side_effect=AssertionError("duplicate guard")), \
+                     mock.patch.object(module, owner_name) as owner, \
+                     mock.patch.object(module, "_fresh_batch_attempt_root",
+                         side_effect=AssertionError("hosted diagnostic must not use legacy failure root")) as old_root, \
+                     mock.patch.object(module, "_write_fresh_batch_failure", side_effect=AssertionError("old latch written")) as old_latch, \
+                     mock.patch.object(module.sys, "stdout", StringIO()), mock.patch.object(module.sys, "stderr", StringIO()):
+                    if isinstance(outcome, Exception): owner.side_effect = outcome
+                    else: owner.return_value = outcome
+                    result = module.main(mode_argv)
+                    self.assertEqual(result, 0 if outcome == {"status": "pass"} else 1)
+                    self.assertEqual(owner.call_count, 1)
+                    old_root.assert_not_called()
+                    old_latch.assert_not_called()
 
     def test_native_diagnostic_driver_forwards_actual_outer_receipt_after_failure(self):
         from unittest import mock
@@ -2529,12 +2769,16 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
         runtime_job = text.split("  v02-runtime:", 1)[1].split("\n  v02-benchmark-control:", 1)[0]
         timeout = next(line.strip().split(": ", 1)[1] for line in runtime_job.splitlines()
                        if line.startswith("    timeout-minutes: "))
-        conditional = re.fullmatch(r"\$\{\{\s*inputs\.native_diagnostic_case\s*==\s*'([^']+)'\s*&&\s*([0-9]+)\s*\|\|\s*([0-9]+)\s*\}\}", timeout)
+        conditional = re.fullmatch(r"\$\{\{\s*\(inputs\.native_diagnostic_case\s*==\s*'([^']+)'\s*\|\|\s*inputs\.native_diagnostic_case\s*==\s*'([^']+)'\)\s*&&\s*([0-9]+)\s*\|\|\s*([0-9]+)\s*\}\}", timeout)
         self.assertIsNotNone(conditional, "runtime timeout must select fixed diagnostic and ordinary limits")
-        selected_case, diagnostic_minutes, ordinary_minutes = conditional.groups()
-        for selector, expected in (("", 360), ("none", 360), ("recursion94-withhold-first-plate", 45)):
+        selected_cases = set(conditional.groups()[:2])
+        diagnostic_minutes, ordinary_minutes = map(int, conditional.groups()[2:])
+        self.assertEqual(selected_cases, {"recursion94-withhold-first-plate", "recursion94-native-prefix"})
+        self.assertEqual((diagnostic_minutes, ordinary_minutes), (45, 360))
+        for selector, expected in (("", 360), ("none", 360),
+                ("recursion94-withhold-first-plate", 45), ("recursion94-native-prefix", 45)):
             with self.subTest(selector=selector):
-                self.assertEqual(int(diagnostic_minutes if selector == selected_case else ordinary_minutes), expected)
+                self.assertEqual(diagnostic_minutes if selector in selected_cases else ordinary_minutes, expected)
         for name in ("v02-benchmark-control", "v02-benchmark-recursion94", "v02-benchmark-tank-battle"):
             self.assertIn(name, text)
         self.assertIn("name: v02-runtime-${{ github.run_id }}-${{ github.run_attempt }}", text)
