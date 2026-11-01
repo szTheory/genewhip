@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "${BASH_SOURCE[0]%/*}/../.."
+TIMEFORMAT='ci-stage %3R seconds'
 if [[ "${1:-}" == "--phase7-fast" ]]; then
   if [[ "${GENEWHIP_PROCESS_CONTEXT:-}" != "host-cleanup-v1" ]]; then
     echo 'process-host-admission-required:non-qualifying:before-Popen' >&2
@@ -10,18 +11,20 @@ if [[ "${1:-}" == "--phase7-fast" ]]; then
     echo 'usage: required-gate.sh [--phase7-fast]' >&2
     exit 2
   fi
-  python3 -I tests/evidence/phase7_process_admission_contract.py
-  python3 -I tests/evidence/phase7_diagnostic_contract.py
-  python3 -I tests/evidence/phase7_fresh_batch_contract.py
-  python3 -I tests/evidence/v02_qualification_contract.py --contracts
-  python3 -I tests/evidence/v02_matrix_contract.py --contracts
-  python3 -I tests/evidence/v02_execution_contract.py --contracts
-  python3 -I tests/evidence/v02_transfer_contract.py
-  python3 -I tests/evidence/v02_package_contract.py
-  python3 -I tests/evidence/promotion_contract.py
-  python3 -I tests/evidence/v02_delivery_contract.py --publisher
-  python3 -I tests/evidence/v02_delivery_contract.py --download
-  python3 -I tests/evidence/public_hygiene.py
+  TIMEFORMAT='ci-stage phase7-process-admission %3R seconds'; time python3 -I tests/evidence/phase7_process_admission_contract.py
+  TIMEFORMAT='ci-stage phase7-diagnostic %3R seconds'; time python3 -I tests/evidence/phase7_diagnostic_contract.py
+  TIMEFORMAT='ci-stage phase7-fresh-batch %3R seconds'; time python3 -I tests/evidence/phase7_fresh_batch_contract.py
+  TIMEFORMAT='ci-stage phase7-single-native-contract %3R seconds'; time python3 -I tests/evidence/phase7_single_native_contract.py
+  TIMEFORMAT='ci-stage qualification-contracts %3R seconds'; time python3 -I tests/evidence/v02_qualification_contract.py --contracts
+  TIMEFORMAT='ci-stage matrix-contracts %3R seconds'; time python3 -I tests/evidence/v02_matrix_contract.py --contracts
+  TIMEFORMAT='ci-stage execution-contracts %3R seconds'; time python3 -I tests/evidence/v02_execution_contract.py --contracts
+  TIMEFORMAT='ci-stage transfer-contract %3R seconds'; time python3 -I tests/evidence/v02_transfer_contract.py
+  TIMEFORMAT='ci-stage package-contract %3R seconds'; time python3 -I tests/evidence/v02_package_contract.py
+  TIMEFORMAT='ci-stage promotion-contract %3R seconds'; time python3 -I tests/evidence/promotion_contract.py
+  TIMEFORMAT='ci-stage publisher-contract %3R seconds'; time python3 -I tests/evidence/v02_delivery_contract.py --publisher
+  TIMEFORMAT='ci-stage download-contract %3R seconds'; time python3 -I tests/evidence/v02_delivery_contract.py --download
+  TIMEFORMAT='ci-stage ci-timing-contract %3R seconds'; time python3 -I tests/evidence/ci_timing_contract.py
+  TIMEFORMAT='ci-stage public-hygiene %3R seconds'; time python3 -I tests/evidence/public_hygiene.py
   echo 'required-gate: PASS (v0.2 semantic, privacy, rights and exact-byte contracts; no compatibility claim)'
   exit 0
 fi
@@ -81,7 +84,8 @@ if [[ "$#" -ne 0 ]]; then
 fi
 run_required_ctest() {
   local lane=$1 junit=$2 leaks=$3 ctest_status=0
-  if ASAN_OPTIONS=detect_leaks=$leaks UBSAN_OPTIONS=halt_on_error=1 \
+  TIMEFORMAT="ci-stage $lane-ctest %3R seconds"
+  if time ASAN_OPTIONS=detect_leaks=$leaks UBSAN_OPTIONS=halt_on_error=1 \
     ctest --test-dir "build/ci/$lane" --no-tests=error --output-junit ctest-junit.raw.xml; then
     :
   else
@@ -95,44 +99,43 @@ run_required_ctest() {
   python3 scripts/ci/check_ctest_skips.py "$junit" || return $?
   return "$ctest_status"
 }
-bash scripts/ci/public-hygiene.sh --self-test
-python3 tests/evidence/public_hygiene.py
-python3 tests/evidence/ci_aggregate_contract.py
-python3 tests/evidence/promotion_contract.py
-python3 tests/evidence/phase4_report_contract.py
-python3 -I tests/evidence/phase7_diagnostic_contract.py
-python3 -I tests/evidence/phase7_fresh_batch_contract.py
-python3 tests/evidence/ctest_skip_contract.py
-python3 tests/evidence/ci_dependency_contract.py
-python3 tests/evidence/independent_game_toolchain.py --self-test-current-receipt
-python3 tests/evidence/independent_game_toolchain.py
-python3 tests/evidence/independent_game_toolchain.py --validate-current-receipt build/tool-cache/z80-elf-as.receipt.json --target z80-elf --assembler build/tool-cache/z80-elf-as
-python3 tests/evidence/independent_game_toolchain.py --validate-current-receipt build/tool-cache/m68k-elf-as.receipt.json --target m68k-elf --assembler build/tool-cache/m68k-elf-as
+TIMEFORMAT='ci-stage public-hygiene %3R seconds'; time bash scripts/ci/public-hygiene.sh --self-test
+TIMEFORMAT='ci-stage public-hygiene-contract %3R seconds'; time python3 tests/evidence/public_hygiene.py
+TIMEFORMAT='ci-stage aggregate-contract %3R seconds'; time python3 tests/evidence/ci_aggregate_contract.py
+TIMEFORMAT='ci-stage promotion-contract %3R seconds'; time python3 tests/evidence/promotion_contract.py
+TIMEFORMAT='ci-stage phase4-report-contract %3R seconds'; time python3 tests/evidence/phase4_report_contract.py
+TIMEFORMAT='ci-stage phase7-diagnostic %3R seconds'; time python3 -I tests/evidence/phase7_diagnostic_contract.py
+TIMEFORMAT='ci-stage phase7-fresh-batch %3R seconds'; time python3 -I tests/evidence/phase7_fresh_batch_contract.py
+TIMEFORMAT='ci-stage ctest-skip-contract %3R seconds'; time python3 tests/evidence/ctest_skip_contract.py
+TIMEFORMAT='ci-stage dependency-contract %3R seconds'; time python3 tests/evidence/ci_dependency_contract.py
+TIMEFORMAT='ci-stage toolchain-receipt-self-test %3R seconds'; time python3 tests/evidence/independent_game_toolchain.py --self-test-current-receipt
+TIMEFORMAT='ci-stage toolchain-build %3R seconds'; time python3 tests/evidence/independent_game_toolchain.py
+TIMEFORMAT='ci-stage z80-receipt %3R seconds'; time python3 tests/evidence/independent_game_toolchain.py --validate-current-receipt build/tool-cache/z80-elf-as.receipt.json --target z80-elf --assembler build/tool-cache/z80-elf-as
+TIMEFORMAT='ci-stage m68k-receipt %3R seconds'; time python3 tests/evidence/independent_game_toolchain.py --validate-current-receipt build/tool-cache/m68k-elf-as.receipt.json --target m68k-elf --assembler build/tool-cache/m68k-elf-as
 python3 scripts/evidence/phase4_report.py safety-start --build build
-cmake --version | head -n 1 > build/ci/toolchain.txt
-"${CC:-cc}" --version | head -n 1 >> build/ci/toolchain.txt
+TIMEFORMAT='ci-stage toolchain-identity %3R seconds'; time { cmake --version | head -n 1 > build/ci/toolchain.txt; "${CC:-cc}" --version | head -n 1 >> build/ci/toolchain.txt; }
 uname -sm >> build/ci/toolchain.txt
 leaks=1
 if [[ "$(uname -s)" == Darwin ]]; then leaks=0; fi # Apple ASan has no LeakSanitizer.
 for lane in native sanitizer; do
   if [[ "$lane" == sanitizer ]]; then
-    cmake -S . -B "build/ci/$lane" -DCMAKE_BUILD_TYPE=Release -DGENEWHIP_TEST_HOOKS=ON \
+    TIMEFORMAT="ci-stage $lane-configure %3R seconds"; time cmake -S . -B "build/ci/$lane" -DCMAKE_BUILD_TYPE=Release -DGENEWHIP_TEST_HOOKS=ON \
       -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
       -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined
   else
-    cmake -S . -B "build/ci/$lane" -DCMAKE_BUILD_TYPE=Release -DGENEWHIP_TEST_HOOKS=ON
+    TIMEFORMAT="ci-stage $lane-configure %3R seconds"; time cmake -S . -B "build/ci/$lane" -DCMAKE_BUILD_TYPE=Release -DGENEWHIP_TEST_HOOKS=ON
   fi
-  cmake --build "build/ci/$lane" --parallel 2
+  TIMEFORMAT="ci-stage $lane-build %3R seconds"; time cmake --build "build/ci/$lane" --parallel 2
   junit="build/ci/$lane/ctest-junit.xml"
   run_required_ctest "$lane" "$junit" "$leaks" || exit $?
-  python3 tests/api/safety_contract.py --build "build/ci/$lane" --mode pr \
+  TIMEFORMAT="ci-stage $lane-api-contract %3R seconds"; time python3 tests/api/safety_contract.py --build "build/ci/$lane" --mode pr \
     --out "build/ci/$lane/safety-contract.json"
   python3 scripts/evidence/phase4_report.py safety-lane-complete --build build --lane "$lane"
 done
-cmake -S . -B build/ci/production -DCMAKE_BUILD_TYPE=Release -DGENEWHIP_TEST_HOOKS=OFF
-cmake --build build/ci/production --parallel 2
+TIMEFORMAT='ci-stage production-configure %3R seconds'; time cmake -S . -B build/ci/production -DCMAKE_BUILD_TYPE=Release -DGENEWHIP_TEST_HOOKS=OFF
+TIMEFORMAT='ci-stage production-build %3R seconds'; time cmake --build build/ci/production --parallel 2
 run_required_ctest production build/ci/production/ctest-junit.xml "$leaks" || exit $?
-python3 tests/api/safety_contract.py --build build/ci/production --mode production \
+TIMEFORMAT='ci-stage production-api-contract %3R seconds'; time python3 tests/api/safety_contract.py --build build/ci/production --mode production \
   --out build/ci/production/safety-contract.json
 python3 scripts/evidence/phase4_report.py safety-lane-complete --build build --lane production
 python3 scripts/evidence/phase4_report.py safety-finish --build build
