@@ -335,6 +335,7 @@ class FreshBatchContracts(unittest.TestCase):
 
     def _validate(self, *, stage="source-preparation", now=None, admission_path=None,
                   admission_sha=None, journal=None, publication=None, preflight=None, output=None,
+                  diagnostic_readiness_path=None, diagnostic_readiness_sha=None,
                   source_is_ancestor=lambda ancestor, descendant: True):
         admission_path = admission_path or self.source_admission_path
         admission_sha = admission_sha or hashlib.sha256(admission_path.read_bytes()).hexdigest()
@@ -347,7 +348,9 @@ class FreshBatchContracts(unittest.TestCase):
             preflight_path=preflight or self.preparation,
             output_path=output or self.preparation,
             source_is_ancestor=source_is_ancestor,
-            expected_source_paths=self.source_paths)
+            expected_source_paths=self.source_paths,
+            diagnostic_readiness_path=diagnostic_readiness_path,
+            diagnostic_readiness_sha256=diagnostic_readiness_sha)
 
     def test_source_preparation_admission_accepts_exact_authority_and_all_source_pins(self):
         result = self._validate()
@@ -364,6 +367,10 @@ class FreshBatchContracts(unittest.TestCase):
                  "scripts/evidence/phase4_report.py", "tests/evidence/phase4_report_contract.py"})
         elif diagnostic_case == BATCH.FIRST_PARTY_CLEANUP_CONTROL_CASE:
             diagnostic_paths = set(BATCH.FIRST_PARTY_CLEANUP_CONTROL_SOURCE_PATHS)
+        elif diagnostic_case == BATCH.NATIVE_HOST_RUNTIME_CASE:
+            diagnostic_paths = set(BATCH.NATIVE_HOST_RUNTIME_SOURCE_PATHS)
+        elif diagnostic_case == BATCH.WORKFLOW_TIMEOUT_CONTRACT_CASE:
+            diagnostic_paths = set(BATCH.WORKFLOW_TIMEOUT_CONTRACT_SOURCE_PATHS)
         else:
             diagnostic_paths = set(BATCH.RSS_DIAGNOSTIC_SOURCE_PATHS)
         self.source_paths = set(self.source_paths) | diagnostic_paths
@@ -383,7 +390,9 @@ class FreshBatchContracts(unittest.TestCase):
         rss_profile = diagnostic_case == BATCH.RSS_DIAGNOSTIC_CASE
         cleanup_profile = diagnostic_profile == "phase5-cleanup"
         first_party_profile = diagnostic_case == BATCH.FIRST_PARTY_CLEANUP_CONTROL_CASE
+        workflow_timeout_profile = diagnostic_case == BATCH.WORKFLOW_TIMEOUT_CONTRACT_CASE
         failed_lanes = ({"product-smoke", "required-ci"} if rss_profile else
+                        {"phase7-fast", "required-ci"} if workflow_timeout_profile else
                         {"safety", "phase7-fast", "required-ci"} if first_party_profile else
                         {"safety", "required-ci"})
         canceled_lanes = {"safety", "desktop"} if rss_profile else set()
@@ -396,23 +405,25 @@ class FreshBatchContracts(unittest.TestCase):
             **({"id": 124591302116} if rss_profile and name == "product-smoke" else
                {"id": 124617412421} if cleanup_profile and name == "safety" else
                {"id": 124626360017} if first_party_profile and name == "safety" else
-               {"id": 124626360087} if first_party_profile and name == "phase7-fast" else {})}
+               {"id": 124626360087} if first_party_profile and name == "phase7-fast" else
+               {"id": 124700000001} if workflow_timeout_profile and name == "phase7-fast" else {})}
             for name in sorted(BATCH.PREVIEW_REQUIRED_LANES | BATCH.PREVIEW_CONDITIONAL_SKIPS)]
         public_head, public_base = "c" * 40, "d" * 40
-        if rss_profile or first_party_profile:
+        if rss_profile or first_party_profile or workflow_timeout_profile:
             self.journal.write_text(json.dumps({"schema": "genewhip.v02-delivery-journal.v1",
                 "repository": "szTheory/genewhip", "source_head": public_head,
                 "public_base_sha": public_base, "started_at": self.started}, sort_keys=True) + "\n")
         terminal = {"all_jobs_terminal": True, "jobs": jobs,
             "event": "pull_request",
             "pull_request": {"state": "open", "merged": False,
-                "number": 31 if rss_profile else 35 if first_party_profile else None,
-                "head_sha": public_head if rss_profile or first_party_profile else "c" * 40,
-                "base_sha": public_base if rss_profile or first_party_profile else "d" * 40},
-            "safety_job_failed": not rss_profile, "qualification_accepted": False,
+                "number": 31 if rss_profile else 35 if first_party_profile else 40 if workflow_timeout_profile else None,
+                "head_sha": public_head if rss_profile or first_party_profile or workflow_timeout_profile else "c" * 40,
+                "base_sha": public_base if rss_profile or first_party_profile or workflow_timeout_profile else "d" * 40},
+            "safety_job_failed": not (rss_profile or workflow_timeout_profile), "qualification_accepted": False,
             "full_qualification_dispatched": False, "local_monitor_safety_issue": False,
             "owning_case": diagnostic_case,
             "failed_lane": "product-smoke" if rss_profile else
+                "phase7-fast" if workflow_timeout_profile else
                 "production" if cleanup_profile else "sanitizer",
             "native_lane": "passed", "hosted_cleanup_outcome": "unknown"}
         if cleanup_profile:
@@ -436,9 +447,19 @@ class FreshBatchContracts(unittest.TestCase):
                     "ProcessAdmissionContract.test_baseline_fake_cleanup_failures_keep_identity_and_restore_handler"],
                     "exception": "AssertionError", "classification": "old mocked argument expectations",
                     "real_child_in_failing_cases": False}})
+        if workflow_timeout_profile:
+            terminal.update({"merge_attempted": False,
+                "original_failure_cause": "unknown",
+                "fast_job_failure": {
+                    "outer_case": "test_default_unittest_suites_do_not_reach_any_os_process_seam",
+                    "inner_case": BATCH.WORKFLOW_TIMEOUT_CONTRACT_CASE,
+                    "exception": "AssertionError",
+                    "expected_literal": "timeout-minutes: 360",
+                    "classification": "workflow-timeout-expression-updated",
+                    "real_child_in_failing_cases": False}})
         repair = {"live_retry_authorized": False, "diagnostic_only": True,
-            "diagnostic_case": diagnostic_case, "safety_job_failed": not rss_profile,
-            "had_safety_job_failure": not rss_profile, "hosted_cleanup_outcome": "unknown",
+            "diagnostic_case": diagnostic_case, "safety_job_failed": not (rss_profile or workflow_timeout_profile),
+            "had_safety_job_failure": not (rss_profile or workflow_timeout_profile), "hosted_cleanup_outcome": "unknown",
             "qualification_accepted": False, "unknown_high_findings": False}
         if cleanup_profile:
             repair.update({"diagnostic_profile": "phase5-cleanup",
@@ -512,6 +533,29 @@ class FreshBatchContracts(unittest.TestCase):
             repair["hosted_logs"] = {
                 "safety": self._reference(safety_log, safety_text),
                 "phase7-fast": self._reference(fast_log, fast_text)}
+        if workflow_timeout_profile:
+            repair.update({"diagnostic_profile": BATCH.WORKFLOW_TIMEOUT_CONTRACT_PROFILE,
+                "original_failure_cause": "unknown", "merge_attempted": False,
+                "full_qualification_dispatched": False})
+            fast_log = self.batch_root / "ci-failure/phase7-fast-124700000001.log"
+            fast_text = (
+                "FAIL: test_default_unittest_suites_do_not_reach_any_os_process_seam "
+                "(__main__.ProcessAdmissionContract.test_default_unittest_suites_do_not_reach_any_os_process_seam)\n"
+                "  File \"tests/evidence/phase7_process_admission_contract.py\", line 1, in "
+                "test_default_unittest_suites_do_not_reach_any_os_process_seam\n"
+                "  nested failure: QualificationCoordinatorContract "
+                "testMethod=test_workflow_wires_real_product_smoke_and_serial_full_jobs\n"
+                "    self.assertIn(\"timeout-minutes: 360\", text)\n"
+                "    AssertionError: \\'timeout-minutes: 360\\' not found in workflow text\n"
+                "AssertionError: Lists differ: nested failure details\n"
+                "  repeated failure details: QualificationCoordinatorContract "
+                "testMethod=test_workflow_wires_real_product_smoke_and_serial_full_jobs\n"
+                "    self.assertIn(\"timeout-minutes: 360\", text)\n"
+                "    AssertionError: \\'timeout-minutes: 360\\' not found in workflow text\n"
+                "Ran 27 tests in 0.001s\nFAILED (failures=1)\n").encode()
+            fast_log.parent.mkdir(parents=True, exist_ok=True)
+            fast_log.write_bytes(fast_text)
+            repair["hosted_log"] = self._reference(fast_log, fast_text)
         terminal_path, repair_path = (self.batch_root / "terminal-observation.json",
                                       self.batch_root / "repair-evidence.json")
         self._write_admission(terminal_path, terminal)
@@ -534,6 +578,283 @@ class FreshBatchContracts(unittest.TestCase):
         second.mkdir()
         return second, predecessor, pins
 
+    def _native_host_runtime_successor(self):
+        second, predecessor, pins = self._diagnostic_successor(
+            BATCH.NATIVE_HOST_RUNTIME_CASE, BATCH.NATIVE_HOST_RUNTIME_PROFILE)
+        attempt_root = self.batch_root
+        public_base, public_head = "b" * 40, "c" * 40
+        nonce, run_id = "2b535a0debbb4f6cb380d84e7683c474", 41244409258
+        created = "2026-10-31T21:36:49Z"
+        job_outcomes = dict(BATCH.NATIVE_HOST_RUNTIME_OUTCOMES)
+        terminal_jobs = []
+        snapshot_jobs = []
+        for index, name in enumerate(sorted(job_outcomes)):
+            job_id = 124660000000 + index
+            outcome = job_outcomes[name]
+            failed_steps = (["Run complete current-source product safety and chunk roster"]
+                if name == "v02-runtime" else
+                ["Reject incomplete or stale required lanes"] if name == "required-ci" else [])
+            terminal_jobs.append({"id": job_id, "name": name, "status": "completed",
+                "conclusion": outcome})
+            snapshot_jobs.append({"id": job_id, "name": name, "status": "completed",
+                "conclusion": outcome, "run_id": run_id, "logs_url": None,
+                "steps": [{"name": step, "status": "completed", "conclusion": "failure"}
+                    for step in failed_steps] or [{"name": "Complete job", "status": "completed",
+                        "conclusion": "success"}]})
+        run = {"id": run_id, "event": "workflow_dispatch", "status": "completed",
+            "conclusion": "failure", "path": ".github/workflows/ci.yml",
+            "head_sha": public_head, "created_at": created, "run_attempt": 1,
+            "display_title": f"Plan10 qualification {nonce}",
+            "name": f"Plan10 qualification {nonce}",
+            "head_branch": "main",
+            "html_url": f"https://github.com/szTheory/genewhip/actions/runs/{run_id}",
+            "head_commit": {"id": public_head, "tree_id": "d" * 40},
+            "repository": {"full_name": "szTheory/genewhip", "private": False,
+                "owner": {"login": "szTheory"}},
+            "head_repository": {"full_name": "szTheory/genewhip", "private": False}}
+        journal_value = {"schema": "genewhip.v02-delivery-journal.v1",
+            "repository": "szTheory/genewhip", "source_head": public_head,
+            "public_base_sha": public_base, "public_source_sha": public_head,
+            "candidate_sha": "a" * 40, "tree_sha": "d" * 40,
+            "started_at": self.started, "qualification_started_at": self.started,
+            "qualification_dispatch_requested": True, "qualification_dispatch_submitted": True,
+            "qualification_dispatch_nonce": nonce, "selected_run_created_at": created,
+            "pull_request": "38", "merge_parents": [public_base], "merge_strategy": "squash"}
+        journal_path = attempt_root / "hosted-delivery-journal.json"
+        self._write_admission(journal_path, journal_value)
+        failure_path = attempt_root / "failure.json"
+        self._write_admission(failure_path, {"schema": "genewhip.phase7-fresh-batch-failure.v1",
+            "authorization_sha256": BATCH.AUTH_SHA256, "stage": "qualification",
+            "reason": "fresh-batch-qualification-failed",
+            "observed_at": "2026-10-31T21:57:06.732067+00:00"})
+        predecessor["failure"] = self._reference(failure_path, failure_path.read_bytes())
+        delivery = {"schema": "genewhip.v02-public-source-delivery.v1", "status": "merged",
+            "public_source_sha": public_head, "public_base_sha": public_base,
+            "candidate_sha": journal_value["candidate_sha"], "tree_sha": journal_value["tree_sha"],
+            "pull_request": "38", "merge_parents": [public_base], "merge_strategy": "squash"}
+        delivery_path = attempt_root / "source-delivery.json"
+        self._write_admission(delivery_path, delivery)
+        terminal_dir = attempt_root / f"terminal-record-{run_id}"
+        terminal_dir.mkdir(parents=True, exist_ok=True)
+        run_path, jobs_path = terminal_dir / "run.json", terminal_dir / "jobs.json"
+        self._write_admission(run_path, run)
+        self._write_admission(jobs_path, snapshot_jobs)
+        safe_line = ("REJECT: qualification-child-failed:runtime:1:BLOCKED: "
+            "phase7-host-batch-failed:backend=native;report=fail;"
+            "case=recursion94/withhold-first-plate;row=fail;return=1;"
+            "cleanup=confirmed;bound=none;cleanup_reason=missing;"
+            "status_observation=missing;cleanup_queries=other")
+        log_path = terminal_dir / "v02-runtime-job.log"
+        log_path.write_text(safe_line + "\n")
+        runtime_job = next(row for row in terminal_jobs if row["name"] == "v02-runtime")
+        packet_jobs = []
+        for row in terminal_jobs:
+            failures = [step.get("name") for step in next(item for item in snapshot_jobs
+                if item["name"] == row["name"]).get("steps", [])
+                if step.get("conclusion") == "failure"]
+            packet_jobs.append({**row, "failed_steps": failures})
+        packet = {"schema": "genewhip.phase7-attempt-terminal-evidence.v1",
+            "attempt_root": attempt_root.relative_to(self.root).as_posix(), "nonce": nonce,
+            "coordinator_terminal": {"exit_code": 1,
+                "failure_record_observed_at": "2026-10-31T21:57:06.732067+00:00",
+                "failure_record_reason": "fresh-batch-qualification-failed",
+                "failure_record_stage": "qualification"},
+            "source_commit": public_head, "public_tree": journal_value["tree_sha"],
+            "qualification_state": "failed/nonqualifying; no acceptance, inventory, or release claim",
+            "workflow_run": {key: run[key] for key in ("id", "name", "event", "status",
+                "conclusion", "created_at", "head_sha", "path", "run_attempt", "display_title", "html_url")},
+            "jobs": packet_jobs,
+            "job_totals": {"conclusions": {"failure": 2, "skipped": 7, "success": 7}, "total": 16},
+            "pull_request": {"number": 38, "state": "closed", "merged": True,
+                "head_sha": public_head, "base_sha": public_base,
+                "merge_commit_sha": public_head},
+            "runtime_failure": {"job_id": runtime_job["id"],
+                "failed_step": "Run complete current-source product safety and chunk roster",
+                "bounded_failure_line": safe_line,
+                "cause_limit": "Retained hosted log has no underlying assertion/test traceback; do not infer cause.",
+                "log": {"path": log_path.relative_to(self.root).as_posix(),
+                    "sha256": hashlib.sha256(log_path.read_bytes()).hexdigest(),
+                    "bytes": log_path.stat().st_size}}}
+        packet_path = terminal_dir / "terminal-packet.json"
+        self._write_admission(packet_path, packet)
+        terminal = {"schema": "genewhip.phase7-terminal-observation.v1", "attempt_index": 1,
+            "attempt_root": attempt_root.relative_to(self.root).as_posix(), "all_jobs_terminal": True,
+            "event": "workflow_dispatch", "workflow_run_id": run_id, "run_attempt": 1,
+            "created_at": created, "run_status": "completed", "run_conclusion": "failure",
+            "head_sha": public_head, "started_at": self.started,
+            "qualification_dispatch_nonce": nonce, "qualification_run": run,
+            "qualification_jobs": snapshot_jobs, "jobs": terminal_jobs,
+            "qualification_run_snapshot": self._reference(run_path, run_path.read_bytes()),
+            "qualification_jobs_snapshot": self._reference(jobs_path, jobs_path.read_bytes()),
+            "terminal_packet": self._reference(packet_path, packet_path.read_bytes()),
+            "hosted_log": self._reference(log_path, log_path.read_bytes()),
+            "source_delivery": self._reference(delivery_path, delivery_path.read_bytes()),
+            "hosted_delivery_journal": self._reference(journal_path, journal_path.read_bytes()),
+            "diagnostic_profile": BATCH.NATIVE_HOST_RUNTIME_PROFILE,
+            "owning_case": BATCH.NATIVE_HOST_RUNTIME_CASE, "failed_lane": "v02-runtime",
+            "inner_row_cleanup": "confirmed", "inner_row_bound": "none", "batch_return": 1,
+            "outer_runtime_cleanup": "unknown", "hosted_cleanup_outcome": "unknown",
+            "desktop_child_return": "unknown", "original_failure_cause": "unknown",
+            "local_monitor_safety_issue": False, "local_monitor_cleanup": "confirmed",
+            "safety_job_failed": False, "qualification_accepted": False,
+            "full_qualification_dispatched": True, "merge_attempted": True,
+            "actual_pr_merged": True, "pull_request": {"number": 38, "state": "closed",
+                "merged": True, "head_sha": public_head, "base_sha": public_base,
+                "merge_commit_sha": public_head}}
+        terminal_path = attempt_root / "terminal-observation.json"
+        self._write_admission(terminal_path, terminal)
+        repair_path = attempt_root / "repair-evidence.json"
+        repair = {"live_retry_authorized": False, "diagnostic_only": True,
+            "diagnostic_case": BATCH.NATIVE_HOST_RUNTIME_CASE,
+            "diagnostic_profile": BATCH.NATIVE_HOST_RUNTIME_PROFILE,
+            "safety_job_failed": False, "had_safety_job_failure": False,
+            "hosted_cleanup_outcome": "unknown", "qualification_accepted": False,
+            "unknown_high_findings": False, "full_qualification_dispatched": True,
+            "outer_runtime_cleanup": "unknown", "inner_row_cleanup": "confirmed",
+            "inner_row_bound": "none", "batch_return": 1,
+            "desktop_child_return": "unknown", "original_failure_cause": "unknown"}
+        self._write_admission(repair_path, repair)
+        predecessor = {"attempt_index": 1, "attempt_root": attempt_root.relative_to(self.root).as_posix(),
+            **{key: self._reference(path, path.read_bytes()) for key, path in (
+                ("failure", attempt_root / "failure.json"), ("journal", journal_path),
+                ("terminal_observation", terminal_path), ("repair_evidence", repair_path),
+                ("source_admission", self.source_admission_path))},
+            "cleanup_evidence": None, "disposition": "bounded-diagnostic-followup",
+            "all_ci_terminal": True, "safety_status": "diagnostic-only",
+            "cleanup_status": "unknown-hosted-test-outcome", "unknown_high_findings": False}
+        for name in BATCH.NATIVE_HOST_RUNTIME_SOURCE_PATHS:
+            source = self.root / name
+            source.parent.mkdir(parents=True, exist_ok=True)
+            source.write_bytes(b"# fresh native host diagnostic fixture\n")
+            pins[name] = hashlib.sha256(source.read_bytes()).hexdigest()
+        second = self.root / BATCH.POLICY_ROOT / "attempt-0002"
+        return second, predecessor, pins
+
+    def test_native_host_runtime_profile_binds_failed_full_run_without_resolving_outer_cleanup(self):
+        second, predecessor, pins = self._native_host_runtime_successor()
+        admission_path = second / "source-admission.json"
+
+        def validate(pred=predecessor, selected=pins,
+                     disposition="bounded-diagnostic-followup"):
+            claim = self.root / BATCH.POLICY_ROOT / "successors" / (
+                BATCH._predecessor_identity_sha256(pred) + ".json")
+            claim.unlink(missing_ok=True)
+            admission = self._source_admission(selected, attempt_index=2,
+                predecessor=pred, disposition=disposition)
+            digest = self._write_admission(admission_path, admission)
+            return self._validate(admission_path=admission_path, admission_sha=digest,
+                journal=second / "hosted-delivery-journal.json",
+                publication=second / "candidate/publication-copy",
+                preflight=second / "candidate/preparation.json",
+                output=second / "candidate/preparation.json")
+
+        result = validate()
+        self.assertEqual(result["admission"]["disposition"], "bounded-diagnostic-followup")
+        self.assertEqual(result["admission"]["predecessor"]["cleanup_status"],
+                         "unknown-hosted-test-outcome")
+        terminal_path = self.root / predecessor["terminal_observation"]["path"]
+        terminal_raw = terminal_path.read_bytes()
+        terminal = json.loads(terminal_raw)
+        for field, value in (
+                ("event", "pull_request"), ("failed_lane", "safety"),
+                ("owning_case", "other-native-case"), ("outer_runtime_cleanup", "confirmed"),
+                ("hosted_cleanup_outcome", "confirmed"), ("desktop_child_return", "zero"),
+                ("original_failure_cause", "assertion-known"), ("safety_job_failed", True),
+                ("qualification_accepted", True), ("full_qualification_dispatched", False),
+                ("merge_attempted", False),
+                ("batch_return", 0), ("batch_return", True),
+                ("inner_row_bound", "violation")):
+            changed = {**terminal, field: value}
+            self._write_admission(terminal_path, changed)
+            pred = {**predecessor, "terminal_observation": self._reference(
+                terminal_path, terminal_path.read_bytes())}
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError,
+                    "diagnostic-classification-invalid|native-host-runtime-evidence-invalid"):
+                validate(pred=pred)
+        terminal_path.write_bytes(terminal_raw)
+
+        for mutate in (
+                lambda value: value["jobs"].pop(),
+                lambda value: value["jobs"][0].update(status="in_progress"),
+                lambda value: value["jobs"][0].update(conclusion="cancelled"),
+                lambda value: value["jobs"].append({"id": 999, "name": "unknown",
+                    "status": "completed", "conclusion": "success"}),
+                lambda value: value["jobs"][1].update(id=value["jobs"][0]["id"]),
+                lambda value: value["qualification_jobs"].pop(),
+                lambda value: value["qualification_run"].update(head_sha="f" * 40),
+                lambda value: value["qualification_run"].update(event="push"),
+                lambda value: value["qualification_run"].update(conclusion="success"),
+                lambda value: value["pull_request"].update(merged=False),
+                lambda value: value.update(qualification_dispatch_nonce="3" * 32),
+                lambda value: value.update(source_delivery=dict(value["terminal_packet"])),
+                lambda value: value.update(terminal_packet={"path": value["terminal_packet"]["path"],
+                    "sha256": "0" * 64}),
+                lambda value: value.update(qualification_jobs_snapshot=dict(value["terminal_packet"])),
+                lambda value: value.update(hosted_log=dict(value["terminal_packet"])),
+        ):
+            changed = json.loads(terminal_raw)
+            mutate(changed)
+            self._write_admission(terminal_path, changed)
+            pred = {**predecessor, "terminal_observation": self._reference(
+                terminal_path, terminal_path.read_bytes())}
+            with self.assertRaises(ValueError):
+                validate(pred=pred)
+        terminal_path.write_bytes(terminal_raw)
+
+        for key in ("outer_runtime_cleanup", "inner_row_cleanup", "batch_return",
+                    "desktop_child_return", "original_failure_cause", "full_qualification_dispatched"):
+            repair_path = self.root / predecessor["repair_evidence"]["path"]
+            repair_raw = repair_path.read_bytes()
+            repair = json.loads(repair_raw)
+            repair[key] = {"outer_runtime_cleanup": "confirmed", "inner_row_cleanup": "unconfirmed",
+                "batch_return": 0, "desktop_child_return": "zero", "original_failure_cause": "known",
+                "full_qualification_dispatched": False}[key]
+            self._write_admission(repair_path, repair)
+            pred = {**predecessor, "repair_evidence": self._reference(
+                repair_path, repair_path.read_bytes())}
+            with self.subTest(repair_key=key), self.assertRaises(ValueError):
+                validate(pred=pred)
+            repair_path.write_bytes(repair_raw)
+
+        packet_path = self.root / terminal["terminal_packet"]["path"]
+        packet_raw = packet_path.read_bytes()
+        packet = json.loads(packet_raw)
+        packet["job_totals"]["conclusions"]["failure"] = 1
+        self._write_admission(packet_path, packet)
+        changed = {**terminal, "terminal_packet": self._reference(packet_path, packet_path.read_bytes())}
+        self._write_admission(terminal_path, changed)
+        pred = {**predecessor, "terminal_observation": self._reference(
+            terminal_path, terminal_path.read_bytes())}
+        with self.assertRaisesRegex(ValueError, "native-host-runtime-evidence-invalid"):
+            validate(pred=pred)
+        packet_path.write_bytes(packet_raw)
+        terminal_path.write_bytes(terminal_raw)
+
+        log_path = self.root / terminal["hosted_log"]["path"]
+        log_raw = log_path.read_bytes()
+        for replacement in (b"case=recursion94/other-case", b"return=0", b"cleanup=unconfirmed"):
+            bad_log = log_raw.replace(b"case=recursion94/withhold-first-plate", replacement) \
+                if replacement.startswith(b"case=") else log_raw.replace(
+                    b"return=1" if replacement == b"return=0" else b"cleanup=confirmed", replacement)
+            log_path.write_bytes(bad_log)
+            changed = {**terminal, "hosted_log": self._reference(log_path, bad_log)}
+            self._write_admission(terminal_path, changed)
+            pred = {**predecessor, "terminal_observation": self._reference(
+                terminal_path, terminal_path.read_bytes())}
+            with self.assertRaisesRegex(ValueError, "native-host-runtime-evidence-invalid"):
+                validate(pred=pred)
+        log_path.write_bytes(log_raw)
+        terminal_path.write_bytes(terminal_raw)
+
+        source_path = "scripts/evidence/v02_run.py"
+        source_file = self.root / source_path
+        source_raw = source_file.read_bytes()
+        partial = dict(pins)
+        partial[source_path] = self.pins[source_path]
+        source_file.write_bytes(b"# prior diagnostic fixture\n")
+        with self.assertRaisesRegex(ValueError, "diagnostic-source-change-unproven"):
+            validate(selected=partial)
+        source_file.write_bytes(source_raw)
     def test_diagnostic_admission_preserves_unknown_and_cannot_become_normal_retry(self):
         second, predecessor, pins = self._diagnostic_successor()
         path = second / "source-admission.json"
@@ -937,6 +1258,121 @@ class FreshBatchContracts(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "diagnostic-source-change-unproven"):
             validate(selected=partial)
         changed_file.write_bytes(fresh)
+
+    def test_workflow_timeout_contract_accepts_only_exact_pure_fastlane_failure(self):
+        second, predecessor, pins = self._diagnostic_successor(
+            BATCH.WORKFLOW_TIMEOUT_CONTRACT_CASE, BATCH.WORKFLOW_TIMEOUT_CONTRACT_PROFILE)
+        admission_path = second / "source-admission.json"
+
+        def validate(pred=predecessor, selected=pins,
+                     disposition="bounded-diagnostic-followup"):
+            claim = self.root / BATCH.POLICY_ROOT / "successors" / (
+                BATCH._predecessor_identity_sha256(pred) + ".json")
+            claim.unlink(missing_ok=True)
+            admission = self._source_admission(selected, attempt_index=2,
+                predecessor=pred, disposition=disposition)
+            digest = self._write_admission(admission_path, admission)
+            return self._validate(admission_path=admission_path, admission_sha=digest,
+                journal=second / "hosted-delivery-journal.json",
+                publication=second / "candidate/publication-copy",
+                preflight=second / "candidate/preparation.json",
+                output=second / "candidate/preparation.json")
+
+        result = validate()
+        self.assertEqual(result["admission"]["disposition"], "bounded-diagnostic-followup")
+        self.assertEqual(result["admission"]["predecessor"]["cleanup_status"],
+                         "unknown-hosted-test-outcome")
+        with self.assertRaisesRegex(ValueError, "diagnostic-disposition-mismatch"):
+            validate(disposition="evidence-backed-infrastructure-retry")
+
+        terminal_path = self.root / predecessor["terminal_observation"]["path"]
+        terminal_bytes = terminal_path.read_bytes()
+        terminal = json.loads(terminal_bytes)
+        mutations = []
+        wrong_case = {**terminal, "owning_case": "QualificationCoordinatorContract.test_other"}
+        mutations.append(wrong_case)
+        wrong_flags = {**terminal, "safety_job_failed": True}
+        mutations.append(wrong_flags)
+        wrong_merge = {**terminal, "merge_attempted": True}
+        mutations.append(wrong_merge)
+        wrong_qualification = {**terminal, "qualification_accepted": True}
+        mutations.append(wrong_qualification)
+        wrong_pr = json.loads(terminal_bytes)
+        wrong_pr["pull_request"]["merged"] = True
+        mutations.append(wrong_pr)
+        missing_lane = json.loads(terminal_bytes)
+        missing_lane["jobs"] = [row for row in missing_lane["jobs"] if row["name"] != "desktop"]
+        mutations.append(missing_lane)
+        active_lane = json.loads(terminal_bytes)
+        next(row for row in active_lane["jobs"] if row["name"] == "phase7-fast")["status"] = "in_progress"
+        mutations.append(active_lane)
+        extra_lane = json.loads(terminal_bytes)
+        extra_lane["jobs"].append({"id": 999, "name": "unknown-lane", "status": "completed",
+                                   "conclusion": "success"})
+        mutations.append(extra_lane)
+        failed_safety = json.loads(terminal_bytes)
+        next(row for row in failed_safety["jobs"] if row["name"] == "safety")["conclusion"] = "failure"
+        mutations.append(failed_safety)
+        for value in mutations:
+            self._write_admission(terminal_path, value)
+            pred = {**predecessor, "terminal_observation": self._reference(
+                terminal_path, terminal_path.read_bytes())}
+            with self.subTest(terminal=value), self.assertRaisesRegex(ValueError,
+                    "diagnostic-classification-invalid"):
+                validate(pred=pred)
+        terminal_path.write_bytes(terminal_bytes)
+
+        repair_path = self.root / predecessor["repair_evidence"]["path"]
+        repair_bytes = repair_path.read_bytes()
+        repair = json.loads(repair_bytes)
+        for field, value in (("diagnostic_profile", "rss-smoke"),
+                ("safety_job_failed", True), ("had_safety_job_failure", True),
+                ("merge_attempted", True), ("original_failure_cause", "determined"),
+                ("hosted_cleanup_outcome", "confirmed"), ("live_retry_authorized", True)):
+            changed = {**repair, field: value}
+            self._write_admission(repair_path, changed)
+            pred = {**predecessor, "repair_evidence": self._reference(
+                repair_path, repair_path.read_bytes())}
+            with self.subTest(repair_field=field), self.assertRaisesRegex(ValueError,
+                    "diagnostic-classification-invalid"):
+                validate(pred=pred)
+        repair_path.write_bytes(repair_bytes)
+
+        log_ref = repair["hosted_log"]
+        log_path = self.root / log_ref["path"]
+        log_bytes = log_path.read_bytes()
+        for changed_log in (log_bytes.replace(b"not found in", b"was found in"),
+                log_bytes + b"FAIL: test_unrelated (__main__.OtherContract.test_unrelated)\n",
+                log_bytes.replace(b"FAILED (failures=1)", b"FAILED (failures=2)")):
+            log_path.write_bytes(changed_log)
+            changed = {**repair, "hosted_log": self._reference(log_path, changed_log)}
+            self._write_admission(repair_path, changed)
+            pred = {**predecessor, "repair_evidence": self._reference(
+                repair_path, repair_path.read_bytes())}
+            with self.assertRaisesRegex(ValueError, "workflow-timeout-contract-invalid"):
+                validate(pred=pred)
+        log_path.write_bytes(log_bytes)
+        repair_path.write_bytes(repair_bytes)
+
+        partial = dict(pins)
+        changed_path = next(iter(BATCH.WORKFLOW_TIMEOUT_CONTRACT_SOURCE_PATHS))
+        changed_source = self.root / changed_path
+        fresh_source_bytes = changed_source.read_bytes()
+        changed_source.write_bytes(b"# prior diagnostic fixture\n")
+        partial[changed_path] = self.pins[changed_path]
+        with self.assertRaisesRegex(ValueError, "diagnostic-source-change-unproven|source-pin-stale"):
+            validate(selected=partial)
+        changed_source.write_bytes(fresh_source_bytes)
+
+        unrelated_path = "scripts/release/v02_qualification.py"
+        unrelated_file = self.root / unrelated_path
+        unrelated_bytes = unrelated_file.read_bytes()
+        unrelated_file.write_bytes(b"# unreviewed additional delta\n")
+        extra_delta = dict(pins)
+        extra_delta[unrelated_path] = hashlib.sha256(unrelated_file.read_bytes()).hexdigest()
+        with self.assertRaisesRegex(ValueError, "diagnostic-source-change-unproven"):
+            validate(selected=extra_delta)
+        unrelated_file.write_bytes(unrelated_bytes)
 
     def _diagnostic_publication(self, *, merged=False, resumed=False, latch_error=False,
                                 failed=False):
@@ -1479,7 +1915,72 @@ class FreshBatchContracts(unittest.TestCase):
         review.unlink()
         review.write_bytes(raw)
 
-    def _public_admission(self, source_pins=None):
+    def _write_assessed_preview(self, attempt_root, source_admission_path, public_path,
+                                public_admission, pr_number):
+        candidate = public_admission["candidate"]
+        source_raw = source_admission_path.read_bytes()
+        public_raw = public_path.read_bytes()
+        head, base = candidate["public_head"], candidate["public_base"]
+        journal = {"schema": "genewhip.v02-delivery-journal.v1",
+            "repository": "szTheory/genewhip", "source_head": head,
+            "public_base_sha": base, "started_at": self.started,
+            "diagnostic_only": True, "diagnostic_ci_status": "passed",
+            "assessment_required": True, "merge_attempted": False, "pull_request": str(pr_number)}
+        journal_path = attempt_root / "hosted-delivery-journal.json"
+        self._write_admission(journal_path, journal)
+        delivery = {"schema": "genewhip.v02-public-source-delivery.v1",
+            "status": "diagnostic-ci-complete", "candidate_sha": head,
+            "diagnostic_only": True, "assessment_required": True, "merge_attempted": False}
+        delivery_path = attempt_root / "source-delivery.json"
+        self._write_admission(delivery_path, delivery)
+        failure = {"schema": "genewhip.phase7-fresh-batch-failure.v1",
+            "authorization_sha256": BATCH.AUTH_SHA256, "stage": "preview-ci",
+            "reason": "diagnostic-ci-complete-assessment-required", "observed_at": self.started}
+        failure_path = attempt_root / "failure.json"
+        self._write_admission(failure_path, failure)
+        self.expected_failure_paths.add(failure_path)
+        jobs = [{"id": 123450000000 + index, "name": name, "status": "completed",
+            "conclusion": "success" if name in BATCH.PREVIEW_REQUIRED_LANES else "skipped"}
+            for index, name in enumerate(sorted(BATCH.PREVIEW_REQUIRED_LANES | BATCH.PREVIEW_CONDITIONAL_SKIPS))]
+        packet = {"schema": "genewhip.phase7-diagnostic-assessment-input.v1",
+            "disposition": "diagnostic-preview-green-assessment-required", "qualification_credit": False,
+            "source_and_candidate": {"private_source_head": self.source_head,
+                "source_admission_path": source_admission_path.relative_to(self.root).as_posix(),
+                "source_admission_sha256": hashlib.sha256(source_raw).hexdigest(),
+                "public_admission_path": public_path.relative_to(self.root).as_posix(),
+                "public_admission_sha256": hashlib.sha256(public_raw).hexdigest(),
+                "candidate_head": candidate["public_head"], "public_base": candidate["public_base"],
+                "public_tree": candidate["public_tree"], "manifest_sha256": candidate["source_manifest_sha256"],
+                "preparation_sha256": candidate["preparation_sha256"],
+                "candidate_review_payload_sha256": candidate["candidate_payload_sha256"]},
+            "hosted_source_delivery": {"source_delivery_path": delivery_path.relative_to(self.root).as_posix(),
+                "source_delivery_sha256": hashlib.sha256(delivery_path.read_bytes()).hexdigest(),
+                "journal_path": journal_path.relative_to(self.root).as_posix(),
+                "journal_sha256": hashlib.sha256(journal_path.read_bytes()).hexdigest(),
+                "failure_latch_path": failure_path.relative_to(self.root).as_posix(),
+                "failure_latch_sha256": hashlib.sha256(failure_path.read_bytes()).hexdigest()},
+            "github": {"repository": "szTheory/genewhip", "merged": False,
+                "pull_request_state": "open", "pull_request": pr_number,
+                "head_sha": head, "base_sha": base, "jobs": jobs,
+                "workflow_run": {"id": 765430000000 + pr_number, "event": "pull_request",
+                    "status": "completed", "conclusion": "success",
+                    "workflow_path": ".github/workflows/ci.yml"}}}
+        packet_path = attempt_root / "ci-failure/assessment-input.json"
+        packet_sha = self._write_admission(packet_path, packet)
+        return packet, {"path": packet_path.relative_to(self.root).as_posix(), "sha256": packet_sha}, journal, failure
+
+    def _source_head_reviews(self, prefix, payload_sha):
+        result = self._reviews(prefix, payload_sha)
+        for ref in result.values():
+            path = self.root / ref["path"]
+            raw = path.read_text()
+            path.write_text(raw.replace("payload_sha256: " + payload_sha,
+                "payload_sha256: " + payload_sha + "\nsource_head: " + self.source_head))
+            ref["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+        return result
+
+    def _public_admission(self, source_pins=None, *, disposition="routine-source-repair",
+                          attempt_index=1, predecessor=None):
         self.publication.mkdir(parents=True)
         for relative in (source_pins or self.pins):
             source = self.root / relative
@@ -1533,11 +2034,12 @@ class FreshBatchContracts(unittest.TestCase):
             "repository_policy_sha256": hashlib.sha256(policy_path.read_bytes()).hexdigest(),
             "public_head": public_head, "public_base": public_base,
             "public_tree": public_tree, "source_manifest_sha256": manifest_sha}
-        source_admission = self._source_admission(source_pins)
+        source_admission = self._source_admission(source_pins, attempt_index=attempt_index,
+            predecessor=predecessor, disposition=disposition)
         source_payload = BATCH.source_review_payload(source_head=self.source_head,
             started_at=self.started, attempt_root=self.batch_root.relative_to(self.root).as_posix(),
-            attempt_index=1, predecessor=self.predecessor,
-            disposition="routine-source-repair", source_pins=source_pins or self.pins)
+            attempt_index=attempt_index, predecessor=self.predecessor if predecessor is None else predecessor,
+            disposition=disposition, source_pins=source_pins or self.pins)
         candidate_payload = BATCH.candidate_review_payload(source_payload, candidate)
         candidate_payload_sha = hashlib.sha256(BATCH._canonical(candidate_payload)).hexdigest()
         candidate["candidate_payload_sha256"] = candidate_payload_sha
@@ -1547,11 +2049,261 @@ class FreshBatchContracts(unittest.TestCase):
         digest = self._write_admission(path, admission)
         return path, digest, policy_path
 
+    def _native_readiness_successor(self, *, prior_workflow_timeout=False):
+        # Attempt 1 is a green, unmerged diagnostic PR. Its source admission is
+        # ordinary repair history; the public stop record explicitly marks the
+        # preview as diagnostic and binds the assessment packet.
+        prior_root = self.batch_root
+        source1 = self._source_admission()
+        source1_path = prior_root / "source-admission.json"
+        self._write_admission(source1_path, source1)
+        claim_identity = BATCH._predecessor_identity_sha256(self.predecessor)
+        BATCH._claim_successor(self.root, predecessor_sha256=claim_identity,
+            predecessor_record_sha256=hashlib.sha256(BATCH._canonical(self.predecessor)).hexdigest(),
+            attempt_root=prior_root.relative_to(self.root).as_posix(),
+            source_payload_sha256=source1["source_payload_sha256"])
+        public1_path, _, _ = self._public_admission()
+        public1 = json.loads(public1_path.read_bytes())
+        public1["disposition"] = "bounded-diagnostic-followup"
+        self._write_admission(public1_path, public1)
+        packet1, packet1_ref, journal1, failure1 = self._write_assessed_preview(
+            prior_root, source1_path, public1_path, public1, 41)
+        packet1_sha = hashlib.sha256(BATCH._canonical(packet1)).hexdigest()
+        repair1 = {"live_retry_authorized": False, "diagnostic_only": True,
+            "diagnostic_case": BATCH.NATIVE_CASE_PREPARATION,
+            "safety_job_failed": False, "had_safety_job_failure": False,
+            "hosted_cleanup_outcome": "unknown", "qualification_accepted": False,
+            "unknown_high_findings": False, "full_qualification_dispatched": False,
+            "original_failure_cause": "unknown", "diagnostic_assessment": packet1_ref,
+            "assessment_reviews": self._source_head_reviews("attempt1-assessment", packet1_sha)}
+        terminal1 = {"all_jobs_terminal": True, "event": "pull_request",
+            "jobs": [{"id": 123450000100 + index, "name": name, "status": "completed",
+                "conclusion": "success" if name in BATCH.PREVIEW_REQUIRED_LANES else "skipped"}
+                for index, name in enumerate(sorted(BATCH.PREVIEW_REQUIRED_LANES | BATCH.PREVIEW_CONDITIONAL_SKIPS))],
+            "owning_case": BATCH.NATIVE_CASE_PREPARATION,
+            "safety_job_failed": False, "qualification_accepted": False,
+            "full_qualification_dispatched": False, "local_monitor_safety_issue": False,
+            "hosted_cleanup_outcome": "unknown", "original_failure_cause": "unknown",
+            "pull_request": {"number": 41,
+                "state": "open", "merged": False, "head_sha": public1["candidate"]["public_head"],
+                "base_sha": public1["candidate"]["public_base"]}}
+        if prior_workflow_timeout:
+            terminal1.update({"owning_case": BATCH.WORKFLOW_TIMEOUT_CONTRACT_CASE,
+                "failed_lane": "phase7-fast", "safety_job_failed": False,
+                "merge_attempted": False,
+                "fast_job_failure": {
+                    "outer_case": "test_default_unittest_suites_do_not_reach_any_os_process_seam",
+                    "inner_case": BATCH.WORKFLOW_TIMEOUT_CONTRACT_CASE,
+                    "exception": "AssertionError", "expected_literal": "timeout-minutes: 360",
+                    "classification": "workflow-timeout-expression-updated",
+                    "real_child_in_failing_cases": False}})
+            terminal1["jobs"] = [{"id": 124710000000 + index, "name": name,
+                "status": "completed", "conclusion":
+                    "failure" if name in ("phase7-fast", "required-ci") else
+                    "success" if name in BATCH.PREVIEW_REQUIRED_LANES else "skipped"}
+                for index, name in enumerate(sorted(BATCH.PREVIEW_REQUIRED_LANES | BATCH.PREVIEW_CONDITIONAL_SKIPS))]
+            repair1 = {"live_retry_authorized": False, "diagnostic_only": True,
+                "diagnostic_case": BATCH.WORKFLOW_TIMEOUT_CONTRACT_CASE,
+                "diagnostic_profile": BATCH.WORKFLOW_TIMEOUT_CONTRACT_PROFILE,
+                "safety_job_failed": False, "had_safety_job_failure": False,
+                "hosted_cleanup_outcome": "unknown", "qualification_accepted": False,
+                "unknown_high_findings": False, "full_qualification_dispatched": False,
+                "merge_attempted": False, "original_failure_cause": "unknown"}
+            fast_id = next(row["id"] for row in terminal1["jobs"] if row["name"] == "phase7-fast")
+            fast_log = prior_root / f"ci-failure/phase7-fast-{fast_id}.log"
+            fast_log.parent.mkdir(parents=True, exist_ok=True)
+            fast_text = ("FAIL: test_default_unittest_suites_do_not_reach_any_os_process_seam "
+                "(__main__.ProcessAdmissionContract.test_default_unittest_suites_do_not_reach_any_os_process_seam)\n"
+                "  QualificationCoordinatorContract testMethod=test_workflow_wires_real_product_smoke_and_serial_full_jobs\n"
+                "  self.assertIn(\"timeout-minutes: 360\", text)\n"
+                "  \\'timeout-minutes: 360\\' not found in\n"
+                "AssertionError: Lists differ: nested failure details\n"
+                "  QualificationCoordinatorContract testMethod=test_workflow_wires_real_product_smoke_and_serial_full_jobs\n"
+                "  self.assertIn(\"timeout-minutes: 360\", text)\n"
+                "  \\'timeout-minutes: 360\\' not found in\n"
+                "FAILED (failures=1)\n").encode()
+            fast_log.write_bytes(fast_text)
+            repair1["hosted_log"] = self._reference(fast_log, fast_text)
+            journal1 = {"schema": "genewhip.v02-delivery-journal.v1",
+                "repository": "szTheory/genewhip",
+                "source_head": public1["candidate"]["public_head"],
+                "public_base_sha": public1["candidate"]["public_base"],
+                "started_at": self.started}
+            self._write_admission(prior_root / "hosted-delivery-journal.json", journal1)
+            failure1 = {"schema": "genewhip.phase7-fresh-batch-failure.v1",
+                "authorization_sha256": BATCH.AUTH_SHA256, "stage": "preview-ci",
+                "reason": "pull-request-required-ci-failed", "observed_at": self.started}
+            self._write_admission(prior_root / "failure.json", failure1)
+        terminal1_path, repair1_path = prior_root / "terminal-observation.json", prior_root / "repair-evidence.json"
+        self._write_admission(terminal1_path, terminal1)
+        self._write_admission(repair1_path, repair1)
+        predecessor2 = {"attempt_index": 1, "attempt_root": prior_root.relative_to(self.root).as_posix(),
+            "failure": self._reference(prior_root / "failure.json", (prior_root / "failure.json").read_bytes()),
+            "journal": self._reference(prior_root / "hosted-delivery-journal.json",
+                (prior_root / "hosted-delivery-journal.json").read_bytes()),
+            "terminal_observation": self._reference(terminal1_path, terminal1_path.read_bytes()),
+            "repair_evidence": self._reference(repair1_path, repair1_path.read_bytes()),
+            "source_admission": self._reference(source1_path, source1_path.read_bytes()),
+            "cleanup_evidence": None, "disposition": "bounded-diagnostic-followup",
+            "all_ci_terminal": True, "safety_status": "diagnostic-only",
+            "cleanup_status": "unknown-hosted-test-outcome", "unknown_high_findings": False}
+
+        # Attempt 2 changes exactly the reviewed native diagnostic path roster.
+        native_paths = (set(BATCH.WORKFLOW_TIMEOUT_CONTRACT_SOURCE_PATHS)
+            if prior_workflow_timeout else set(BATCH.NATIVE_CASE_PREPARATION_PATHS))
+        self.source_paths = set(self.source_paths) | native_paths
+        current_pins = dict(self.pins)
+        for relative in sorted(native_paths):
+            data = b"# reviewed native diagnostic source fixture\n"
+            target = self.root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+            current_pins[relative] = hashlib.sha256(data).hexdigest()
+        second = self.root / BATCH.POLICY_ROOT / "attempt-0002"
+        second.mkdir()
+        self.batch_root, self.predecessor = second, predecessor2
+        self.publication = second / "candidate/publication-copy"
+        self.preparation = second / "candidate/preparation.json"
+        self.journal = second / "hosted-delivery-journal.json"
+        self.output = second / "native-diagnostic/result.json"
+        public2_path, _, _ = self._public_admission(current_pins,
+            disposition="bounded-diagnostic-followup", attempt_index=2, predecessor=predecessor2)
+        public2 = json.loads(public2_path.read_bytes())
+        source2 = {key: value for key, value in public2.items() if key != "candidate"}
+        source2["status"] = "source-preparation"
+        source2_path = second / "source-admission.json"
+        self._write_admission(source2_path, source2)
+        # Current public admission and source admission use the same source payload/reviews.
+        public2["source_reviews"] = source2["source_reviews"]
+        self._write_admission(public2_path, public2)
+        packet2, packet2_ref, journal2, failure2 = self._write_assessed_preview(
+            second, source2_path, public2_path, public2, 42)
+        ready = {"schema": "genewhip.phase7-native-diagnostic-readiness.v1",
+            "diagnostic_only": True, "qualification_accepted": False,
+            "plan": BATCH.native_diagnostic_plan(), "started_at": self.started,
+            "source_head": self.source_head, "candidate_head": public2["candidate"]["public_head"],
+            "public_admission": {"path": public2_path.relative_to(self.root).as_posix(),
+                "sha256": hashlib.sha256(public2_path.read_bytes()).hexdigest()},
+            "diagnostic_assessment": packet2_ref}
+        readiness_payload = dict(ready)
+        ready["assessment_reviews"] = self._source_head_reviews("attempt2-assessment",
+            hashlib.sha256(BATCH._canonical(readiness_payload)).hexdigest())
+        readiness_path = second / "native-diagnostic-readiness.json"
+        readiness_sha = self._write_admission(readiness_path, ready)
+        return {"root": second, "admission_path": public2_path,
+            "admission_sha": hashlib.sha256(public2_path.read_bytes()).hexdigest(),
+            "readiness_path": readiness_path, "readiness_sha": readiness_sha,
+            "source_pins": current_pins, "predecessor": predecessor2,
+            "prior_packet": packet1, "current_packet": packet2,
+            "current_journal": journal2, "current_failure": failure2}
+
     def test_public_admission_reopens_candidate_privacy_policy_and_two_fresh_reviews(self):
         path, digest, _ = self._public_admission()
         result = self._validate(stage="public-effects", admission_path=path, admission_sha=digest,
             output=self.output)
         self.assertEqual(result["started_at"], self.started)
+
+    def test_native_case_readiness_uses_full_production_guard_and_fixed_plan(self):
+        fixture = self._native_readiness_successor()
+        root = fixture["root"]
+
+        def validate(readiness_path=None, readiness_sha=None, output=None):
+            claim = self.root / BATCH.POLICY_ROOT / "successors" / (
+                BATCH._predecessor_identity_sha256(fixture["predecessor"]) + ".json")
+            claim.unlink(missing_ok=True)
+            return self._validate(stage="native-diagnostic",
+                admission_path=fixture["admission_path"], admission_sha=fixture["admission_sha"],
+                journal=root / "hosted-delivery-journal.json",
+                publication=root / "candidate/publication-copy",
+                preflight=root / "candidate/preparation.json",
+                output=output or root / "native-diagnostic/result.json",
+                diagnostic_readiness_path=readiness_path or fixture["readiness_path"],
+                diagnostic_readiness_sha=readiness_sha or fixture["readiness_sha"])
+
+        accepted = validate()
+        self.assertEqual(accepted["native_diagnostic_readiness"]["plan"], BATCH.native_diagnostic_plan())
+        self.assertEqual(accepted["admission"]["disposition"], "bounded-diagnostic-followup")
+        self.assertFalse((root / "native-diagnostic/result.json").exists())
+
+        readiness_raw = fixture["readiness_path"].read_bytes()
+        readiness = json.loads(readiness_raw)
+        for mutate in (
+                lambda value: value.update(qualification_accepted=True),
+                lambda value: value.update(source_head="f" * 40),
+                lambda value: value.update(candidate_head="f" * 40),
+                lambda value: value.update(started_at="2026-10-31T12:43:20+00:00"),
+                lambda value: value.update(plan={**value["plan"], "case": "other-case"}),
+                lambda value: value.update(plan={**value["plan"], "outer_wall_seconds": 1801}),
+                lambda value: value.update(assessment_reviews={}),
+                lambda value: value["assessment_reviews"]["code"].update(sha256="0" * 64),
+                lambda value: value.update(public_admission={**value["public_admission"],
+                    "sha256": "0" * 64})):
+            altered = json.loads(readiness_raw)
+            mutate(altered)
+            digest = self._write_admission(fixture["readiness_path"], altered)
+            with self.assertRaises(ValueError):
+                validate(readiness_sha=digest)
+        fixture["readiness_path"].write_bytes(readiness_raw)
+        with self.assertRaisesRegex(ValueError, "native-diagnostic-output-layout-invalid"):
+            validate(output=root / "native-diagnostic/other.json")
+        failure_path = root / BATCH.FAILURE_FILENAME
+        failure_raw = failure_path.read_bytes()
+        failure_path.unlink()
+        with self.assertRaisesRegex(ValueError, "native-diagnostic-assessment-stop-required"):
+            validate()
+        failure_path.write_bytes(failure_raw)
+
+        packet_ref = readiness["diagnostic_assessment"]
+        packet_path = self.root / packet_ref["path"]
+        packet_raw = packet_path.read_bytes()
+        packet = json.loads(packet_raw)
+        for mutate in (
+                lambda value: value["github"]["jobs"].pop(),
+                lambda value: value["github"]["jobs"].append({"id": 999999,
+                    "name": "unexpected", "status": "completed", "conclusion": "success"}),
+                lambda value: value["github"]["jobs"][0].update(status="in_progress"),
+                lambda value: value["github"]["jobs"][0].update(conclusion="failure"),
+                lambda value: value["github"]["workflow_run"].update(event="workflow_dispatch"),
+                lambda value: value["source_and_candidate"].update(preparation_sha256="0" * 64),
+                lambda value: value["github"].update(merged=True, pull_request_state="closed")):
+            altered_packet = json.loads(packet_raw)
+            mutate(altered_packet)
+            packet_sha = self._write_admission(packet_path, altered_packet)
+            altered_ready = json.loads(readiness_raw)
+            altered_ready["diagnostic_assessment"] = {"path": packet_ref["path"], "sha256": packet_sha}
+            ready_digest = self._write_admission(fixture["readiness_path"], altered_ready)
+            # Review payload covers the assessment reference, so rebuild synthetic
+            # accepted review fixtures exactly as production requires.
+            payload = {key: value for key, value in altered_ready.items() if key != "assessment_reviews"}
+            altered_ready["assessment_reviews"] = self._source_head_reviews("mutated-assessment",
+                hashlib.sha256(BATCH._canonical(payload)).hexdigest())
+            ready_digest = self._write_admission(fixture["readiness_path"], altered_ready)
+            with self.assertRaises(ValueError):
+                validate(readiness_sha=ready_digest)
+        packet_path.write_bytes(packet_raw)
+        fixture["readiness_path"].write_bytes(readiness_raw)
+
+    def test_native_case_readiness_accepts_workflow_timeout_predecessor_after_green_pr(self):
+        fixture = self._native_readiness_successor(prior_workflow_timeout=True)
+        root = fixture["root"]
+        claim = self.root / BATCH.POLICY_ROOT / "successors" / (
+            BATCH._predecessor_identity_sha256(fixture["predecessor"]) + ".json")
+        claim.unlink(missing_ok=True)
+        accepted = self._validate(stage="native-diagnostic",
+            admission_path=fixture["admission_path"], admission_sha=fixture["admission_sha"],
+            journal=root / "hosted-delivery-journal.json",
+            publication=root / "candidate/publication-copy",
+            preflight=root / "candidate/preparation.json",
+            output=root / "native-diagnostic/result.json",
+            diagnostic_readiness_path=fixture["readiness_path"],
+            diagnostic_readiness_sha=fixture["readiness_sha"])
+        self.assertEqual(accepted["native_diagnostic_readiness"]["plan"],
+                         BATCH.native_diagnostic_plan())
+        self.assertEqual(accepted["admission"]["predecessor"]["disposition"],
+                         "bounded-diagnostic-followup")
+        self.assertEqual(accepted["admission"]["predecessor"]["cleanup_status"],
+                         "unknown-hosted-test-outcome")
+        self.assertFalse((root / "native-diagnostic/result.json").exists())
 
     def test_positive_production_guard_packet_and_policy_validation_composition(self):
         coordinator_path = self.root / "scripts/release/v02_qualification.py"
