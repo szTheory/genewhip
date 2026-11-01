@@ -7,6 +7,7 @@ import importlib.util
 import json
 import hashlib
 import inspect
+import re
 import subprocess
 import tempfile
 import unittest
@@ -20,6 +21,75 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 MODULE = ROOT / "scripts/release/v02_qualification.py"
+
+
+def evaluate_ci_condition(expression, *, event, diagnostic_case):
+    """Evaluate the small boolean/equality subset used by these workflow jobs."""
+    token_pattern = re.compile(r"\s*(\(|\)|&&|\|\||==|!=|'[^']*'|[A-Za-z_][A-Za-z0-9_.-]*)")
+    tokens = []
+    offset = 0
+    while offset < len(expression):
+        match = token_pattern.match(expression, offset)
+        if match is None:
+            raise AssertionError("unsupported-workflow-condition-token")
+        tokens.append(match.group(1))
+        offset = match.end()
+    index = 0
+
+    def take(expected=None):
+        nonlocal index
+        if index >= len(tokens) or (expected is not None and tokens[index] != expected):
+            raise AssertionError("invalid-workflow-condition:" + str(tokens[index:index + 2]))
+        value = tokens[index]
+        index += 1
+        return value
+
+    def value():
+        token = take()
+        if token.startswith("'"):
+            return token[1:-1]
+        if token == "github.event_name":
+            return event
+        if token == "inputs.native_diagnostic_case":
+            return diagnostic_case
+        raise AssertionError("unsupported-workflow-condition-operand")
+
+    def comparison():
+        left = value()
+        if index < len(tokens) and tokens[index] in ("==", "!="):
+            operator = take()
+            right = value()
+            return left == right if operator == "==" else left != right
+        return bool(left)
+
+    def primary():
+        if index < len(tokens) and tokens[index] == "(":
+            take("(")
+            result = disjunction()
+            take(")")
+            return result
+        return comparison()
+
+    def conjunction():
+        result = primary()
+        while index < len(tokens) and tokens[index] == "&&":
+            take("&&")
+            right = primary()
+            result = bool(result and right)
+        return result
+
+    def disjunction():
+        result = conjunction()
+        while index < len(tokens) and tokens[index] == "||":
+            take("||")
+            right = conjunction()
+            result = bool(result or right)
+        return result
+
+    result = disjunction()
+    if index != len(tokens):
+        raise AssertionError("unsupported-workflow-condition-expression")
+    return bool(result)
 
 
 def require_process_context():
@@ -100,6 +170,360 @@ def synthetic_qualified_reports(benchmark, identity, source_digest, scope_id, sc
 
 
 class QualificationCoordinatorContract(unittest.TestCase):
+    def test_single_native_direct_entry_rejects_partial_authority_before_external_work(self):
+        from unittest import mock
+        module = load_module(self)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            args = (root / "packet.json", root / "publication", root / "scope.json",
+                    root / "result.json", root / "journal.json")
+            with mock.patch.object(module, "_external", side_effect=AssertionError("external-work")):
+                with self.assertRaisesRegex(ValueError,
+                        "single-native-authority-and-admission-required"):
+                    module.run_native_prefix_diagnostic_hosted(*args,
+                        batch_authorization=None, batch_authorization_sha256=None,
+                        batch_admission=None, batch_admission_sha256=None,
+                        prefix_readiness=root / "readiness.json", prefix_readiness_sha256="a" * 64,
+                        single_native_admission=root / "admission.json")
+
+    def test_single_native_claim_pair_is_optional_only_as_a_complete_legacy_absence(self):
+        from unittest import mock
+        module = load_module(self)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(module._native_prefix_claim_bounds())
+        with mock.patch.dict(os.environ, {"GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT":
+                "2026-11-01T11:27:01Z"}, clear=True):
+            with self.assertRaisesRegex(ValueError, "claim-clock-invalid"):
+                module._native_prefix_claim_bounds()
+        start = "2026-11-01T11:27:01Z"
+        deadline = "2026-11-01T12:12:01Z"
+        now_type = datetime.datetime
+        class FixedClock(now_type):
+            @classmethod
+            def now(cls, tz=None):
+                return now_type(2026, 11, 1, 11, 27, 2, tzinfo=datetime.timezone.utc)
+        with mock.patch.object(module, "datetime", mock.Mock(datetime=FixedClock,
+                timedelta=datetime.timedelta, timezone=datetime.timezone)), mock.patch.dict(os.environ, {
+                    "GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT": start,
+                    "GENEWHIP_NATIVE_DIAGNOSTIC_DEADLINE": deadline,
+                    "GENEWHIP_QUALIFICATION_STARTED_AT": start}, clear=True):
+            self.assertEqual(module._native_prefix_claim_bounds(required_reserve=1830)[2], 2699)
+
+    def test_single_native_q_guard_uses_pinned_validator_and_real_candidate_checks(self):
+        from unittest import mock
+        from types import SimpleNamespace
+        spec = importlib.util.spec_from_file_location("gw_q_single_native_fixture",
+            ROOT / "tests/evidence/phase7_single_native_contract.py")
+        fixture_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture_module)
+        fixture_case = fixture_module.SingleNativeAuthorityContract("test_real_admission_validator_checks_complete_candidate_and_rejects_forgery")
+        with tempfile.TemporaryDirectory(prefix="q-single-native-guard-") as temp:
+            root = Path(temp)
+            attempt, admission, record = fixture_case._admission_fixture(root)
+            validator_copy = root / "scripts/release/v02_single_native.py"
+            validator_copy.parent.mkdir(parents=True)
+            validator_copy.write_bytes((ROOT / "scripts/release/v02_single_native.py").read_bytes())
+            module = load_module(self)
+            module.ROOT = root
+            def external(command, **_kwargs):
+                if command[:3] == ["git", "ls-files", "-z"]:
+                    return SimpleNamespace(returncode=0, stdout="src/source.c\0", stderr="")
+                if command[:3] == ["git", "merge-base", "--is-ancestor"]:
+                    return SimpleNamespace(returncode=0, stdout="", stderr="")
+                raise AssertionError("unexpected external command")
+            source_head = record["source_head"]
+            with mock.patch.object(module, "_external", side_effect=external), \
+                 mock.patch.object(module, "_git", return_value=source_head):
+                accepted = module._single_native_guard(admission_path=admission,
+                    stage="public-effects", authority_path=None,
+                    authority_sha256=fixture_module.MOD.AUTH_SHA256,
+                    admission_sha256=hashlib.sha256(admission.read_bytes()).hexdigest())
+            self.assertEqual(accepted["candidate"]["public_head"], record["candidate"]["public_head"])
+            self.assertEqual(os.environ["GENEWHIP_SINGLE_NATIVE_ADMITTED"], "1")
+
+    def test_single_native_controller_uses_real_guard_assessment_and_candidate(self):
+        from unittest import mock
+        from types import SimpleNamespace
+        spec = importlib.util.spec_from_file_location("gw_q_single_native_controller_fixture",
+            ROOT / "tests/evidence/phase7_single_native_contract.py")
+        fixture_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture_module)
+        case = fixture_module.SingleNativeAuthorityContract("test_real_admission_validator_checks_complete_candidate_and_rejects_forgery")
+        with tempfile.TemporaryDirectory(prefix="q-single-native-controller-") as temp:
+            root = Path(temp).resolve()
+            attempt, admission, public_record = case._admission_fixture(root)
+            mod = fixture_module.MOD
+            for rel in ("scripts/release/v02_single_native.py", "scripts/release/v02_batch.py",
+                        "scripts/evidence/v02_run.py"):
+                target = root / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((ROOT / rel).read_bytes())
+            source = public_record["source_head"]
+            candidate = public_record["candidate"]
+            source_record = {"source_head": source, "started_at": public_record["started_at"],
+                "source_payload_sha256": public_record["source_payload_sha256"]}
+            source_admission = attempt / "source-admission.json"
+            source_admission.write_text(json.dumps(source_record, sort_keys=True))
+            source_rel = source_admission.relative_to(root).as_posix()
+            admission_rel = admission.relative_to(root).as_posix()
+            admission_sha = hashlib.sha256(admission.read_bytes()).hexdigest()
+            candidate_head, base = candidate["public_head"], candidate["public_base"]
+            branch, pr_number, preview_id = "v0.2-source-" + candidate_head[:12], 46, 99001
+            jobs_for_preview = [{"id": i + 1, "name": name, "status": "completed",
+                "conclusion": "success" if name in mod.PREVIEW_REQUIRED else "skipped"}
+                for i, name in enumerate(sorted(mod.PREVIEW_REQUIRED | mod.PREVIEW_SKIPPED))]
+            source_delivery = {"status": "diagnostic-ci-complete", "diagnostic_only": True,
+                "assessment_required": True, "merge_attempted": False,
+                "repository": "szTheory/genewhip", "candidate_sha": candidate_head,
+                "public_base_sha": base, "pull_request": str(pr_number)}
+            journal = {"repository": "szTheory/genewhip", "source_head": candidate_head,
+                "public_base_sha": base, "branch": branch, "push_performed": True,
+                "started_at": fixture_module.PUBLIC_STARTED_AT, "diagnostic_only": True,
+                "diagnostic_ci_status": "passed", "assessment_required": True,
+                "merge_attempted": False, "pull_request": str(pr_number)}
+            for name, value in (("source-delivery.json", source_delivery),
+                                ("hosted-delivery-journal.json", journal)):
+                (attempt / name).write_text(json.dumps(value, sort_keys=True))
+            delivery = {name: {"path": (attempt / filename).relative_to(root).as_posix(),
+                "sha256": hashlib.sha256((attempt / filename).read_bytes()).hexdigest()}
+                for name, filename in (("source_delivery", "source-delivery.json"),
+                    ("journal", "hosted-delivery-journal.json"))}
+            module = load_module(self)
+            module.ROOT = root
+            fixed_now = datetime.datetime(2026, 11, 1, 13, 9, 16, tzinfo=datetime.timezone.utc)
+            actual_datetime = datetime.datetime
+            class FixedClock(actual_datetime):
+                @classmethod
+                def now(cls, tz=None):
+                    return fixed_now if tz is not None else fixed_now.replace(tzinfo=None)
+            packet = {"disposition": "diagnostic-preview-green-assessment-required",
+                "qualification_credit": False,
+                "source_and_candidate": {"source_admission_path": source_rel,
+                    "source_admission_sha256": hashlib.sha256(source_admission.read_bytes()).hexdigest(),
+                    "public_admission_path": admission_rel, "public_admission_sha256": admission_sha,
+                    "private_source_head": source, "candidate_head": candidate_head,
+                    "public_head": candidate_head, "public_base": base,
+                    "public_tree": candidate["public_tree"],
+                    "manifest_sha256": candidate["source_manifest_sha256"],
+                    "preparation_sha256": candidate["preparation_sha256"],
+                    "candidate_review_payload_sha256": candidate["candidate_payload_sha256"]},
+                "hosted_source_delivery": {"source_delivery_path": delivery["source_delivery"]["path"],
+                    "source_delivery_sha256": delivery["source_delivery"]["sha256"],
+                    "journal_path": delivery["journal"]["path"], "journal_sha256": delivery["journal"]["sha256"]},
+                "github": {"repository": "szTheory/genewhip", "pull_request": pr_number,
+                    "pull_request_state": "open", "merged": False, "head_sha": candidate_head,
+                    "base_sha": base, "workflow_run": {"id": preview_id, "run_attempt": 1,
+                        "event": "pull_request", "status": "completed", "conclusion": "success",
+                        "workflow_path": ".github/workflows/ci.yml"}, "jobs": jobs_for_preview}}
+            ci_dir = attempt / "ci-failure"
+            ci_dir.mkdir()
+            assessment_path = ci_dir / "assessment.json"
+            assessment_path.write_text(json.dumps(packet, sort_keys=True))
+            assessment_ref = {"path": assessment_path.relative_to(root).as_posix(),
+                "sha256": hashlib.sha256(assessment_path.read_bytes()).hexdigest()}
+            plan_spec = importlib.util.spec_from_file_location("gw_test_single_native_plan", root / "scripts/release/v02_batch.py")
+            plan_module = importlib.util.module_from_spec(plan_spec); plan_spec.loader.exec_module(plan_module)
+            readiness_payload = {"schema": "genewhip.phase7-native-prefix-diagnostic-readiness.v1",
+                "diagnostic_only": True, "qualification_accepted": False,
+                "plan": plan_module.native_prefix_diagnostic_plan(),
+                "started_at": public_record["started_at"], "source_head": source,
+                "candidate_head": candidate_head,
+                "public_admission": {"path": admission_rel, "sha256": admission_sha},
+                "diagnostic_assessment": assessment_ref}
+            ready_digest = hashlib.sha256(json.dumps(readiness_payload, sort_keys=True,
+                separators=(",", ":")).encode()).hexdigest()
+            reviews = {}
+            for name, role in mod.SOURCE_ROLES.items():
+                path = root / ".planning/phases/GW-07-controller-fixture" / (name + ".md")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                raw = f"---\nstatus: accepted\nreviewer_role: {role}\npayload_sha256: {ready_digest}\n---\nfixture review\n"
+                path.write_text(raw)
+                reviews[name] = {"path": path.relative_to(root).as_posix(),
+                    "sha256": hashlib.sha256(raw.encode()).hexdigest(), "reviewer_role": role,
+                    "status": "accepted", "payload_sha256": ready_digest}
+            readiness_payload["assessment_reviews"] = reviews
+            readiness_path = attempt / "native-prefix-diagnostic-readiness.json"
+            readiness_path.write_text(json.dumps(readiness_payload, sort_keys=True))
+            readiness_sha = hashlib.sha256(readiness_path.read_bytes()).hexdigest()
+            self.assertEqual(readiness_payload["started_at"], public_record["started_at"])
+            self.assertGreater(datetime.datetime.fromisoformat(journal["started_at"]),
+                datetime.datetime.fromisoformat(readiness_payload["started_at"].replace("Z", "+00:00")))
+            module = load_module(self)
+            module.ROOT = root
+            fixed_now = datetime.datetime(2026, 11, 1, 13, 9, 16, tzinfo=datetime.timezone.utc)
+            actual_datetime = datetime.datetime
+            class FixedClock(actual_datetime):
+                @classmethod
+                def now(cls, tz=None):
+                    return fixed_now if tz is not None else fixed_now.replace(tzinfo=None)
+            github_run = {"id": 99887, "run_attempt": 1, "event": "workflow_dispatch",
+                "head_sha": candidate_head, "head_branch": branch, "path": ".github/workflows/ci.yml",
+                "display_title": "Plan10 native prefix diagnostic " + "f" * 32,
+                "repository": {"full_name": "szTheory/genewhip"}, "status": "completed",
+                "conclusion": "success", "created_at": fixed_now.isoformat().replace("+00:00", "Z")}
+            runtime_jobs_names = {"safety", "gameplay", "desktop", "package", "performance", "product-smoke",
+                "phase7-fast", "v02-runtime", "extended", "attestation", "required-ci",
+                "v02-benchmark-control", "v02-benchmark-recursion94", "v02-benchmark-tank-battle",
+                "v02-package", "v02-release-qualification"}
+            runtime_jobs = {"total_count": 16, "jobs": [{"name": name, "status": "completed",
+                "conclusion": "success" if name == "v02-runtime" else "skipped"}
+                for name in sorted(runtime_jobs_names)]}
+            preview_jobs = {"total_count": 16, "jobs": jobs_for_preview}
+            api_endpoints = []
+            def github(_repo, endpoint, **_kwargs):
+                api_endpoints.append(endpoint)
+                if endpoint == f"pulls/{pr_number}":
+                    return {"state": "open", "merged": False,
+                        "head": {"sha": candidate_head, "ref": branch, "repo": {"full_name": "szTheory/genewhip"}},
+                        "base": {"sha": base, "ref": "main"}}
+                if endpoint == "git/ref/heads/" + branch:
+                    return {"object": {"sha": candidate_head}}
+                if endpoint == f"actions/runs/{preview_id}":
+                    return {"id": preview_id, "run_attempt": 1, "event": "pull_request",
+                        "head_sha": candidate_head, "head_branch": branch, "path": ".github/workflows/ci.yml",
+                        "status": "completed", "conclusion": "success"}
+                if endpoint == f"actions/runs/{preview_id}/jobs?filter=latest&per_page=100":
+                    return preview_jobs
+                if endpoint == f"actions/runs/{github_run['id']}/jobs?filter=latest&per_page=100":
+                    return runtime_jobs
+                raise AssertionError("unexpected GitHub endpoint: " + endpoint)
+            report_module_spec = importlib.util.spec_from_file_location("gw_q_test_runtime", ROOT / "scripts/evidence/v02_run.py")
+            report_runtime = importlib.util.module_from_spec(report_module_spec); report_module_spec.loader.exec_module(report_runtime)
+            native_spec = importlib.util.spec_from_file_location("gw_q_native_report_fixture",
+                ROOT / "tests/evidence/phase7_native_diagnostic_contract.py")
+            native_fixture = importlib.util.module_from_spec(native_spec); native_spec.loader.exec_module(native_fixture)
+            report_case = native_fixture.NativePrefixDiagnosticContract("test_fixed_two_case_projector_passes_and_checks_both_port_observations")
+            report = report_case.public()
+            report["identity"] = {"source_sha": candidate_head, "head_sha": candidate_head,
+                "base_sha": base, "run_id": str(github_run["id"]), "run_attempt": "1"}
+            dispatches = []
+            def external(command, **_kwargs):
+                if command[:3] == ["git", "ls-files", "-z"]:
+                    return SimpleNamespace(returncode=0, stdout="src/source.c\0", stderr="")
+                if command[:3] == ["git", "merge-base", "--is-ancestor"]:
+                    return SimpleNamespace(returncode=0, stdout="", stderr="")
+                if command[:3] == ["gh", "workflow", "run"]:
+                    dispatches.append(command)
+                    return SimpleNamespace(returncode=0, stdout="", stderr="")
+                raise AssertionError("unexpected production external command")
+            runs = [[], [github_run]]
+            def workflow_runs(*_args, **_kwargs):
+                return runs.pop(0)
+            def download(_repo, run_id, attempt_number, artifact, destination, **_kwargs):
+                self.assertEqual((run_id, attempt_number, artifact), (str(github_run["id"]), "1", "native-prefix-diagnostic"))
+                destination.mkdir(parents=True)
+                (destination / "native-prefix-diagnostic.json").write_text(json.dumps(report))
+            output = attempt / "native-prefix-diagnostic/result.json"
+            scope = root / mod.SCOPE_REL
+            self.assertEqual(scope.resolve(), (module.ROOT / "evidence/v02-execution.json").resolve())
+            self.assertEqual(hashlib.sha256(scope.read_bytes()).hexdigest(), mod.SCOPE_SHA256)
+            self.assertEqual(module._sha(scope), "05eb7f5fa91d759fbef8fb86bbc9db402dc41812261235bcf5085a0e2aa9b1a5")
+            module._single_native_scope(scope)
+            source_path = attempt / "preparation.json"
+            with mock.patch.object(module, "datetime", SimpleNamespace(datetime=FixedClock,
+                    timezone=datetime.timezone, timedelta=datetime.timedelta)), \
+                 mock.patch.object(module.uuid, "uuid4", return_value=SimpleNamespace(hex="f" * 32)), \
+                 mock.patch.object(module, "_external", side_effect=external), \
+                 mock.patch.object(module, "_git", return_value=source), \
+                 mock.patch.object(module, "_gh_json", side_effect=github), \
+                 mock.patch.object(module, "_workflow_runs", side_effect=workflow_runs), \
+                 mock.patch.object(module, "_download_run_artifact", side_effect=download), \
+                 mock.patch.object(module, "_load_runtime_module", return_value=report_runtime):
+                result = module.run_native_prefix_diagnostic_hosted(source_path,
+                    attempt / "publication", scope, output, attempt / "hosted-delivery-journal.json",
+                    batch_authorization=None, batch_authorization_sha256=None,
+                    batch_admission=None, batch_admission_sha256=None,
+                    prefix_readiness=readiness_path, prefix_readiness_sha256=readiness_sha,
+                    single_native_admission=admission, single_native_admission_sha256=admission_sha,
+                    single_native_authority=root / mod.AUTH_REL, single_native_authority_sha256=mod.AUTH_SHA256)
+            self.assertEqual(result["status"], "pass")
+            self.assertFalse(result["qualification_accepted"])
+            self.assertEqual(len(dispatches), 1)
+            dispatch = json.loads((attempt / "native-prefix-diagnostic/dispatch.json").read_text())
+            self.assertEqual(dispatch["dispatches"], 1)
+            claim_path = root / mod.CLAIM_REL
+            claim = json.loads(claim_path.read_text())
+            self.assertEqual(claim, mod.claim_payload(attempt_root=mod.ROOT_REL.as_posix(),
+                source_sha=candidate_head, base_sha=base, branch=branch, nonce=dispatch["nonce"],
+                started_at=claim["started_at"], deadline=claim["deadline"],
+                readiness_sha256=readiness_sha))
+            self.assertEqual(claim["qualification_started_at"], claim["started_at"])
+            self.assertEqual(dispatch["native_diagnostic_started_at"], claim["started_at"])
+            self.assertEqual(dispatch["native_diagnostic_deadline"], claim["deadline"])
+
+    def test_single_native_reentry_does_not_touch_existing_claim_or_query_api(self):
+        from unittest import mock
+        from types import SimpleNamespace
+        spec = importlib.util.spec_from_file_location("gw_q_single_native_reentry_fixture",
+            ROOT / "tests/evidence/phase7_single_native_contract.py")
+        fixture_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture_module)
+        case = fixture_module.SingleNativeAuthorityContract("test_real_admission_validator_checks_complete_candidate_and_rejects_forgery")
+        with tempfile.TemporaryDirectory(prefix="q-single-native-reentry-") as temp:
+            root = Path(temp).resolve()
+            attempt, admission, record = case._admission_fixture(root)
+            for rel in ("scripts/release/v02_single_native.py",):
+                target = root / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((ROOT / rel).read_bytes())
+            source = record["source_head"]
+            module = load_module(self)
+            module.ROOT = root
+            journal = attempt / "hosted-delivery-journal.json"
+            journal.write_text("{}")
+            readiness = attempt / "native-prefix-diagnostic-readiness.json"
+            readiness.write_text("{}")
+            output = attempt / "native-prefix-diagnostic/result.json"
+            scope = root / fixture_module.MOD.SCOPE_REL
+            source_path = attempt / "preparation.json"
+            claim_path = root / fixture_module.MOD.CLAIM_REL
+            claim_path.parent.mkdir(parents=True, exist_ok=True)
+            existing_claim = b"preserved global claim fixture\n"
+            claim_path.write_bytes(existing_claim)
+            def external(command, **_kwargs):
+                if command[:3] == ["git", "ls-files", "-z"]:
+                    return SimpleNamespace(returncode=0, stdout="src/source.c\0", stderr="")
+                if command[:3] == ["git", "merge-base", "--is-ancestor"]:
+                    return SimpleNamespace(returncode=0, stdout="", stderr="")
+                raise AssertionError("unexpected local git operation")
+            with mock.patch.object(module, "_external", side_effect=external), \
+                 mock.patch.object(module, "_git", return_value=source), \
+                 mock.patch.object(module, "_gh_json", side_effect=AssertionError("remote API queried")), \
+                 mock.patch.object(module, "_workflow_runs", side_effect=AssertionError("workflow queried")):
+                with self.assertRaisesRegex(ValueError, "already-claimed"):
+                    module.run_native_prefix_diagnostic_hosted(source_path, attempt / "publication",
+                        scope, output, journal, batch_authorization=None,
+                        batch_authorization_sha256=None, batch_admission=None,
+                        batch_admission_sha256=None, prefix_readiness=readiness,
+                        prefix_readiness_sha256=hashlib.sha256(readiness.read_bytes()).hexdigest(),
+                        single_native_admission=admission,
+                        single_native_admission_sha256=hashlib.sha256(admission.read_bytes()).hexdigest(),
+                        single_native_authority=root / fixture_module.MOD.AUTH_REL,
+                        single_native_authority_sha256=fixture_module.MOD.AUTH_SHA256)
+            self.assertEqual(claim_path.read_bytes(), existing_claim)
+            self.assertFalse((attempt / "native-prefix-diagnostic").exists())
+
+            claim_path.unlink()
+            prior_attempt_claim = (root / "build/v02/native-prefix-one-shot-20261101T112701Z"
+                                   / "attempt-0001/native-prefix-diagnostic")
+            prior_attempt_claim.mkdir(parents=True)
+            with mock.patch.object(module, "_external", side_effect=external), \
+                 mock.patch.object(module, "_git", return_value=source), \
+                 mock.patch.object(module, "_gh_json", side_effect=AssertionError("remote API queried")), \
+                 mock.patch.object(module, "_workflow_runs", side_effect=AssertionError("workflow queried")):
+                with self.assertRaisesRegex(ValueError, "already-claimed"):
+                    module.run_native_prefix_diagnostic_hosted(source_path, attempt / "publication",
+                        scope, output, journal, batch_authorization=None,
+                        batch_authorization_sha256=None, batch_admission=None,
+                        batch_admission_sha256=None, prefix_readiness=readiness,
+                        prefix_readiness_sha256=hashlib.sha256(readiness.read_bytes()).hexdigest(),
+                        single_native_admission=admission,
+                        single_native_admission_sha256=hashlib.sha256(admission.read_bytes()).hexdigest(),
+                        single_native_authority=root / fixture_module.MOD.AUTH_REL,
+                        single_native_authority_sha256=fixture_module.MOD.AUTH_SHA256)
+            self.assertFalse(claim_path.exists())
+            self.assertFalse((attempt / "native-prefix-diagnostic").exists())
+
     def test_native_private_handoff_reader_preserves_typed_read_failures(self):
         module = load_module(self)
         with tempfile.TemporaryDirectory() as temp:
@@ -257,7 +681,9 @@ class QualificationCoordinatorContract(unittest.TestCase):
             ("push", "refs/heads/main", "", ordinary | {"attestation"}),
             ("workflow_dispatch", "refs/heads/main", "none", set(jobs) - {"extended"}),
             ("workflow_dispatch", "refs/heads/reviewed", "recursion94-withhold-first-plate", {"v02-runtime"}),
+            ("workflow_dispatch", "refs/heads/reviewed", "recursion94-native-prefix", {"v02-runtime"}),
             ("workflow_dispatch", "refs/heads/main", "recursion94-withhold-first-plate", {"v02-runtime"}),
+            ("workflow_dispatch", "refs/heads/main", "recursion94-native-prefix", {"v02-runtime"}),
             ("workflow_dispatch", "refs/heads/reviewed", "unrecognized", {"v02-runtime"})]
         for event, ref, selector, expected in scenarios:
             selected = set()
@@ -285,13 +711,241 @@ class QualificationCoordinatorContract(unittest.TestCase):
             command.append(line.strip())
         argv = shlex.split(" ".join(command))
         self.assertEqual(argv[:3], ["python3", "-I", "-c"])
-        for selector in ("", "none", "recursion94-withhold-first-plate", "unrecognized"):
+        for selector in ("", "none", "recursion94-withhold-first-plate", "recursion94-native-prefix", "unrecognized"):
             with mock.patch.dict(os.environ, {"GENEWHIP_NATIVE_DIAGNOSTIC_CASE": selector}):
                 if selector == "unrecognized":
                     with self.assertRaisesRegex(AssertionError, "selector-invalid"):
                         exec(compile(argv[3], "<trusted-workflow-selector-guard>", "exec"), {})
                 else:
                     exec(compile(argv[3], "<trusted-workflow-selector-guard>", "exec"), {})
+
+    def test_native_prefix_hosted_cli_uses_reviewed_guard_route_only(self):
+        from unittest import mock
+        from io import StringIO
+        module = load_module(self)
+        argv = ["--mode", "native-prefix-diagnostic-hosted", "--out", "build/v02/prefix-result.json",
+            "--journal", "build/v02/ci-continuation-20261031T124319Z/attempt-0016/hosted-delivery-journal.json",
+            "--publication-copy", "build/v02/ci-continuation-20261031T124319Z/attempt-0016/candidate/publication-copy",
+            "--batch-authorization", "build/v02/ci-continuation-20261031T124319Z/authorization.json",
+            "--batch-authorization-sha256", "a" * 64, "--batch-admission", "build/v02/admission.json",
+            "--batch-admission-sha256", "b" * 64, "--diagnostic-readiness", "build/v02/prefix-readiness.json",
+            "--diagnostic-readiness-sha256", "c" * 64]
+        for outcome in ({"status": "pass"}, {"status": "fail"}):
+            with mock.patch.object(module, "_fresh_batch_guard", side_effect=AssertionError("duplicate main guard")), \
+                 mock.patch.object(module, "run_native_prefix_diagnostic_hosted") as owner, \
+                 mock.patch.object(module, "_write_fresh_batch_failure", side_effect=AssertionError("old latch written")), \
+                 mock.patch.object(module.sys, "stdout", StringIO()), mock.patch.object(module.sys, "stderr", StringIO()):
+                owner.return_value = outcome
+                result = module.main(argv)
+                self.assertEqual(result, 0 if outcome == {"status": "pass"} else 1)
+                self.assertEqual(owner.call_count, 1)
+        wrong_route = ["--mode", "native-diagnostic", "--out", "build/v02/prefix-result.json",
+            "--diagnostic-readiness", "build/v02/prefix-readiness.json",
+            "--diagnostic-readiness-sha256", "c" * 64]
+        with mock.patch.object(module, "run_native_prefix_diagnostic_hosted") as owner, \
+             mock.patch.object(module.sys, "stdout", StringIO()), mock.patch.object(module.sys, "stderr", StringIO()):
+            self.assertEqual(module.main(wrong_route), 1)
+            owner.assert_not_called()
+
+    def test_native_prefix_hosted_controller_uses_real_batch_validator(self):
+        from types import SimpleNamespace
+        from unittest import mock
+        from io import StringIO
+        import copy
+
+        if os.environ.get("GENEWHIP_PREFIX_REAL_GUARD_CHILD") != "1":
+            module = load_module(self)
+            require_process_context()
+            scope = json.loads((ROOT / "evidence/v02-execution.json").read_bytes())
+            code = (
+                "import importlib.util,sys,unittest\n"
+                f"root={str(ROOT)!r}\n"
+                "spec=importlib.util.spec_from_file_location('qcontracts_child', root + '/tests/evidence/v02_qualification_contract.py')\n"
+                "m=importlib.util.module_from_spec(spec); sys.modules[spec.name]=m; spec.loader.exec_module(m)\n"
+                "test=unittest.defaultTestLoader.loadTestsFromName('test_native_prefix_hosted_controller_uses_real_batch_validator', m.QualificationCoordinatorContract)\n"
+                "result=unittest.TextTestRunner(verbosity=2).run(test)\n"
+                "raise SystemExit(0 if result.wasSuccessful() else 1)\n")
+            with tempfile.TemporaryDirectory(prefix="native-prefix-real-guard-", dir=ROOT / "build/v02") as temp:
+                scratch = Path(temp).resolve()
+                attempt = module._bounded_command([sys.executable, "-I", "-c", code],
+                    limits=scope["per_child_limits"], scratch=scratch, timeout=180,
+                    label="native-prefix-real-guard-contract", check=False,
+                    env={**os.environ, "GENEWHIP_PREFIX_REAL_GUARD_CHILD": "1"},
+                    scratch_roots=(scratch,))
+                retain_control_receipt("native-prefix-real-guard", attempt)
+                self.assertEqual(attempt.get("returncode"), 0,
+                    "isolated real-guard contract failed: " + str(attempt.get("streams", {}).get("stderr", {}).get("text", ""))[-1000:])
+                self.assertEqual(attempt.get("process_group_cleanup"), "confirmed")
+                self.assertEqual(attempt.get("processes", [{}])[0].get("bound_violation"), False)
+            return
+
+        def load_contract(path, name):
+            spec = importlib.util.spec_from_file_location(name, path)
+            loaded = importlib.util.module_from_spec(spec)
+            sys.modules[name] = loaded
+            spec.loader.exec_module(loaded)
+            return loaded
+        fixture_module = load_contract(ROOT / "tests/evidence/phase7_fresh_batch_contract.py",
+            "gw_native_prefix_hosted_real_guard_fixture")
+        fixture_module.FreshBatchContracts.setUpClass()
+        module = load_module(self)
+        fixed_now = datetime.datetime.fromisoformat("2026-10-31T12:50:00+00:00")
+        actual_datetime = datetime.datetime
+        class FixedCoordinatorClock(actual_datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return fixed_now if tz is not None else fixed_now.replace(tzinfo=None)
+        coordinator_clock = SimpleNamespace(datetime=FixedCoordinatorClock,
+            timezone=datetime.timezone, timedelta=datetime.timedelta)
+        nonce = "e" * 32
+        for runtime_conclusion in ("success", "failure"):
+            case = fixture_module.FreshBatchContracts(
+                "test_native_prefix_stage_uses_full_production_guard_and_disallows_legacy_route")
+            case.setUp()
+            self.addCleanup(case.doCleanups)
+            fixture = case._native_prefix_readiness_successor()
+            attempt = fixture["root"]
+            scope_path = case.root / fixture_module.BATCH.SCOPE_PATH
+            publication = attempt / "candidate/publication-copy"
+            preparation = attempt / "candidate/preparation.json"
+            journal = attempt / "hosted-delivery-journal.json"
+            output = attempt / "native-prefix-diagnostic/result.json"
+            auth_sha = fixture_module.BATCH.AUTH_SHA256
+            source = json.loads(fixture["admission_path"].read_bytes())["candidate"]["public_head"]
+            base = json.loads(fixture["admission_path"].read_bytes())["candidate"]["public_base"]
+            branch = "v0.2-source-" + source[:12]
+            pr_number = int(json.loads(journal.read_bytes())["pull_request"])
+            readiness = json.loads(fixture["readiness_path"].read_bytes())
+            assessment_path = case.root / readiness["diagnostic_assessment"]["path"]
+            assessment = json.loads(assessment_path.read_bytes())
+            preview = assessment["github"]["workflow_run"]
+            run_id = 87654321 if runtime_conclusion == "success" else 87654322
+            run = {"id": run_id, "run_attempt": 1, "event": "workflow_dispatch",
+                "head_sha": source, "head_branch": branch, "path": ".github/workflows/ci.yml",
+                "display_title": "Plan10 native prefix diagnostic " + nonce,
+                "repository": {"full_name": "szTheory/genewhip"}, "status": "completed",
+                "conclusion": runtime_conclusion, "created_at": fixed_now.isoformat().replace("+00:00", "Z")}
+            job_names = {"safety", "gameplay", "desktop", "package", "performance", "product-smoke",
+                "phase7-fast", "v02-runtime", "extended", "attestation", "required-ci",
+                "v02-benchmark-control", "v02-benchmark-recursion94", "v02-benchmark-tank-battle",
+                "v02-package", "v02-release-qualification"}
+            jobs = {"total_count": 16, "jobs": [{"name": name, "status": "completed",
+                "conclusion": runtime_conclusion if name == "v02-runtime" else "skipped"}
+                for name in sorted(job_names)]}
+            dispatches = []
+            workflow_checks = [[], [run]]
+
+            def real_guard(**kwargs):
+                return fixture_module.BATCH.validate_batch(case.root, case.auth, auth_sha,
+                    kwargs["batch_admission"], kwargs["batch_admission_sha256"],
+                    stage=kwargs["stage"], source_head=case.source_head,
+                    now=datetime.datetime.fromisoformat("2026-10-31T12:50:00+00:00"),
+                    scope_path=scope_path, journal_path=kwargs["journal_path"],
+                    publication_copy=kwargs["publication_copy"],
+                    preflight_path=kwargs["preflight_path"], output_path=kwargs["output_path"],
+                    source_is_ancestor=lambda _ancestor, _descendant: True,
+                    expected_source_paths=set(case.source_paths),
+                    diagnostic_readiness_path=kwargs["diagnostic_readiness_path"],
+                    diagnostic_readiness_sha256=kwargs["diagnostic_readiness_sha256"])
+
+            def github(_repository, endpoint, **_kwargs):
+                if endpoint == f"pulls/{pr_number}":
+                    return {"state": "open", "merged": False,
+                        "head": {"sha": source, "ref": branch, "repo": {"full_name": "szTheory/genewhip"}},
+                        "base": {"sha": base, "ref": "main"}}
+                if endpoint == "git/ref/heads/" + branch:
+                    return {"object": {"sha": source}}
+                if endpoint == "actions/runs/" + str(preview["id"]):
+                    return {"event": "pull_request", "head_sha": source, "status": "completed",
+                        "conclusion": "success", "run_attempt": preview["run_attempt"]}
+                if endpoint == f"actions/runs/{run_id}/jobs?filter=latest&per_page=100":
+                    return jobs
+                raise AssertionError("unexpected GitHub endpoint: " + endpoint)
+
+            native_module = load_contract(ROOT / "tests/evidence/phase7_native_diagnostic_contract.py",
+                "gw_native_prefix_report_fixture")
+            report_case = native_module.NativePrefixDiagnosticContract(
+                "test_fixed_two_case_projector_passes_and_checks_both_port_observations")
+            self.addCleanup(report_case.doCleanups)
+            report = report_case.public()
+            if runtime_conclusion == "failure":
+                record = report_case.passing_record()
+                record["status"] = "fail"
+                record["failure_category"] = "bounded-workload-failed"
+                record["stages"][1]["cases"][0]["status"] = "fail"
+                record["stages"][1]["status"] = "fail"
+                report = report_case.public(record)
+            report["identity"] = {"source_sha": source, "head_sha": source, "base_sha": base,
+                "run_id": str(run_id), "run_attempt": "1"}
+
+            def download(_repo, selected, attempt_number, artifact, destination, **_kwargs):
+                self.assertEqual((selected, attempt_number, artifact), (str(run_id), "1", "native-prefix-diagnostic"))
+                destination.mkdir(parents=True)
+                (destination / "native-prefix-diagnostic.json").write_text(json.dumps(report))
+
+            argv = ["gh", "workflow", "run"]
+            def external(command, **_kwargs):
+                dispatches.append(list(command))
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            def workflow_runs(*_args, **_kwargs):
+                return workflow_checks.pop(0)
+
+            with mock.patch.object(module, "ROOT", case.root), \
+                 mock.patch.object(module, "datetime", coordinator_clock), \
+                 mock.patch.object(module, "_fresh_batch_guard", side_effect=real_guard), \
+                 mock.patch.object(module, "_load_runtime_module", return_value=native_module.runner), \
+                 mock.patch.object(module, "_gh_json", side_effect=github), \
+                 mock.patch.object(module, "_workflow_runs", side_effect=workflow_runs), \
+                 mock.patch.object(module, "_external", side_effect=external), \
+                 mock.patch.object(module, "_download_run_artifact", side_effect=download), \
+                 mock.patch.object(module.uuid, "uuid4", return_value=SimpleNamespace(hex=nonce)), \
+                 mock.patch.object(fixture_module.BATCH, "NATIVE_PREFIX_ATTEMPT20_ROOT",
+                     fixture["predecessor"]["attempt_root"]), \
+                 mock.patch.object(fixture_module.BATCH, "NATIVE_PREFIX_ATTEMPT20_EVIDENCE_PATHS",
+                     fixture["attempt20_paths"]), \
+                 mock.patch.object(fixture_module.BATCH, "NATIVE_PREFIX_ATTEMPT20_EVIDENCE_SHA256",
+                     fixture["attempt20_hashes"]), \
+                 mock.patch.object(module.time, "monotonic", return_value=100.0), \
+                 mock.patch.object(module.time, "sleep", side_effect=AssertionError("completed run must not sleep")):
+                result = module.run_native_prefix_diagnostic_hosted(preparation, publication, scope_path,
+                    output, journal, batch_authorization=case.auth,
+                    batch_authorization_sha256=auth_sha, batch_admission=fixture["admission_path"],
+                    batch_admission_sha256=fixture["admission_sha"], prefix_readiness=fixture["readiness_path"],
+                    prefix_readiness_sha256=fixture["readiness_sha"])
+                self.assertEqual(result["status"], "pass" if runtime_conclusion == "success" else "fail")
+                self.assertFalse(result["qualification_accepted"])
+                self.assertTrue(result["assessment_required"])
+                self.assertEqual(len(dispatches), 1)
+                self.assertEqual(dispatches[0][dispatches[0].index("--field") + 1],
+                    "qualification_started_at=" + case.started)
+                self.assertIn("native_diagnostic_case=recursion94-native-prefix", dispatches[0])
+                self.assertIn("qualification_base_sha=" + base, dispatches[0])
+                self.assertIn("diagnostic_source_sha=" + source, dispatches[0])
+                with self.assertRaises(ValueError):
+                    module.run_native_prefix_diagnostic_hosted(preparation, publication, scope_path,
+                        output, journal, batch_authorization=case.auth,
+                        batch_authorization_sha256=auth_sha, batch_admission=fixture["admission_path"],
+                        batch_admission_sha256=fixture["admission_sha"], prefix_readiness=fixture["readiness_path"],
+                        prefix_readiness_sha256=fixture["readiness_sha"])
+                self.assertEqual(len(dispatches), 1)
+
+    def test_native_prefix_runtime_cli_dispatches_only_fixed_collector(self):
+        from unittest import mock
+        from io import StringIO
+        module = load_module(self)
+        with tempfile.TemporaryDirectory() as temp:
+            out = Path(temp) / "native-prefix.json"
+            argv = ["--mode", "native-prefix-diagnostic", "--build", str(ROOT / "build/phase6"),
+                "--scope", str(ROOT / "evidence/v02-execution.json"), "--out", str(out)]
+            for status in ("pass", "fail"):
+                with mock.patch.object(module, "run_native_prefix_diagnostic",
+                        return_value={"status": status, "qualification_accepted": False}) as owner, \
+                     mock.patch.object(module.sys, "stdout", StringIO()), \
+                     mock.patch.object(module.sys, "stderr", StringIO()):
+                    self.assertEqual(module.main(argv), 0 if status == "pass" else 1)
+                    owner.assert_called_once_with(Path(ROOT / "build/phase6"),
+                        Path(ROOT / "evidence/v02-execution.json"), out)
 
     def test_native_hosted_cli_uses_its_own_guard_and_cannot_write_old_failure_latch(self):
         from unittest import mock
@@ -304,16 +958,28 @@ class QualificationCoordinatorContract(unittest.TestCase):
             "--batch-authorization-sha256", "a" * 64, "--batch-admission", "build/v02/admission.json",
             "--batch-admission-sha256", "b" * 64, "--diagnostic-readiness", "build/v02/readiness.json",
             "--diagnostic-readiness-sha256", "c" * 64]
-        for outcome in ({"status": "pass"}, {"status": "fail"}, ValueError("diagnostic-rejected")):
-            with mock.patch.object(module, "_fresh_batch_guard", side_effect=AssertionError("duplicate guard")), \
-                 mock.patch.object(module, "run_native_diagnostic_hosted") as owner, \
-                 mock.patch.object(module, "_write_fresh_batch_failure", side_effect=AssertionError("old latch written")), \
-                 mock.patch.object(module.sys, "stdout", StringIO()), mock.patch.object(module.sys, "stderr", StringIO()):
-                if isinstance(outcome, Exception): owner.side_effect = outcome
-                else: owner.return_value = outcome
-                result = module.main(argv)
-                self.assertEqual(result, 0 if outcome == {"status": "pass"} else 1)
-                self.assertEqual(owner.call_count, 1)
+        for mode, owner_name in (("native-diagnostic-hosted", "run_native_diagnostic_hosted"),
+                                 ("native-prefix-diagnostic-hosted", "run_native_prefix_diagnostic_hosted")):
+            mode_argv = list(argv)
+            mode_argv[mode_argv.index("--mode") + 1] = mode
+            if mode.startswith("native-prefix"):
+                mode_argv[mode_argv.index("--journal") + 1] = mode_argv[mode_argv.index("--journal") + 1].replace(
+                    "attempt-0015", "attempt-0016")
+            for outcome in ({"status": "pass"}, {"status": "fail"}, ValueError("diagnostic-rejected")):
+                with self.subTest(mode=mode, outcome=repr(outcome)), \
+                     mock.patch.object(module, "_fresh_batch_guard", side_effect=AssertionError("duplicate guard")), \
+                     mock.patch.object(module, owner_name) as owner, \
+                     mock.patch.object(module, "_fresh_batch_attempt_root",
+                         side_effect=AssertionError("hosted diagnostic must not use legacy failure root")) as old_root, \
+                     mock.patch.object(module, "_write_fresh_batch_failure", side_effect=AssertionError("old latch written")) as old_latch, \
+                     mock.patch.object(module.sys, "stdout", StringIO()), mock.patch.object(module.sys, "stderr", StringIO()):
+                    if isinstance(outcome, Exception): owner.side_effect = outcome
+                    else: owner.return_value = outcome
+                    result = module.main(mode_argv)
+                    self.assertEqual(result, 0 if outcome == {"status": "pass"} else 1)
+                    self.assertEqual(owner.call_count, 1)
+                    old_root.assert_not_called()
+                    old_latch.assert_not_called()
 
     def test_native_diagnostic_driver_forwards_actual_outer_receipt_after_failure(self):
         from unittest import mock
@@ -2510,8 +3176,53 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
 
     def test_workflow_wires_real_product_smoke_and_serial_full_jobs(self):
         text = (ROOT / ".github/workflows/ci.yml").read_text()
+        smoke_job = text.split("  product-smoke:", 1)[1].split("\n  phase7-fast:", 1)[0]
+        fast_job = text.split("  phase7-fast:", 1)[1].split("\n  desktop:", 1)[0]
+        import re
+        aggregate_match = re.search(r"(?ms)^  required-aggregate:\n(.*?)(?=^  [a-z0-9-]+:|\Z)", text)
+        self.assertIsNotNone(aggregate_match)
+        aggregate = aggregate_match.group(1)
         self.assertRegex(text, r"(?m)^  product-smoke:\s*$")
+        smoke_predicate = next(line.strip()[4:] for line in smoke_job.splitlines() if line.strip().startswith("if:"))
+        fast_predicate = next(line.strip()[4:] for line in fast_job.splitlines() if line.strip().startswith("if:"))
+        expected_predicate = "github.event_name != 'schedule' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')"
+        self.assertEqual(smoke_predicate, fast_predicate)
+        self.assertEqual(smoke_predicate, expected_predicate)
+        trigger_block = text.split("jobs:", 1)[0]
+        for event in ("pull_request", "push", "merge_group", "schedule", "workflow_dispatch"):
+            self.assertIn(event + ":", trigger_block)
+        self.assertIn("branches: [main]", trigger_block)
+        event_cases = (("pull_request", "", True), ("push", "", True),
+            ("merge_group", "", True), ("workflow_dispatch", "", True),
+            ("workflow_dispatch", "none", True),
+            ("workflow_dispatch", "recursion94-native-prefix", False),
+            ("workflow_dispatch", "recursion94-withhold-first-plate", False),
+            ("schedule", "", False), ("schedule", "none", False),
+            ("schedule", "recursion94-native-prefix", False))
+        for event, diagnostic_case, expected in event_cases:
+            eligible = evaluate_ci_condition(smoke_predicate, event=event,
+                diagnostic_case=diagnostic_case)
+            self.assertEqual(eligible, expected, f"event eligibility changed: {event}/{diagnostic_case}")
+        self.assertIn("needs:", aggregate)
+        self.assertIn("product-smoke", aggregate)
+        self.assertIn("phase7-fast", aggregate)
+        for required_job in ("safety", "gameplay", "desktop", "package", "performance",
+                "v02-release-qualification", "attestation"):
+            self.assertIn(required_job, aggregate)
+        self.assertIn("always()", aggregate)
+        aggregate_predicate = next(line.strip()[4:] for line in aggregate.splitlines()
+            if line.strip().startswith("if:"))
+        self.assertIn("always()", aggregate_predicate)
+        self.assertEqual(aggregate_predicate,
+            "always() && " + expected_predicate)
+        self.assertIn("required-aggregate", text)
         self.assertIn("scripts/evidence/v02_run.py --mode smoke", text)
+        self.assertNotIn("v02_execution_contract.py --contracts", smoke_job)
+        gate_text = (ROOT / "scripts/ci/required-gate.sh").read_text()
+        fast_gate = gate_text.split('if [[ "${1:-}" == "--phase7-fast" ]]; then', 1)[1].split("  exit 0", 1)[0]
+        self.assertIn("v02_execution_contract.py --contracts", fast_gate)
+        smoke_source = (ROOT / "scripts/evidence/v02_run.py").read_text()
+        self.assertIn('"status": "pass" if core_ok and host_ok and observations_match else "fail"', smoke_source)
         self.assertRegex(text, r"(?m)^  v02-release-qualification:\s*$")
         qualification_job = text.split("  v02-release-qualification:", 1)[1].split("\n  required-aggregate:", 1)[0]
         mutant_step = qualification_job.index("--mode semantic-mutants")
@@ -2525,16 +3236,19 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
                          "--base-sha \"$GITHUB_BASE_SHA\"", "--run-id \"$GITHUB_RUN_ID\"",
                          "--run-attempt \"$GITHUB_RUN_ATTEMPT\""):
             self.assertIn(argument, package_job, "semantic-mutant-identity-not-explicit:" + argument)
-        import re
         runtime_job = text.split("  v02-runtime:", 1)[1].split("\n  v02-benchmark-control:", 1)[0]
         timeout = next(line.strip().split(": ", 1)[1] for line in runtime_job.splitlines()
                        if line.startswith("    timeout-minutes: "))
-        conditional = re.fullmatch(r"\$\{\{\s*inputs\.native_diagnostic_case\s*==\s*'([^']+)'\s*&&\s*([0-9]+)\s*\|\|\s*([0-9]+)\s*\}\}", timeout)
+        conditional = re.fullmatch(r"\$\{\{\s*\(inputs\.native_diagnostic_case\s*==\s*'([^']+)'\s*\|\|\s*inputs\.native_diagnostic_case\s*==\s*'([^']+)'\)\s*&&\s*([0-9]+)\s*\|\|\s*([0-9]+)\s*\}\}", timeout)
         self.assertIsNotNone(conditional, "runtime timeout must select fixed diagnostic and ordinary limits")
-        selected_case, diagnostic_minutes, ordinary_minutes = conditional.groups()
-        for selector, expected in (("", 360), ("none", 360), ("recursion94-withhold-first-plate", 45)):
+        selected_cases = set(conditional.groups()[:2])
+        diagnostic_minutes, ordinary_minutes = map(int, conditional.groups()[2:])
+        self.assertEqual(selected_cases, {"recursion94-withhold-first-plate", "recursion94-native-prefix"})
+        self.assertEqual((diagnostic_minutes, ordinary_minutes), (45, 360))
+        for selector, expected in (("", 360), ("none", 360),
+                ("recursion94-withhold-first-plate", 45), ("recursion94-native-prefix", 45)):
             with self.subTest(selector=selector):
-                self.assertEqual(int(diagnostic_minutes if selector == selected_case else ordinary_minutes), expected)
+                self.assertEqual(diagnostic_minutes if selector in selected_cases else ordinary_minutes, expected)
         for name in ("v02-benchmark-control", "v02-benchmark-recursion94", "v02-benchmark-tank-battle"):
             self.assertIn(name, text)
         self.assertIn("name: v02-runtime-${{ github.run_id }}-${{ github.run_attempt }}", text)
