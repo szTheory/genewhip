@@ -11,6 +11,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import tempfile
 import unittest
@@ -636,6 +637,91 @@ class NativeDiagnosticContract(unittest.TestCase):
             self.assertIs(comparison["failure_presence"]["capture_field_matches"], False)
             self.assertNotIn("private", json.dumps(safe))
 
+    def test_host_batch_failure_summary_distinguishes_ticks_from_first_input_mismatch(self):
+        def summary(*, ticks, input_equal, rows, fixture="recursion94",
+                    case="withhold-first-plate", core_count=18, host_count=18,
+                    process_return=1):
+            host = {"status": "fail", "runs": [{"fixture": fixture,
+                "case": case, "status": "fail",
+                "process": {"return_code": process_return},
+                "observed_clocks": {"status": 1, "active_ticks": ticks,
+                    "fields": 3631, "boundary_calls": 321},
+                "common_boundary": {"inputs": {"equal": input_equal,
+                    "core_count": core_count, "host_count": host_count, "rows": rows}}}]}
+            return json.loads(runner._safe_host_batch_failure("native", 1, host))
+
+        expected_masks = runner._NATIVE_DIAGNOSTIC_ROUTE_MASKS
+        complete_rows = [{"index": index, "equal": True, "port": 0,
+            "desired": mask, "effective": mask}
+            for index, mask in enumerate(expected_masks)]
+        early_tick = summary(ticks=3599, input_equal=True, rows=complete_rows)
+        self.assertEqual(early_tick["schema"], "genewhip.v02-host-batch-failure.v2")
+        self.assertEqual(early_tick["active_ticks"], "mismatch")
+        self.assertEqual(early_tick["active_ticks_value"], 3599)
+        self.assertEqual(early_tick["first_input_mismatch"]["state"], "none")
+        self.assertEqual(early_tick["input_core_count"], 18)
+        self.assertEqual(early_tick["input_host_count"], 18)
+        self.assertEqual(early_tick["first_input_mismatch"]["state"], "none")
+
+        # A producer-level equal flag cannot hide an incomplete, reordered,
+        # malformed, or wrong-count roster.
+        incomplete = summary(ticks=3600, input_equal=True, rows=complete_rows[:1])
+        duplicate = [dict(row) for row in complete_rows]
+        duplicate[1]["index"] = 0
+        reordered = [dict(row) for row in complete_rows]
+        reordered[0], reordered[1] = reordered[1], reordered[0]
+        malformed = [dict(row) for row in complete_rows]
+        malformed[0]["port"] = True
+        wrong_port = [dict(row) for row in complete_rows]
+        wrong_port[7]["port"] = 1
+        wrong_count = summary(ticks=3600, input_equal=True, rows=complete_rows,
+            core_count=True)
+        for case_summary in (incomplete,
+                summary(ticks=3600, input_equal=True, rows=duplicate),
+                summary(ticks=3600, input_equal=True, rows=reordered),
+                summary(ticks=3600, input_equal=True, rows=malformed),
+                summary(ticks=3600, input_equal=True, rows=wrong_port), wrong_count):
+            self.assertNotEqual(case_summary["first_input_mismatch"]["state"], "none")
+
+        input_mismatch = summary(ticks=3600, input_equal=False, rows=[
+            {"index": 0, "equal": False, "port": 0, "desired": 0, "effective": 8},
+            {"index": 1, "equal": True, "port": 0, "desired": 0, "effective": 0}])
+        mismatch = input_mismatch["first_input_mismatch"]
+        self.assertEqual(input_mismatch["active_ticks"], "expected")
+        self.assertEqual(input_mismatch["active_ticks_value"], 3600)
+        self.assertEqual(mismatch, {"state": "found", "index": 0, "expected_mask": 8,
+            "retained_desired": 0, "retained_effective": 8})
+        self.assertNotEqual(early_tick["first_input_mismatch"]["state"], mismatch["state"])
+
+        # The retained 18-mask map is specific to withhold-first-plate. Other
+        # recursion94 cases must not borrow its expected-mask values.
+        for case, count in (("full-route", 20), ("withhold-final-b", 18)):
+            with self.subTest(case=case):
+                other_case = summary(ticks=3600, input_equal=False, case=case,
+                    core_count=count, host_count=count, rows=[
+                        {"index": 0, "equal": False, "port": 0,
+                         "desired": 0, "effective": 8}])
+                self.assertEqual(other_case["first_input_mismatch"]["state"], "found")
+                self.assertEqual(other_case["first_input_mismatch"]["expected_mask"], "unavailable")
+
+        hostile = summary(ticks=True, input_equal=False, rows=[
+            {"index": True, "equal": False, "port": "private", "desired": ["secret"],
+                "effective": 10**100}], core_count=-1, host_count={"private": "secret"})
+        encoded = json.dumps(hostile, sort_keys=True)
+        self.assertLessEqual(len(encoded.encode("utf-8")), 4096)
+        self.assertNotIn("secret", encoded)
+        self.assertNotIn("private", encoded)
+        self.assertEqual(hostile["active_ticks_value"], "untyped")
+        self.assertEqual(hostile["input_core_count"], "negative")
+        self.assertEqual(hostile["input_host_count"], "untyped")
+        self.assertEqual(hostile["first_input_mismatch"]["index"], "untyped")
+        self.assertEqual(hostile["first_input_mismatch"]["retained_desired"], "untyped")
+        self.assertEqual(hostile["first_input_mismatch"]["retained_effective"], "overrange")
+
+        over_ticks = summary(ticks=3601, input_equal=False, rows=[])
+        self.assertEqual(over_ticks["active_ticks"], "overrange")
+        self.assertEqual(over_ticks["active_ticks_value"], "overrange")
+
     def test_projection_rejects_untyped_fields_without_leaking_them(self):
         hostile = {"status": "pass", "failure_category": [], "stages": [
             {"status": "pass", "process": {"return_code": True, "status": ["secret"],
@@ -664,8 +750,593 @@ class NativeDiagnosticContract(unittest.TestCase):
         self.assertIs(safe["qualification_accepted"], False)
 
 
+class NativePrefixDiagnosticContract(unittest.TestCase):
+    def test_queue_collector_remaining_time_never_rounds_subsecond_up(self):
+        cutoff = 10_000_000_000
+        self.assertEqual(runner._native_prefix_queue_remaining_seconds(
+            {"collector_deadline_monotonic_ns": cutoff}, cutoff - 1_000_000_000), 1)
+        for now in (cutoff - 999_999_999, cutoff, cutoff + 1):
+            with self.subTest(now=now), self.assertRaisesRegex(ValueError, "deadline-exhausted"):
+                runner._native_prefix_queue_remaining_seconds(
+                    {"collector_deadline_monotonic_ns": cutoff}, now)
+
+    @staticmethod
+    def identity():
+        return {"source_sha": "a" * 40, "head_sha": "b" * 40,
+            "base_sha": "c" * 40, "run_id": "12345", "run_attempt": "1"}
+
+    @staticmethod
+    def process():
+        return {"status": "completed", "return_code": 0,
+            "process_group_cleanup": "confirmed", "bound_violation": False}
+
+    @classmethod
+    def passing_record(cls):
+        input_masks = list(runner._NATIVE_DIAGNOSTIC_INPUT_MASKS)
+        observations = [{"requested_mask": mask, "effective_mask": mask,
+            "joystick_mask": mask} for mask in input_masks]
+        stages = [{"name": "input-contract", "status": "pass", "process": cls.process(),
+            "proof": {"outcome": "pass", "requested_count": 23,
+                "port_isolation_verified": True, "masks": input_masks,
+                "observations": observations}}]
+        case_masks = runner._NATIVE_PREFIX_ROUTE_MASKS
+        headless_cases, native_cases = [], []
+        for case in runner._NATIVE_PREFIX_CASES:
+            masks = list(case_masks[case])
+            count = len(masks)
+            predicates = {key: {"reached": reached, "value": value, "field": field}
+                for key, (reached, value, field) in
+                runner._NATIVE_PREFIX_EXPECTED_PREDICATES[case].items()}
+            core_events = [{"port": 0, "desired": mask, "effective": mask} for mask in masks]
+            core = {"status": 0, "active_ticks": 3600, "fields": 3631,
+                "boundary_calls": 99, "inputs": core_events}
+            core_row = {"fixture": "recursion94", "case": case, "repetition": 1,
+                "client": "public-core", "status": "pass", "process": cls.process(),
+                "native_report": {"path": "build/v02/prefix/native.json"},
+                "predicate_results": predicates}
+            headless_cases.append({"case": case, "status": "pass", "process": cls.process(),
+                "facts": {"native": core, "row": core_row}})
+            host_events = [{"port": 0, "requested_mask": mask, "effective_mask": mask,
+                "joystick_mask": mask, "handler": "SDL_Gamepad/sample_port"} for mask in masks]
+            host_row = {"status": "pass", "core_outcome": "pass", "host_outcome": "pass-diagnostic",
+                "process": cls.process(), "common_boundary": {"source_samples_equal": True,
+                    "renderer_pixel_equal": True, "full_pcm_equal": True,
+                    "inputs": {"equal": True, "rows": [{"index": index, "equal": True,
+                        "port": 0, "desired": mask, "effective": mask}
+                        for index, mask in enumerate(masks)]}},
+                "renderer": {"renderer_readback_activity": True},
+                "audio": {"audio_device_activity": True, "audio_submitted_frames": 20,
+                    "audio_device_consumed_frames": 19},
+                "raw_outputs": {"native": {"path": "build/v02/prefix/native.json"},
+                    "host": {"path": "build/v02/prefix/host.json"}}}
+            native_cases.append({"case": case, "status": "pass", "process": cls.process(),
+                "facts": {"row": host_row}})
+        stages.extend([
+            {"name": "headless-reference", "status": "pass", "cases": headless_cases},
+            {"name": "native-comparison", "status": "pass", "cases": native_cases}])
+        return {"schema": "genewhip.phase7-native-prefix-collector.v1", "status": "pass",
+            "failure_category": None, "stages": stages}
+
+    def public(self, record=None):
+        record = record or self.passing_record()
+        outer = {"returncode": 0, "launch_error": None, "process_group_cleanup": "confirmed",
+            "processes": [self.process()]}
+        with tempfile.TemporaryDirectory(dir=ROOT) as temp:
+            projected_root = Path(temp)
+            evidence = projected_root / "build/v02/prefix"
+            evidence.mkdir(parents=True)
+            for case in runner._NATIVE_PREFIX_CASES:
+                masks = list(runner._NATIVE_PREFIX_ROUTE_MASKS[case])
+                (evidence / f"native-{case}.json").write_text(json.dumps({
+                    "status": 0, "active_ticks": 3600, "fields": 3631,
+                    "boundary_calls": 99, "inputs": [{"port": 0,
+                        "desired": mask, "effective": mask} for mask in masks]}))
+                (evidence / f"host-{case}.json").write_text(json.dumps({"input_events": [
+                    {"port": 0, "requested_mask": mask, "effective_mask": mask,
+                     "joystick_mask": mask, "handler": "SDL_Gamepad/sample_port"}
+                    for mask in masks]}))
+            for stage_index, stage in enumerate(record.get("stages", [])[1:], 1):
+                for row in stage.get("cases", []):
+                    facts = row.get("facts", {})
+                    if not isinstance(facts.get("row"), dict):
+                        continue
+                    if stage_index == 1:
+                        facts["row"]["native_report"]["path"] = (
+                            f"build/v02/prefix/native-{row['case']}.json")
+                    elif stage_index == 2:
+                        facts["row"]["raw_outputs"] = {
+                            "native": {"path": f"build/v02/prefix/native-{row['case']}.json"},
+                            "host": {"path": f"build/v02/prefix/host-{row['case']}.json"}}
+            with mock.patch.object(runner, "ROOT", projected_root):
+                handoff = runner.native_prefix_diagnostic_handoff(record)
+                return runner.complete_native_prefix_diagnostic_handoff(handoff, outer,
+                    identity=self.identity())
+
+    def test_fixed_two_case_projector_passes_and_checks_both_port_observations(self):
+        report = self.public()
+        self.assertEqual(report["status"], "pass")
+        self.assertEqual(report["case_order"], ["full-route", "withhold-first-plate"])
+        self.assertTrue(runner.validate_native_prefix_diagnostic_public(report, self.identity()))
+        observations = report["stages"][0]["input"]["observations"]
+        self.assertEqual([row["joystick_mask"] for row in observations],
+            list(runner._NATIVE_DIAGNOSTIC_INPUT_MASKS))
+
+    def test_prefix_retains_bounded_terminal_context_without_changing_pass_oracle(self):
+        with tempfile.TemporaryDirectory(dir=ROOT) as temp:
+            projected_root = Path(temp)
+            evidence = projected_root / "build/v02/prefix"
+            evidence.mkdir(parents=True)
+            native_path = evidence / "native.json"
+            host_path = evidence / "host.json"
+            native = {"status": 1, "active_ticks": 3570, "fields": 3602,
+                "boundary_calls": 31780483, "first_stop_tick": 3499, "final_tick": 3600,
+                "stop_reason": 2, "instruction_address": 0x123456,
+                "opcode": 0x4e71, "render_requested": True, "render_tick": 3580,
+                "inputs": []}
+            native_path.write_text(json.dumps(native))
+            host_path.write_text(json.dumps({"input_events": []}))
+            facts = {"row": {"status": "fail", "core_outcome": "fail",
+                "host_outcome": "fail-diagnostic", "common_boundary": {},
+                "raw_outputs": {"native": {"path": "build/v02/prefix/native.json"},
+                    "host": {"path": "build/v02/prefix/host.json"}}}}
+            expected_stages = {
+                0: "none", 1: "input-quit", 2: "input-virtual-gamepad",
+                3: "field-observation", 4: "capture", 5: "field-hash",
+                6: "audio-read", 7: "audio-dump", 8: "renderer-observation",
+                9: "renderer-format", 10: "renderer-setup", 11: "renderer-draw",
+                12: "renderer-readback", 13: "renderer-capture",
+                14: "renderer-present", 15: "route-execution", 16: "audio-device"}
+            producer = (ROOT / "tools/desktop/main_sdl.c").read_text(encoding="utf-8")
+            producer_enum = dict((name, int(value)) for name, value in re.findall(
+                r"ROUTE_FAILURE_([A-Z_]+)\s*=\s*(\d+)", producer))
+            self.assertEqual(producer_enum, {
+                "NONE": 0, "INPUT_QUIT": 1, "INPUT_GAMEPAD": 2,
+                "FIELD_OBSERVATION": 3, "CAPTURE": 4, "FIELD_HASH": 5,
+                "AUDIO_READ": 6, "AUDIO_DUMP": 7, "RENDERER_OBSERVATION": 8,
+                "RENDERER_FORMAT": 9, "RENDERER_SETUP": 10, "RENDERER_DRAW": 11,
+                "RENDERER_READBACK": 12, "RENDERER_CAPTURE": 13,
+                "RENDERER_PRESENT": 14, "ROUTE_EXECUTION": 15,
+                "AUDIO_DEVICE": 16})
+            self.assertIn("first_failure_stage", producer)
+            self.assertIn("r->route_first_failure", producer)
+            marker_match = re.search(r"static void route_mark_failure\(.*?\n\}", producer, re.S)
+            self.assertIsNotNone(marker_match)
+            self.assertIn("route_first_failure == ROUTE_FAILURE_NONE", marker_match.group(0))
+            self.assertIn("route_first_failure = stage", marker_match.group(0))
+            for raw_stage, expected_stage in expected_stages.items():
+                host_path.write_text(json.dumps({"input_events": [],
+                    "first_failure_stage": raw_stage}))
+                with mock.patch.object(runner, "ROOT", projected_root):
+                    projected = runner._safe_host_facts(facts, retain_terminal_context=True)
+                self.assertEqual(projected["host_failure_stage"], expected_stage)
+            for hostile_stage in (True, "private SDL error/path", [], 17):
+                host_path.write_text(json.dumps({"input_events": [],
+                    "first_failure_stage": hostile_stage}))
+                with mock.patch.object(runner, "ROOT", projected_root):
+                    projected = runner._safe_host_facts(facts, retain_terminal_context=True)
+                self.assertEqual(projected["host_failure_stage"], "unavailable")
+                self.assertNotIn("private SDL error/path", json.dumps(projected))
+            host_path.write_text(json.dumps({"input_events": []}))
+            with mock.patch.object(runner, "ROOT", projected_root):
+                projected = runner._safe_host_facts(facts, retain_terminal_context=True)
+            self.assertEqual(projected["host_failure_stage"], "unavailable")
+
+            host_path.write_text(json.dumps({"input_events": [], "first_failure_stage": 12}))
+            with mock.patch.object(runner, "ROOT", projected_root):
+                projected = runner._safe_host_facts(facts, retain_terminal_context=True)
+            self.assertEqual(projected["terminal_context"], {
+                "status": 1, "first_stop_tick": 3499, "final_tick": 3600, "stop_reason": 2,
+                "instruction_address": 0x123456, "opcode": 0x4e71,
+                "render_requested": True, "render_tick": 3580})
+            self.assertEqual(projected["status"], "fail")
+            self.assertEqual(projected["observed_clocks"], {
+                "active_ticks": 3570, "fields": 3602, "boundary_calls": 31780483})
+            self.assertEqual(projected["host_failure_stage"], "renderer-readback")
+            for mutation in (
+                    {"stop_reason": "private terminal text"},
+                    {"stop_reason": True},
+                    {"status": 11},
+                    {"status": True},
+                    {"instruction_address": 1 << 40},
+                    {"opcode": 1 << 16},
+                    {"render_tick": 1 << 64},
+                    {"render_requested": 1},
+                    {"first_stop_tick": "path/rom/stderr"},
+                    {"final_tick": 1 << 64}):
+                hostile = dict(native)
+                hostile.update(mutation)
+                native_path.write_text(json.dumps(hostile))
+                with mock.patch.object(runner, "ROOT", projected_root):
+                    safe = runner._safe_host_facts(facts, retain_terminal_context=True)
+                self.assertNotIn("terminal_context", safe)
+                self.assertNotIn("private terminal text", json.dumps(safe))
+                self.assertNotIn("path/rom/stderr", json.dumps(safe))
+
+            # Public API errors 7-9 stay observable while the legacy status
+            # summary remains the fixed "unavailable" value for those codes.
+            for api_status in (7, 8, 9):
+                raw_error = dict(native, status=api_status)
+                native_path.write_text(json.dumps(raw_error))
+                with mock.patch.object(runner, "ROOT", projected_root):
+                    safe = runner._safe_host_facts(facts, retain_terminal_context=True)
+                self.assertEqual(safe["native_status"], "unavailable")
+                self.assertEqual(safe["terminal_context"]["status"], api_status)
+                self.assertEqual(safe["terminal_context"]["final_tick"], 3600)
+
+            # The new optional context is accepted for a failed report, but it
+            # cannot upgrade that report to compatibility/pass credit.
+            report = self.public()
+            report["stages"][2]["cases"][1]["comparison"]["terminal_context"] = {
+                "status": 1, "first_stop_tick": 3499, "final_tick": 3600, "stop_reason": 2,
+                "instruction_address": 0x123456, "opcode": 0x4e71,
+                "render_requested": True, "render_tick": 3580}
+            report["stages"][2]["cases"][1]["comparison"]["native_status"] = 1
+            report["status"] = "fail"
+            report["stages"][2]["cases"][1]["comparison"]["host_failure_stage"] = "renderer-readback"
+            self.assertTrue(runner.validate_native_prefix_diagnostic_public(report, self.identity()))
+            self.assertEqual(report["status"], "fail")
+            bad_stage = json.loads(json.dumps(report))
+            for bad_value in ("SDL error at /private/path", [], True):
+                bad_stage = json.loads(json.dumps(report))
+                bad_stage["stages"][2]["cases"][1]["comparison"]["host_failure_stage"] = bad_value
+                with self.assertRaisesRegex(ValueError, "native-prefix-diagnostic-public-report-invalid"):
+                    runner.validate_native_prefix_diagnostic_public(bad_stage, self.identity())
+            for invalid in (
+                    {**report["stages"][2]["cases"][1]["comparison"]["terminal_context"], "extra": "x"},
+                    {**report["stages"][2]["cases"][1]["comparison"]["terminal_context"], "stop_reason": True},
+                    {**report["stages"][2]["cases"][1]["comparison"]["terminal_context"], "stop_reason": 99},
+                    {**report["stages"][2]["cases"][1]["comparison"]["terminal_context"], "status": 0},
+                    {**report["stages"][2]["cases"][1]["comparison"]["terminal_context"], "status": 8}):
+                bad = json.loads(json.dumps(report))
+                bad["stages"][2]["cases"][1]["comparison"]["terminal_context"] = invalid
+                with self.assertRaisesRegex(ValueError, "native-prefix-diagnostic-public-report-invalid"):
+                    runner.validate_native_prefix_diagnostic_public(bad, self.identity())
+
+            # The status join also works for public API error values which the
+            # historical native_status summary intentionally does not expose.
+            error_report = self.public()
+            error_comparison = error_report["stages"][2]["cases"][1]["comparison"]
+            error_comparison["terminal_context"] = {
+                "status": 8, "first_stop_tick": None, "final_tick": 3600,
+                "stop_reason": 5, "instruction_address": 0x123456,
+                "opcode": 0x4e71, "render_requested": False, "render_tick": 3580}
+            error_comparison["native_status"] = "unavailable"
+            error_report["status"] = "fail"
+            self.assertTrue(runner.validate_native_prefix_diagnostic_public(error_report, self.identity()))
+
+    def test_prefix_public_consumer_rejects_wrong_case_order_or_port1_mask(self):
+        report = self.public()
+        wrong_order = json.loads(json.dumps(report))
+        wrong_order["stages"][2]["cases"].reverse()
+        with self.assertRaisesRegex(ValueError, "native-prefix-diagnostic-public-report-invalid"):
+            runner.validate_native_prefix_diagnostic_public(wrong_order, self.identity())
+        wrong_port = json.loads(json.dumps(report))
+        wrong_port["stages"][0]["input"]["observations"][19]["joystick_mask"] = 0
+        with self.assertRaisesRegex(ValueError, "native-prefix-diagnostic-public-report-invalid"):
+            runner.validate_native_prefix_diagnostic_public(wrong_port, self.identity())
+
+    def test_raw_prefix_stage_names_are_not_replaced_by_expected_positions(self):
+        record = self.passing_record()
+        record["stages"][1]["name"] = "native-comparison"
+        report = self.public(record)
+        self.assertEqual(report["status"], "fail")
+        self.assertEqual(report["failure_category"], "evidence-shape-invalid")
+        self.assertEqual(report["stages"][1]["status"], "unavailable")
+        self.assertTrue(runner.validate_native_prefix_diagnostic_public(report, self.identity()))
+
+    def test_prefix_projector_rejects_extra_or_misordered_raw_workloads_through_handoff(self):
+        mutations = (
+            ("extra-stage", lambda r: r["stages"].append({"name": "unexpected", "status": "fail", "cases": []})),
+            ("extra-headless-case", lambda r: r["stages"][1]["cases"].append({"case": "unknown", "status": "fail"})),
+            ("extra-native-case", lambda r: r["stages"][2]["cases"].append({"case": "unknown", "status": "fail"})),
+            ("unrecognized-headless-case", lambda r: r["stages"][1]["cases"][0].update(case="unknown")),
+            ("missing-native-case", lambda r: r["stages"][2]["cases"].pop()),
+            ("wrong-case-order", lambda r: r["stages"][1]["cases"].reverse()),
+        )
+        for name, mutate in mutations:
+            with self.subTest(name=name):
+                record = self.passing_record()
+                mutate(record)
+                handoff = runner.native_prefix_diagnostic_handoff(record)
+                self.assertEqual(handoff["collector_status"], "fail")
+                self.assertEqual(handoff["failure_category"], "evidence-shape-invalid")
+                report = self.public(record)
+                self.assertEqual(report["status"], "fail")
+                self.assertEqual(report["failure_category"], "evidence-shape-invalid")
+                self.assertTrue(runner.validate_native_prefix_diagnostic_public(report, self.identity()))
+
+    def test_untrusted_prefix_enums_are_sanitized_without_hashing_or_leaking(self):
+        for hostile in ([], {}, ["bounded-workload-failed"]):
+            record = self.passing_record()
+            record["status"] = "fail"
+            record["failure_category"] = hostile
+            record["stages"][1]["cases"][0]["status"] = hostile
+            report = runner.safe_native_prefix_diagnostic(record,
+                {"returncode": 1, "launch_error": None,
+                 "process_group_cleanup": "confirmed", "processes": [self.process()]},
+                identity=self.identity())
+            self.assertEqual(report["status"], "fail")
+            self.assertIsNone(report["failure_category"])
+            self.assertEqual(report["stages"][1]["cases"][0]["case"], "full-route")
+            self.assertEqual(report["stages"][1]["cases"][0]["status"], "unavailable")
+            self.assertTrue(runner.validate_native_prefix_diagnostic_public(report, self.identity()))
+
+        for key, hostile in (("case_order", []), ("collector_read_status", {}),
+                             ("outer_rejection", []), ("failure_category", {})):
+            report = self.public()
+            report[key] = hostile
+            with self.assertRaisesRegex(ValueError, "native-prefix-diagnostic-public-report-invalid"):
+                runner.validate_native_prefix_diagnostic_public(report, self.identity())
+
+    def test_prefix_failure_retains_unrun_case_without_pass_credit(self):
+        record = self.passing_record()
+        record["status"] = "fail"
+        record["failure_category"] = "bounded-workload-failed"
+        record["stages"][1]["cases"][0]["status"] = "fail"
+        record["stages"][1]["cases"][1].update({"status": "unavailable", "process": None, "facts": {}})
+        record["stages"][1]["status"] = "fail"
+        report = self.public(record)
+        self.assertEqual(report["status"], "fail")
+        self.assertEqual(report["stages"][1]["cases"][1]["status"], "unavailable")
+        self.assertTrue(runner.validate_native_prefix_diagnostic_public(report, self.identity()))
+
+    def test_prefix_pass_requires_real_route_predicates_limits_audio_and_handler(self):
+        mutations = (
+            ("wrong-predicate", lambda r: r["stages"][1]["cases"][0]["route"]["predicates"][0].update(value=0)),
+            ("fields-over-limit", lambda r: r["stages"][1]["cases"][0]["route"].update(fields=7201)),
+            ("calls-over-limit", lambda r: r["stages"][1]["cases"][0]["route"].update(boundary_calls=100000001)),
+            ("zero-audio", lambda r: r["stages"][2]["cases"][0]["comparison"].update(audio_submitted_frames=0)),
+            ("wrong-handler", lambda r: r["stages"][2]["cases"][0]["comparison"]["host_input_events"][0].update(handler="other")),
+            ("truncated-host-events", lambda r: r["stages"][2]["cases"][0]["comparison"].update(host_input_events_truncated=True)),
+            ("boolean-native-status", lambda r: r["stages"][2]["cases"][0]["comparison"].update(native_status=False)),
+        )
+        for name, mutate in mutations:
+            with self.subTest(name=name):
+                report = self.public()
+                mutate(report)
+                report["status"] = "pass"
+                with self.assertRaisesRegex(ValueError, "native-prefix-diagnostic-public-report-invalid"):
+                    runner.validate_native_prefix_diagnostic_public(report, self.identity())
+
+    def test_headless_cases_share_one_aggregate_deadline(self):
+        from types import SimpleNamespace
+
+        class Compiler:
+            @staticmethod
+            def canonical_digest(value):
+                return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+            @staticmethod
+            def compile_routes(_mapping=None, client="public-core"):
+                return {"routes": [{"fixture": "recursion94", "case": {"id": case}}
+                    for case in runner._NATIVE_PREFIX_CASES]}
+
+            @staticmethod
+            def lower_route(_route, **_kwargs):
+                return b"bounded fake route", {}
+
+        class Fixture:
+            compiler = Compiler()
+            def __init__(self): self.calls = []; self.scope = None
+            def set_execution_scope(self, scope): self.scope = scope
+            def freeze_candidate(self, _build, _map, path):
+                candidate = {"schema": "synthetic-candidate"}; path.write_text(json.dumps(candidate)); return candidate
+            def collect_case(self, _build, route, _mapping, _candidate, work, repetition, remaining,
+                             compiled_binary=None):
+                self.calls.append(route["case"]["id"])
+                self.assert_contract(repetition, remaining, compiled_binary)
+                assert work.parent.is_dir(), "runner must create shared headless stage parent"
+                work.mkdir(mode=0o700)
+                (work / "fields").mkdir()
+                masks = runner._NATIVE_PREFIX_ROUTE_MASKS[route["case"]["id"]]
+                native_path = work / "native.json"
+                native_path.write_text(json.dumps({"status": 0, "active_ticks": 3600,
+                    "fields": 3631, "boundary_calls": 99,
+                    "inputs": [{"port": 0, "desired": mask, "effective": mask} for mask in masks]}))
+                result = {"fixture": "recursion94", "case": route["case"]["id"],
+                    "repetition": 1, "client": "public-core", "status": "pass",
+                    "process": NativePrefixDiagnosticContract.process(),
+                    "native_report": {"path": native_path.relative_to(temp_root).as_posix()},
+                    "predicate_results": {key: {"reached": False, "value": 0, "field": 0}
+                        for key in ("early_dependency_interaction", "two_echoes_at_boot_cap",
+                            "crossed_generated_door", "late_program_stable")}}
+                monotonic_value[0] = 600
+                return result
+            @staticmethod
+            def assert_contract(repetition, remaining, compiled_binary):
+                assert repetition == 1 and 0 < remaining <= 600 and compiled_binary == b"bounded fake route"
+
+        class Desktop:
+            compiler = Compiler()
+            def __init__(self): self.scope = None; self.phase6_game = SimpleNamespace(_V02_DEADLINE=None)
+            def set_execution_scope(self, scope): self.scope = scope
+            def input_contract(self, _build, _map_path, output, _candidate, backend):
+                self.assert_contract(backend)
+                masks = MAP_MASKS
+                expected = [(0, mask) for mask in masks] + [(1, 2), (1, 0), (1, 16), (1, 0)]
+                proof = {"schema": "genewhip-phase6-sdl-virtual-input-contract-v1", "backend": "native",
+                    "video_driver": "cocoa", "rom_used": False,
+                    "delivery_map_sha256": Compiler.canonical_digest(mapping),
+                    "desktop_sha256": hashlib.sha256(b"fake executable identity").hexdigest(),
+                    "desktop_source_sha256": hashlib.sha256(b"fake desktop source").hexdigest(),
+                    "outcome": "pass", "requested_count": 23, "port_isolation_verified": True,
+                    "masks": masks, "observations": [{"port": port, "requested_mask": mask,
+                        "effective_mask": mask, "joystick_mask": mask} for port, mask in expected],
+                    "process": NativePrefixDiagnosticContract.process()}
+                output.write_text(json.dumps(proof)); return 0
+            @staticmethod
+            def assert_contract(backend): assert backend == "native"
+            def _retained_host_case(self, *_args):
+                raise AssertionError("host stage must not start after headless aggregate expires")
+
+        temp_dir = tempfile.TemporaryDirectory(dir=ROOT)
+        self.addCleanup(temp_dir.cleanup)
+        temp_root = Path(temp_dir.name).resolve()
+        build = temp_root / "build"
+        (build / "tools/desktop").mkdir(parents=True)
+        executable = build / "tools/desktop/genewhip-desktop"
+        executable.write_bytes(b"fake executable identity")
+        (temp_root / "tools/desktop").mkdir(parents=True)
+        (temp_root / "tools/desktop/main_sdl.c").write_text("fake desktop source")
+        mapping = {"events": [{"effective_mask": mask} for mask in MAP_MASKS]}
+        mapping_path = temp_root / "fixtures/phase6/recursion94-consumed-map-v1.json"
+        mapping_path.parent.mkdir(parents=True)
+        mapping_path.write_text(json.dumps(mapping))
+        scope = json.loads((ROOT / "evidence/v02-execution.json").read_text())
+        scope["owned_roots"] = ["build/v02/prefix-tests"]
+        limits = dict(scope["per_child_limits"])
+        out = temp_root / "build/v02/prefix-tests/prefix.json"
+        out.parent.mkdir(parents=True)
+        start = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=2)
+        monotonic_value = [0]
+        fixture, desktop = Fixture(), Desktop()
+        route_contract = SimpleNamespace()
+        with mock.patch.object(runner, "ROOT", temp_root), \
+             mock.patch.dict(os.environ, {"GITHUB_EVENT_NAME": "workflow_dispatch",
+                "GENEWHIP_NATIVE_DIAGNOSTIC_CASE": runner._NATIVE_PREFIX_SELECTOR,
+                "GENEWHIP_NATIVE_DIAGNOSTIC_SOURCE_SHA": "a" * 40, "GITHUB_SHA": "a" * 40,
+                "GENEWHIP_QUALIFICATION_STARTED_AT": start.isoformat(),
+                "GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT": start.isoformat(),
+                "GENEWHIP_NATIVE_DIAGNOSTIC_DEADLINE": (start + datetime.timedelta(seconds=2700)).isoformat()}), \
+             mock.patch.object(runner, "validate_execution_scope", return_value=(scope, limits)), \
+             mock.patch.object(runner, "_isolation_preflight", return_value={"production_child_starts": 0}), \
+             mock.patch.object(runner, "_module", side_effect=[fixture, desktop, route_contract]), \
+             mock.patch.object(runner.time, "monotonic", side_effect=lambda: monotonic_value[0]):
+            record = runner.run_native_prefix_diagnostic(build, temp_root / "scope.json", out)
+        self.assertEqual(fixture.calls, ["full-route"])
+        self.assertIsNone(desktop.phase6_game._V02_DEADLINE)
+        self.assertEqual(record["status"], "fail")
+        self.assertEqual(record["stages"][1]["cases"][0]["case"], "full-route")
+        self.assertEqual(record["stages"][1]["cases"][1]["status"], "unavailable")
+        self.assertEqual(record["stages"][2]["status"], "unavailable")
+
+    def test_prefix_requires_matching_exact_claim_clock(self):
+        start = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        self.assertIsNone(runner._native_prefix_claim_deadline(start, None, None))
+        with self.assertRaisesRegex(ValueError, "claim-clock-invalid"):
+            runner._native_prefix_claim_deadline(start, start, start)
+        deadline = (datetime.datetime.fromisoformat(start) + datetime.timedelta(seconds=2700)).isoformat()
+        self.assertEqual(runner._native_prefix_claim_deadline(start, start, deadline),
+            datetime.datetime.fromisoformat(deadline))
+        with self.assertRaisesRegex(ValueError, "claim-clock-invalid"):
+            runner._native_prefix_claim_deadline(start, start, None)
+        queued_end = (datetime.datetime.fromisoformat(start)
+            + datetime.timedelta(seconds=5400)).isoformat()
+        with mock.patch.dict(os.environ, {
+                "GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE": "native-prefix-queue-v1"}, clear=False):
+            self.assertEqual(runner._native_prefix_claim_deadline(start, start, queued_end),
+                datetime.datetime.fromisoformat(queued_end))
+        with mock.patch.dict(os.environ, {
+                "GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE": "unrecognized"}, clear=False):
+            with self.assertRaisesRegex(ValueError, "claim-clock-invalid"):
+                runner._native_prefix_claim_deadline(start, start, deadline)
+
+    def test_full_private_headless_row_reaches_real_host_consumer(self):
+        """The actual consumer reads media/identity refs before its launch boundary."""
+        desktop = load("tests/desktop/phase6_routes.py", "phase7_real_native_prefix_host_consumer")
+        compiler = desktop.compiler
+        mapping = json.loads((ROOT / "fixtures/phase6/recursion94-consumed-map-v1.json").read_text())
+        routes = compiler.compile_routes(mapping, client="sdl")["routes"]
+        route = next(row for row in routes if row["fixture"] == "recursion94"
+            and row["case"]["id"] == "withhold-first-plate")
+        with tempfile.TemporaryDirectory(dir=ROOT) as temp:
+            root = Path(temp).resolve()
+            for relative in ("build", "build/v02", "artifacts"):
+                (root / relative).mkdir(parents=True, exist_ok=True)
+            native_path = root / "artifacts/native.json"
+            pcm_path = root / "artifacts/headless.pcm"
+            image_path = root / "artifacts/headless.rgba"
+            native_path.write_text(json.dumps({"status": 0, "samples": [], "inputs": []}))
+            pcm_path.write_bytes(b"headless-pcm")
+            image_path.write_bytes(b"x" * (320 * 224 * 4))
+            core_row = {"fixture": "recursion94", "case": "withhold-first-plate",
+                "repetition": 1, "client": "public-core", "status": "pass",
+                "process": self.process(), "native_report": {"path": "artifacts/native.json"},
+                "pcm": {"path": "artifacts/headless.pcm", "sha256": hashlib.sha256(pcm_path.read_bytes()).hexdigest()},
+                "image": {"path": "artifacts/headless.rgba", "sha256": hashlib.sha256(image_path.read_bytes()).hexdigest()},
+                "field_sequence": 1441, "identity": {"rom_sha256": "a" * 64},
+                "predicate_results": {}}
+            core_report_path = root / "build/v02/headless-report.json"
+            core_report_path.write_text("{}\n")
+            attempts = root / "build/v02/native-comparison"
+            (attempts / "old-projection").mkdir(parents=True)
+            (attempts / "full-row").mkdir()
+            build = root / "build"
+            desktop_bin = root / "build/genewhip-desktop"
+            rom = root / "fixtures/game.bin"
+            rom.parent.mkdir(parents=True)
+            rom.write_bytes(b"fixture-only, never opened by a process")
+            sources = dict(compiler.SOURCES)
+            fixture_sources = list(sources["recursion94"])
+            fixture_sources[3] = str(rom.relative_to(root))
+            sources["recursion94"] = tuple(fixture_sources)
+            launches = []
+
+            class LaunchBoundaryReached(Exception):
+                pass
+
+            def launch(*_args, **_kwargs):
+                launches.append(True)
+                raise LaunchBoundaryReached()
+
+            old_projection = {key: core_row.get(key) for key in (
+                "fixture", "case", "repetition", "client", "status", "process",
+                "native_report", "predicate_results")}
+            with mock.patch.object(desktop, "ROOT", root), \
+                    mock.patch.object(compiler, "SOURCES", sources), \
+                    mock.patch.object(desktop.phase6_game, "shared_launch", side_effect=launch):
+                with self.assertRaisesRegex(KeyError, "pcm"):
+                    desktop._retained_host_case(build, desktop_bin, route, mapping,
+                        {"runs": [old_projection]}, core_report_path, "native",
+                        attempts / "old-projection", {})
+                self.assertEqual(launches, [])
+                consumer_row = runner._native_prefix_headless_consumer_row(core_row)
+                self.assertIsNot(consumer_row, core_row)
+                for key in ("pcm", "image", "field_sequence", "identity"):
+                    self.assertEqual(consumer_row[key], core_row[key])
+                with self.assertRaises(LaunchBoundaryReached):
+                    desktop._retained_host_case(build, desktop_bin, route, mapping,
+                        {"runs": [consumer_row]}, core_report_path, "native",
+                        attempts / "full-row", {})
+            self.assertEqual(launches, [True])
+
+    def test_real_collect_case_reaches_only_the_stubbed_launch_after_parent_exists(self):
+        module = load("tests/fixtures/phase6_game.py", "phase7_prefix_real_collect_case")
+        with tempfile.TemporaryDirectory(dir=ROOT) as temp:
+            root = Path(temp).resolve()
+            build = root / "build"
+            build.mkdir()
+            parent = root / "runtime" / "headless-reference"
+            work = parent / "full-route"
+            route = {"fixture": "recursion94", "case": {"id": "full-route"},
+                "definitions": {"predicates": []}}
+            reached = []
+
+            class LaunchReached(Exception):
+                pass
+
+            def launch(*_args, **_kwargs):
+                reached.append(True)
+                raise LaunchReached()
+
+            with mock.patch.object(module, "ROOT", root), \
+                    mock.patch.object(module.compiler, "lower_route", return_value=(b"route", {})), \
+                    mock.patch.object(module, "shared_launch", side_effect=launch):
+                with self.assertRaises(FileNotFoundError):
+                    module.collect_case(build, route, {}, {}, work, 1, 60,
+                        compiled_binary=b"route")
+                self.assertEqual(reached, [])
+                parent.mkdir(mode=0o700, parents=True)
+                with self.assertRaises(LaunchReached):
+                    module.collect_case(build, route, {}, {}, work, 1, 60,
+                        compiled_binary=b"route")
+                self.assertEqual(reached, [True])
+
+
 if __name__ == "__main__":
-    suite = unittest.defaultTestLoader.loadTestsFromTestCase(NativeDiagnosticContract)
+    suite = unittest.TestSuite([
+        unittest.defaultTestLoader.loadTestsFromTestCase(NativeDiagnosticContract),
+        unittest.defaultTestLoader.loadTestsFromTestCase(NativePrefixDiagnosticContract)])
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     if not result.wasSuccessful():
         raise SystemExit(1)
