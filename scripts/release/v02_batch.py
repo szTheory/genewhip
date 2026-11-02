@@ -222,7 +222,98 @@ WINDOW_RETRY_PREPARE_RECORD_SHA256 = {
     "started": "0bc7d4f32f258bd675bde5e950805919ec21494b0f8ae34135c7017c57505053",
     "exit": "7abdd982ffff4cf8d43026b18b32338a37adc27988440318a4a1a00eaced7062",
     "controller": "8577ccbd8c2a58255d7bc4267d59e153c937024277c673c4c7dc9f4cc0dd7e79"}
+TWO_HOUR_AUTH_PATH = Path("build/v02/phase7-qualification-20261102T220829Z/authorization.json")
+TWO_HOUR_AUTH_SHA256 = "abe4ac195dfa2fb0cd851f3d022b503b31229a7d16481a0be9678cd112b2238a"
+TWO_HOUR_SCOPE_PATH = Path("evidence/v02-phase7-two-hour-execution-scope.json")
+TWO_HOUR_SCOPE_SHA256 = "a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c"
+TWO_HOUR_ATTEMPT_NAMESPACE = Path("build/v02/phase7-qualification-20261102T220829Z/attempts")
+TWO_HOUR_STARTED_AT = "2026-11-02T22:08:29+00:00"
+TWO_HOUR_INITIAL_PREDECESSOR = {
+    "attempt_index": 2,
+    "attempt_root": "build/v02/phase7-qualification-20261102T165630Z/attempts/attempt-0002",
+    "terminal": {"path": "build/v02/phase7-qualification-20261102T165630Z/attempts/attempt-0002/operator/full-failure-observation.json",
+        "sha256": "f78d82391b3b6dd30bfa0c3a63e65dd8050e75ffbdb1e36ca48181cbcc4fc98b"},
+    "status": "settled-full-qualification-failure",
+    "qualification_accepted": False,
+    "local_cleanup": "settled",
+}
+TWO_HOUR_TERMINAL_ROOT = Path("build/v02/phase7-qualification-20261102T165630Z/attempts/attempt-0002")
+TWO_HOUR_TERMINAL_CLAIM = TWO_HOUR_TERMINAL_ROOT / "dispatch-claim.json"
+TWO_HOUR_TERMINAL_RUN = TWO_HOUR_TERMINAL_ROOT / "operator/full-terminal-run.json"
+TWO_HOUR_TERMINAL_JOBS = TWO_HOUR_TERMINAL_ROOT / "operator/full-terminal-jobs.json"
+TWO_HOUR_HOSTED_ARGV = TWO_HOUR_TERMINAL_ROOT / "operator/hosted-argv.json"
+TWO_HOUR_HOSTED_STARTED = TWO_HOUR_TERMINAL_ROOT / "operator/hosted-argv-started.json"
+TWO_HOUR_HOSTED_EXIT = TWO_HOUR_TERMINAL_ROOT / "operator/hosted-argv-exit.json"
+TWO_HOUR_HOSTED_CONTROLLER = TWO_HOUR_TERMINAL_ROOT / "operator/hosted-argv-controller.json"
+TWO_HOUR_PREPARE_ARGV = TWO_HOUR_TERMINAL_ROOT / "operator/prepare-argv.json"
+TWO_HOUR_PREPARE_STARTED = TWO_HOUR_TERMINAL_ROOT / "operator/prepare-argv-started.json"
+TWO_HOUR_PREPARE_EXIT = TWO_HOUR_TERMINAL_ROOT / "operator/prepare-argv-exit.json"
+TWO_HOUR_PREPARE_CONTROLLER = TWO_HOUR_TERMINAL_ROOT / "operator/prepare-argv-controller.json"
+TWO_HOUR_EXTERNAL_DIRECTORY = TWO_HOUR_TERMINAL_ROOT / "coordinator-external-attempts"
+TWO_HOUR_RUN_ID = 41507369006
+TWO_HOUR_RUN_ATTEMPT = 1
+TWO_HOUR_SOURCE_SHA = "3c1ae8db9fbe31347553d5a5ed601100dceb282c"
+TWO_HOUR_PRIVATE_SOURCE_HEAD = "efdf67a93ff18195b714d1800fa81fd83d96a577"
+TWO_HOUR_CONTROLLER_PID = 83223
+TWO_HOUR_CONTROLLER_EXIT_PID = 83213
+TWO_HOUR_EXTERNAL_LIMIT = 512
+TWO_HOUR_EXTERNAL_BYTES_LIMIT = 128 * 1024 * 1024
+TWO_HOUR_FIXED_RECORD_SHA256 = {
+    "source_admission": "edaed52809a093653594ef66d1b5cb9dbc0f0702dd824bb2473435e1666a835c",
+    "public_admission": "8519ae4e7c801b095eb979ef5cc1b44056d8c5cf4f8bfd12bd9af65a4c95d32c",
+    "dispatch_claim": "25703ebeb261856d115af45e9cf2a50e719406f4330093bce2ba3ba6cd2bf084",
+    "journal": "ac015d051cbe7c589761efddb51fc2c292fc694f4e0e008dfb8b2a06b334c824",
+    "failure": "15578076bb81010c75a427f724c0f9e9be84b385cde2d15ff4e801a295fc963c",
+    "preparation": "bd2535aae2ff410b21235212ba95ffe1b228e5b6a8871f7bc0afd159f05bd293",
+    "repository_policy": "076ae94005867f91d4beec1a3ed5e8b97f850488782caca00781cc58917dc95c",
+    "run": "8a8f611cb07a5210593544e61a9d384e24ebf58734b32c4e70ab828913479b28",
+    "jobs": "1f0876425bd492208a2b73f5165bc82e4f558ace5dda140718e9c18bed0d6a2f",
+    "hosted_argv": "5ff49251eb3a2fab9b6c4db499ba4c5780a764bb9e2ab1c1ef250cf0eb1e28f1",
+    "hosted_started": "867289253941b6edc84d0ad4dd0c2734c5a4b7a0dd257018a042a2753387d2af",
+    "hosted_exit": "77242fc2f0cedda35f8411d18d6ed2426c1af1b84f642e35f1db3b1ac1a10447",
+    "hosted_controller": "ed48024a5b8f41cf11363fd80aee3683728ab63c293240219ed78fbc8b95c36a",
+    "prepare_argv": "89c197df52b5ca490d6faccb8bc20c00161355101659a1b385c733f3e07492e9",
+    "prepare_started": "23aeed6fbaae34d9ba59d8af0e4fc52eef1c3324d6afc9dc4f362666c91fcc5b",
+    "prepare_exit": "eb9bb8b3659bebeaa11b38365c91901dbc2706cbba39716c38384ac4cfcfe180",
+    "prepare_controller": "f46fadb4e607862841463860c1c3661432660943f3b7b955a85e72490e58d22c",
+}
+TWO_HOUR_JOB_RESULTS = {
+    "product-smoke": "success", "safety": "success", "desktop": "success",
+    "performance": "success", "phase7-fast": "success", "package": "success",
+    "gameplay": "success", "v02-runtime": "failure", "extended": "skipped",
+    "v02-benchmark-control": "skipped", "v02-benchmark-recursion94": "skipped",
+    "required-ci": "failure", "v02-benchmark-tank-battle": "skipped",
+    "v02-package": "skipped", "attestation": "skipped",
+    "v02-release-qualification": "skipped",
+}
+WINDOW_PROFILES = {
+    "four-hour": {"authority_path": WINDOW_AUTH_PATH, "authority_sha256": WINDOW_AUTH_SHA256,
+        "scope_path": WINDOW_SCOPE_PATH, "scope_sha256": WINDOW_SCOPE_SHA256,
+        "attempt_namespace": WINDOW_ATTEMPT_NAMESPACE, "started_at": WINDOW_STARTED_AT,
+        "claim_schema": "genewhip.phase7-four-hour-dispatch-claim.v1",
+        "failure_schema": "genewhip.phase7-four-hour-attempt-failure.v1"},
+    "two-hour": {"authority_path": TWO_HOUR_AUTH_PATH, "authority_sha256": TWO_HOUR_AUTH_SHA256,
+        "scope_path": TWO_HOUR_SCOPE_PATH, "scope_sha256": TWO_HOUR_SCOPE_SHA256,
+        "attempt_namespace": TWO_HOUR_ATTEMPT_NAMESPACE, "started_at": TWO_HOUR_STARTED_AT,
+        "claim_schema": "genewhip.phase7-two-hour-dispatch-claim.v1",
+        "failure_schema": "genewhip.phase7-two-hour-attempt-failure.v1"},
+}
 _WINDOW_MODULE = None
+
+
+def _phase7_window_profile(window: dict[str, Any] | None = None) -> tuple[str, dict[str, Any]]:
+    """Resolve one of the two fixed prospective profile identities."""
+    if window is None or window.get("profile_id") is None:
+        return "four-hour", WINDOW_PROFILES["four-hour"]
+    profile_id = window.get("profile_id")
+    profile = WINDOW_PROFILES.get(profile_id)
+    if (profile is None or window.get("authority_sha256") != profile["authority_sha256"]
+            or window.get("scope_sha256") != profile["scope_sha256"]
+            or window.get("scope_path") != profile["scope_path"].as_posix()
+            or window.get("attempt_namespace") != profile["attempt_namespace"].as_posix()
+            or window.get("started_at") != profile["started_at"]):
+        raise ValueError("phase7-window-context-invalid")
+    return profile_id, profile
 NATIVE_DIAGNOSTIC_RESUMPTION_CASE = "native-diagnostic/accepted-revalidation"
 NATIVE_DIAGNOSTIC_RESUMPTION_PROFILE = "native-diagnostic-accepted-resumption"
 WORKFLOW_TIMEOUT_CONTRACT_CASE = (
@@ -682,32 +773,38 @@ def source_review_payload(*, source_head: str, started_at: str, attempt_root: st
 
 def phase7_window_source_admission_payload(*, attempt_root: str, attempt_index: int,
         predecessor: dict[str, Any], disposition: str, source_head: str,
-        source_pins: dict[str, str]) -> dict[str, Any]:
-    """Construct the source-review payload for the separately pinned four-hour window."""
-    return source_review_payload(source_head=source_head, started_at=WINDOW_STARTED_AT,
+        source_pins: dict[str, str], window: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Construct the source-review payload for one pinned prospective window."""
+    _, profile = _phase7_window_profile(window)
+    return source_review_payload(source_head=source_head, started_at=profile["started_at"],
         attempt_root=attempt_root, attempt_index=attempt_index, predecessor=predecessor,
         disposition=disposition, source_pins=source_pins,
-        authorization_sha256=WINDOW_AUTH_SHA256, scope_sha256=WINDOW_SCOPE_SHA256)
+        authorization_sha256=profile["authority_sha256"],
+        scope_sha256=profile["scope_sha256"])
 
 
 def phase7_window_candidate_review_payload(source_payload: dict[str, Any],
-        candidate: dict[str, Any]) -> dict[str, Any]:
-    """Construct the existing candidate-review payload under the four-hour policy hashes."""
+        candidate: dict[str, Any], window: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Construct a candidate-review payload bound to the selected window profile."""
+    _, profile = _phase7_window_profile(window)
     if (not isinstance(source_payload, dict)
-            or source_payload.get("authorization_sha256") != WINDOW_AUTH_SHA256
-            or source_payload.get("scope_sha256") != WINDOW_SCOPE_SHA256):
+            or source_payload.get("authorization_sha256") != profile["authority_sha256"]
+            or source_payload.get("scope_sha256") != profile["scope_sha256"]):
         raise ValueError("phase7-window-source-payload-invalid")
     return candidate_review_payload(source_payload, candidate)
 
 
-def phase7_window_attempt_root(root: Path, attempt_index: int) -> Path:
-    """Return one exact four-digit attempt directory under the new fixed namespace."""
+def phase7_window_attempt_root(root: Path, attempt_index: int,
+        window: dict[str, Any] | None = None) -> Path:
+    """Return one exact numbered attempt under the selected prospective namespace."""
     if type(attempt_index) is not int or attempt_index < 1 or attempt_index > 9999:
         raise ValueError("phase7-window-attempt-index-invalid")
+    _, profile = _phase7_window_profile(window)
     root = Path(os.path.abspath(root)).resolve(strict=True)
-    namespace = root / WINDOW_ATTEMPT_NAMESPACE
+    namespace_rel = profile["attempt_namespace"]
+    namespace = root / namespace_rel
     cursor = root
-    for part in WINDOW_ATTEMPT_NAMESPACE.parts:
+    for part in namespace_rel.parts:
         cursor = cursor / part
         if cursor.is_symlink():
             raise ValueError("phase7-window-attempt-namespace-invalid")
@@ -740,10 +837,11 @@ def _phase7_window_module():
 
 
 def _phase7_window_admission_location(root: Path, admission_path: Path,
-                                      stage: str) -> tuple[Path, int]:
+        stage: str, window: dict[str, Any] | None = None) -> tuple[Path, int]:
     if stage not in ("source-preparation", "public-effects"):
         raise ValueError("phase7-window-stage-invalid")
     root = Path(os.path.abspath(root)).resolve(strict=True)
+    _, profile = _phase7_window_profile(window)
     value = admission_path if admission_path.is_absolute() else root / admission_path
     value = Path(os.path.abspath(value))
     try:
@@ -751,8 +849,9 @@ def _phase7_window_admission_location(root: Path, admission_path: Path,
     except ValueError:
         raise ValueError("phase7-window-admission-path-invalid") from None
     expected_name = "source-admission.json" if stage == "source-preparation" else "public-admission.json"
-    if (len(relative.parts) != len(WINDOW_ATTEMPT_NAMESPACE.parts) + 2
-            or relative.parts[:len(WINDOW_ATTEMPT_NAMESPACE.parts)] != WINDOW_ATTEMPT_NAMESPACE.parts
+    namespace = profile["attempt_namespace"]
+    if (len(relative.parts) != len(namespace.parts) + 2
+            or relative.parts[:len(namespace.parts)] != namespace.parts
             or relative.name != expected_name):
         raise ValueError("phase7-window-admission-path-invalid")
     attempt_name = relative.parts[-2]
@@ -764,10 +863,10 @@ def _phase7_window_admission_location(root: Path, admission_path: Path,
         cursor = cursor / part
         if cursor.is_symlink():
             raise ValueError("phase7-window-admission-path-invalid")
-    attempt = phase7_window_attempt_root(root, int(match.group(1)))
+    attempt = phase7_window_attempt_root(root, int(match.group(1)), window=window)
     if value != attempt / expected_name:
         raise ValueError("phase7-window-admission-path-invalid")
-    namespace = (root / WINDOW_ATTEMPT_NAMESPACE).resolve(strict=True)
+    namespace = (root / profile["attempt_namespace"]).resolve(strict=True)
     allocated = []
     for child in namespace.iterdir():
         if child.is_symlink():
@@ -782,10 +881,324 @@ def _phase7_window_admission_location(root: Path, admission_path: Path,
     return attempt, int(match.group(1))
 
 
+def _phase7_window_validate_two_hour_predecessor(root: Path,
+        observation: dict[str, Any]) -> dict[str, Any]:
+    """Reopen the exact failed full run and its complete local cleanup evidence."""
+    label = "phase7-window-two-hour-predecessor-invalid"
+    root = Path(os.path.abspath(root)).resolve(strict=True)
+    expected_observation_keys = {"schema", "observed_at", "qualification",
+        "release_published", "run_id", "run_attempt", "source", "jobs",
+        "controller_exit", "controller_rejection", "observed_failure",
+        "runtime_cutoff", "no_retry_or_clock_reset", "dispatch_claim_preserved",
+        "external_attempts", "cleanup_problems", "not_an_attempt_rollover_admission"}
+    if (not isinstance(observation, dict) or set(observation) != expected_observation_keys
+            or observation.get("schema") != "genewhip.phase7-full-failure-observation.v1"
+            or observation.get("qualification") is not False
+            or observation.get("release_published") is not False
+            or observation.get("run_id") != TWO_HOUR_RUN_ID
+            or observation.get("run_attempt") != TWO_HOUR_RUN_ATTEMPT
+            or observation.get("source") != TWO_HOUR_SOURCE_SHA
+            or observation.get("controller_rejection") != "hosted-run-source-event-or-result-mismatch"
+            or observation.get("runtime_cutoff") != "2026-11-02T19:56:30+00:00"
+            or observation.get("no_retry_or_clock_reset") is not True
+            or observation.get("dispatch_claim_preserved") is not True
+            or observation.get("cleanup_problems") != []
+            or observation.get("not_an_attempt_rollover_admission") is not True
+            or observation.get("jobs") != TWO_HOUR_JOB_RESULTS
+            or not isinstance(observation.get("observed_failure"), str)
+            or not observation["observed_failure"]):
+        raise ValueError(label)
+
+    def fixed(name: str, relative: Path, cap: int = MAX_ADMISSION_BYTES):
+        reference = {"path": relative.as_posix(),
+            "sha256": TWO_HOUR_FIXED_RECORD_SHA256[name]}
+        return _phase7_window_read_json_reference(root, reference, label=label, cap=cap)
+
+    attempt_root = TWO_HOUR_TERMINAL_ROOT.as_posix()
+    source, source_raw = fixed("source_admission",
+        TWO_HOUR_TERMINAL_ROOT / "source-admission.json")
+    public, public_raw = fixed("public_admission",
+        TWO_HOUR_TERMINAL_ROOT / "public-admission.json")
+    claim, _ = fixed("dispatch_claim", TWO_HOUR_TERMINAL_CLAIM)
+    journal, _ = fixed("journal", TWO_HOUR_TERMINAL_ROOT / "hosted-delivery-journal.json")
+    failure, _ = fixed("failure", TWO_HOUR_TERMINAL_ROOT / "failure.json")
+    preparation, preparation_raw = fixed("preparation",
+        TWO_HOUR_TERMINAL_ROOT / "candidate/preparation.json", MAX_CANDIDATE_BYTES)
+    policy_path = TWO_HOUR_TERMINAL_ROOT / "candidate/repository-preflight-lmmr7a9a/policy.json"
+    policy, policy_raw = fixed("repository_policy", policy_path, MAX_CANDIDATE_BYTES)
+    source_keys = {"schema", "status", "authorization_path", "authorization_sha256",
+        "scope_path", "scope_sha256", "batch_root", "attempt_index", "attempt_root",
+        "predecessor", "disposition", "started_at", "source_head", "source_pins",
+        "source_payload_sha256", "source_reviews"}
+    candidate = public.get("candidate") if isinstance(public, dict) else None
+    candidate_keys = {"preparation_path", "preparation_sha256", "publication_path",
+        "repository_policy_path", "repository_policy_sha256", "public_head", "public_base",
+        "public_tree", "source_manifest_sha256", "candidate_payload_sha256", "candidate_reviews"}
+    common = ("authorization_path", "authorization_sha256", "scope_path", "scope_sha256",
+        "batch_root", "attempt_index", "attempt_root", "predecessor", "disposition",
+        "started_at", "source_head", "source_pins", "source_payload_sha256", "source_reviews")
+    if (not isinstance(source, dict) or set(source) != source_keys
+            or not isinstance(public, dict) or set(public) != source_keys | {"candidate"}
+            or not isinstance(candidate, dict) or set(candidate) != candidate_keys
+            or any(source.get(key) != public.get(key) for key in common)
+            or source.get("schema") != SCHEMA or public.get("schema") != SCHEMA
+            or source.get("status") != "source-preparation"
+            or public.get("status") != "public-effects"
+            or source.get("authorization_path") != WINDOW_AUTH_PATH.as_posix()
+            or source.get("authorization_sha256") != WINDOW_AUTH_SHA256
+            or source.get("scope_path") != WINDOW_SCOPE_PATH.as_posix()
+            or source.get("scope_sha256") != WINDOW_SCOPE_SHA256
+            or source.get("batch_root") != attempt_root
+            or source.get("attempt_index") != 2 or source.get("attempt_root") != attempt_root
+            or source.get("started_at") != WINDOW_STARTED_AT
+            or source.get("source_head") != TWO_HOUR_PRIVATE_SOURCE_HEAD
+            or not isinstance(source.get("source_pins"), dict)
+            or not source["source_pins"]
+            or not isinstance(source.get("source_reviews"), dict)
+            or set(source["source_reviews"]) != set(SOURCE_ROLES)
+            or any(not isinstance(path, str) or not isinstance(digest, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", digest)
+                for path, digest in source["source_pins"].items())):
+        raise ValueError(label)
+    source_payload = source_review_payload(source_head=source["source_head"],
+        started_at=source["started_at"], attempt_root=attempt_root, attempt_index=2,
+        predecessor=source["predecessor"], disposition=source["disposition"],
+        source_pins=source["source_pins"], authorization_sha256=WINDOW_AUTH_SHA256,
+        scope_sha256=WINDOW_SCOPE_SHA256)
+    source_payload_sha = _digest(_canonical(source_payload))
+    if source.get("source_payload_sha256") != source_payload_sha:
+        raise ValueError(label)
+    for key, role in SOURCE_ROLES.items():
+        _check_review(root, source["source_reviews"][key], role=role,
+            payload_sha256=source_payload_sha)
+    if (candidate.get("preparation_path") != (TWO_HOUR_TERMINAL_ROOT / "candidate/preparation.json").as_posix()
+            or candidate.get("preparation_sha256") != _digest(preparation_raw)
+            or candidate.get("repository_policy_path") != policy_path.as_posix()
+            or candidate.get("repository_policy_sha256") != _digest(policy_raw)
+            or candidate.get("public_head") != "ffbc94c40ff46960a8d637500302d5e155423b4f"
+            or candidate.get("public_base") != "0521ecd2e874e7ad5f5d593f244f2885939c4590"
+            or candidate.get("source_manifest_sha256") != preparation.get("source_manifest_sha256")
+            or candidate.get("public_tree") != preparation.get("public_identity", {}).get("tree_sha")
+            or preparation.get("status") != "prepared"
+            or preparation.get("mutations_performed") != 0
+            or preparation.get("workflow_dispatched") is not False
+            or preparation.get("push_performed") is not False
+            or preparation.get("pull_request_opened") is not False
+            or preparation.get("blockers") != []
+            or policy.get("repository") != "szTheory/genewhip"
+            or policy.get("repository_observations", {}).get("ready") is not True
+            or policy.get("privacy_scan", {}).get("publication_copy", {}).get("status") != "pass"):
+        raise ValueError(label)
+    candidate_payload = candidate_review_payload(source_payload, candidate)
+    candidate_payload_sha = _digest(_canonical(candidate_payload))
+    if (candidate.get("candidate_payload_sha256") != candidate_payload_sha
+            or not isinstance(candidate.get("candidate_reviews"), dict)
+            or set(candidate["candidate_reviews"]) != set(CANDIDATE_ROLES)):
+        raise ValueError(label)
+    for key, role in CANDIDATE_ROLES.items():
+        _check_review(root, candidate["candidate_reviews"][key], role=role,
+            payload_sha256=candidate_payload_sha)
+
+    if (not isinstance(claim, dict)
+            or claim.get("schema") != "genewhip.phase7-four-hour-dispatch-claim.v1"
+            or claim.get("authorization_sha256") != WINDOW_AUTH_SHA256
+            or claim.get("scope_sha256") != WINDOW_SCOPE_SHA256
+            or claim.get("attempt_index") != 2 or claim.get("attempt_root") != attempt_root
+            or claim.get("admission_sha256") != _digest(public_raw)
+            or claim.get("source_payload_sha256") != source_payload_sha
+            or claim.get("started_at") != WINDOW_STARTED_AT
+            or not isinstance(claim.get("nonce"), str)
+            or re.fullmatch(r"[0-9a-f]{32}", claim["nonce"]) is None
+            or not isinstance(journal, dict)
+            or journal.get("schema") != "genewhip.v02-delivery-journal.v1"
+            or journal.get("repository") != "szTheory/genewhip"
+            or journal.get("source_head") != candidate.get("public_head")
+            or journal.get("candidate_sha") != candidate.get("public_head")
+            or journal.get("public_source_sha") != TWO_HOUR_SOURCE_SHA
+            or journal.get("public_base_sha") != candidate.get("public_base")
+            or journal.get("started_at") != WINDOW_STARTED_AT
+            or journal.get("qualification_started_at") != WINDOW_STARTED_AT
+            or journal.get("qualification_dispatch_nonce") != claim.get("nonce")
+            or journal.get("qualification_dispatch_submitted") is not True
+            or journal.get("push_performed") is not True
+            or not isinstance(failure, dict)
+            or failure.get("schema") != "genewhip.phase7-four-hour-attempt-failure.v1"
+            or failure.get("authorization_sha256") != WINDOW_AUTH_SHA256
+            or failure.get("scope_sha256") != WINDOW_SCOPE_SHA256
+            or failure.get("attempt_index") != 2 or failure.get("attempt_root") != attempt_root
+            or failure.get("stage") != "qualification"
+            or failure.get("reason") != "fresh-batch-qualification-failed"):
+        raise ValueError(label)
+    claimed_at = _utc(claim.get("claimed_at"))
+
+    run, _ = fixed("run", TWO_HOUR_TERMINAL_RUN, 16 * 1024 * 1024)
+    jobs_doc, _ = fixed("jobs", TWO_HOUR_TERMINAL_JOBS, 16 * 1024 * 1024)
+    if (not isinstance(run, dict) or not isinstance(jobs_doc, dict)
+            or run.get("id") != TWO_HOUR_RUN_ID
+            or run.get("run_attempt") != TWO_HOUR_RUN_ATTEMPT
+            or run.get("workflow_id") != 392236816
+            or run.get("event") != "workflow_dispatch"
+            or not isinstance(run.get("path"), str)
+            or run["path"].split("@", 1)[0] != ".github/workflows/ci.yml"
+            or run.get("status") != "completed" or run.get("conclusion") != "failure"
+            or run.get("head_sha") != TWO_HOUR_SOURCE_SHA
+            or run.get("head_branch") != "main"
+            or not isinstance(run.get("repository"), dict)
+            or run["repository"].get("full_name") != "szTheory/genewhip"):
+        raise ValueError(label)
+    run_created = _utc(run.get("created_at"))
+    run_started = _utc(run.get("run_started_at"))
+    run_updated = _utc(run.get("updated_at"))
+    controller_exit = observation.get("controller_exit")
+    if (run_created < claimed_at or run_started < run_created or run_updated < run_started
+            or not isinstance(controller_exit, dict)
+            or run_updated > _utc(controller_exit.get("finished_at"))
+            or run_updated >= _utc(observation["runtime_cutoff"])):
+        raise ValueError(label)
+    jobs = jobs_doc.get("jobs")
+    if not isinstance(jobs, list) or len(jobs) != len(TWO_HOUR_JOB_RESULTS):
+        raise ValueError(label)
+    job_names, job_ids = [], []
+    for job in jobs:
+        if (not isinstance(job, dict) or type(job.get("id")) is not int or job["id"] <= 0
+                or job.get("run_id") != TWO_HOUR_RUN_ID
+                or job.get("status") != "completed"
+                or job.get("name") not in TWO_HOUR_JOB_RESULTS
+                or job.get("conclusion") != TWO_HOUR_JOB_RESULTS.get(job.get("name"))):
+            raise ValueError(label)
+        job_names.append(job["name"])
+        job_ids.append(job["id"])
+    if (len(set(job_names)) != len(job_names) or set(job_names) != set(TWO_HOUR_JOB_RESULTS)
+            or len(set(job_ids)) != len(job_ids)):
+        raise ValueError(label)
+
+    hosted_argv, hosted_argv_raw = fixed("hosted_argv", TWO_HOUR_HOSTED_ARGV)
+    hosted_started, _ = fixed("hosted_started", TWO_HOUR_HOSTED_STARTED)
+    hosted_exit, _ = fixed("hosted_exit", TWO_HOUR_HOSTED_EXIT)
+    hosted_controller, _ = fixed("hosted_controller", TWO_HOUR_HOSTED_CONTROLLER)
+    prepare_argv, prepare_argv_raw = fixed("prepare_argv", TWO_HOUR_PREPARE_ARGV)
+    prepare_started, _ = fixed("prepare_started", TWO_HOUR_PREPARE_STARTED)
+    prepare_exit, _ = fixed("prepare_exit", TWO_HOUR_PREPARE_EXIT)
+    prepare_controller, _ = fixed("prepare_controller", TWO_HOUR_PREPARE_CONTROLLER)
+    if (not isinstance(hosted_argv, list) or not isinstance(hosted_started, dict)
+            or not isinstance(hosted_exit, dict) or not isinstance(hosted_controller, dict)
+            or not isinstance(prepare_argv, list) or not isinstance(prepare_started, dict)
+            or not isinstance(prepare_exit, dict) or not isinstance(prepare_controller, dict)
+            or hosted_started.get("argv_sha256") != _digest(hosted_argv_raw)
+            or hosted_exit.get("argv_sha256") != _digest(hosted_argv_raw)
+            or hosted_started.get("source_head") != TWO_HOUR_PRIVATE_SOURCE_HEAD
+            or hosted_exit.get("source_head") != TWO_HOUR_PRIVATE_SOURCE_HEAD
+            or hosted_started.get("pid") != hosted_exit.get("pid")
+            or hosted_exit.get("controller_pid") != TWO_HOUR_CONTROLLER_PID
+            or hosted_exit.get("pid") != TWO_HOUR_CONTROLLER_EXIT_PID
+            or hosted_exit.get("exit_code") != 1 or hosted_exit.get("error") is not None
+            or hosted_controller.get("pid") != hosted_exit.get("controller_pid")
+            or hosted_controller.get("source_head") != TWO_HOUR_PRIVATE_SOURCE_HEAD
+            or hosted_started.get("started_at") != hosted_exit.get("started_at")
+            or hosted_controller.get("started_at") is None
+            or prepare_started.get("argv_sha256") != _digest(prepare_argv_raw)
+            or prepare_exit.get("argv_sha256") != _digest(prepare_argv_raw)
+            or prepare_started.get("source_head") != TWO_HOUR_PRIVATE_SOURCE_HEAD
+            or prepare_exit.get("source_head") != TWO_HOUR_PRIVATE_SOURCE_HEAD
+            or prepare_started.get("pid") != prepare_exit.get("pid")
+            or prepare_exit.get("controller_pid") != 79397
+            or prepare_exit.get("exit_code") != 0 or prepare_exit.get("error") is not None
+            or prepare_controller.get("pid") != prepare_exit.get("controller_pid")
+            or prepare_controller.get("source_head") != TWO_HOUR_PRIVATE_SOURCE_HEAD
+            or prepare_started.get("started_at") != prepare_exit.get("started_at")
+            or prepare_controller.get("started_at") is None):
+        raise ValueError(label)
+    expected_controller_summary = {
+        "argv_sha256": _digest(hosted_argv_raw),
+        "cleanup_established_by_recorder": False,
+        "controller_pid": hosted_exit["controller_pid"],
+        "deadline_owner": "Q; no recorder kill timer",
+        "error": hosted_exit["error"], "exit_code": hosted_exit["exit_code"],
+        "finished_at": hosted_exit["finished_at"], "pid": hosted_exit["pid"],
+        "source_head": TWO_HOUR_PRIVATE_SOURCE_HEAD,
+        "started_at": hosted_exit["started_at"],
+    }
+    if (observation.get("controller_exit") != expected_controller_summary
+            or _utc(hosted_controller.get("started_at")) < _utc(hosted_started.get("started_at"))
+            or _utc(hosted_exit.get("finished_at")) < _utc(hosted_controller.get("started_at"))):
+        raise ValueError(label)
+
+    external_refs = observation.get("external_attempts")
+    if not isinstance(external_refs, list) or len(external_refs) != 408:
+        raise ValueError(label)
+    external_dir = _resolve_no_symlink(root, root / TWO_HOUR_EXTERNAL_DIRECTORY, label=label)
+    expected_paths, listed_paths = [], []
+    total_bytes = 0
+    expected_controller_pids = {79397: 5, TWO_HOUR_CONTROLLER_PID: 403}
+    seen_controller_pids = {pid: 0 for pid in expected_controller_pids}
+    for reference in external_refs:
+        if (not isinstance(reference, dict)
+                or set(reference) != {"path", "sha256", "returncode", "cleanup"}
+                or reference.get("cleanup") != "confirmed"
+                or type(reference.get("returncode")) is not int
+                or not isinstance(reference.get("path"), str)):
+            raise ValueError(label)
+        relative = _safe_relative(reference["path"], label)
+        if relative.parent != TWO_HOUR_EXTERNAL_DIRECTORY.relative_to(Path(".")):
+            raise ValueError(label)
+        match = re.fullmatch(r"external-([0-9]+)-([0-9]+)\.attempt\.json", relative.name)
+        if match is None or int(match.group(1)) not in expected_controller_pids:
+            raise ValueError(label)
+        seen_controller_pids[int(match.group(1))] += 1
+        raw = _read_regular(_path(root, relative), cap=MAX_CONNECTOR_CAPTURE_BYTES, label=label)
+        total_bytes += len(raw)
+        if total_bytes > TWO_HOUR_EXTERNAL_BYTES_LIMIT or _digest(raw) != reference.get("sha256"):
+            raise ValueError(label)
+        receipt = _json_object(raw, label)
+        processes = receipt.get("processes")
+        if (receipt.get("schema") != "genewhip.v02-coordinator-child-attempt.v1"
+                or receipt.get("label") != relative.stem.removesuffix(".attempt")
+                or receipt.get("returncode") != reference["returncode"]
+                or receipt.get("launch_error") is not None
+                or receipt.get("process_group_cleanup") != "confirmed"
+                or not isinstance(receipt.get("argv"), list) or not receipt["argv"]
+                or not all(isinstance(arg, str) for arg in receipt["argv"])
+                or not isinstance(processes, list) or not processes
+                or any(not isinstance(row, dict) or row.get("status") != "completed"
+                    or type(row.get("return_code")) is not int
+                    or row.get("process_group_cleanup") != "confirmed"
+                    or row.get("bound_violation") is not False for row in processes)):
+            raise ValueError(label)
+        expected_paths.append(relative.as_posix())
+    if (expected_paths != sorted(set(expected_paths))
+            or seen_controller_pids != expected_controller_pids):
+        raise ValueError(label)
+    try:
+        for entry in external_dir.iterdir():
+            if entry.name.startswith("external-") and entry.name.endswith(".attempt.json"):
+                if entry.is_symlink() or not entry.is_file():
+                    raise ValueError(label)
+                listed_paths.append(entry.relative_to(root).as_posix())
+    except OSError:
+        raise ValueError(label) from None
+    if sorted(listed_paths) != expected_paths:
+        raise ValueError(label)
+    return dict(TWO_HOUR_INITIAL_PREDECESSOR)
+
 def _phase7_window_predecessor(root: Path, admission: dict[str, Any],
                                *, attempt_index: int, window: dict[str, Any]) -> dict[str, Any]:
     """Bind the prior closed attempt; unknown or unclean predecessors stop retries."""
     predecessor = admission.get("predecessor")
+    profile_id, _ = _phase7_window_profile(window)
+    if profile_id == "two-hour":
+        expected = dict(TWO_HOUR_INITIAL_PREDECESSOR)
+        if attempt_index != 1:
+            raise ValueError("phase7-window-two-hour-successor-terminal-proof-consumer-required")
+        if predecessor != expected:
+            raise ValueError("phase7-window-two-hour-predecessor-invalid")
+        observation, raw = _read_reference(root, expected["terminal"],
+            label="phase7-window-two-hour-predecessor-invalid", cap=256 * 1024)
+        if _digest(raw) != expected["terminal"]["sha256"]:
+            raise ValueError("phase7-window-two-hour-predecessor-invalid")
+        verified = _phase7_window_validate_two_hour_predecessor(root, observation)
+        if verified != expected:
+            raise ValueError("phase7-window-two-hour-predecessor-invalid")
+        return expected
     if attempt_index == 1:
         expected = {"attempt_index": 1,
             "attempt_root": "build/v02/phase7-iterations/attempt-0001",
@@ -1512,24 +1925,33 @@ def validate_phase7_window_batch(root: Path, authorization_path: Path,
         stage: str, source_head: str, now: datetime.datetime, scope_path: Path,
         journal_path: Path, publication_copy: Path, preflight_path: Path,
         output_path: Path, source_is_ancestor: Callable[[str, str], bool],
-        expected_source_paths: set[str]) -> dict[str, Any]:
-    """Validate source/candidate under the immutable Phase 7 four-hour route."""
+        expected_source_paths: set[str],
+        window: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Validate source/candidate under one exact prospective Phase 7 profile."""
     root = Path(os.path.abspath(root)).resolve(strict=True)
-    window = _phase7_window_module().load_window(root)
-    _phase7_window_module().check_window(window, phase="preparation" if stage ==
-        "source-preparation" else "runtime", now=now,
-        started_at=os.environ.get("GENEWHIP_QUALIFICATION_STARTED_AT", WINDOW_STARTED_AT))
     auth_value = Path(authorization_path)
     if not auth_value.is_absolute():
         auth_value = root / auth_value
     scope_value = Path(scope_path)
     if not scope_value.is_absolute():
         scope_value = root / scope_value
-    if (auth_value.resolve(strict=False) != root / WINDOW_AUTH_PATH
-            or authorization_sha256 != WINDOW_AUTH_SHA256
-            or scope_value.resolve(strict=False) != root / WINDOW_SCOPE_PATH):
+    profile_id, profile = _phase7_window_profile(window)
+    if (auth_value.resolve(strict=False) != root / profile["authority_path"]
+            or authorization_sha256 != profile["authority_sha256"]
+            or scope_value.resolve(strict=False) != root / profile["scope_path"]):
         raise ValueError("phase7-window-authority-or-scope-path-invalid")
-    attempt_root, attempt_index = _phase7_window_admission_location(root, admission_path, stage)
+    loaded_window = _phase7_window_module().load_window(root,
+        authority_path=profile["authority_path"],
+        authority_sha256=profile["authority_sha256"],
+        scope_path=profile["scope_path"], scope_sha256=profile["scope_sha256"])
+    if window is not None and _phase7_window_profile(loaded_window)[0] != profile_id:
+        raise ValueError("phase7-window-context-invalid")
+    window = loaded_window
+    _phase7_window_module().check_window(window, phase="preparation" if stage ==
+        "source-preparation" else "runtime", now=now,
+        started_at=os.environ.get("GENEWHIP_QUALIFICATION_STARTED_AT", profile["started_at"]))
+    attempt_root, attempt_index = _phase7_window_admission_location(root,
+        admission_path, stage, window=window)
     expected_admission = attempt_root / ("source-admission.json" if stage ==
         "source-preparation" else "public-admission.json")
     expected_journal = attempt_root / "hosted-delivery-journal.json"
@@ -1544,7 +1966,7 @@ def validate_phase7_window_batch(root: Path, authorization_path: Path,
         if resolved != Path(value).resolve(strict=False):
             raise ValueError("phase7-window-" + label + "-path-invalid")
     if (_resolve_no_symlink(root, scope_path,
-            label="phase7-window-scope-path-invalid") != root / WINDOW_SCOPE_PATH
+            label="phase7-window-scope-path-invalid") != root / profile["scope_path"]
             or expected_journal != Path(journal_path if Path(journal_path).is_absolute()
                 else root / journal_path)
             or attempt_root not in publication.resolve(strict=False).parents
@@ -1552,7 +1974,7 @@ def validate_phase7_window_batch(root: Path, authorization_path: Path,
             or attempt_root not in output.resolve(strict=False).parents
             or output.resolve(strict=False).exists()):
         raise ValueError("phase7-window-output-layout-invalid")
-    protected_paths = [root / WINDOW_AUTH_PATH, root / WINDOW_SCOPE_PATH,
+    protected_paths = [root / profile["authority_path"], root / profile["scope_path"],
         expected_admission, expected_journal]
     if stage == "public-effects":
         protected_paths.append(preflight.resolve(strict=False))
@@ -1583,14 +2005,14 @@ def validate_phase7_window_batch(root: Path, authorization_path: Path,
     attempt_relative = attempt_root.relative_to(root).as_posix()
     if (set(admission) != expected_keys or admission.get("schema") != SCHEMA
             or admission.get("status") != stage
-            or admission.get("authorization_path") != WINDOW_AUTH_PATH.as_posix()
-            or admission.get("authorization_sha256") != WINDOW_AUTH_SHA256
-            or admission.get("scope_path") != WINDOW_SCOPE_PATH.as_posix()
-            or admission.get("scope_sha256") != WINDOW_SCOPE_SHA256
+            or admission.get("authorization_path") != profile["authority_path"].as_posix()
+            or admission.get("authorization_sha256") != profile["authority_sha256"]
+            or admission.get("scope_path") != profile["scope_path"].as_posix()
+            or admission.get("scope_sha256") != profile["scope_sha256"]
             or admission.get("batch_root") != attempt_relative
             or admission.get("attempt_root") != attempt_relative
             or admission.get("attempt_index") != attempt_index
-            or admission.get("started_at") != WINDOW_STARTED_AT
+            or admission.get("started_at") != profile["started_at"]
             or admission.get("source_head") != source_head
             or admission.get("disposition") not in DISPOSITIONS):
         raise ValueError("phase7-window-admission-identity-invalid")
@@ -1606,7 +2028,8 @@ def validate_phase7_window_batch(root: Path, authorization_path: Path,
         "tests/evidence/phase7_fresh_batch_contract.py", "scripts/ci/required-gate.sh"})
     source_payload = phase7_window_source_admission_payload(attempt_root=attempt_relative,
         attempt_index=attempt_index, predecessor=predecessor,
-        disposition=admission["disposition"], source_head=source_head, source_pins=pins)
+        disposition=admission["disposition"], source_head=source_head,
+        source_pins=pins, window=window)
     source_payload_sha = _digest(_canonical(source_payload))
     if admission.get("source_payload_sha256") != source_payload_sha:
         raise ValueError("phase7-window-source-review-payload-stale")
@@ -1659,7 +2082,8 @@ def validate_phase7_window_batch(root: Path, authorization_path: Path,
             "public_tree", "source_manifest_sha256", "candidate_payload_sha256", "candidate_reviews"}
         if set(candidate) != candidate_keys:
             raise ValueError("phase7-window-candidate-admission-invalid")
-        candidate_payload = phase7_window_candidate_review_payload(source_payload, candidate)
+        candidate_payload = phase7_window_candidate_review_payload(source_payload,
+            candidate, window=window)
         candidate_payload_sha = _digest(_canonical(candidate_payload))
         if candidate.get("candidate_payload_sha256") != candidate_payload_sha:
             raise ValueError("phase7-window-candidate-review-payload-stale")
@@ -1671,8 +2095,9 @@ def validate_phase7_window_batch(root: Path, authorization_path: Path,
                           payload_sha256=candidate_payload_sha)
     return {"phase7_window": True, "window": window,
         "authorization": window["authority"], "admission": admission,
-        "started_at": WINDOW_STARTED_AT, "batch_root": attempt_root,
+        "started_at": profile["started_at"], "batch_root": attempt_root,
         "attempt_root": attempt_root, "attempt_index": attempt_index,
+        "window_profile": profile_id,
         "admission_path": expected_admission,
         "source_payload_sha256": source_payload_sha,
         "candidate_payload_sha256": candidate_payload_sha,
@@ -1685,17 +2110,21 @@ def create_phase7_window_dispatch_claim(root: Path, batch: dict[str, Any], nonce
             or not re.fullmatch(r"[0-9a-f]{32}", nonce)):
         raise ValueError("phase7-window-dispatch-claim-input-invalid")
     root = Path(os.path.abspath(root)).resolve(strict=True)
+    window = batch.get("window")
+    profile_id, profile = _phase7_window_profile(window)
     attempt_root = Path(batch["attempt_root"])
     if not attempt_root.is_absolute():
         attempt_root = root / attempt_root
-    expected = phase7_window_attempt_root(root, batch["attempt_index"])
+    expected = phase7_window_attempt_root(root, batch["attempt_index"], window=window)
     if attempt_root.resolve(strict=True) != expected:
         raise ValueError("phase7-window-dispatch-claim-root-invalid")
     window_module = _phase7_window_module()
-    window_module.load_window(root)
+    window_module.load_window(root, authority_path=profile["authority_path"],
+        authority_sha256=profile["authority_sha256"], scope_path=profile["scope_path"],
+        scope_sha256=profile["scope_sha256"])
     window_module.validate_public_clock(root,
-        scope_path=WINDOW_SCOPE_PATH.as_posix(), scope_sha256=WINDOW_SCOPE_SHA256,
-        started_at=WINDOW_STARTED_AT, phase="runtime")
+        scope_path=profile["scope_path"].as_posix(), scope_sha256=profile["scope_sha256"],
+        started_at=profile["started_at"], phase="runtime")
     admission_path = Path(batch.get("admission_path", ""))
     if not admission_path.is_absolute():
         admission_path = root / admission_path
@@ -1710,18 +2139,19 @@ def create_phase7_window_dispatch_claim(root: Path, batch: dict[str, Any], nonce
     _require_no_entry(expected / "failure.json",
                       "phase7-window-dispatch-claim-attempt-failed")
     claim = expected / "dispatch-claim.json"
-    payload = {"schema": "genewhip.phase7-four-hour-dispatch-claim.v1",
-        "authorization_sha256": WINDOW_AUTH_SHA256, "scope_sha256": WINDOW_SCOPE_SHA256,
+    payload = {"schema": profile["claim_schema"],
+        "authorization_sha256": profile["authority_sha256"],
+        "scope_sha256": profile["scope_sha256"],
         "attempt_index": batch["attempt_index"],
         "attempt_root": expected.relative_to(root).as_posix(),
         "admission_sha256": batch["admission_sha256"],
         "source_payload_sha256": batch["source_payload_sha256"],
-        "nonce": nonce, "started_at": WINDOW_STARTED_AT,
+        "nonce": nonce, "started_at": profile["started_at"],
         "claimed_at": datetime.datetime.now(datetime.timezone.utc).isoformat()}
     raw = _canonical(payload) + b"\n"
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     directory_fd, directory_identity = _open_phase7_window_attempt_dir(root,
-        batch["attempt_index"])
+        batch["attempt_index"], window=window)
     try:
         descriptor = os.open("dispatch-claim.json", flags, 0o600, dir_fd=directory_fd)
     except OSError as error:
@@ -1741,7 +2171,7 @@ def create_phase7_window_dispatch_claim(root: Path, batch: dict[str, Any], nonce
                 or (opened_directory.st_dev, opened_directory.st_ino) != directory_identity[-1]):
             raise ValueError("phase7-window-dispatch-claim-binding-invalid")
         verify_fd, verify_identity = _open_phase7_window_attempt_dir(root,
-            batch["attempt_index"])
+            batch["attempt_index"], window=window)
         try:
             verify_info = os.stat("dispatch-claim.json", dir_fd=verify_fd,
                                   follow_symlinks=False)
@@ -1781,9 +2211,11 @@ def create_phase7_window_dispatch_claim(root: Path, batch: dict[str, Any], nonce
     return claim
 
 
-def _open_phase7_window_attempt_dir(root: Path, attempt_index: int) -> tuple[int, tuple[tuple[int, int], ...]]:
+def _open_phase7_window_attempt_dir(root: Path, attempt_index: int,
+        window: dict[str, Any] | None = None) -> tuple[int, tuple[tuple[int, int], ...]]:
     """Open the attempt directory component-by-component without following links."""
     root = Path(os.path.abspath(root)).resolve(strict=True)
+    _, profile = _phase7_window_profile(window)
     flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
         current = os.open(root, flags)
@@ -1791,7 +2223,7 @@ def _open_phase7_window_attempt_dir(root: Path, attempt_index: int) -> tuple[int
         raise ValueError("phase7-window-attempt-directory-unavailable") from None
     chain = []
     try:
-        components = (*WINDOW_ATTEMPT_NAMESPACE.parts, f"attempt-{attempt_index:04d}")
+        components = (*profile["attempt_namespace"].parts, f"attempt-{attempt_index:04d}")
         for component in components:
             following = None
             try:
@@ -1828,11 +2260,13 @@ def verify_phase7_window_dispatch_claim(root: Path, batch: dict[str, Any]) -> No
             or batch.get("phase7_window") is not True):
         raise ValueError("phase7-window-dispatch-claim-context-invalid")
     root = Path(os.path.abspath(root)).resolve(strict=True)
+    window = batch.get("window")
+    _, profile = _phase7_window_profile(window)
     opened = os.fstat(batch["_dispatch_directory_fd"])
     current_fd, current_identity = _open_phase7_window_attempt_dir(root,
-        batch["attempt_index"])
+        batch["attempt_index"], window=window)
     try:
-        expected_attempt = phase7_window_attempt_root(root, batch["attempt_index"])
+        expected_attempt = phase7_window_attempt_root(root, batch["attempt_index"], window=window)
         admission_path = Path(batch.get("admission_path", ""))
         if not admission_path.is_absolute():
             admission_path = Path(root) / admission_path
@@ -1897,14 +2331,14 @@ def verify_phase7_window_dispatch_claim(root: Path, batch: dict[str, Any]) -> No
                 or (opened.st_dev, opened.st_ino) != current_identity[-1]
                 or (info.st_dev, info.st_ino) != batch.get("_dispatch_claim_identity")
                 or _digest(raw) != batch.get("dispatch_claim_sha256")
-                or claim_payload.get("schema") != "genewhip.phase7-four-hour-dispatch-claim.v1"
-                or claim_payload.get("authorization_sha256") != WINDOW_AUTH_SHA256
-                or claim_payload.get("scope_sha256") != WINDOW_SCOPE_SHA256
+                or claim_payload.get("schema") != profile["claim_schema"]
+                or claim_payload.get("authorization_sha256") != profile["authority_sha256"]
+                or claim_payload.get("scope_sha256") != profile["scope_sha256"]
                 or claim_payload.get("attempt_index") != batch["attempt_index"]
                 or claim_payload.get("attempt_root") != expected_attempt.relative_to(Path(root)).as_posix()
                 or claim_payload.get("admission_sha256") != batch.get("admission_sha256")
                 or claim_payload.get("source_payload_sha256") != batch.get("source_payload_sha256")
-                or claim_payload.get("started_at") != WINDOW_STARTED_AT
+                or claim_payload.get("started_at") != profile["started_at"]
                 or not isinstance(claim_payload.get("nonce"), str)
                 or re.fullmatch(r"[0-9a-f]{32}", claim_payload["nonce"]) is None):
             raise ValueError("phase7-window-dispatch-claim-binding-invalid")
@@ -1922,23 +2356,26 @@ def close_phase7_window_dispatch_claim(batch: dict[str, Any]) -> None:
 
 
 def write_phase7_window_failure(root: Path, *, attempt_root: Path, stage: str,
-        reason: str, observed_at: str) -> Path:
+        reason: str, observed_at: str,
+        window: dict[str, Any] | None = None) -> Path:
     """Write one immutable stop marker under the current prospective attempt."""
     if (stage not in ("preparation", "publication", "preview-ci", "qualification", "package")
             or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,95}", reason)):
         raise ValueError("phase7-window-failure-input-invalid")
     _utc(observed_at)
     root = Path(os.path.abspath(root)).resolve(strict=True)
+    _, profile = _phase7_window_profile(window)
     attempt = Path(attempt_root)
     if not attempt.is_absolute():
         attempt = root / attempt
     attempt = attempt.resolve(strict=True)
-    namespace = (root / WINDOW_ATTEMPT_NAMESPACE).resolve(strict=True)
+    namespace = (root / profile["attempt_namespace"]).resolve(strict=True)
     if (attempt.parent != namespace or re.fullmatch(r"attempt-[0-9]{4}", attempt.name) is None
             or int(attempt.name[-4:]) < 1 or attempt.is_symlink()):
         raise ValueError("phase7-window-failure-root-invalid")
-    payload = {"schema": "genewhip.phase7-four-hour-attempt-failure.v1",
-        "authorization_sha256": WINDOW_AUTH_SHA256, "scope_sha256": WINDOW_SCOPE_SHA256,
+    payload = {"schema": profile["failure_schema"],
+        "authorization_sha256": profile["authority_sha256"],
+        "scope_sha256": profile["scope_sha256"],
         "attempt_index": int(attempt.name[-4:]),
         "attempt_root": attempt.relative_to(root).as_posix(),
         "stage": stage, "reason": reason, "observed_at": observed_at}

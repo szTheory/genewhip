@@ -472,7 +472,9 @@ def _is_unlaunched_launch_failure(result, receipt):
         receipt.get("bound_violation") is True)
 
 
-def shared_launch(client, command, work, report_path, timeout, *, files=(), directories=(), env=None, plan_id="06-51"):
+def shared_launch(client, command, work, report_path, timeout, *, files=(), directories=(), env=None,
+                  child_cwd=None, build_scratch_root=None, build_file_size_limit_bytes=None,
+                  allow_build_file_links=False, plan_id="06-51"):
     """Reuse the actual bounded process boundary; persist accounting even on errors."""
     if _EXECUTION_SCOPE is not None:
         if _V02_STATE is None or _V02_DEADLINE is None:
@@ -480,6 +482,11 @@ def shared_launch(client, command, work, report_path, timeout, *, files=(), dire
         limits = _EXECUTION_SCOPE.get("per_child_limits")
         if not isinstance(limits, dict):
             raise RuntimeError("phase7-runtime-child-limits-missing")
+        if (type(allow_build_file_links) is not bool or
+                (build_scratch_root is None) != (build_file_size_limit_bytes is None) or
+                (build_scratch_root is None and allow_build_file_links) or
+                (build_scratch_root is not None and not allow_build_file_links)):
+            raise RuntimeError("phase7-build-scratch-options-invalid")
         remaining = min(float(timeout), _V02_DEADLINE - time.monotonic())
         if remaining <= 1:
             raise RuntimeError("phase7-runtime-batch-deadline-exhausted")
@@ -502,9 +509,13 @@ def shared_launch(client, command, work, report_path, timeout, *, files=(), dire
             receipt_name = pathlib.Path("process-receipts") / (uuid.uuid4().hex + ".json")
             with receipt_module.receipt_file(work, receipt_name) as receipt_stream:
                 result = route_contract._run_client(pathlib.Path(command[0]), command, receipts,
-                    report=report_path, timeout=remaining, cwd=work, env=env, retained_streams=streams,
+                    report=report_path, timeout=remaining, cwd=work if child_cwd is None else child_cwd,
+                    env=env, retained_streams=streams,
                     monitored_files=files, monitored_directories=directories, limits=limits,
-                    scratch_roots=(work,), process_receipt_stream=receipt_stream)
+                    scratch_roots=((work,) if build_scratch_root is None else (work, build_scratch_root)),
+                    allow_build_file_links=allow_build_file_links,
+                    file_size_limit_bytes=build_file_size_limit_bytes,
+                    process_receipt_stream=receipt_stream)
         except BaseException as exc:
             boundary_exception=exc
             boundary_error=f"{type(exc).__name__}: {exc}"
@@ -694,18 +705,89 @@ SAFETY_SOURCE_PATHS = tuple("tests/api/"+name+".c" for name in SAFETY_TESTS
     "CMakeLists.txt","tools/session/CMakeLists.txt")
 
 
+def _phase7_cmake_build_root(command, cwd):
+    """Return an approved existing build directory for the two CMake setup forms."""
+    if not command or pathlib.Path(str(command[0])).name != "cmake":
+        return None
+    if command[1:2] == ["--build"]:
+        if len(command) < 3:
+            raise RuntimeError("phase7-cmake-build-root-missing")
+        raw = pathlib.Path(command[2])
+    elif command[1:2] == ["-S"]:
+        positions = [index for index, value in enumerate(command) if value == "-B"]
+        if len(positions) != 1 or positions[0] + 1 >= len(command):
+            raise RuntimeError("phase7-cmake-build-root-missing")
+        raw = pathlib.Path(command[positions[0] + 1])
+    else:
+        return None
+    if ".." in raw.parts:
+        raise RuntimeError("phase7-cmake-build-root-invalid")
+    repository = ROOT.resolve(strict=True)
+    build_root = pathlib.Path(os.path.abspath(raw if raw.is_absolute() else cwd / raw))
+    try:
+        relative = build_root.relative_to(repository)
+    except ValueError as error:
+        raise RuntimeError("phase7-cmake-build-root-unowned") from error
+    if not relative.parts:
+        raise RuntimeError("phase7-cmake-build-root-unowned")
+
+    scope_roots = _EXECUTION_SCOPE.get("owned_roots")
+    if not isinstance(scope_roots, list) or not scope_roots:
+        raise RuntimeError("phase7-cmake-owned-roots-missing")
+    approved = False
+    for entry in scope_roots:
+        owned_relative = pathlib.PurePosixPath(entry) if isinstance(entry, str) else None
+        if (owned_relative is None or owned_relative.is_absolute() or
+                ".." in owned_relative.parts or not owned_relative.parts):
+            raise RuntimeError("phase7-cmake-owned-root-invalid")
+        owned = repository.joinpath(*owned_relative.parts)
+        try:
+            owned.relative_to(repository)
+            if build_root == owned or owned in build_root.parents:
+                approved = True
+        except ValueError:
+            pass
+    if not approved:
+        raise RuntimeError("phase7-cmake-build-root-unowned")
+
+    current = repository
+    try:
+        for part in relative.parts:
+            current = current / part
+            info = current.lstat()
+            if current.is_symlink() or (current != build_root and not current.is_dir()):
+                raise RuntimeError("phase7-cmake-build-root-invalid")
+        info = build_root.lstat()
+    except OSError as error:
+        raise RuntimeError("phase7-cmake-build-root-invalid") from error
+    if not build_root.is_dir() or info.st_uid != os.getuid():
+        raise RuntimeError("phase7-cmake-build-root-invalid")
+    return build_root
+
+
 def _command(command, timeout, *, cwd=ROOT, env=None):
     if _EXECUTION_SCOPE is not None:
+        scoped_command = list(command)
+        if scoped_command and str(scoped_command[0]).startswith("./"):
+            scoped_command[0] = str((cwd / scoped_command[0]).resolve())
+        build_root = _phase7_cmake_build_root(scoped_command, cwd)
+        build_file_size_limit = None
+        if build_root is not None:
+            limits = _EXECUTION_SCOPE.get("per_child_limits")
+            build_file_size_limit = limits.get("max_binary_file_bytes") if isinstance(limits, dict) else None
+            if type(build_file_size_limit) is not int or build_file_size_limit <= 0:
+                raise RuntimeError("phase7-cmake-file-size-limit-invalid")
         setup_root = ROOT / "build/v02/runtime/setup"
         setup_root.mkdir(parents=True, exist_ok=True)
         work = pathlib.Path(tempfile.mkdtemp(prefix="phase7-setup-", dir=setup_root))
         report = work / "command-output.json"
-        scoped_command = [str((cwd / command[0]).resolve()) if not pathlib.Path(command[0]).is_absolute()
-            and str(command[0]).startswith("./") else command[0] for command in command]
         result, receipt, streams = shared_launch(pathlib.Path(scoped_command[0]), scoped_command, work, report,
-            timeout, plan_id="07-09-setup")
+            timeout, env=env, child_cwd=cwd, build_scratch_root=build_root,
+            build_file_size_limit_bytes=build_file_size_limit,
+            allow_build_file_links=build_root is not None, plan_id="07-09-setup")
         return subprocess.CompletedProcess(command, result.returncode,
-            streams.get("stdout", {}).get("text", ""), streams.get("stderr", {}).get("text", ""))
+            streams.get("stdout", {}).get("text", result.stdout),
+            streams.get("stderr", {}).get("text", result.stderr))
     try:
         return subprocess.run(command, cwd=cwd, env=env, text=True, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, timeout=timeout, check=False)
@@ -755,10 +837,9 @@ def safety(build, candidate_path, output):
             "bus_boundary_contract","gameplay_bus_contract","movem_contract","phase6_repairs_contract",
             "session_contract","input_log_contract","phase6_chunk_contract","gw_headless"]
         build_cmd=["cmake","--build",str(directory),"--parallel","2","--target",*sorted(set(targets))]
-        if variant=="native":
-            result=_command(build_cmd,150)
-            commands.append(build_cmd)
-            if result.returncode:raise RuntimeError(f"{variant}-build:{result.stderr[-3000:]}")
+        result=_command(build_cmd,150)
+        commands.append(build_cmd)
+        if result.returncode:raise RuntimeError(f"{variant}-build:{result.stderr[-3000:]}")
         listing=_command(["ctest","--test-dir",str(directory),"--show-only=json-v1"],30)
         commands.append(["ctest","--show-only=json-v1"])
         if listing.returncode:raise RuntimeError(f"{variant}-ctest-discovery:{listing.stderr[-2000:]}")
@@ -768,14 +849,14 @@ def safety(build, candidate_path, output):
             raise RuntimeError(f"{variant}-missing-ctest:{sorted(set(SAFETY_TESTS)-set(by_name))}")
         selected=[]
         for name in SAFETY_TESTS:
-            command=" ".join(by_name[name].get("command",[])).lower()
+            discovered_command=by_name[name].get("command")
+            if (not isinstance(discovered_command,list) or not discovered_command or
+                    any(type(argument) is not str or not argument for argument in discovered_command)):
+                raise RuntimeError(f"{variant}-invalid-ctest-command:{name}")
+            command=" ".join(discovered_command).lower()
             if any(token in command for token in ("mame","accounting","phase6_core_routes","independent_game_admission")):
                 raise RuntimeError(f"{variant}-unsafe-ctest-command:{name}")
             selected.append(name)
-        if variant!="native":
-            result=_command(build_cmd,150)
-            commands.append(build_cmd)
-            if result.returncode:raise RuntimeError(f"{variant}-build:{result.stderr[-3000:]}")
         parser_report_path=(ROOT/"build/v02/runtime/safety/native-parser.json" if _EXECUTION_SCOPE is not None and variant=="native"
             else directory/"evidence/controller.json")
         parser_report_path.parent.mkdir(parents=True,exist_ok=True)

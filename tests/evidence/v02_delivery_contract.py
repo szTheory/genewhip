@@ -478,6 +478,10 @@ class V02DownloadContract(unittest.TestCase):
     def test_window_adoption_uses_owned_group_and_reserves_cleanup(self):
         from scripts.release import v02_qualification as coordinator
         command = ["python3", "docs_commands.py"]
+        self.enterContext(mock.patch.dict(os.environ, {
+            "GENEWHIP_QUALIFICATION_SCOPE_PATH": "evidence/v02-phase7-two-hour-execution-scope.json",
+            "GENEWHIP_QUALIFICATION_SCOPE_SHA256": "a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c",
+        }))
         with mock.patch.object(qualify_delivery.promote, "execution_window_active", return_value=True), \
                 mock.patch.object(qualify_delivery.promote, "execution_window_timeout", return_value=120), \
                 mock.patch.object(coordinator, "_external") as launch:

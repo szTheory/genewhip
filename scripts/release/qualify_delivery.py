@@ -6,6 +6,7 @@ import argparse
 import datetime as dt
 import hashlib
 import json
+import os
 import pathlib
 import re
 import secrets
@@ -854,7 +855,9 @@ def _run_v02_download_docs(command: list[str], directory: pathlib.Path):
     """Let the existing PGID owner cancel nested adoption work in the fixed window."""
     if promote.execution_window_active():
         from scripts.release.v02_qualification import _external, _load_phase7_window_module
-        scope = _load_phase7_window_module().load_public_scope(ROOT)
+        scope = _load_phase7_window_module().load_public_scope(ROOT,
+            scope_path=os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH", ""),
+            scope_sha256=os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", ""))
         timeout = promote.execution_window_timeout(900, phase="close") - scope[
             "per_child_limits"]["cleanup_grace_seconds"]
         if timeout <= 0:

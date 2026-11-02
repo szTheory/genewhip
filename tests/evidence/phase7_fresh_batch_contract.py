@@ -391,6 +391,57 @@ class FreshBatchContracts(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "phase7-window-source-payload-invalid"):
             BATCH.phase7_window_candidate_review_payload(legacy, candidate)
 
+    def test_two_hour_review_payload_and_attempt_namespace_are_additive_to_four_hour(self):
+        window = {"profile_id": "two-hour",
+            "authority_sha256": BATCH.TWO_HOUR_AUTH_SHA256,
+            "scope_path": BATCH.TWO_HOUR_SCOPE_PATH.as_posix(),
+            "scope_sha256": BATCH.TWO_HOUR_SCOPE_SHA256,
+            "attempt_namespace": BATCH.TWO_HOUR_ATTEMPT_NAMESPACE.as_posix(),
+            "started_at": BATCH.TWO_HOUR_STARTED_AT}
+        predecessor = BATCH.TWO_HOUR_INITIAL_PREDECESSOR
+        pins = {"scripts/release/v02_batch.py": "a" * 64}
+        source = BATCH.phase7_window_source_admission_payload(
+            attempt_root="build/v02/phase7-qualification-20261102T220829Z/attempts/attempt-0001",
+            attempt_index=1, predecessor=predecessor, disposition="routine-source-repair",
+            source_head="b" * 40, source_pins=pins, window=window)
+        self.assertEqual(source["authorization_sha256"], BATCH.TWO_HOUR_AUTH_SHA256)
+        self.assertEqual(source["scope_sha256"], BATCH.TWO_HOUR_SCOPE_SHA256)
+        self.assertEqual(source["started_at"], BATCH.TWO_HOUR_STARTED_AT)
+        self.assertEqual(source["predecessor_sha256"],
+            hashlib.sha256(BATCH._canonical(predecessor)).hexdigest())
+
+        candidate = {"preparation_sha256": "c" * 64,
+            "repository_policy_sha256": "d" * 64, "public_head": "e" * 40,
+            "public_base": "f" * 40, "public_tree": "1" * 40,
+            "source_manifest_sha256": "2" * 64}
+        candidate_payload = BATCH.phase7_window_candidate_review_payload(
+            source, candidate, window=window)
+        self.assertEqual(candidate_payload["authorization_sha256"],
+            BATCH.TWO_HOUR_AUTH_SHA256)
+        self.assertEqual(candidate_payload["scope_sha256"], BATCH.TWO_HOUR_SCOPE_SHA256)
+        self.assertEqual(candidate_payload["public_head"], candidate["public_head"])
+
+        four_hour = BATCH.phase7_window_source_admission_payload(
+            attempt_root="build/v02/phase7-qualification-20261102T165630Z/attempts/attempt-0001",
+            attempt_index=1, predecessor={"attempt_index": 1},
+            disposition="routine-source-repair", source_head="c" * 40,
+            source_pins=pins)
+        self.assertEqual(four_hour["authorization_sha256"], BATCH.WINDOW_AUTH_SHA256)
+        self.assertEqual(four_hour["scope_sha256"], BATCH.WINDOW_SCOPE_SHA256)
+
+        namespace = self.root / BATCH.TWO_HOUR_ATTEMPT_NAMESPACE
+        attempt = namespace / "attempt-0001"
+        attempt.mkdir(parents=True)
+        self.assertEqual(BATCH.phase7_window_attempt_root(self.root, 1, window=window),
+            attempt.resolve())
+        located, index = BATCH._phase7_window_admission_location(
+            self.root, attempt / "source-admission.json", "source-preparation", window=window)
+        self.assertEqual(located, attempt.resolve())
+        self.assertEqual(index, 1)
+        with self.assertRaisesRegex(ValueError, "phase7-window-context-invalid"):
+            BATCH.phase7_window_attempt_root(self.root, 1,
+                window={**window, "scope_sha256": BATCH.WINDOW_SCOPE_SHA256})
+
     def test_four_hour_attempt_paths_keep_the_fixed_numbered_namespace(self):
         namespace = self.root / BATCH.WINDOW_ATTEMPT_NAMESPACE
         (namespace / "attempt-0001").mkdir(parents=True)

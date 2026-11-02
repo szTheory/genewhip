@@ -4101,6 +4101,133 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
                 with self.assertRaisesRegex(ValueError, "qualification-scope-pin-invalid"):
                     module.phase7_execution_scope_path(root=root)
 
+    def test_two_hour_profile_routes_workflow_scope_budget_and_fresh_batch_guard(self):
+        from types import SimpleNamespace
+        from unittest import mock
+        module = load_module(self)
+        with tempfile.TemporaryDirectory(prefix="phase7-two-hour-route-") as temporary:
+            root = Path(temporary).resolve()
+            for relative in (Path("evidence/v02-phase7-two-hour-execution-scope.json"),
+                    Path("evidence/v02-execution.json"),
+                    Path("scripts/release/v02_window.py")):
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((ROOT / relative).read_bytes())
+            module.ROOT = root
+            window_spec = importlib.util.spec_from_file_location(
+                "phase7_two_hour_workflow_window", root / "scripts/release/v02_window.py")
+            window_module = importlib.util.module_from_spec(window_spec)
+            window_spec.loader.exec_module(window_module)
+            start = window_module.TWO_HOUR_STARTED_AT
+            start_dt = datetime.datetime.fromisoformat(start)
+            now = start_dt + datetime.timedelta(minutes=2)
+            created = start_dt + datetime.timedelta(minutes=1)
+            new_scope_path = window_module.TWO_HOUR_SCOPE_PATH
+            new_scope_sha = window_module.TWO_HOUR_SCOPE_SHA256
+            new_auth_path = window_module.TWO_HOUR_AUTH_PATH
+            new_auth_sha = window_module.TWO_HOUR_AUTH_SHA256
+            selected = {"GENEWHIP_QUALIFICATION_SCOPE_PATH": new_scope_path.as_posix(),
+                "GENEWHIP_QUALIFICATION_SCOPE_SHA256": new_scope_sha,
+                "GENEWHIP_QUALIFICATION_WINDOW_AUTH_PATH": new_auth_path.as_posix(),
+                "GENEWHIP_QUALIFICATION_WINDOW_AUTH_SHA256": new_auth_sha}
+            window_context = {"profile_id": "two-hour", "authority": {"schema": "fixture"},
+                "authority_path": new_auth_path.as_posix(), "authority_sha256": new_auth_sha,
+                "scope_path": new_scope_path.as_posix(), "scope_sha256": new_scope_sha,
+                "attempt_namespace": window_module.TWO_HOUR_ATTEMPT_NAMESPACE.as_posix(),
+                "started_at": start, "source_ancestor": "a" * 40}
+            attempt = root / window_module.TWO_HOUR_ATTEMPT_NAMESPACE / "attempt-0001"
+            attempt.mkdir(parents=True)
+
+            with mock.patch.dict(os.environ, selected, clear=True), \
+                 mock.patch.object(module, "_load_phase7_window_module",
+                    return_value=window_module), \
+                 mock.patch.object(window_module, "load_window", return_value=window_context):
+                profile = module._phase7_window_profile()
+                self.assertEqual(profile["profile_id"], "two-hour")
+                self.assertEqual(module.phase7_execution_scope_path(root=root),
+                    root / new_scope_path)
+                scope = window_module.load_public_scope(root,
+                    scope_path=new_scope_path.as_posix(), scope_sha256=new_scope_sha)
+                self.assertEqual(module._validate_workflow_clock(start, created.isoformat(),
+                    "b" * 32, "c" * 40, now=now.isoformat(), phase="runtime"), start)
+                self.assertEqual(module._require_hosted_budget(start, now.isoformat(),
+                    scope, phase="runtime"),
+                    (datetime.datetime.fromisoformat(window_module.TWO_HOUR_RUNTIME_CUTOFF)
+                        - now).total_seconds())
+                remaining = module.phase7_window_remaining_seconds("runtime", now=now,
+                    root=root)
+                self.assertEqual(remaining,
+                    (datetime.datetime.fromisoformat(window_module.TWO_HOUR_RUNTIME_CUTOFF)
+                        - now).total_seconds())
+
+                admission = attempt / "source-admission.json"
+                admission.write_text("{}\n")
+                fake_batch = SimpleNamespace(
+                    _phase7_window_admission_location=lambda *args, **kwargs: (attempt, 1),
+                    phase7_window_attempt_root=lambda *args, **kwargs: attempt,
+                    validate_phase7_window_batch=lambda *args, **kwargs: {
+                        "batch_root": attempt, "attempt_root": attempt,
+                        "attempt_index": 1, "started_at": start, "phase7_window": True})
+                class FakeLoader:
+                    @staticmethod
+                    def exec_module(_module):
+                        return None
+                class FakeSpec:
+                    loader = FakeLoader()
+                with mock.patch.object(module.importlib.util, "spec_from_file_location",
+                        return_value=FakeSpec()), \
+                     mock.patch.object(module.importlib.util, "module_from_spec",
+                        return_value=fake_batch), \
+                     mock.patch.object(module, "_git", return_value="d" * 40), \
+                     mock.patch.object(module, "_external",
+                        return_value=SimpleNamespace(returncode=0)), \
+                     mock.patch.object(module, "_bounded_publication_paths",
+                        return_value=["scripts/release/v02_batch.py"]):
+                    guarded = module._fresh_batch_guard(
+                        batch_authorization=new_auth_path,
+                        batch_authorization_sha256=new_auth_sha,
+                        batch_admission=admission,
+                        batch_admission_sha256="e" * 64,
+                        stage="source-preparation", scope_path=new_scope_path,
+                        journal_path=attempt / "hosted-delivery-journal.json",
+                        publication_copy=attempt / "candidate/publication-copy",
+                        preflight_path=attempt / "candidate/preparation.json",
+                        output_path=attempt / "source-validation.json")
+                self.assertEqual(guarded["batch_root"], attempt)
+                self.assertEqual(os.environ["GENEWHIP_PHASE7_WINDOW_ACTIVE"], "1")
+                self.assertEqual(os.environ["GENEWHIP_QUALIFICATION_WINDOW_AUTH_PATH"],
+                    new_auth_path.as_posix())
+                self.assertEqual(os.environ["GENEWHIP_QUALIFICATION_WINDOW_AUTH_SHA256"],
+                    new_auth_sha)
+                self.assertEqual(os.environ["GENEWHIP_QUALIFICATION_SCOPE_PATH"],
+                    new_scope_path.as_posix())
+                self.assertEqual(os.environ["GENEWHIP_QUALIFICATION_SCOPE_SHA256"], new_scope_sha)
+                self.assertEqual(os.environ["GENEWHIP_FRESH_BATCH_ROOT"],
+                    attempt.relative_to(root).as_posix())
+                active_profile = module._phase7_window_profile()
+                self.assertEqual(active_profile["profile_id"], "two-hour")
+                bounded_receipt = {"returncode": 0, "process_group_cleanup": "confirmed",
+                    "streams": {"stdout": {"text": ""}, "stderr": {"text": ""}}}
+                with mock.patch.object(module, "_bounded_command",
+                        return_value=bounded_receipt) as bounded:
+                    result = module._external(["cmake", "--version"], cwd=root,
+                        timeout=600, phase="runtime",
+                        fresh_batch_scratch=attempt / "coordinator-external-attempts")
+                self.assertEqual(result.returncode, 0)
+                bounded.assert_called_once()
+                self.assertEqual(bounded.call_args.kwargs["env"][
+                    "GENEWHIP_QUALIFICATION_WINDOW_AUTH_PATH"], new_auth_path.as_posix())
+                self.assertEqual(bounded.call_args.kwargs["env"][
+                    "GENEWHIP_QUALIFICATION_WINDOW_AUTH_SHA256"], new_auth_sha)
+                self.assertGreater(bounded.call_args.kwargs["limits"]["wall_seconds"], 0)
+                self.assertLessEqual(bounded.call_args.kwargs["limits"]["wall_seconds"], 600)
+
+            wrong_profile = {**selected,
+                "GENEWHIP_QUALIFICATION_SCOPE_PATH": "evidence/v02-phase7-full-execution-scope.json"}
+            with mock.patch.dict(os.environ, wrong_profile, clear=True):
+                with self.assertRaisesRegex(ValueError, "scope-or-authority-profile-invalid"):
+                    module._phase7_window_profile()
+
     def test_phase7_external_preparation_timeout_stops_at_runtime_cutoff_minus_cleanup(self):
         from unittest import mock
         import shutil
@@ -4166,12 +4293,22 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
             scope = root / module.PHASE7_WINDOW_SCOPE_PATH
             scope.parent.mkdir(parents=True)
             shutil.copyfile(ROOT / module.PHASE7_WINDOW_SCOPE_PATH, scope)
+            legacy_scope = root / "evidence/v02-execution.json"
+            shutil.copyfile(ROOT / "evidence/v02-execution.json", legacy_scope)
+            window_source = root / "scripts/release/v02_window.py"
+            window_source.parent.mkdir(parents=True)
+            shutil.copyfile(ROOT / "scripts/release/v02_window.py", window_source)
             module.ROOT = root
             build = root / "build/v02/window-configure"
             command = ["cmake", "-S", ".", "-B", str(build), "-DGENEWHIP_BUILD_DESKTOP=OFF"]
             expected_cap = json.loads(scope.read_text())["per_child_limits"]["max_binary_file_bytes"]
             completed = subprocess.CompletedProcess(command, 0, "", "")
-            with mock.patch.object(module, "_external", return_value=completed) as external:
+            with mock.patch.dict(os.environ, {
+                    "GENEWHIP_QUALIFICATION_SCOPE_PATH":
+                        module.PHASE7_WINDOW_SCOPE_PATH.as_posix(),
+                    "GENEWHIP_QUALIFICATION_SCOPE_SHA256":
+                        module.PHASE7_WINDOW_SCOPE_SHA256}, clear=True), \
+                 mock.patch.object(module, "_external", return_value=completed) as external:
                 result = module._run_bounded_phase7_cmake(command, timeout=600, phase="runtime")
             self.assertIs(result, completed)
             external.assert_called_once()
@@ -4180,6 +4317,36 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
             self.assertEqual(external.call_args.kwargs["timeout"], 600)
             self.assertEqual(external.call_args.kwargs["owned_roots"], (build,))
             self.assertEqual(external.call_args.kwargs["file_size_limit_bytes"], expected_cap)
+            self.assertTrue(external.call_args.kwargs["allow_build_file_links"])
+
+    def test_two_hour_scope_enters_the_monitored_phase7_cmake_limits(self):
+        from unittest import mock
+        import shutil
+        module = load_module(self)
+        with tempfile.TemporaryDirectory(prefix="phase7-two-hour-bounded-cmake-") as temporary:
+            root = Path(temporary).resolve()
+            for relative in (module.PHASE7_TWO_HOUR_SCOPE_PATH,
+                    Path("evidence/v02-execution.json"),
+                    Path("scripts/release/v02_window.py")):
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ROOT / relative, target)
+            module.ROOT = root
+            build = root / "build/v02/two-hour-configure"
+            command = ["cmake", "-S", ".", "-B", str(build), "-DGENEWHIP_BUILD_DESKTOP=OFF"]
+            scope = json.loads((root / module.PHASE7_TWO_HOUR_SCOPE_PATH).read_text())
+            env = {"GENEWHIP_QUALIFICATION_SCOPE_PATH":
+                    module.PHASE7_TWO_HOUR_SCOPE_PATH.as_posix(),
+                "GENEWHIP_QUALIFICATION_SCOPE_SHA256": module.PHASE7_TWO_HOUR_SCOPE_SHA256}
+            completed = subprocess.CompletedProcess(command, 0, "", "")
+            with mock.patch.dict(os.environ, env, clear=True), \
+                 mock.patch.object(module, "_external", return_value=completed) as external:
+                result = module._run_bounded_phase7_cmake(command, timeout=600, phase="runtime")
+            self.assertIs(result, completed)
+            external.assert_called_once()
+            self.assertEqual(external.call_args.kwargs["file_size_limit_bytes"],
+                scope["per_child_limits"]["max_binary_file_bytes"])
+            self.assertEqual(external.call_args.kwargs["timeout"], 600)
             self.assertTrue(external.call_args.kwargs["allow_build_file_links"])
 
     def test_phase7_runtime_bundle_requires_exact_attempt_and_completes_by_runtime_cutoff(self):
@@ -4745,7 +4912,8 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
             admission_bytes = json.dumps(admission, sort_keys=True,
                 separators=(",", ":")).encode() + b"\n"
             admission_path.write_bytes(admission_bytes)
-            batch = {"phase7_window": True, "attempt_root": attempt,
+            batch = {"phase7_window": True, "window_profile": "four-hour",
+                "attempt_root": attempt,
                 "attempt_index": 1, "admission": admission,
                 "admission_path": admission_path,
                 "admission_sha256": hashlib.sha256(admission_bytes).hexdigest(),
@@ -4806,7 +4974,8 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
 
             with mock.patch.dict(os.environ, {
                     "GENEWHIP_QUALIFICATION_SCOPE_PATH": "evidence/v02-phase7-full-execution-scope.json",
-                    "GENEWHIP_QUALIFICATION_SCOPE_SHA256": module.PHASE7_WINDOW_SCOPE_SHA256}, clear=True), \
+                    "GENEWHIP_QUALIFICATION_SCOPE_SHA256": module.PHASE7_WINDOW_SCOPE_SHA256,
+                    "GENEWHIP_PHASE7_WINDOW_ACTIVE": "1"}, clear=True), \
                  mock.patch.object(importlib.util, "spec_from_file_location",
                     side_effect=instrumented_spec), \
                  mock.patch.object(module, "_external", side_effect=fake_external) as external:
@@ -5917,8 +6086,26 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
         self.assertIn("GENEWHIP_QUALIFICATION_SCOPE_SHA256: ${{ inputs.qualification_scope_sha256 }}", text)
         self.assertIn("GENEWHIP_QUALIFICATION_SCOPE_PATH: ${{ inputs.qualification_scope_sha256 == '" +
             "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4'", text)
-        self.assertIn('command.extend(["--field", "qualification_scope_sha256=" + PHASE7_WINDOW_SCOPE_SHA256])',
-            (ROOT / "scripts/release/v02_qualification.py").read_text())
+        self.assertIn("inputs.qualification_scope_sha256 == '" +
+            "a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' && " +
+            "'evidence/v02-phase7-two-hour-execution-scope.json'", text)
+        two_hour_cmake_guard = (
+            "[ \"${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}\" = "
+            "'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ]")
+        self.assertEqual(text.count(two_hour_cmake_guard), 10,
+            "all Phase 7 CI CMake setup branches must recognize the selected two-hour scope")
+        self.assertEqual(text.count(
+            "python3 -I scripts/release/v02_qualification.py --mode bounded-command "
+            "--command-phase \"$GENEWHIP_QUALIFICATION_PHASE\" --command-timeout 600 "
+            "--command cmake"), 10,
+            "all identified CMake setup branches must use monitored child execution")
+        qualification_source = (ROOT / "scripts/release/v02_qualification.py").read_text()
+        self.assertIn('command.extend(["--field", "qualification_scope_sha256=" + profile["scope_sha256"]])',
+            qualification_source)
+        self.assertIn('PHASE7_WINDOW_SCOPE_SHA256 = "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4"',
+            qualification_source)
+        self.assertIn('PHASE7_TWO_HOUR_SCOPE_SHA256 = "a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c"',
+            qualification_source)
         job_headers = list(re.finditer(r"(?m)^  [A-Za-z0-9_-]+:\s*$", text))
         job_sections = {match.group(0).strip().rstrip(":"): text[match.start():
             (job_headers[index + 1].start() if index + 1 < len(job_headers) else len(text))]
