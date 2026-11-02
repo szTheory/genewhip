@@ -43,15 +43,21 @@ def qualification_scope_path(explicit=None):
     legacy = ROOT / "evidence/v02-execution.json"
     selected_sha = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", "")
     selected_path = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH", "")
-    window_sha = "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4"
-    window_rel = "evidence/v02-phase7-full-execution-scope.json"
-    if selected_sha not in ("", window_sha):
+    window_profiles = {
+        "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4":
+            "evidence/v02-phase7-full-execution-scope.json",
+        "a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c":
+            "evidence/v02-phase7-two-hour-execution-scope.json",
+    }
+    legacy_sha = "05eb7f5fa91d759fbef8fb86bbc9db402dc41812261235bcf5085a0e2aa9b1a5"
+    if selected_sha not in ("", legacy_sha, *window_profiles):
         raise ValueError("qualification-scope-profile-invalid")
-    if selected_sha == window_sha:
+    if selected_sha in window_profiles:
+        window_rel = window_profiles[selected_sha]
         path = ROOT / window_rel
         chosen = Path(explicit).resolve(strict=True) if explicit is not None else path.resolve(strict=True)
         if (selected_path != window_rel or chosen != path.resolve(strict=True)
-                or hashlib.sha256(path.read_bytes()).hexdigest() != window_sha):
+                or hashlib.sha256(path.read_bytes()).hexdigest() != selected_sha):
             raise ValueError("qualification-scope-profile-invalid")
         return path
     chosen = Path(explicit).resolve(strict=True) if explicit is not None else legacy.resolve(strict=True)

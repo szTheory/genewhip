@@ -169,21 +169,36 @@ def validate_execution_scope(scope_path: pathlib.Path, mode: str) -> tuple[dict,
         raise ValueError("phase7-child-serialization-required")
     batch = scope["qualification_batch"]
     actual_sha = sha(path)
-    window_sha = "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4"
-    window_path = ROOT / "evidence/v02-phase7-full-execution-scope.json"
+    window_profiles = {
+        "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4": {
+            "path": ROOT / "evidence/v02-phase7-full-execution-scope.json",
+            "relative": "evidence/v02-phase7-full-execution-scope.json",
+            "budget": {"wall_seconds": 14400, "runtime_wall_seconds": 10800,
+                "package_wall_seconds": 2700, "close_wall_seconds": 900}},
+        "a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c": {
+            "path": ROOT / "evidence/v02-phase7-two-hour-execution-scope.json",
+            "relative": "evidence/v02-phase7-two-hour-execution-scope.json",
+            "budget": {"wall_seconds": 7200, "runtime_wall_seconds": 5700,
+                "package_wall_seconds": 1200, "close_wall_seconds": 300}},
+    }
+    legacy_scope_sha = "05eb7f5fa91d759fbef8fb86bbc9db402dc41812261235bcf5085a0e2aa9b1a5"
     selected_sha = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", "")
     selected_path = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH", "")
-    if selected_sha not in ("", window_sha):
+    selected_profile = window_profiles.get(selected_sha) if selected_sha else None
+    if selected_sha not in ("", legacy_scope_sha, *window_profiles):
         raise ValueError("phase7-window-scope-profile-invalid")
-    if selected_sha == window_sha and (selected_path !=
-            "evidence/v02-phase7-full-execution-scope.json" or
-            path != window_path.resolve(strict=True) or actual_sha != window_sha):
+    if selected_profile is not None and (selected_path != selected_profile["relative"]
+            or path != selected_profile["path"].resolve(strict=False)
+            or actual_sha != selected_sha):
         raise ValueError("phase7-window-scope-profile-invalid")
-    if actual_sha == window_sha or path == window_path:
-        if (actual_sha != window_sha or path != window_path.resolve(strict=True)
-                or os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256") != window_sha
-                or os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH") !=
-                    "evidence/v02-phase7-full-execution-scope.json"):
+    path_profile = next((profile for sha, profile in window_profiles.items()
+        if path == profile["path"].resolve(strict=False) or actual_sha == sha), None)
+    if path_profile is not None:
+        profile_sha = next(sha for sha, profile in window_profiles.items()
+            if profile is path_profile)
+        if (actual_sha != profile_sha or path != path_profile["path"].resolve(strict=False)
+                or selected_sha != profile_sha
+                or selected_path != path_profile["relative"]):
             raise ValueError("phase7-window-scope-profile-invalid")
         try:
             started = os.environ["GENEWHIP_QUALIFICATION_STARTED_AT"]
@@ -197,16 +212,15 @@ def validate_execution_scope(scope_path: pathlib.Path, mode: str) -> tuple[dict,
         window_module = importlib.util.module_from_spec(module_spec)
         module_spec.loader.exec_module(window_module)
         window_module.validate_public_clock(ROOT,
-            scope_path="evidence/v02-phase7-full-execution-scope.json",
-            scope_sha256=window_sha, started_at=started, phase=phase)
-        if (batch.get("wall_seconds") != 14400
-                or batch.get("runtime_wall_seconds") != 10800
-                or batch.get("package_wall_seconds") != 2700
-                or batch.get("close_wall_seconds") != 900
+            scope_path=path_profile["relative"],
+            scope_sha256=profile_sha, started_at=started, phase=phase)
+        if (any(batch.get(key) != value for key, value in path_profile["budget"].items())
                 or sum(batch[key] for key in ("runtime_wall_seconds", "package_wall_seconds",
                     "close_wall_seconds")) != batch["wall_seconds"]):
             raise ValueError("phase7-window-cutoff-partition-invalid")
     else:
+        if selected_profile is not None or selected_sha in window_profiles:
+            raise ValueError("phase7-window-scope-profile-invalid")
         if (type(scope.get("per_batch_wall_seconds")) is not int or scope["per_batch_wall_seconds"] <= 0 or
                 type(scope.get("final_reserve_seconds")) is not int or scope["final_reserve_seconds"] <= 0 or
                 scope["per_batch_wall_seconds"] + scope["final_reserve_seconds"] > batch.get("wall_seconds", 0)):

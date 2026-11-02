@@ -53,7 +53,7 @@ jobs:
     env:
       GENEWHIP_QUALIFICATION_STARTED_AT: ${{ inputs.qualification_started_at }}
       GENEWHIP_QUALIFICATION_SCOPE_SHA256: ${{ inputs.qualification_scope_sha256 }}
-      GENEWHIP_QUALIFICATION_SCOPE_PATH: ${{ inputs.qualification_scope_sha256 == '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' && 'evidence/v02-phase7-full-execution-scope.json' || 'evidence/v02-execution.json' }}
+      GENEWHIP_QUALIFICATION_SCOPE_PATH: ${{ inputs.qualification_scope_sha256 == 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' && 'evidence/v02-phase7-two-hour-execution-scope.json' || inputs.qualification_scope_sha256 == '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' && 'evidence/v02-phase7-full-execution-scope.json' || 'evidence/v02-execution.json' }}
       GENEWHIP_QUALIFICATION_PHASE: package
       GENEWHIP_QUALIFICATION_NONCE: ${{ inputs.correlation_id }}
       GITHUB_BASE_SHA: ${{ inputs.source_sha }}

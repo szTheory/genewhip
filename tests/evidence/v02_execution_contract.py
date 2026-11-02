@@ -323,6 +323,110 @@ class Phase7ExecutionContract(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "phase7-window-scope-profile-invalid"):
                     runner.validate_execution_scope(old_scope, "smoke")
 
+    def test_child_runner_accepts_two_hour_scope_only_with_exact_scope_and_clock_profile(self) -> None:
+        import importlib.util
+        from types import SimpleNamespace
+        from unittest import mock
+
+        spec = importlib.util.spec_from_file_location(
+            "phase7_two_hour_child_scope_contract", ROOT / "scripts/evidence/v02_run.py")
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        with tempfile.TemporaryDirectory(prefix="phase7-two-hour-child-scope-") as temporary:
+            root = pathlib.Path(temporary).resolve()
+            for relative in (pathlib.Path("evidence/v02-phase7-two-hour-execution-scope.json"),
+                    pathlib.Path("evidence/v02-phase7-full-execution-scope.json"),
+                    pathlib.Path("evidence/v02-execution.json")):
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((ROOT / relative).read_bytes())
+            runner.ROOT = root
+            scope_path = root / "evidence/v02-phase7-two-hour-execution-scope.json"
+            legacy_path = root / "evidence/v02-execution.json"
+            start = "2026-11-02T22:08:29+00:00"
+            sha = "a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c"
+            env = {"GENEWHIP_QUALIFICATION_SCOPE_PATH": scope_path.relative_to(root).as_posix(),
+                "GENEWHIP_QUALIFICATION_SCOPE_SHA256": sha,
+                "GENEWHIP_QUALIFICATION_STARTED_AT": start,
+                "GENEWHIP_QUALIFICATION_PHASE": "runtime"}
+            clock_calls = []
+
+            def validate_public_clock(checked_root, **kwargs):
+                clock_calls.append((checked_root, kwargs))
+                return {"profile_id": "two-hour", "remaining_seconds": 5600}
+
+            class FakeLoader:
+                @staticmethod
+                def exec_module(_module):
+                    return None
+
+            class FakeSpec:
+                loader = FakeLoader()
+
+            with mock.patch.dict(os.environ, env, clear=True), \
+                 mock.patch.object(runner.importlib.util, "spec_from_file_location",
+                    return_value=FakeSpec()), \
+                 mock.patch.object(runner.importlib.util, "module_from_spec",
+                    return_value=SimpleNamespace(validate_public_clock=validate_public_clock)):
+                scope, limits = runner.validate_execution_scope(scope_path, "smoke")
+                self.assertEqual({key: scope["qualification_batch"][key] for key in (
+                    "wall_seconds", "runtime_wall_seconds", "package_wall_seconds",
+                    "close_wall_seconds")}, {"wall_seconds": 7200,
+                        "runtime_wall_seconds": 5700, "package_wall_seconds": 1200,
+                        "close_wall_seconds": 300})
+                self.assertEqual(limits["wall_seconds"], 600)
+                self.assertEqual(len(clock_calls), 1)
+                self.assertEqual(clock_calls[0][0], root)
+                self.assertEqual(clock_calls[0][1], {
+                    "scope_path": "evidence/v02-phase7-two-hour-execution-scope.json",
+                    "scope_sha256": sha, "started_at": start, "phase": "runtime"})
+                with self.assertRaisesRegex(ValueError, "phase7-window-scope-profile-invalid"):
+                    runner.validate_execution_scope(legacy_path, "smoke")
+
+            with mock.patch.dict(os.environ, {**env,
+                    "GENEWHIP_QUALIFICATION_SCOPE_PATH": "evidence/v02-phase7-full-execution-scope.json"},
+                    clear=True):
+                with self.assertRaisesRegex(ValueError, "phase7-window-scope-profile-invalid"):
+                    runner.validate_execution_scope(scope_path, "smoke")
+
+    def test_core_benchmark_routes_two_hour_scope_and_runtime_partition(self) -> None:
+        import datetime
+        import importlib.util
+        from unittest import mock
+
+        spec = importlib.util.spec_from_file_location(
+            "phase7_two_hour_core_benchmark_scope_contract", ROOT / "tools/evidence/core_benchmark.py")
+        benchmark = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(benchmark)
+        with tempfile.TemporaryDirectory(prefix="phase7-two-hour-benchmark-scope-") as temporary:
+            root = pathlib.Path(temporary).resolve()
+            for relative in (pathlib.Path("evidence/v02-phase7-two-hour-execution-scope.json"),
+                    pathlib.Path("evidence/v02-phase7-full-execution-scope.json"),
+                    pathlib.Path("evidence/v02-execution.json")):
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((ROOT / relative).read_bytes())
+            benchmark.ROOT = root
+            scope_path = root / "evidence/v02-phase7-two-hour-execution-scope.json"
+            legacy_path = root / "evidence/v02-execution.json"
+            new_sha = "a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c"
+            start = "2026-11-02T22:08:29+00:00"
+            with mock.patch.dict(os.environ, {
+                    "GENEWHIP_QUALIFICATION_SCOPE_PATH": scope_path.relative_to(root).as_posix(),
+                    "GENEWHIP_QUALIFICATION_SCOPE_SHA256": new_sha}, clear=True):
+                self.assertEqual(benchmark.qualification_scope_path(), scope_path)
+                scope = json.loads(scope_path.read_text())
+                now = datetime.datetime.fromisoformat(start) + datetime.timedelta(seconds=60)
+                self.assertEqual(benchmark.qualification_runtime_remaining(scope, start,
+                    now=now.isoformat()), 5640)
+                with self.assertRaisesRegex(ValueError, "qualification-scope-profile-invalid"):
+                    benchmark.qualification_scope_path(legacy_path)
+            with mock.patch.dict(os.environ, {
+                    "GENEWHIP_QUALIFICATION_SCOPE_PATH": "evidence/v02-phase7-full-execution-scope.json",
+                    "GENEWHIP_QUALIFICATION_SCOPE_SHA256": new_sha}, clear=True):
+                with self.assertRaisesRegex(ValueError, "qualification-scope-profile-invalid"):
+                    benchmark.qualification_scope_path(scope_path)
+
     def test_active_scope_cmake_provenance_uses_the_consumer_build_root(self) -> None:
         import importlib.util
         spec = importlib.util.spec_from_file_location(
@@ -843,6 +947,97 @@ class Phase7ExecutionContract(unittest.TestCase):
         finally:
             fixture.set_execution_scope(None)
 
+    def test_scoped_setup_preserves_argv_environment_cwd_and_launch_error(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "phase7_setup_argv_contract", ROOT / "tests/fixtures/phase6_game.py")
+        fixture = importlib.util.module_from_spec(spec); spec.loader.exec_module(fixture)
+        scope = json.loads((ROOT / "evidence/v02-execution.json").read_text())
+        fixture.set_execution_scope(scope)
+        try:
+            commands = (
+                ["cmake", "--build", str(ROOT / "build/v02"),
+                 "--parallel", "2", "--target", "phase6_safety", "gw_headless"],
+                ["./tools/probe", "./relative-output.json", "argument with spaces"],
+            )
+            child_env = {"ASAN_OPTIONS": "detect_leaks=0", "UBSAN_OPTIONS": "halt_on_error=1"}
+            for command in commands:
+                with self.subTest(command=command):
+                    original = list(command)
+                    expected = list(command)
+                    if expected[0].startswith("./"):
+                        expected[0] = str((ROOT / expected[0]).resolve())
+                    failure = subprocess.CompletedProcess(expected, 127, "", "launch failed: unavailable tool")
+                    with patch.object(fixture, "shared_launch", return_value=(failure, {}, {
+                            "stdout": {"status": "not-started"},
+                            "stderr": {"status": "not-started"}})) as launch:
+                        result = fixture._command(command, 10, cwd=ROOT, env=child_env)
+                    self.assertEqual(command, original, "the caller's argv must not be mutated")
+                    self.assertEqual(launch.call_args.args[0], pathlib.Path(expected[0]))
+                    self.assertEqual(launch.call_args.args[1], expected)
+                    self.assertEqual(launch.call_args.kwargs["child_cwd"], ROOT)
+                    self.assertIs(launch.call_args.kwargs["env"], child_env)
+                    is_build = command[0] == "cmake"
+                    self.assertEqual(launch.call_args.kwargs["build_scratch_root"],
+                        ROOT / "build/v02" if is_build else None)
+                    self.assertEqual(launch.call_args.kwargs["build_file_size_limit_bytes"],
+                        scope["per_child_limits"]["max_binary_file_bytes"] if is_build else None)
+                    self.assertEqual(launch.call_args.kwargs["allow_build_file_links"], is_build)
+                    self.assertEqual(result.returncode, 127)
+                    self.assertEqual(result.stderr, "launch failed: unavailable tool")
+        finally:
+            fixture.set_execution_scope(None)
+
+    def test_scoped_build_rejects_unowned_or_unsafe_roots_before_launch(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "phase7_setup_build_root_contract", ROOT / "tests/fixtures/phase6_game.py")
+        fixture = importlib.util.module_from_spec(spec); spec.loader.exec_module(fixture)
+        scope = json.loads((ROOT / "evidence/v02-execution.json").read_text())
+        fixture.set_execution_scope(scope)
+        try:
+            with tempfile.TemporaryDirectory(dir=ROOT / "build/v02") as temporary:
+                work = pathlib.Path(temporary)
+                actual = work / "build"; actual.mkdir()
+                link = work / "linked"; link.symlink_to(actual, target_is_directory=True)
+                for target in (str(ROOT), "/tmp", str(work / "missing"),
+                               str(link), str(work / "build/../build")):
+                    with self.subTest(target=target), patch.object(fixture, "shared_launch") as launch:
+                        with self.assertRaisesRegex(RuntimeError, "phase7-cmake-build-root"):
+                            fixture._command(["cmake", "--build", target], 10)
+                        launch.assert_not_called()
+                for command in (["cmake", "--build"], ["cmake", "-S", str(ROOT)]):
+                    with patch.object(fixture, "shared_launch") as launch:
+                        with self.assertRaisesRegex(RuntimeError, "phase7-cmake-build-root-missing"):
+                            fixture._command(command, 10)
+                        launch.assert_not_called()
+        finally:
+            fixture.set_execution_scope(None)
+
+    def test_safety_builds_before_discovery_and_rejects_missing_command(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "phase7_safety_discovery_contract", ROOT / "tests/fixtures/phase6_game.py")
+        fixture = importlib.util.module_from_spec(spec); spec.loader.exec_module(fixture)
+        with tempfile.TemporaryDirectory(dir=ROOT / "build/v02") as temporary:
+            work = pathlib.Path(temporary)
+            candidate = work / "candidate.json"; candidate.write_text("{}")
+            tests = [{"name": name, "command": [str(work / name)]}
+                     for name in fixture.SAFETY_TESTS]
+            tests[0].pop("command")
+            calls = []
+            def setup(command, timeout, **kwargs):
+                calls.append(command)
+                return subprocess.CompletedProcess(command, 0,
+                    json.dumps({"tests": tests}) if command[0] == "ctest" else "", "")
+            with patch.object(fixture, "freeze_build_provenance"), \
+                    patch.object(fixture, "_command", side_effect=setup):
+                with self.assertRaisesRegex(RuntimeError, "native-invalid-ctest-command:load_contract"):
+                    fixture.safety(work, candidate, work / "safety.json")
+            self.assertEqual(len(calls), 2, "invalid discovery must not execute any safety test")
+            self.assertEqual(calls[0][:2], ["cmake", "--build"])
+            self.assertEqual(calls[1][:3], ["ctest", "--test-dir", str(work)])
+
     def test_failed_scoped_launch_keeps_attempt_receipt_and_bounded_streams(self) -> None:
         import importlib.util
         spec = importlib.util.spec_from_file_location("phase7_durable_failure", ROOT / "tests/fixtures/phase6_game.py")
@@ -867,6 +1062,8 @@ class Phase7ExecutionContract(unittest.TestCase):
         attempts = sorted(setup_root.glob("phase7-setup-*"))
         attempts = [path for path in attempts if path not in before]
         self.assertEqual(len(starts), 1, "synthetic denial must observe zero production starts")
+        self.assertEqual(starts[0], ["/unusable-production-client"])
+        self.assertIn("synthetic production launch denied", result.stderr)
         self.assertEqual(len(attempts), 1)
         journal = json.loads((attempts[0] / "process.json").read_text())
         self.assertEqual(len(journal["processes"]), 1)
