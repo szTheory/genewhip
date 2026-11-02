@@ -747,3 +747,24 @@ cache and runtime configuration. Test-registration metadata can change without
 rerunning an identical native executable; runtime changes require affected proof
 to be refreshed. Current host evidence also binds each selected run to its exact
 completed process receipt, limits and confirmed group cleanup.
+
+Renderer capture diagnostics retain the first coarse host failure stage. The
+additive host JSON integer `renderer_capture_substage` identifies only that
+first failure when it is stage13 (`renderer-capture`): 1 logical-query, 2 crop,
+3 readback, 4 surface-shape, 5 size, 6 allocation, 7 conversion, 8 exclusive-open,
+9 write, 10 close. Zero means no capture substage was the first host failure.
+The bounded native-prefix public comparison projects these integers to the
+listed fixed strings. Missing legacy fields, malformed types (including boolean
+integers), unknown values and inconsistent stage/detail pairs become
+`unavailable`; legacy public comparisons without the optional detail still
+validate. The established one-case public schema remains unchanged. No SDL error
+text, renderer/device name or output path is added to public diagnostics.
+
+The offline `renderer_capture_contract` CTest runs the same private capture
+implementation with fake SDL and file leaves, including each failure substage,
+cleanup precedence, size boundaries and successful byte output. It runs without
+SDL, ROMs or devices in the default build. These controls establish reporting
+behavior; they do not identify any earlier hosted capture failure. Capture
+acceptance, nearest sampling, output format, field timing and the 80MiB limit
+are unchanged. Changed runtime bytes invalidate future reuse of old source-bound
+readiness; retained historical outcomes keep their original scope.
