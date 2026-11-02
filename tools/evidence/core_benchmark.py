@@ -38,6 +38,28 @@ _ACTIVE_RUNTIME_LIMIT_SECONDS = 64800
 _ACTIVE_JOURNAL = None
 
 
+def qualification_scope_path(explicit=None):
+    """Honor only the exact prospective scope when its fixed profile is selected."""
+    legacy = ROOT / "evidence/v02-execution.json"
+    selected_sha = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", "")
+    selected_path = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH", "")
+    window_sha = "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4"
+    window_rel = "evidence/v02-phase7-full-execution-scope.json"
+    if selected_sha not in ("", window_sha):
+        raise ValueError("qualification-scope-profile-invalid")
+    if selected_sha == window_sha:
+        path = ROOT / window_rel
+        chosen = Path(explicit).resolve(strict=True) if explicit is not None else path.resolve(strict=True)
+        if (selected_path != window_rel or chosen != path.resolve(strict=True)
+                or hashlib.sha256(path.read_bytes()).hexdigest() != window_sha):
+            raise ValueError("qualification-scope-profile-invalid")
+        return path
+    chosen = Path(explicit).resolve(strict=True) if explicit is not None else legacy.resolve(strict=True)
+    if chosen != legacy.resolve(strict=True):
+        raise ValueError("qualification-scope-profile-not-selected")
+    return legacy
+
+
 def enforce_batch_wall_limit():
     now = time.time()
     if (_ACTIVE_QUALIFICATION_START is not None
@@ -797,7 +819,7 @@ def run_child(binary, mode, diagnostics, warmup, fields, rom=ROM, repetition=0):
     journal_entry = (_ACTIVE_JOURNAL.launch("control", mode, diagnostics, repetition, command,
         fields=fields, warmup=warmup) if _ACTIVE_JOURNAL and fields > 4 else None)
     if fields > 4 or warmup > 2 or _ACTIVE_QUALIFICATION_START is not None:
-        scope_path = ROOT / "evidence/v02-execution.json"
+        scope_path = qualification_scope_path()
         v02 = load_v02_launcher()
         scope, limits = v02.validate_execution_scope(scope_path, "smoke")
         capture = checked_capture_size(fields)[2]

@@ -4,11 +4,46 @@ inputs:
   phase:
     description: Qualification partition enforced by this job
     required: true
+  minimum_remaining_seconds:
+    description: Optional minimum public-window time required before a later effect
+    required: false
+    default: '0'
 runs:
   using: composite
   steps:
+    - name: Select the prospective Phase 7 clock for source CI runs inside its window
+      if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        created_at="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .created_at)"
+        test -n "$created_at"
+        RUN_CREATED_AT="$created_at" python3 -I - <<'PY'
+        import importlib.util
+        import os
+        from pathlib import Path
+
+        root = Path.cwd().resolve(strict=True)
+        path = root / "scripts/release/v02_window.py"
+        spec = importlib.util.spec_from_file_location("gw_public_phase7_window", path)
+        if spec is None or spec.loader is None:
+            raise SystemExit("phase7-window-selector-unavailable")
+        window = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(window)
+        selected = window.select_public_event_window(root,
+            workflow_created_at=os.environ["RUN_CREATED_AT"])
+        if selected["selected"]:
+            with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as stream:
+                stream.write("GENEWHIP_QUALIFICATION_STARTED_AT=" + selected["started_at"] + "\n")
+                stream.write("GENEWHIP_QUALIFICATION_SCOPE_PATH=" + selected["scope_path"] + "\n")
+                stream.write("GENEWHIP_QUALIFICATION_SCOPE_SHA256=" + selected["scope_sha256"] + "\n")
+            print("phase7-window: selected prospective clock for in-window source run")
+        else:
+            print("phase7-window: outside prospective source-run interval; legacy defaults retained")
+        PY
     - name: Check immutable journal start and run creation time
-      if: ${{ github.event_name == 'workflow_dispatch' }}
+      if: ${{ github.event_name == 'workflow_dispatch' && env.GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE != 'native-prefix-queue-v1' }}
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
@@ -17,3 +52,36 @@ runs:
         created_at="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .created_at)"
         test -n "$created_at"
         QUALIFICATION_RUN_CREATED_AT="$created_at" python3 -I -c 'import os,sys;sys.path.insert(0,os.getcwd()); from scripts.release.v02_qualification import _validate_workflow_clock; _validate_workflow_clock(os.environ["GENEWHIP_QUALIFICATION_STARTED_AT"], os.environ["QUALIFICATION_RUN_CREATED_AT"], os.environ["GENEWHIP_QUALIFICATION_NONCE"], os.environ["GITHUB_BASE_SHA"], phase=os.environ["QUALIFICATION_PHASE"])'
+    - name: Enforce minimum remaining prospective window
+      if: ${{ inputs.minimum_remaining_seconds != '0' && env.GENEWHIP_QUALIFICATION_SCOPE_SHA256 == '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' }}
+      shell: bash
+      env:
+        MINIMUM_REMAINING_SECONDS: ${{ inputs.minimum_remaining_seconds }}
+        QUALIFICATION_PHASE: ${{ inputs.phase }}
+      run: |
+        python3 -I - <<'PY'
+        import datetime
+        import os
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, os.getcwd())
+        from scripts.release.v02_window import validate_public_clock
+
+        minimum = os.environ["MINIMUM_REMAINING_SECONDS"]
+        if not minimum.isdigit() or int(minimum) > 14400:
+            raise SystemExit("qualification-minimum-remaining-invalid")
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        checked = validate_public_clock(Path.cwd(),
+            scope_path=os.environ["GENEWHIP_QUALIFICATION_SCOPE_PATH"],
+            scope_sha256=os.environ["GENEWHIP_QUALIFICATION_SCOPE_SHA256"],
+            started_at=os.environ["GENEWHIP_QUALIFICATION_STARTED_AT"],
+            phase=os.environ["QUALIFICATION_PHASE"], now=now)
+        if checked["remaining_seconds"] < int(minimum):
+            raise SystemExit("qualification-minimum-remaining-not-met")
+        PY
+    - name: Reopen and publish the queue-aware native job-clock receipt
+      if: ${{ github.event_name == 'workflow_dispatch' && env.GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE == 'native-prefix-queue-v1' }}
+      shell: bash
+      run: |
+        python3 -I -c 'import os,sys;sys.path.insert(0,os.getcwd()); from scripts.release.v02_qualification import publish_native_prefix_job_clock_receipt; publish_native_prefix_job_clock_receipt()'

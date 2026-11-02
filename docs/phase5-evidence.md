@@ -1,5 +1,21 @@
 # Phase 5 fixture screening and evidence
 
+## Current-host Binutils configure-probe provenance
+
+The current-host assembler build may use the narrowly recorded local configure
+probe correction `binutils-2.47-configure-parent-relative-probe`. It runs only
+after the signed upstream archive and original extracted tree are verified. The
+helper checks the complete 14-file allowlist, each upstream file digest and
+occurrence count, then changes only the exact configure symlink target from
+`conf$$.file` to `../conf$$.file`; the resulting source tree is checked against
+its fixed digest. Current-host receipts use
+`genewhip-current-host-toolchain-v2` and bind the original archive/tree, patch
+recipe, helper, file manifest, patched tree, unchanged configure/build flags,
+and assembler bytes. Historical `toolchain.lock`, legacy `--record` and
+`--verify-lock` behavior, and unpatched v1 receipts remain unchanged. This
+repairs the proven configure-probe/scanner incompatibility only; it does not
+identify the exact path or cause of the earlier hosted CI failure.
+
 ## Phase 5-07 admitted pair and Genewhip baseline
 
 The current admitted pair is fixed to two independently authored lineages:

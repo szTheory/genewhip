@@ -48,6 +48,37 @@ class PromotionError(Exception):
     """Stable, non-secret-bearing blocker reported to the workflow log."""
 
 
+def execution_window_active() -> bool:
+    scope_sha = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", "")
+    return (os.environ.get("GENEWHIP_PHASE7_WINDOW_ACTIVE") == "1"
+        or scope_sha not in ("", "05eb7f5fa91d759fbef8fb86bbc9db402dc41812261235bcf5085a0e2aa9b1a5"))
+
+
+def execution_window_timeout(seconds: float, *, phase: str | None = None,
+                             now: Any = None) -> float:
+    """Clamp active Phase 7 work using the public clock, including on hosted jobs."""
+    scope_sha = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", "")
+    if not execution_window_active():
+        return seconds
+    root = pathlib.Path(__file__).resolve().parents[2]
+    spec = importlib.util.spec_from_file_location(
+        "genewhip_promotion_window", root / "scripts/release/v02_window.py")
+    if spec is None or spec.loader is None:
+        raise PromotionError("phase7-window-validator-unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        clock = module.validate_public_clock(root,
+            scope_path=os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH", ""),
+            scope_sha256=scope_sha,
+            started_at=os.environ.get("GENEWHIP_QUALIFICATION_STARTED_AT", ""),
+            phase=phase or os.environ.get("GENEWHIP_QUALIFICATION_PHASE", "package"),
+            now=now)
+    except (OSError, ValueError) as error:
+        raise PromotionError("phase7-publication-window-invalid-or-expired") from error
+    return min(seconds, clock["remaining_seconds"])
+
+
 def validate_provenance(statement: dict[str, Any], expected: dict[str, Any]) -> list[str]:
     """Return named blockers unless run identity, qualification and inventory match."""
     fields = (
@@ -349,7 +380,8 @@ def validate_v02_inventory(directory: pathlib.Path, inventory: dict[str, Any],
 
 
 def verify_run_event(event: dict[str, Any], expected_repo: str, source_sha: str,
-                     run_id: str, attempt: int) -> tuple[dict[str, Any] | None, list[str]]:
+                     run_id: str, attempt: int, *, expected_event: str = "push"
+                     ) -> tuple[dict[str, Any] | None, list[str]]:
     run = event.get("workflow_run") if isinstance(event, dict) else None
     if not isinstance(run, dict):
         return None, ["workflow-run-event-missing"]
@@ -359,7 +391,7 @@ def verify_run_event(event: dict[str, Any], expected_repo: str, source_sha: str,
         return None, ["provenance-repository-mismatch"]
     if not isinstance(head_repo, dict) or head_repo.get("id") != repo.get("id"):
         return None, ["provenance-fork-source"]
-    if run.get("event") != "push":
+    if expected_event not in {"push", "workflow_dispatch"} or run.get("event") != expected_event:
         return None, ["provenance-event-mismatch"]
     if run.get("head_branch") != "main":
         return None, ["provenance-ref-mismatch"]
@@ -371,7 +403,13 @@ def verify_run_event(event: dict[str, Any], expected_repo: str, source_sha: str,
         return None, ["provenance-run-attempt-mismatch"]
     if run.get("status") != "completed" or run.get("conclusion") != "success":
         return None, ["provenance-run-not-success"]
-    if run.get("name") != "Required preview checks":
+    if expected_event == "workflow_dispatch":
+        name = run.get("name")
+        if (not isinstance(name, str)
+                or re.fullmatch(r"Plan10 qualification [0-9a-f]{32}", name) is None
+                or run.get("display_title") != name):
+            return None, ["provenance-workflow-mismatch"]
+    elif run.get("name") != "Required preview checks":
         return None, ["provenance-workflow-mismatch"]
     return run, []
 
@@ -480,10 +518,12 @@ def _attestation_statement(result: Any, expected_invocation: str) -> dict[str, A
 
 def verify_attestation(path: pathlib.Path, repository: str, source_sha: str,
                        run_id: str, attempt: int, expected_sha256: str | None = None,
-                       runner: Any = None) -> dict[str, Any]:
+                       runner: Any = None, *, expected_event: str = "push") -> dict[str, Any]:
     """Use gh's Sigstore verifier and additionally bind SLSA invocation to this attempt."""
     if not REPO_RE.fullmatch(repository) or not SHA_RE.fullmatch(source_sha):
         raise PromotionError("provenance-expected-identity-invalid")
+    if expected_event not in {"push", "workflow_dispatch"}:
+        raise PromotionError("provenance-event-mismatch")
     command = [
         "gh", "attestation", "verify", str(path), "--repo", repository,
         "--signer-workflow", f"{repository}/{WORKFLOW_PATH}",
@@ -493,7 +533,8 @@ def verify_attestation(path: pathlib.Path, repository: str, source_sha: str,
     ]
     try:
         completed = (runner(command) if runner is not None else
-                     subprocess.run(command, check=False, capture_output=True, text=True, timeout=60))
+                     subprocess.run(command, check=False, capture_output=True, text=True,
+                                    timeout=execution_window_timeout(60)))
     except (OSError, subprocess.TimeoutExpired):
         raise PromotionError("attestation-verifier-unavailable") from None
     if completed.returncode:
@@ -520,7 +561,9 @@ def verify_attestation(path: pathlib.Path, repository: str, source_sha: str,
         "sha": source_sha,
         "run_id": str(run_id),
         "run_attempt": attempt,
-        "event": "push",
+        # This label comes from the independently authenticated source run.
+        # Sigstore verification above binds its exact run/attempt and source.
+        "event": expected_event,
         "conclusion": "success",
         "qualification": "success",
         "assets": {},
@@ -694,7 +737,8 @@ class GitHub:
             headers["Content-Type"] = content_type
         request = urllib.request.Request(url, data=body, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(request, timeout=30) as response:
+            with urllib.request.urlopen(request, timeout=execution_window_timeout(30,
+                    phase="package" if method != "GET" else None)) as response:
                 data = response.read()
                 return json.loads(data.decode("utf-8")) if data else None
         except urllib.error.HTTPError as error:
@@ -1040,6 +1084,7 @@ def publish(repository: str, source_sha: str, run_id: str, attempt: int,
             event_path: pathlib.Path, asset_dir: pathlib.Path, token: str,
             authorized_recovery_release_id: int,
             release_version: str = "0.1.0") -> str:
+    execution_window_timeout(60, phase="package")
     if (not REPO_RE.fullmatch(repository) or ".." in repository.split("/")
             or not SHA_RE.fullmatch(source_sha) or not RUN_ID_RE.fullmatch(str(run_id))
             or attempt < 1 or type(authorized_recovery_release_id) is not int):
@@ -1063,24 +1108,13 @@ def publish(repository: str, source_sha: str, run_id: str, attempt: int,
     if blockers:
         raise PromotionError(blockers[0])
 
-    # Verify all publisher inputs, including the manifest, against GitHub's signed provenance.
-    expected = {"repository": repository, "workflow": WORKFLOW_PATH, "ref": "refs/heads/main",
-                "sha": source_sha, "run_id": str(run_id), "run_attempt": attempt,
-                "event": "push", "assets": {}}
-    for name in sorted(inventory["assets"]):
-        path = asset_dir / name
-        if path.suffixes[-2:] == [".tar", ".gz"] or name.endswith(".tar.gz"):
-            proof = verify_attestation(path, repository, source_sha, run_id, attempt)
-            statement = {**proof, "assets": {}}
-            if validate_provenance(statement, expected):
-                raise PromotionError("attestation-identity-mismatch")
-    manifest_proof = verify_attestation(asset_dir / "inventory.json", repository, source_sha, run_id, attempt)
-    if validate_provenance({**manifest_proof, "assets": {}}, expected):
-        raise PromotionError("attestation-identity-mismatch")
-
+    # Authenticate the source event before labeling the separately verified attestations.
     api = GitHub(token, repository)
     run = api.get(f"/repos/{repository}/actions/runs/{run_id}/attempts/{attempt}")
-    _, run_blockers = verify_run_event({"workflow_run": run}, repository, source_sha, run_id, attempt)
+    source_event = ("workflow_dispatch" if release_version == V02_RELEASE_VERSION
+        and isinstance(run, dict) and run.get("event") == "workflow_dispatch" else "push")
+    _, run_blockers = verify_run_event({"workflow_run": run}, repository, source_sha,
+        run_id, attempt, expected_event=source_event)
     workflow_id = run.get("workflow_id") if isinstance(run, dict) else None
     if run_blockers or not isinstance(workflow_id, int):
         raise PromotionError(run_blockers[0] if run_blockers else "provenance-workflow-mismatch")
@@ -1088,6 +1122,24 @@ def publish(repository: str, source_sha: str, run_id: str, attempt: int,
     if not isinstance(workflow, dict) or workflow.get("path") != WORKFLOW_PATH:
         raise PromotionError("provenance-workflow-mismatch")
     api.verify_required_check(run_id, attempt, release_version)
+
+    # Verify all publisher inputs, including the manifest, against signed provenance.
+    expected = {"repository": repository, "workflow": WORKFLOW_PATH, "ref": "refs/heads/main",
+                "sha": source_sha, "run_id": str(run_id), "run_attempt": attempt,
+                "event": source_event, "assets": {}}
+    for name in sorted(inventory["assets"]):
+        path = asset_dir / name
+        if path.suffixes[-2:] == [".tar", ".gz"] or name.endswith(".tar.gz"):
+            proof = verify_attestation(path, repository, source_sha, run_id, attempt,
+                                       expected_event=source_event)
+            statement = {**proof, "assets": {}}
+            if validate_provenance(statement, expected):
+                raise PromotionError("attestation-identity-mismatch")
+    manifest_proof = verify_attestation(asset_dir / "inventory.json", repository, source_sha,
+        run_id, attempt, expected_event=source_event)
+    if validate_provenance({**manifest_proof, "assets": {}}, expected):
+        raise PromotionError("attestation-identity-mismatch")
+
     version = inventory.get("version")
     if version != release_version:
         raise PromotionError("release-version-not-allowed")

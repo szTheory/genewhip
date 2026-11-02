@@ -9,6 +9,8 @@ import json
 import os
 from pathlib import Path
 import re
+import importlib.util
+import stat
 from typing import Any, Callable
 
 
@@ -77,6 +79,44 @@ FIRST_PARTY_CLEANUP_CONTROL_SOURCE_PATHS = {
 }
 NATIVE_HOST_RUNTIME_CASE = "runtime/native/recursion94/withhold-first-plate"
 NATIVE_HOST_RUNTIME_PROFILE = "native-host-runtime"
+NATIVE_PREFIX_PREDECESSOR_CASE = "native-prefix/source-repair-after-attempt20"
+NATIVE_PREFIX_PREDECESSOR_PROFILE = "native-prefix-attempt20-failure-v1"
+NATIVE_PREFIX_DIAGNOSTIC_CASE = "recursion94-native-prefix"
+NATIVE_PREFIX_DIAGNOSTIC_PROFILE = "native-prefix-diagnostic"
+NATIVE_PREFIX_SOURCE_PATHS = {
+    ".github/workflows/ci.yml",
+    "scripts/evidence/v02_run.py",
+    "scripts/release/v02_qualification.py",
+    "scripts/release/v02_batch.py",
+    "tests/evidence/phase7_fresh_batch_contract.py",
+    "tests/evidence/phase7_native_diagnostic_contract.py",
+    "tests/evidence/v02_qualification_contract.py",
+}
+NATIVE_PREFIX_ATTEMPT20_EVIDENCE_PATHS = {
+    "failure": "build/v02/ci-continuation-20261031T124319Z/attempt-0020/failure.json",
+    "journal": "build/v02/ci-continuation-20261031T124319Z/attempt-0020/hosted-delivery-journal.json",
+    "source_delivery": "build/v02/ci-continuation-20261031T124319Z/attempt-0020/source-delivery.json",
+    "workflow_run": "build/v02/ci-continuation-20261031T124319Z/attempt-0020/ci-failure/qualification-workflow-run-41271972599.json",
+    "workflow_jobs": "build/v02/ci-continuation-20261031T124319Z/attempt-0020/ci-failure/qualification-jobs-41271972599.json",
+    "runtime_log": "build/v02/ci-continuation-20261031T124319Z/attempt-0020/ci-failure/qualification-runtime-job-124746427262.log",
+}
+NATIVE_PREFIX_ATTEMPT20_EVIDENCE_SHA256 = {
+    "failure": "52162e18a1aabb50035cea986086dcc7f184d2075badd4a24d9300bce7aaa3ce",
+    "journal": "ada37c1dd904bd0cdd6375baf53215692bcd6a34a89792a9a931c44e43255aae",
+    "source_delivery": "ad2b3909dcac9eb3e6db760f9dc4eee29edb524d790e0cb36f6ffef8db9e9d09",
+    "workflow_run": "2f6e3b68a942e0d497ae2afffa85e8066dea80bf4cfdc4b929cb5a3eb1556e80",
+    "workflow_jobs": "c8cc75b47c064165499cdef9f7341c405af4f6fe6ace8da0b181302206d4d74f",
+    "runtime_log": "3a78189c7c9003ce3a52ad8dbe38dd5b7ddaa75f4cd78ae87db5d01b77894f0d",
+}
+NATIVE_PREFIX_ATTEMPT20_ROOT = (POLICY_ROOT / "attempt-0020").as_posix()
+NATIVE_PREFIX_ATTEMPT20_RUN_ID = 41271972599
+NATIVE_PREFIX_ATTEMPT20_RUN_CREATED_AT = "2026-11-01T04:09:35Z"
+NATIVE_PREFIX_ATTEMPT20_CANDIDATE_SHA = "77521f60df4baf9dd74206c9be6d848992c4849f"
+NATIVE_PREFIX_ATTEMPT20_MERGE_SHA = "0521ecd2e874e7ad5f5d593f244f2885939c4590"
+NATIVE_PREFIX_ATTEMPT20_BASE_SHA = "d4865061f524a8637342562710af72dd2d583ae3"
+NATIVE_PREFIX_ATTEMPT20_TREE_SHA = "8b3ed60bf47ea221cbc5e1022fb0471c6455df0e"
+NATIVE_PREFIX_ATTEMPT20_PR = 45
+NATIVE_PREFIX_ATTEMPT20_NONCE = "beb551e4c574449f9413bf2ab05ab0d3"
 NATIVE_CASE_PREPARATION = "prepare/native/recursion94/withhold-first-plate"
 NATIVE_CASE_PREPARATION_PATHS = {
     ".github/workflows/ci.yml", "scripts/evidence/v02_run.py",
@@ -152,6 +192,37 @@ NATIVE_INPUT_MASK_ALIGNMENT_READINESS_SHA256 = (
     "f3d1a900e1db2946dfa304b40bd0c9bdaaf6c120a5ce200a7f1c6f7ee84008a4")
 NATIVE_INPUT_MASK_ALIGNMENT_RESULT_PAYLOAD_SHA256 = (
     "f175946ef06b672be9546f6361483daaccf94d27682f148a4d67e15ed6491988")
+
+# Separate prospective four-hour Phase 7 window. The legacy fresh-batch
+# validator below remains pinned to its original authority and namespace.
+WINDOW_AUTH_PATH = Path("build/v02/phase7-qualification-20261102T165630Z/authorization.json")
+WINDOW_AUTH_SHA256 = "d9aa7ecce2826cc3832dd99333cc637ba8ef9d4cdb6e261331abec89ac0b4ebf"
+WINDOW_SCOPE_PATH = Path("evidence/v02-phase7-full-execution-scope.json")
+WINDOW_SCOPE_SHA256 = "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4"
+WINDOW_ATTEMPT_NAMESPACE = Path("build/v02/phase7-qualification-20261102T165630Z/attempts")
+WINDOW_PREDECESSOR = {"path":
+    "build/v02/phase7-iterations/attempt-0001/terminal-assessment.json",
+    "sha256": "a4690d9a81fd094b977d71603b6236dfa667fa35a99482e711c522df773b4c70"}
+WINDOW_STARTED_AT = "2026-11-02T16:56:30+00:00"
+WINDOW_RETRY_ATTEMPT1_ROOT = WINDOW_ATTEMPT_NAMESPACE / "attempt-0001"
+WINDOW_RETRY_ATTEMPT1_TERMINAL = WINDOW_RETRY_ATTEMPT1_ROOT / "terminal-assessment.json"
+WINDOW_RETRY_TERMINAL_SCHEMA = "genewhip.phase7-four-hour-prequalification-terminal.v1"
+WINDOW_RETRY_TERMINAL_STATUS = "settled-preview-ci-failure"
+WINDOW_RETRY_PRIVATE_SOURCE = "7976f8ce0fd2ebd912724147011313e70b51a084"
+WINDOW_RETRY_CANDIDATE_SOURCE = "ea3927928681aaf269b1cfba877b88ab78545f45"
+WINDOW_RETRY_BASE_SOURCE = "0521ecd2e874e7ad5f5d593f244f2885939c4590"
+WINDOW_RETRY_PR_NUMBER = 65
+WINDOW_RETRY_RUN_ID = 41500507177
+WINDOW_RETRY_RUN_ATTEMPT = 1
+WINDOW_RETRY_WORKFLOW_ID = 392236816
+WINDOW_RETRY_EXTERNAL_LIMIT = 64
+WINDOW_RETRY_EXTERNAL_BYTES_LIMIT = 64 * 1024 * 1024
+WINDOW_RETRY_PREPARE_RECORD_SHA256 = {
+    "argv": "c86fa04316d209a988fa6a8dbf9f0b417606badce18afc4563e9d8c687e9b75a",
+    "started": "0bc7d4f32f258bd675bde5e950805919ec21494b0f8ae34135c7017c57505053",
+    "exit": "7abdd982ffff4cf8d43026b18b32338a37adc27988440318a4a1a00eaced7062",
+    "controller": "8577ccbd8c2a58255d7bc4267d59e153c937024277c673c4c7dc9f4cc0dd7e79"}
+_WINDOW_MODULE = None
 NATIVE_DIAGNOSTIC_RESUMPTION_CASE = "native-diagnostic/accepted-revalidation"
 NATIVE_DIAGNOSTIC_RESUMPTION_PROFILE = "native-diagnostic-accepted-resumption"
 WORKFLOW_TIMEOUT_CONTRACT_CASE = (
@@ -179,6 +250,203 @@ def native_diagnostic_plan() -> dict[str, Any]:
         {"name": "native-sdl-comparison", "wall_seconds": 600}],
         "outer_wall_seconds": 1800, "job_wall_seconds": 2700,
         "qualification_accepted": False, "stop_after_result": True}
+
+
+def native_prefix_diagnostic_plan() -> dict[str, Any]:
+    cases = ["full-route", "withhold-first-plate"]
+    return {"case": NATIVE_PREFIX_DIAGNOSTIC_CASE, "workloads": [
+        {"name": "input-contract", "wall_seconds": 30},
+        {"name": "headless-reference", "wall_seconds": 600, "cases": cases},
+        {"name": "native-comparison", "wall_seconds": 600, "cases": cases}],
+        "outer_wall_seconds": 1800, "job_wall_seconds": 2700,
+        "qualification_accepted": False, "stop_after_result": True}
+
+
+def _validate_attempt20_native_failure(root: Path, *, expected_root: str,
+                                       terminal: dict[str, Any],
+                                       journal: dict[str, Any],
+                                       failure: dict[str, Any]) -> None:
+    """Join the immutable attempt-20 failure to its retained, sanitized CI evidence."""
+    label = "fresh-batch-native-prefix-attempt20-evidence-invalid"
+    refs = terminal.get("attempt20_evidence")
+    if not isinstance(refs, dict) or set(refs) != set(NATIVE_PREFIX_ATTEMPT20_EVIDENCE_PATHS):
+        raise ValueError(label)
+    values: dict[str, Any] = {}
+    for key, relative in NATIVE_PREFIX_ATTEMPT20_EVIDENCE_PATHS.items():
+        reference = refs.get(key)
+        if (not isinstance(reference, dict) or set(reference) != {"path", "sha256"}
+                or reference.get("path") != relative
+                or reference.get("sha256") != NATIVE_PREFIX_ATTEMPT20_EVIDENCE_SHA256[key]):
+            raise ValueError(label)
+        try:
+            raw = _read_regular(_path(root, _safe_relative(relative, label)),
+                                cap=8 * 1024 * 1024, label=label)
+        except ValueError:
+            raise ValueError(label) from None
+        if _digest(raw) != reference["sha256"]:
+            raise ValueError(label)
+        if key == "runtime_log":
+            values[key] = raw
+        elif key == "workflow_jobs":
+            wrapper = _json_object(raw, label)
+            if set(wrapper) != {"jobs"} or not isinstance(wrapper.get("jobs"), list):
+                raise ValueError(label)
+            values[key] = wrapper["jobs"]
+        else:
+            values[key] = _json_object(raw, label)
+
+    delivery = values["source_delivery"]
+    run = values["workflow_run"]
+    jobs = values["workflow_jobs"]
+    repository = run.get("repository")
+    head_repository = run.get("head_repository")
+    outer_rows = [line for line in values["runtime_log"].splitlines()
+                  if b"GENEWHIP_COORDINATOR_FAILURE:" in line]
+    marker_rows = [line for line in values["runtime_log"].splitlines()
+                   if b"REJECT: qualification-child-failed:runtime:1:BLOCKED: phase7-host-batch-failed:" in line]
+    outer_prefix = b"GENEWHIP_COORDINATOR_FAILURE:"
+    if len(outer_rows) != 1 or outer_prefix not in outer_rows[0]:
+        raise ValueError(label)
+    try:
+        outer_facts = json.loads(outer_rows[0].split(outer_prefix, 1)[1])
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise ValueError(label) from None
+    expected_outer = {"bound": "false", "bound_reason": "missing", "cleanup": "confirmed",
+        "cleanup_phase": "missing", "cleanup_queries": "unavailable", "cleanup_reason": "missing",
+        "observer_error": "missing", "observer_return": "missing", "observer_stage": "missing",
+        "receipt_count": "one", "rejection": "nonzero-exit", "return": "nonzero",
+        "status": "completed", "status_observation": "missing"}
+    if (outer_facts != expected_outer
+            or terminal.get("runtime_outer_cleanup") != "confirmed"
+            or terminal.get("runtime_outer_return") != "nonzero"
+            or terminal.get("runtime_outer_bound_violation") is not False
+            or terminal.get("runtime_outer_rejection") != "nonzero-exit"):
+        raise ValueError(label)
+    marker_prefix = (b"REJECT: qualification-child-failed:runtime:1:BLOCKED: "
+                     b"phase7-host-batch-failed:")
+    if len(marker_rows) != 1 or marker_prefix not in marker_rows[0]:
+        raise ValueError(label)
+    try:
+        facts = json.loads(marker_rows[0].split(marker_prefix, 1)[1])
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise ValueError(label) from None
+    expected_facts = {
+        "active_ticks": "mismatch", "audio_activity": "true",
+        "audio_consumed_frames": "positive", "audio_driver_named": "true",
+        "audio_submitted_frames": "positive", "backend": "native",
+        "batch_return": "1", "bound": "none", "boundary_calls": "in-range",
+        "capture_field_matches": "true", "case": "recursion94/withhold-first-plate",
+        "child_exit": "nonzero", "cleanup": "confirmed", "cleanup_queries": "other",
+        "cleanup_reason": "missing", "core_outcome": "fail", "fields": "in-range",
+        "host_outcome": "fail-diagnostic", "input_equal": "false",
+        "native_status": "nonzero", "pcm_equal": "false", "readback_activity": "false",
+        "reason": "core-input-progress-or-common-boundary-mismatch",
+        "renderer_named": "true", "renderer_pixel_equal": "false", "report": "fail",
+        "row": "fail", "schema": "genewhip.v02-host-batch-failure.v1",
+        "source_samples_equal": "false", "status_observation": "missing",
+        "video_driver_named": "true",
+    }
+    if facts != expected_facts:
+        raise ValueError(label)
+    job_rows = jobs
+    by_name = {row.get("name"): row for row in job_rows
+               if isinstance(row, dict) and isinstance(row.get("name"), str)}
+    if (len(job_rows) != 16 or len(by_name) != 16 or set(by_name) != NATIVE_HOST_RUNTIME_JOBS
+            or any(not isinstance(row, dict) or type(row.get("id")) is not int
+                   or row["id"] <= 0 or row.get("run_id") != run.get("id")
+                   or row.get("status") != "completed" for row in job_rows)
+            or len({row["id"] for row in job_rows}) != 16
+            or by_name.get("v02-runtime", {}).get("conclusion") != "failure"
+            or by_name.get("required-ci", {}).get("conclusion") != "failure"
+            or any(by_name[name].get("conclusion") != "success"
+                   for name in PREVIEW_REQUIRED_LANES - {"v02-runtime", "required-ci"})
+            or any(by_name[name].get("conclusion") != "skipped"
+                   for name in PREVIEW_CONDITIONAL_SKIPS - {"v02-runtime"})):
+        raise ValueError(label)
+    failed_steps = {}
+    for name, row in by_name.items():
+        steps = row.get("steps")
+        if steps is None:
+            steps = []
+        if not isinstance(steps, list) or any(not isinstance(step, dict) for step in steps):
+            raise ValueError(label)
+        failed_steps[name] = [step.get("name") for step in steps
+                              if step.get("conclusion") == "failure"]
+    if (failed_steps.get("v02-runtime") != [
+            "Run complete current-source product safety and chunk roster"]
+            or failed_steps.get("required-ci") != ["Reject incomplete or stale required lanes"]
+            or any(failed_steps[name] for name in NATIVE_HOST_RUNTIME_JOBS -
+                   {"v02-runtime", "required-ci"})):
+        raise ValueError(label)
+    if (run.get("id") != NATIVE_PREFIX_ATTEMPT20_RUN_ID or run.get("run_attempt") != 1
+            or run.get("event") != "workflow_dispatch" or run.get("status") != "completed"
+            or run.get("conclusion") != "failure" or run.get("path") != ".github/workflows/ci.yml"
+            or run.get("head_branch") != "main"
+            or run.get("head_sha") != NATIVE_PREFIX_ATTEMPT20_MERGE_SHA
+            or not isinstance(run.get("head_commit"), dict)
+            or run["head_commit"].get("id") != run.get("head_sha")
+            or run["head_commit"].get("tree_id") != NATIVE_PREFIX_ATTEMPT20_TREE_SHA
+            or run.get("name") != f"Plan10 qualification {NATIVE_PREFIX_ATTEMPT20_NONCE}"
+            or run.get("display_title") != run.get("name")
+            or not isinstance(repository, dict)
+            or repository.get("full_name") != "szTheory/genewhip"
+            or repository.get("private") is not False
+            or not isinstance(head_repository, dict)
+            or head_repository.get("full_name") != "szTheory/genewhip"
+            or head_repository.get("private") is not False
+            or run.get("created_at") != NATIVE_PREFIX_ATTEMPT20_RUN_CREATED_AT
+            or journal.get("schema") != "genewhip.v02-delivery-journal.v1"
+            or journal.get("repository") != "szTheory/genewhip"
+            or journal.get("public_source_sha") != run.get("head_sha")
+            or journal.get("source_head") != NATIVE_PREFIX_ATTEMPT20_CANDIDATE_SHA
+            or journal.get("branch") != f"v0.2-source-{NATIVE_PREFIX_ATTEMPT20_CANDIDATE_SHA[:12]}"
+            or journal.get("public_base_sha") != NATIVE_PREFIX_ATTEMPT20_BASE_SHA
+            or journal.get("tree_sha") != NATIVE_PREFIX_ATTEMPT20_TREE_SHA
+            or journal.get("candidate_sha") != NATIVE_PREFIX_ATTEMPT20_CANDIDATE_SHA
+            or journal.get("merge_parents") != [NATIVE_PREFIX_ATTEMPT20_BASE_SHA]
+            or journal.get("merge_strategy") != "squash"
+            or journal.get("pull_request") != str(NATIVE_PREFIX_ATTEMPT20_PR) or journal.get("push_performed") is not True
+            or journal.get("qualification_dispatch_nonce") != NATIVE_PREFIX_ATTEMPT20_NONCE
+            or journal.get("qualification_dispatch_submitted") is not True
+            or journal.get("qualification_dispatch_requested") is not True
+            or journal.get("qualification_started_at") != "2026-10-31T12:43:19+00:00"
+            or journal.get("started_at") != "2026-10-31T12:43:19+00:00"
+            or journal.get("selected_run_created_at") != run.get("created_at")
+            or delivery.get("status") != "merged"
+            or delivery.get("schema") != "genewhip.v02-public-source-delivery.v1"
+            or delivery.get("public_source_sha") != journal.get("public_source_sha")
+            or delivery.get("public_base_sha") != journal.get("public_base_sha")
+            or delivery.get("tree_sha") != journal.get("tree_sha")
+            or delivery.get("candidate_sha") != journal.get("candidate_sha")
+            or delivery.get("pull_request") != str(NATIVE_PREFIX_ATTEMPT20_PR)
+            or delivery.get("merge_parents") != [NATIVE_PREFIX_ATTEMPT20_BASE_SHA]
+            or delivery.get("merge_strategy") != "squash"
+            or failure.get("stage") != "qualification"
+            or failure.get("reason") != "fresh-batch-qualification-failed"
+            or failure.get("authorization_sha256") != AUTH_SHA256
+            or terminal.get("attempt_root") != expected_root
+            or expected_root != NATIVE_PREFIX_ATTEMPT20_ROOT
+            or terminal.get("workflow_run_id") != run.get("id")
+            or terminal.get("run_attempt") != run.get("run_attempt")
+            or terminal.get("event") != run.get("event")
+            or terminal.get("run_status") != run.get("status")
+            or terminal.get("run_conclusion") != run.get("conclusion")
+            or terminal.get("head_sha") != run.get("head_sha")
+            or terminal.get("qualification_dispatch_nonce") != journal.get("qualification_dispatch_nonce")
+            or terminal.get("started_at") != journal.get("started_at")
+            or terminal.get("runtime_outer_cleanup") != "confirmed"
+            or terminal.get("runtime_outer_return") != "nonzero"
+            or terminal.get("runtime_outer_bound_violation") is not False
+            or terminal.get("runtime_outer_rejection") != "nonzero-exit"
+            or terminal.get("pull_request") != {
+                "number": NATIVE_PREFIX_ATTEMPT20_PR, "state": "closed", "merged": True,
+                "head_sha": journal.get("candidate_sha"),
+                "base_sha": journal.get("public_base_sha"),
+                "merge_commit_sha": journal.get("public_source_sha")}
+            or terminal.get("jobs") != sorted(
+                [{key: row.get(key) for key in ("id", "name", "status", "conclusion")}
+                 for row in jobs], key=lambda item: item["name"])):
+        raise ValueError(label)
 
 
 def _validate_assessed_preview(root: Path, expected_root: str, packet_ref: Any,
@@ -322,6 +590,49 @@ def _validate_native_readiness(root: Path, batch_root: Path, admission: dict[str
     if public != admission:
         raise ValueError(label)
     return ready
+
+
+def _validate_native_prefix_readiness(root: Path, batch_root: Path, admission: dict[str, Any],
+        admission_sha: str, path: Path, expected_sha: str) -> dict[str, Any]:
+    label = "native-prefix-diagnostic-readiness-invalid"
+    if (path.is_symlink()
+            or path.resolve(strict=False) != batch_root / "native-prefix-diagnostic-readiness.json"):
+        raise ValueError(label)
+    data = _read_regular(path, cap=MAX_ADMISSION_BYTES, label=label)
+    if _digest(data) != expected_sha:
+        raise ValueError(label)
+    ready = _json_object(data, label)
+    required = {"schema", "diagnostic_only", "qualification_accepted", "plan", "started_at",
+        "source_head", "candidate_head", "public_admission", "diagnostic_assessment",
+        "assessment_reviews"}
+    if (set(ready) != required
+            or ready.get("schema") != "genewhip.phase7-native-prefix-diagnostic-readiness.v1"
+            or ready.get("diagnostic_only") is not True
+            or ready.get("qualification_accepted") is not False
+            or _canonical(ready.get("plan")) != _canonical(native_prefix_diagnostic_plan())
+            or ready.get("started_at") != admission.get("started_at")
+            or ready.get("source_head") != admission.get("source_head")
+            or ready.get("candidate_head") != admission.get("candidate", {}).get("public_head")
+            or ready.get("public_admission") != {
+                "path": (batch_root / "public-admission.json").relative_to(root).as_posix(),
+                "sha256": admission_sha}
+            or admission.get("disposition") != "bounded-diagnostic-followup"):
+        raise ValueError(label)
+    repair, _ = _read_reference(root, admission["predecessor"]["repair_evidence"], label=label)
+    if (repair.get("diagnostic_case") != NATIVE_PREFIX_PREDECESSOR_CASE
+            or repair.get("diagnostic_profile") != NATIVE_PREFIX_PREDECESSOR_PROFILE):
+        raise ValueError(label)
+    journal = _json_object(_read_regular(batch_root / "hosted-delivery-journal.json",
+        cap=MAX_ADMISSION_BYTES, label=label), label)
+    failure = _json_object(_read_regular(batch_root / FAILURE_FILENAME,
+        cap=MAX_AUTH_BYTES, label=label), label)
+    payload = {key: value for key, value in ready.items() if key != "assessment_reviews"}
+    public = _validate_assessed_preview(root, batch_root.relative_to(root).as_posix(),
+        ready["diagnostic_assessment"], ready["assessment_reviews"], journal, failure,
+        review_payload_sha=_digest(_canonical(payload)))
+    if public != admission:
+        raise ValueError(label)
+    return ready
 NATIVE_HOST_RUNTIME_SOURCE_PATHS = {
     "scripts/release/v02_qualification.py",
     "tests/evidence/v02_qualification_contract.py",
@@ -358,13 +669,1291 @@ def _digest(data: bytes) -> str:
 
 def source_review_payload(*, source_head: str, started_at: str, attempt_root: str,
                           attempt_index: int, predecessor: dict[str, Any],
-                          disposition: str, source_pins: dict[str, str]) -> dict[str, Any]:
+                          disposition: str, source_pins: dict[str, str],
+                          authorization_sha256: str = AUTH_SHA256,
+                          scope_sha256: str = SCOPE_SHA256) -> dict[str, Any]:
     return {"schema": SCHEMA, "stage": "source-preparation",
-        "authorization_sha256": AUTH_SHA256, "scope_sha256": SCOPE_SHA256,
+        "authorization_sha256": authorization_sha256, "scope_sha256": scope_sha256,
         "batch_root": attempt_root, "attempt_index": attempt_index,
         "predecessor_sha256": _digest(_canonical(predecessor)),
         "disposition": disposition, "started_at": started_at,
         "source_head": source_head, "source_pins": dict(sorted(source_pins.items()))}
+
+
+def phase7_window_source_admission_payload(*, attempt_root: str, attempt_index: int,
+        predecessor: dict[str, Any], disposition: str, source_head: str,
+        source_pins: dict[str, str]) -> dict[str, Any]:
+    """Construct the source-review payload for the separately pinned four-hour window."""
+    return source_review_payload(source_head=source_head, started_at=WINDOW_STARTED_AT,
+        attempt_root=attempt_root, attempt_index=attempt_index, predecessor=predecessor,
+        disposition=disposition, source_pins=source_pins,
+        authorization_sha256=WINDOW_AUTH_SHA256, scope_sha256=WINDOW_SCOPE_SHA256)
+
+
+def phase7_window_candidate_review_payload(source_payload: dict[str, Any],
+        candidate: dict[str, Any]) -> dict[str, Any]:
+    """Construct the existing candidate-review payload under the four-hour policy hashes."""
+    if (not isinstance(source_payload, dict)
+            or source_payload.get("authorization_sha256") != WINDOW_AUTH_SHA256
+            or source_payload.get("scope_sha256") != WINDOW_SCOPE_SHA256):
+        raise ValueError("phase7-window-source-payload-invalid")
+    return candidate_review_payload(source_payload, candidate)
+
+
+def phase7_window_attempt_root(root: Path, attempt_index: int) -> Path:
+    """Return one exact four-digit attempt directory under the new fixed namespace."""
+    if type(attempt_index) is not int or attempt_index < 1 or attempt_index > 9999:
+        raise ValueError("phase7-window-attempt-index-invalid")
+    root = Path(os.path.abspath(root)).resolve(strict=True)
+    namespace = root / WINDOW_ATTEMPT_NAMESPACE
+    cursor = root
+    for part in WINDOW_ATTEMPT_NAMESPACE.parts:
+        cursor = cursor / part
+        if cursor.is_symlink():
+            raise ValueError("phase7-window-attempt-namespace-invalid")
+    if not namespace.is_dir():
+        raise ValueError("phase7-window-attempt-namespace-unavailable")
+    attempt = namespace / f"attempt-{attempt_index:04d}"
+    if attempt.is_symlink():
+        raise ValueError("phase7-window-attempt-namespace-invalid")
+    try:
+        resolved = attempt.resolve(strict=True)
+    except OSError:
+        raise ValueError("phase7-window-attempt-unavailable") from None
+    if resolved.parent != namespace.resolve(strict=True) or not resolved.is_dir():
+        raise ValueError("phase7-window-attempt-namespace-invalid")
+    return resolved
+
+
+def _phase7_window_module():
+    global _WINDOW_MODULE
+    if _WINDOW_MODULE is not None:
+        return _WINDOW_MODULE
+    spec = importlib.util.spec_from_file_location(
+        "gw_v02_phase7_window", Path(__file__).with_name("v02_window.py"))
+    if spec is None or spec.loader is None:
+        raise ValueError("phase7-window-validator-unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    _WINDOW_MODULE = module
+    return module
+
+
+def _phase7_window_admission_location(root: Path, admission_path: Path,
+                                      stage: str) -> tuple[Path, int]:
+    if stage not in ("source-preparation", "public-effects"):
+        raise ValueError("phase7-window-stage-invalid")
+    root = Path(os.path.abspath(root)).resolve(strict=True)
+    value = admission_path if admission_path.is_absolute() else root / admission_path
+    value = Path(os.path.abspath(value))
+    try:
+        relative = value.relative_to(root)
+    except ValueError:
+        raise ValueError("phase7-window-admission-path-invalid") from None
+    expected_name = "source-admission.json" if stage == "source-preparation" else "public-admission.json"
+    if (len(relative.parts) != len(WINDOW_ATTEMPT_NAMESPACE.parts) + 2
+            or relative.parts[:len(WINDOW_ATTEMPT_NAMESPACE.parts)] != WINDOW_ATTEMPT_NAMESPACE.parts
+            or relative.name != expected_name):
+        raise ValueError("phase7-window-admission-path-invalid")
+    attempt_name = relative.parts[-2]
+    match = re.fullmatch(r"attempt-([0-9]{4})", attempt_name)
+    if match is None or int(match.group(1)) < 1:
+        raise ValueError("phase7-window-attempt-index-invalid")
+    cursor = root
+    for part in relative.parts:
+        cursor = cursor / part
+        if cursor.is_symlink():
+            raise ValueError("phase7-window-admission-path-invalid")
+    attempt = phase7_window_attempt_root(root, int(match.group(1)))
+    if value != attempt / expected_name:
+        raise ValueError("phase7-window-admission-path-invalid")
+    namespace = (root / WINDOW_ATTEMPT_NAMESPACE).resolve(strict=True)
+    allocated = []
+    for child in namespace.iterdir():
+        if child.is_symlink():
+            raise ValueError("phase7-window-attempt-namespace-invalid")
+        child_match = re.fullmatch(r"attempt-([0-9]{4})", child.name)
+        if child_match and child.is_dir():
+            allocated.append(int(child_match.group(1)))
+    allocated.sort()
+    current_index = int(match.group(1))
+    if allocated != list(range(1, current_index + 1)) or allocated[-1] != current_index:
+        raise ValueError("phase7-window-attempt-sequence-invalid")
+    return attempt, int(match.group(1))
+
+
+def _phase7_window_predecessor(root: Path, admission: dict[str, Any],
+                               *, attempt_index: int, window: dict[str, Any]) -> dict[str, Any]:
+    """Bind the prior closed attempt; unknown or unclean predecessors stop retries."""
+    predecessor = admission.get("predecessor")
+    if attempt_index == 1:
+        expected = {"attempt_index": 1,
+            "attempt_root": "build/v02/phase7-iterations/attempt-0001",
+            "terminal": WINDOW_PREDECESSOR,
+            "status": "claimed-no-dispatch-proven", "local_cleanup": "settled"}
+        if predecessor != expected:
+            raise ValueError("phase7-window-initial-predecessor-invalid")
+        raw = _read_regular(root / WINDOW_PREDECESSOR["path"], cap=MAX_AUTH_BYTES,
+                            label="phase7-window-initial-predecessor-invalid")
+        if _digest(raw) != WINDOW_PREDECESSOR["sha256"]:
+            raise ValueError("phase7-window-initial-predecessor-invalid")
+        value = _json_object(raw, "phase7-window-initial-predecessor-invalid")
+        if (value.get("policy_sha256") != "bf60746bf790ed11e9912c4d6136339d12f6235f6cd491f423209bca33ece9f8"
+                or value.get("status") != "claimed-no-dispatch-proven"
+                or value.get("qualification_accepted") is not False
+                or value.get("remote_execution") != "not-started"
+                or value.get("local_cleanup") != "settled"):
+            raise ValueError("phase7-window-initial-predecessor-invalid")
+        return expected
+    if attempt_index == 2:
+        terminal_path = WINDOW_RETRY_ATTEMPT1_TERMINAL.as_posix()
+        reference = predecessor.get("terminal") if isinstance(predecessor, dict) else None
+        expected_root = WINDOW_RETRY_ATTEMPT1_ROOT.as_posix()
+        if (not isinstance(reference, dict) or set(reference) != {"path", "sha256"}
+                or reference.get("path") != terminal_path
+                or not re.fullmatch(r"[0-9a-f]{64}", str(reference.get("sha256", "")))):
+            raise ValueError("phase7-window-source-ci-predecessor-invalid")
+        terminal, raw = _read_reference(root, reference,
+            label="phase7-window-source-ci-predecessor-invalid", cap=MAX_ADMISSION_BYTES)
+        if _digest(raw) != reference["sha256"]:
+            raise ValueError("phase7-window-source-ci-predecessor-invalid")
+        _phase7_window_validate_source_ci_terminal(root, terminal)
+        expected = {"attempt_index": 1, "attempt_root": expected_root,
+            "terminal": reference, "status": WINDOW_RETRY_TERMINAL_STATUS,
+            "qualification_accepted": False, "local_cleanup": "settled"}
+        if predecessor != expected:
+            raise ValueError("phase7-window-source-ci-predecessor-invalid")
+        return expected
+    # A status string cannot prove that prior owned children and any provider
+    # dispatch settled. This deliberately supports only the one concrete, first
+    # prequalification failure until another terminal consumer is reviewed.
+    raise ValueError("phase7-window-successor-terminal-proof-consumer-required")
+
+
+def _phase7_window_read_json_reference(root: Path, reference: Any, *, label: str,
+                                       cap: int = MAX_ADMISSION_BYTES) -> tuple[Any, bytes]:
+    if not isinstance(reference, dict) or set(reference) != {"path", "sha256"}:
+        raise ValueError(label)
+    relative = _safe_relative(reference.get("path"), label)
+    path = _path(root, relative)
+    raw = _read_regular(path, cap=cap, label=label)
+    if not isinstance(reference.get("sha256"), str) or _digest(raw) != reference["sha256"]:
+        raise ValueError(label)
+    try:
+        value = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise ValueError(label) from None
+    return value, raw
+
+
+def _phase7_window_attempt_reference(root: Path, path: Path, *, cap: int = MAX_ADMISSION_BYTES
+                                    ) -> dict[str, str]:
+    try:
+        relative = path.relative_to(root)
+    except ValueError:
+        raise ValueError("phase7-window-source-ci-reference-invalid") from None
+    raw = _read_regular(path, cap=cap, label="phase7-window-source-ci-reference-invalid")
+    return {"path": relative.as_posix(), "sha256": _digest(raw)}
+
+
+def _phase7_window_source_payload_for_admission(admission: dict[str, Any],
+                                                attempt_root: str) -> dict[str, Any]:
+    return phase7_window_source_admission_payload(attempt_root=attempt_root,
+        attempt_index=1, predecessor=admission["predecessor"],
+        disposition=admission["disposition"], source_head=admission["source_head"],
+        source_pins=admission["source_pins"])
+
+
+def _phase7_window_require_object(value: Any, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(label)
+    return value
+
+
+def _phase7_window_attempt1_external_command_allowed(command: list[str]) -> bool:
+    """Allow only the reviewed source-preparation/PR query command forms."""
+    if not command or not all(isinstance(value, str) for value in command):
+        return False
+    branch = "v0.2-source-" + WINDOW_RETRY_CANDIDATE_SOURCE[:12]
+    if command[0] == "git":
+        if command == ["git", "ls-files", "-z"]:
+            return True
+        if command == ["git", "merge-base", "--is-ancestor",
+                       "0de74de60375f044336711f86090cec2f77394ee",
+                       WINDOW_RETRY_PRIVATE_SOURCE]:
+            return True
+        if command[:7] == ["git", "clone", "--single-branch", "--no-tags",
+                           "--branch", "main", "https://github.com/szTheory/genewhip.git"]:
+            return (len(command) == 8 and command[7] ==
+                    (WINDOW_RETRY_ATTEMPT1_ROOT / "candidate/publication-copy").as_posix())
+        if (len(command) == 3 and command[:2] == ["git", "show"]
+                and command[2] in {
+                    WINDOW_RETRY_BASE_SOURCE + ":evidence/independent-game.json",
+                    WINDOW_RETRY_BASE_SOURCE + ":evidence/independent-game-v2.json"}):
+            return True
+        if command == ["git", "remote", "get-url", "origin"]:
+            return True
+        if command == ["git", "fetch", "--no-tags", "origin", "main"]:
+            return True
+        if command == ["git", "rev-parse", "refs/remotes/origin/main"]:
+            return True
+        if command == ["git", "push", "origin", "HEAD:refs/heads/" + branch]:
+            return True
+        return False
+    executable = Path(command[0]).name
+    if executable == "gh":
+        if command == ["gh", "pr", "list", "--repo", "szTheory/genewhip",
+                "--head", branch, "--state", "all", "--json",
+                "number,url,headRefName,headRefOid,baseRefOid,baseRefName,state,mergeCommit,statusCheckRollup"]:
+            return True
+        if command[:3] == ["gh", "pr", "create"]:
+            return (len(command) == 13 and command[3:10] == ["--repo", "szTheory/genewhip",
+                "--base", "main", "--head", branch, "--title"]
+                and command[10] == "Prepare sanitized v0.2 source snapshot"
+                and command[11] == "--body-file"
+                and Path(command[12]).is_absolute()
+                and Path(command[12]).suffix == ".md")
+        if command == ["gh", "pr", "view", str(WINDOW_RETRY_PR_NUMBER),
+                "--repo", "szTheory/genewhip", "--json",
+                "number,state,headRefOid,baseRefOid,mergeStateStatus,statusCheckRollup,url"]:
+            return True
+        return False
+    if executable.startswith("python3"):
+        return command[1:] == ["scripts/ci/repository_preflight.py",
+            "--inspect-authorized", "--repository", "szTheory/genewhip",
+            "--destination", "szTheory/genewhip", "--visibility", "public",
+            "--history-disposition", "sanitized-snapshots-preserve-local-history",
+            "--publication-copy", (WINDOW_RETRY_ATTEMPT1_ROOT / "candidate/publication-copy").as_posix(),
+            "--expected-head", WINDOW_RETRY_CANDIDATE_SOURCE,
+            "--expected-base", WINDOW_RETRY_BASE_SOURCE,
+            "--out", (WINDOW_RETRY_ATTEMPT1_ROOT / "candidate" /
+                ("repository-preflight-" + WINDOW_RETRY_CANDIDATE_SOURCE + "-delivery.json")).as_posix()]
+    return False
+
+
+def _phase7_window_validate_reviewed_attempt1_admissions(root: Path,
+        refs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    label = "phase7-window-source-ci-admission-invalid"
+    attempt_root = WINDOW_RETRY_ATTEMPT1_ROOT.as_posix()
+    source_path = WINDOW_RETRY_ATTEMPT1_ROOT / "source-admission.json"
+    public_path = WINDOW_RETRY_ATTEMPT1_ROOT / "public-admission.json"
+    source_ref = refs.get("source_admission")
+    public_ref = refs.get("public_admission")
+    if (not isinstance(source_ref, dict) or source_ref.get("path") != source_path.as_posix()
+            or not isinstance(public_ref, dict) or public_ref.get("path") != public_path.as_posix()):
+        raise ValueError(label)
+    source, _ = _phase7_window_read_json_reference(root, source_ref, label=label)
+    public, _ = _phase7_window_read_json_reference(root, public_ref, label=label)
+    source_keys = {"schema", "status", "authorization_path", "authorization_sha256",
+        "scope_path", "scope_sha256", "batch_root", "attempt_index", "attempt_root",
+        "predecessor", "disposition", "started_at", "source_head", "source_pins",
+        "source_payload_sha256", "source_reviews"}
+    if (not isinstance(source, dict) or set(source) != source_keys
+            or not isinstance(public, dict) or source.get("schema") != SCHEMA
+            or source.get("status") != "source-preparation"):
+        raise ValueError(label)
+    candidate = public.get("candidate") if isinstance(public, dict) else None
+    candidate_keys = {"preparation_path", "preparation_sha256", "publication_path",
+        "repository_policy_path", "repository_policy_sha256", "public_head", "public_base",
+        "public_tree", "source_manifest_sha256", "candidate_payload_sha256", "candidate_reviews"}
+    if (set(public) != source_keys | {"candidate"} or public.get("schema") != SCHEMA
+            or public.get("status") != "public-effects"
+            or not isinstance(candidate, dict) or set(candidate) != candidate_keys):
+        raise ValueError(label)
+    common = ("authorization_path", "authorization_sha256", "scope_path", "scope_sha256",
+        "batch_root", "attempt_index", "attempt_root", "predecessor", "disposition",
+        "started_at", "source_head", "source_pins", "source_payload_sha256", "source_reviews")
+    expected_predecessor = {"attempt_index": 1,
+        "attempt_root": "build/v02/phase7-iterations/attempt-0001",
+        "terminal": WINDOW_PREDECESSOR, "status": "claimed-no-dispatch-proven",
+        "local_cleanup": "settled"}
+    if (any(source.get(key) != public.get(key) for key in common)
+            or source.get("authorization_path") != WINDOW_AUTH_PATH.as_posix()
+            or source.get("authorization_sha256") != WINDOW_AUTH_SHA256
+            or source.get("scope_path") != WINDOW_SCOPE_PATH.as_posix()
+            or source.get("scope_sha256") != WINDOW_SCOPE_SHA256
+            or source.get("batch_root") != attempt_root
+            or source.get("attempt_root") != attempt_root
+            or source.get("attempt_index") != 1
+            or source.get("predecessor") != expected_predecessor
+            or source.get("started_at") != WINDOW_STARTED_AT
+            or source.get("source_head") != WINDOW_RETRY_PRIVATE_SOURCE
+            or not isinstance(source.get("disposition"), str)
+            or source.get("disposition") not in DISPOSITIONS
+            or not isinstance(source.get("source_pins"), dict)
+            or not source["source_pins"]
+            or any(not isinstance(name, str) or not isinstance(digest, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", digest)
+                for name, digest in source["source_pins"].items())):
+        raise ValueError(label)
+    source_payload = _phase7_window_source_payload_for_admission(source, attempt_root)
+    source_payload_sha = _digest(_canonical(source_payload))
+    if source.get("source_payload_sha256") != source_payload_sha:
+        raise ValueError(label)
+    if not isinstance(source.get("source_reviews"), dict) \
+            or set(source["source_reviews"]) != set(SOURCE_ROLES):
+        raise ValueError(label)
+    for key, role in SOURCE_ROLES.items():
+        _check_review(root, source["source_reviews"][key], role=role,
+                      payload_sha256=source_payload_sha)
+
+    preparation_rel = _safe_relative(candidate.get("preparation_path"), label)
+    policy_rel = _safe_relative(candidate.get("repository_policy_path"), label)
+    publication_rel = _safe_relative(candidate.get("publication_path"), label)
+    if (preparation_rel != WINDOW_RETRY_ATTEMPT1_ROOT / "candidate/preparation.json"
+            or publication_rel != WINDOW_RETRY_ATTEMPT1_ROOT / "candidate/publication-copy"
+            or WINDOW_RETRY_ATTEMPT1_ROOT / "candidate" not in policy_rel.parents
+            or not isinstance(candidate.get("preparation_sha256"), str)
+            or not re.fullmatch(r"[0-9a-f]{64}", candidate["preparation_sha256"])
+            or not isinstance(candidate.get("repository_policy_sha256"), str)
+            or not re.fullmatch(r"[0-9a-f]{64}", candidate["repository_policy_sha256"])):
+        raise ValueError(label)
+    preparation_ref = {"path": preparation_rel.as_posix(),
+        "sha256": candidate["preparation_sha256"]}
+    policy_ref = {"path": policy_rel.as_posix(),
+        "sha256": candidate["repository_policy_sha256"]}
+    preparation, preparation_raw = _phase7_window_read_json_reference(root,
+        preparation_ref, label=label, cap=MAX_CANDIDATE_BYTES)
+    policy, _ = _phase7_window_read_json_reference(root, policy_ref,
+        label=label, cap=MAX_CANDIDATE_BYTES)
+    publication = _resolve_no_symlink(root, root / publication_rel, label=label)
+    source_identity = preparation.get("source_identity") if isinstance(preparation, dict) else None
+    public_identity = preparation.get("public_identity") if isinstance(preparation, dict) else None
+    privacy = preparation.get("privacy") if isinstance(preparation, dict) else None
+    observations = policy.get("repository_observations") if isinstance(policy, dict) else None
+    observation_values = observations.get("observations") if isinstance(observations, dict) else None
+    privacy_scan = policy.get("privacy_scan") if isinstance(policy, dict) else None
+    publication_scan = (privacy_scan.get("publication_copy")
+        if isinstance(privacy_scan, dict) else None)
+    if (not isinstance(preparation, dict) or not isinstance(policy, dict)
+            or not isinstance(source_identity, dict) or not isinstance(public_identity, dict)
+            or not isinstance(privacy, dict) or not isinstance(observations, dict)
+            or not isinstance(observation_values, dict) or not isinstance(publication_scan, dict)
+            or not publication.is_dir()
+            or preparation.get("schema") != "genewhip.v02-public-source-preflight.v1"
+            or preparation.get("status") != "prepared"
+            or source_identity.get("private_git_head") != WINDOW_RETRY_PRIVATE_SOURCE
+            or source_identity.get("source_manifest_sha256") != candidate.get("source_manifest_sha256")
+            or public_identity.get("head_sha") != WINDOW_RETRY_CANDIDATE_SOURCE
+            or public_identity.get("base_sha") != WINDOW_RETRY_BASE_SOURCE
+            or public_identity.get("tree_sha") != candidate.get("public_tree")
+            or candidate.get("public_head") != WINDOW_RETRY_CANDIDATE_SOURCE
+            or candidate.get("public_base") != WINDOW_RETRY_BASE_SOURCE
+            or not re.fullmatch(r"[0-9a-f]{40}", str(candidate.get("public_tree", "")))
+            or preparation.get("source_manifest_sha256") != candidate.get("source_manifest_sha256")
+            or preparation.get("publication_copy") != publication_rel.as_posix()
+            or preparation.get("repository_preflight") != policy_rel.as_posix()
+            or preparation.get("mutations_performed") != 0
+            or preparation.get("pull_request_opened") is not False
+            or preparation.get("push_performed") is not False
+            or preparation.get("workflow_dispatched") is not False
+            or preparation.get("blockers") != []
+            or privacy.get("status") != "pass"
+            or _digest(preparation_raw) != candidate.get("preparation_sha256")
+            or policy.get("repository") != "szTheory/genewhip"
+            or observations.get("ready") is not True
+            or observation_values.get("expected_identity") != {
+                "head": WINDOW_RETRY_CANDIDATE_SOURCE,
+                "base": WINDOW_RETRY_BASE_SOURCE,
+                "observed_default_branch_sha": WINDOW_RETRY_BASE_SOURCE}
+            or publication_scan.get("status") != "pass"
+            or publication_scan.get("findings") != []):
+        raise ValueError(label)
+    candidate_payload = candidate_review_payload(source_payload, candidate)
+    candidate_payload_sha = _digest(_canonical(candidate_payload))
+    if candidate.get("candidate_payload_sha256") != candidate_payload_sha \
+            or not isinstance(candidate.get("candidate_reviews"), dict) \
+            or set(candidate["candidate_reviews"]) != set(CANDIDATE_ROLES):
+        raise ValueError(label)
+    for key, role in CANDIDATE_ROLES.items():
+        _check_review(root, candidate["candidate_reviews"][key], role=role,
+                      payload_sha256=candidate_payload_sha)
+    return source, public, candidate
+
+
+def _phase7_window_prepare_controller_pid(root: Path, source_ref: dict[str, Any]) -> int:
+    """Bind source-preparation receipts to their recorded, completed controller."""
+    label = "phase7-window-source-ci-controller-invalid"
+    operator = root / WINDOW_RETRY_ATTEMPT1_ROOT / "operator"
+    paths = {"argv": operator / "prepare-argv.json",
+        "started": operator / "prepare-argv-started.json",
+        "exit": operator / "prepare-argv-exit.json",
+        "controller": operator / "prepare-argv-controller.json"}
+    records = {}
+    for name, path in paths.items():
+        raw = _read_regular(_path(root, path.relative_to(root)),
+            cap=MAX_ADMISSION_BYTES, label=label)
+        if _digest(raw) != WINDOW_RETRY_PREPARE_RECORD_SHA256[name]:
+            raise ValueError(label)
+        records[name] = raw
+    try:
+        argv = json.loads(records["argv"])
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise ValueError(label) from None
+    started = _json_object(records["started"], label)
+    exited = _json_object(records["exit"], label)
+    controller = _json_object(records["controller"], label)
+    script = (root / "scripts/release/v02_qualification.py").resolve(strict=True)
+    expected_args = ["-B", "-I", str(script), "--mode", "stage-public", "--prepare-only",
+        "--scope", str((root / WINDOW_SCOPE_PATH).resolve(strict=True)),
+        "--publication-copy", str((root / WINDOW_RETRY_ATTEMPT1_ROOT / "candidate/publication-copy").resolve(strict=True)),
+        "--journal", str((root / WINDOW_RETRY_ATTEMPT1_ROOT / "hosted-delivery-journal.json").resolve(strict=True)),
+        "--out", str((root / WINDOW_RETRY_ATTEMPT1_ROOT / "candidate/preparation.json").resolve(strict=True)),
+        "--batch-authorization", str((root / WINDOW_AUTH_PATH).resolve(strict=True)),
+        "--batch-authorization-sha256", WINDOW_AUTH_SHA256,
+        "--batch-admission", str((root / WINDOW_RETRY_ATTEMPT1_ROOT / "source-admission.json").resolve(strict=True)),
+        "--batch-admission-sha256", source_ref["sha256"]]
+    if (not isinstance(argv, list) or not argv or not isinstance(argv[0], str)
+            or not Path(argv[0]).name.startswith("python3") or argv[1:] != expected_args
+            or started.get("source_head") != WINDOW_RETRY_PRIVATE_SOURCE
+            or started.get("argv_sha256") != _digest(records["argv"])
+            or not isinstance(started.get("pid"), int) or started["pid"] <= 0
+            or exited.get("source_head") != WINDOW_RETRY_PRIVATE_SOURCE
+            or exited.get("argv_sha256") != started.get("argv_sha256")
+            or exited.get("pid") != started.get("pid") or exited.get("exit_code") != 0
+            or exited.get("error") is not None
+            or not isinstance(exited.get("controller_pid"), int) or exited["controller_pid"] <= 0
+            or controller.get("pid") != exited.get("controller_pid")
+            or controller.get("source_head") != WINDOW_RETRY_PRIVATE_SOURCE
+            or started.get("started_at") != exited.get("started_at")
+            or _utc(controller.get("started_at")) < _utc(started.get("started_at"))
+            or _utc(exited.get("finished_at")) < _utc(controller.get("started_at"))):
+        raise ValueError(label)
+    return exited["controller_pid"]
+
+
+def _phase7_window_validate_source_ci_terminal(root: Path,
+                                               terminal: dict[str, Any]) -> None:
+    """Reopen the one settled, prequalification source-CI failure accepted for attempt 2."""
+    label = "phase7-window-source-ci-terminal-invalid"
+    expected_attempt_root = WINDOW_RETRY_ATTEMPT1_ROOT.as_posix()
+    expected_keys = {"schema", "authorization_sha256", "scope_sha256", "attempt_index",
+        "attempt_root", "status", "qualification_accepted", "refs"}
+    if (not isinstance(terminal, dict) or set(terminal) != expected_keys
+            or terminal.get("schema") != WINDOW_RETRY_TERMINAL_SCHEMA
+            or terminal.get("authorization_sha256") != WINDOW_AUTH_SHA256
+            or terminal.get("scope_sha256") != WINDOW_SCOPE_SHA256
+            or terminal.get("attempt_index") != 1
+            or terminal.get("attempt_root") != expected_attempt_root
+            or terminal.get("status") != WINDOW_RETRY_TERMINAL_STATUS
+            or terminal.get("qualification_accepted") is not False):
+        raise ValueError(label)
+    refs = terminal.get("refs")
+    required_refs = {"failure", "journal", "source_admission", "public_admission",
+        "preparation", "repository_policy", "workflow_run", "workflow_jobs",
+        "pull_request", "main_ref", "hosted_argv", "hosted_started", "hosted_exit",
+        "hosted_controller", "external_attempts"}
+    if not isinstance(refs, dict) or set(refs) != required_refs:
+        raise ValueError(label)
+    static = {"failure": WINDOW_RETRY_ATTEMPT1_ROOT / "failure.json",
+        "journal": WINDOW_RETRY_ATTEMPT1_ROOT / "hosted-delivery-journal.json",
+        "source_admission": WINDOW_RETRY_ATTEMPT1_ROOT / "source-admission.json",
+        "public_admission": WINDOW_RETRY_ATTEMPT1_ROOT / "public-admission.json",
+        "hosted_argv": WINDOW_RETRY_ATTEMPT1_ROOT / "operator/hosted-argv.json",
+        "hosted_started": WINDOW_RETRY_ATTEMPT1_ROOT / "operator/hosted-argv-started.json",
+        "hosted_exit": WINDOW_RETRY_ATTEMPT1_ROOT / "operator/hosted-argv-exit.json",
+        "hosted_controller": WINDOW_RETRY_ATTEMPT1_ROOT / "operator/hosted-argv-controller.json"}
+    for key, relative in static.items():
+        if not isinstance(refs.get(key), dict) or refs[key].get("path") != relative.as_posix():
+            raise ValueError(label)
+    provider_names = (("workflow_run", "run"), ("workflow_jobs", "jobs"),
+                      ("pull_request", "pr"), ("main_ref", "main"))
+    provider_stamp = None
+    for key, suffix in provider_names:
+        ref = refs.get(key)
+        if not isinstance(ref, dict) or set(ref) != {"path", "sha256"}:
+            raise ValueError(label)
+        match = re.fullmatch(r"build/v02/phase7-qualification-20261102T165630Z/attempts/attempt-0001/"
+            r"source-ci-failure/([0-9]{8}T[0-9]{12}Z)-" + suffix + r"\.json", str(ref.get("path", "")))
+        if match is None or (provider_stamp is not None and match.group(1) != provider_stamp):
+            raise ValueError(label)
+        provider_stamp = match.group(1)
+
+    source, public, candidate = _phase7_window_validate_reviewed_attempt1_admissions(root, refs)
+    attempt_root = root / WINDOW_RETRY_ATTEMPT1_ROOT
+    preparation_ref = refs.get("preparation")
+    policy_ref = refs.get("repository_policy")
+    if (preparation_ref != {"path": candidate.get("preparation_path"),
+            "sha256": candidate.get("preparation_sha256")}
+            or policy_ref != {"path": candidate.get("repository_policy_path"),
+                "sha256": candidate.get("repository_policy_sha256")}):
+        raise ValueError(label)
+    failure, _ = _phase7_window_read_json_reference(root, refs["failure"], label=label)
+    journal, _ = _phase7_window_read_json_reference(root, refs["journal"], label=label)
+    if (not isinstance(failure, dict) or not isinstance(journal, dict)
+            or failure.get("schema") != "genewhip.phase7-four-hour-attempt-failure.v1"
+            or failure.get("attempt_index") != 1
+            or failure.get("attempt_root") != expected_attempt_root
+            or failure.get("authorization_sha256") != WINDOW_AUTH_SHA256
+            or failure.get("scope_sha256") != WINDOW_SCOPE_SHA256
+            or failure.get("stage") != "preview-ci"
+            or failure.get("reason") != "pull-request-required-ci-failed"
+            or journal.get("schema") != "genewhip.v02-delivery-journal.v1"
+            or journal.get("repository") != "szTheory/genewhip"
+            or journal.get("source_head") != WINDOW_RETRY_CANDIDATE_SOURCE
+            or journal.get("public_base_sha") != WINDOW_RETRY_BASE_SOURCE
+            or journal.get("branch") != "v0.2-source-" + WINDOW_RETRY_CANDIDATE_SOURCE[:12]
+            or journal.get("push_performed") is not True
+            or journal.get("started_at") != WINDOW_STARTED_AT):
+        raise ValueError(label)
+
+    run, _ = _phase7_window_read_json_reference(root, refs["workflow_run"], label=label)
+    jobs_doc, _ = _phase7_window_read_json_reference(root, refs["workflow_jobs"], label=label)
+    pr, _ = _phase7_window_read_json_reference(root, refs["pull_request"], label=label)
+    main_ref, _ = _phase7_window_read_json_reference(root, refs["main_ref"], label=label)
+    if (not isinstance(run, dict) or not isinstance(jobs_doc, dict)
+            or not isinstance(pr, dict) or not isinstance(main_ref, dict)
+            or run.get("id") != WINDOW_RETRY_RUN_ID
+            or run.get("run_attempt") != WINDOW_RETRY_RUN_ATTEMPT
+            or run.get("workflow_id") != WINDOW_RETRY_WORKFLOW_ID
+            or run.get("event") != "pull_request"
+            or not isinstance(run.get("path"), str)
+            or run["path"].split("@", 1)[0] != ".github/workflows/ci.yml"
+            or run.get("status") != "completed" or run.get("conclusion") != "failure"
+            or run.get("head_sha") != WINDOW_RETRY_CANDIDATE_SOURCE
+            or run.get("head_branch") != "v0.2-source-" + WINDOW_RETRY_CANDIDATE_SOURCE[:12]
+            or not isinstance(run.get("repository"), dict)
+            or run["repository"].get("full_name") != "szTheory/genewhip"
+            or not isinstance(run.get("created_at"), str)
+            or not isinstance(run.get("run_started_at"), str)):
+        raise ValueError(label)
+    run_created_at = _utc(run["created_at"])
+    run_started_at = _utc(run["run_started_at"])
+    attempt_started_at = _utc(journal.get("started_at"))
+    if run_created_at < attempt_started_at or run_started_at < run_created_at:
+        raise ValueError(label)
+    jobs = jobs_doc.get("jobs")
+    allowed_jobs = PREVIEW_REQUIRED_LANES | PREVIEW_CONDITIONAL_SKIPS
+    allowed_conclusions = {"success", "failure", "cancelled", "skipped", "timed_out",
+        "action_required", "neutral", "stale", "startup_failure"}
+    if (not isinstance(jobs, list) or len(jobs) != len(allowed_jobs)
+            or type(jobs_doc.get("total_count")) is not int
+            or jobs_doc["total_count"] != len(jobs)):
+        raise ValueError(label)
+    job_names, job_ids = [], []
+    failed_job = False
+    for job in jobs:
+        if (not isinstance(job, dict) or type(job.get("id")) is not int or job["id"] <= 0
+                or job.get("run_id") != WINDOW_RETRY_RUN_ID
+                or job.get("run_attempt") != WINDOW_RETRY_RUN_ATTEMPT
+                or job.get("head_sha") != WINDOW_RETRY_CANDIDATE_SOURCE
+                or job.get("head_branch") != "v0.2-source-" + WINDOW_RETRY_CANDIDATE_SOURCE[:12]
+                or job.get("status") != "completed"
+                or job.get("conclusion") not in allowed_conclusions
+                or not isinstance(job.get("name"), str) or job["name"] not in allowed_jobs):
+            raise ValueError(label)
+        job_names.append(job["name"])
+        job_ids.append(job["id"])
+        failed_job = failed_job or job["conclusion"] == "failure"
+    if (len(set(job_names)) != len(job_names) or set(job_names) != allowed_jobs
+            or len(set(job_ids)) != len(job_ids)
+            or not failed_job):
+        raise ValueError(label)
+    pr_head = pr.get("head")
+    pr_base = pr.get("base")
+    main_object = main_ref.get("object")
+    if (not isinstance(pr_head, dict) or not isinstance(pr_base, dict)
+            or not isinstance(main_object, dict)
+            or pr.get("number") != WINDOW_RETRY_PR_NUMBER or pr.get("state") != "open"
+            or pr.get("merged") is not False or pr.get("merged_at") is not None
+            or pr_head.get("sha") != WINDOW_RETRY_CANDIDATE_SOURCE
+            or pr_head.get("ref") != "v0.2-source-" + WINDOW_RETRY_CANDIDATE_SOURCE[:12]
+            or not isinstance(pr_head.get("repo"), dict)
+            or pr_head["repo"].get("full_name") != "szTheory/genewhip"
+            or pr_base.get("sha") != WINDOW_RETRY_BASE_SOURCE
+            or pr_base.get("ref") != "main"
+            or main_ref.get("ref") != "refs/heads/main"
+            or main_object.get("sha") != WINDOW_RETRY_BASE_SOURCE):
+        raise ValueError(label)
+
+    argv, argv_raw = _phase7_window_read_json_reference(root, refs["hosted_argv"], label=label)
+    started, _ = _phase7_window_read_json_reference(root, refs["hosted_started"], label=label)
+    exited, _ = _phase7_window_read_json_reference(root, refs["hosted_exit"], label=label)
+    controller, _ = _phase7_window_read_json_reference(root, refs["hosted_controller"], label=label)
+    argv_map = {}
+    argv_is_well_formed = isinstance(argv, list) and len(argv) >= 4 \
+        and all(isinstance(value, str) for value in argv)
+    if argv_is_well_formed:
+        index = 4
+        while index < len(argv):
+            if (not argv[index].startswith("--") or index + 1 >= len(argv)
+                    or argv[index] in argv_map):
+                argv_is_well_formed = False
+                break
+            argv_map[argv[index]] = argv[index + 1]
+            index += 2
+    # The first four tokens are interpreter, -B, -I, and the coordinator path;
+    # all path-bearing flags must bind to this exact attempt.
+    if (not isinstance(started, dict) or not isinstance(exited, dict)
+            or not isinstance(controller, dict)
+            or not argv_is_well_formed
+            or not Path(argv[0]).name.startswith("python3")
+            or argv[1:3] != ["-B", "-I"]
+            or Path(argv[3]).resolve(strict=False) !=
+                (root / "scripts/release/v02_qualification.py").resolve(strict=True)
+            or argv_map.get("--mode") != "hosted"
+            or Path(argv_map.get("--preflight", "")).resolve(strict=False) != attempt_root / "candidate/preparation.json"
+            or Path(argv_map.get("--scope", "")).resolve(strict=False) != root / WINDOW_SCOPE_PATH
+            or Path(argv_map.get("--publication-copy", "")).resolve(strict=False) != attempt_root / "candidate/publication-copy"
+            or Path(argv_map.get("--journal", "")).resolve(strict=False) != attempt_root / "hosted-delivery-journal.json"
+            or Path(argv_map.get("--out", "")).resolve(strict=False) != attempt_root / "hosted-qualification.json"
+            or Path(argv_map.get("--batch-authorization", "")).resolve(strict=False) != root / WINDOW_AUTH_PATH
+            or argv_map.get("--batch-authorization-sha256") != WINDOW_AUTH_SHA256
+            or Path(argv_map.get("--batch-admission", "")).resolve(strict=False) != attempt_root / "public-admission.json"
+            or argv_map.get("--batch-admission-sha256") != refs["public_admission"]["sha256"]
+            or set(argv_map) != {"--mode", "--preflight", "--scope", "--publication-copy",
+                "--journal", "--out", "--batch-authorization",
+                "--batch-authorization-sha256", "--batch-admission",
+                "--batch-admission-sha256"}
+            or started.get("source_head") != WINDOW_RETRY_PRIVATE_SOURCE
+            or started.get("argv_sha256") != _digest(argv_raw)
+            or not isinstance(started.get("pid"), int) or started["pid"] <= 0
+            or exited.get("source_head") != WINDOW_RETRY_PRIVATE_SOURCE
+            or exited.get("argv_sha256") != started.get("argv_sha256")
+            or exited.get("pid") != started.get("pid")
+            or exited.get("exit_code") != 1 or exited.get("error") is not None
+            or not isinstance(exited.get("controller_pid"), int) or exited["controller_pid"] <= 0
+            or controller.get("pid") != exited.get("controller_pid")
+            or controller.get("source_head") != WINDOW_RETRY_PRIVATE_SOURCE
+            or controller.get("started_at") is None
+            or started.get("started_at") != exited.get("started_at")
+            or _utc(controller.get("started_at")) < _utc(started.get("started_at"))
+            or _utc(exited.get("finished_at")) < _utc(controller.get("started_at"))):
+        raise ValueError(label)
+    if run_started_at > _utc(exited.get("finished_at")):
+        raise ValueError(label)
+    preparation_controller_pid = _phase7_window_prepare_controller_pid(root,
+        refs["source_admission"])
+    known_controller_pids = {preparation_controller_pid, exited["controller_pid"]}
+
+    external_refs = refs.get("external_attempts")
+    external_dir_rel = WINDOW_RETRY_ATTEMPT1_ROOT / "coordinator-external-attempts"
+    if (not isinstance(external_refs, list) or not external_refs
+            or len(external_refs) > WINDOW_RETRY_EXTERNAL_LIMIT):
+        raise ValueError(label)
+    expected_external_paths = []
+    for reference in external_refs:
+        if (not isinstance(reference, dict) or set(reference) != {"path", "sha256"}
+                or not isinstance(reference.get("path"), str)
+                or not reference["path"].startswith(external_dir_rel.as_posix() + "/")
+                or re.fullmatch(r"external-[0-9]+-[0-9]+\.attempt\.json",
+                    Path(reference["path"]).name) is None):
+            raise ValueError(label)
+        receipt_match = re.fullmatch(r"external-([0-9]+)-[0-9]+\.attempt\.json",
+            Path(reference["path"]).name)
+        if receipt_match is None or int(receipt_match.group(1)) not in known_controller_pids:
+            raise ValueError(label)
+        expected_external_paths.append(reference["path"])
+    if expected_external_paths != sorted(set(expected_external_paths)):
+        raise ValueError(label)
+    external_dir = _resolve_no_symlink(root, root / external_dir_rel, label=label)
+    actual_external_paths = []
+    try:
+        for entry in external_dir.iterdir():
+            if entry.name.startswith("external-") and entry.name.endswith(".attempt.json"):
+                if entry.is_symlink() or not entry.is_file():
+                    raise ValueError(label)
+                actual_external_paths.append(entry.relative_to(root).as_posix())
+    except OSError:
+        raise ValueError(label) from None
+    actual_external_paths.sort()
+    if actual_external_paths != sorted(expected_external_paths):
+        raise ValueError(label)
+    external_bytes = 0
+    for reference in external_refs:
+        receipt, receipt_raw = _phase7_window_read_json_reference(root, reference,
+            label=label, cap=MAX_CONNECTOR_CAPTURE_BYTES)
+        external_bytes += len(receipt_raw)
+        if external_bytes > WINDOW_RETRY_EXTERNAL_BYTES_LIMIT:
+            raise ValueError(label)
+        if not isinstance(receipt, dict):
+            raise ValueError(label)
+        command = receipt.get("argv")
+        processes = receipt.get("processes")
+        expected_label = Path(reference["path"]).name.removesuffix(".attempt.json")
+        if (receipt.get("label") != expected_label
+                or receipt.get("schema") != "genewhip.v02-coordinator-child-attempt.v1"
+                or not isinstance(command, list) or not command
+                or not all(isinstance(value, str) for value in command)
+                or not _phase7_window_attempt1_external_command_allowed(command)
+                or receipt.get("launch_error") is not None or receipt.get("returncode") != 0
+                or receipt.get("process_group_cleanup") != "confirmed"
+                or not isinstance(processes, list) or not processes
+                or any(not isinstance(row, dict) or row.get("status") != "completed"
+                    or type(row.get("return_code")) is not int
+                    or row.get("process_group_cleanup") != "confirmed"
+                    or row.get("bound_violation") is not False for row in processes)):
+            raise ValueError(label)
+
+    # Files alone do not establish that no dispatch occurred; the complete Q
+    # command ledger above is also required. These guards catch contradictory
+    # claims if a dispatch marker or its result exists anyway.
+    for relative in (WINDOW_RETRY_ATTEMPT1_ROOT / "dispatch-claim.json",
+                     WINDOW_RETRY_ATTEMPT1_ROOT / "native-prefix-diagnostic",
+                     WINDOW_RETRY_ATTEMPT1_ROOT / "hosted-qualification.json"):
+        try:
+            relative_path = _resolve_no_symlink(root, root / relative, label=label)
+            relative_path.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError:
+            raise ValueError(label) from None
+        raise ValueError(label)
+
+
+def write_phase7_window_source_ci_terminal(root: Path,
+        provider_refs: dict[str, dict[str, str]]) -> dict[str, str]:
+    """Seal the settled first source-CI failure after reopening its actual records."""
+    root = Path(os.path.abspath(root)).resolve(strict=True)
+    expected_provider_keys = {"workflow_run", "workflow_jobs", "pull_request", "main_ref"}
+    if not isinstance(provider_refs, dict) or set(provider_refs) != expected_provider_keys:
+        raise ValueError("phase7-window-source-ci-terminal-input-invalid")
+    attempt = phase7_window_attempt_root(root, 1)
+    refs = {
+        "failure": _phase7_window_attempt_reference(root, attempt / "failure.json"),
+        "journal": _phase7_window_attempt_reference(root, attempt / "hosted-delivery-journal.json"),
+        "source_admission": _phase7_window_attempt_reference(root, attempt / "source-admission.json"),
+        "public_admission": _phase7_window_attempt_reference(root, attempt / "public-admission.json"),
+        "hosted_argv": _phase7_window_attempt_reference(root, attempt / "operator/hosted-argv.json"),
+        "hosted_started": _phase7_window_attempt_reference(root, attempt / "operator/hosted-argv-started.json"),
+        "hosted_exit": _phase7_window_attempt_reference(root, attempt / "operator/hosted-argv-exit.json"),
+        "hosted_controller": _phase7_window_attempt_reference(root, attempt / "operator/hosted-argv-controller.json")}
+    refs.update(provider_refs)
+    source_admission, _ = _phase7_window_read_json_reference(root, refs["public_admission"],
+        label="phase7-window-source-ci-terminal-input-invalid")
+    candidate = source_admission.get("candidate")
+    if not isinstance(candidate, dict):
+        raise ValueError("phase7-window-source-ci-terminal-input-invalid")
+    refs["preparation"] = {"path": candidate.get("preparation_path"),
+        "sha256": candidate.get("preparation_sha256")}
+    refs["repository_policy"] = {"path": candidate.get("repository_policy_path"),
+        "sha256": candidate.get("repository_policy_sha256")}
+    external_dir = attempt / "coordinator-external-attempts"
+    try:
+        external_paths = sorted(external_dir.glob("external-*.attempt.json"))
+    except OSError:
+        raise ValueError("phase7-window-source-ci-terminal-input-invalid") from None
+    refs["external_attempts"] = [_phase7_window_attempt_reference(root, path,
+        cap=MAX_CONNECTOR_CAPTURE_BYTES)
+        for path in external_paths]
+    body = {"schema": WINDOW_RETRY_TERMINAL_SCHEMA,
+        "authorization_sha256": WINDOW_AUTH_SHA256,
+        "scope_sha256": WINDOW_SCOPE_SHA256, "attempt_index": 1,
+        "attempt_root": WINDOW_RETRY_ATTEMPT1_ROOT.as_posix(),
+        "status": WINDOW_RETRY_TERMINAL_STATUS,
+        "qualification_accepted": False, "refs": refs}
+    _phase7_window_validate_source_ci_terminal(root, body)
+    raw = _canonical(body) + b"\n"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    directory_fd = verify_fd = descriptor = verify_leaf = None
+    try:
+        directory_fd, directory_chain = _open_phase7_window_attempt_dir(root, 1)
+        descriptor = os.open("terminal-assessment.json", flags, 0o600, dir_fd=directory_fd)
+        view = memoryview(raw)
+        while view:
+            written = os.write(descriptor, view)
+            if written <= 0:
+                raise OSError("short terminal write")
+            view = view[written:]
+        os.fsync(descriptor)
+        leaf_info = os.stat("terminal-assessment.json", dir_fd=directory_fd,
+                            follow_symlinks=False)
+        if (not stat.S_ISREG(leaf_info.st_mode) or leaf_info.st_uid != os.getuid()
+                or leaf_info.st_nlink != 1 or leaf_info.st_size != len(raw)
+                or (os.fstat(directory_fd).st_dev, os.fstat(directory_fd).st_ino)
+                    != directory_chain[-1]):
+            raise ValueError("phase7-window-source-ci-terminal-binding-invalid")
+        os.fsync(directory_fd)
+        verify_fd, verify_chain = _open_phase7_window_attempt_dir(root, 1)
+        verify_info = os.stat("terminal-assessment.json", dir_fd=verify_fd,
+                              follow_symlinks=False)
+        if (verify_chain != directory_chain
+                or (verify_info.st_dev, verify_info.st_ino) !=
+                    (leaf_info.st_dev, leaf_info.st_ino)):
+            raise ValueError("phase7-window-source-ci-terminal-binding-invalid")
+        verify_leaf = os.open("terminal-assessment.json", os.O_RDONLY
+            | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),
+            dir_fd=verify_fd)
+        try:
+            checked = os.fstat(verify_leaf)
+            if (not stat.S_ISREG(checked.st_mode) or checked.st_uid != os.getuid()
+                    or checked.st_nlink != 1 or checked.st_size != len(raw)):
+                raise ValueError("phase7-window-source-ci-terminal-binding-invalid")
+            chunks, total = [], 0
+            while True:
+                chunk = os.read(verify_leaf, 8192)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > MAX_ADMISSION_BYTES:
+                    raise ValueError("phase7-window-source-ci-terminal-binding-invalid")
+                chunks.append(chunk)
+            if b"".join(chunks) != raw:
+                raise ValueError("phase7-window-source-ci-terminal-binding-invalid")
+        finally:
+            os.close(verify_leaf)
+            verify_leaf = None
+    except OSError as error:
+        raise ValueError("phase7-window-source-ci-terminal-write-failed") from error
+    finally:
+        for fd in (verify_leaf, verify_fd, descriptor, directory_fd):
+            if type(fd) is int:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+    return {"path": WINDOW_RETRY_ATTEMPT1_TERMINAL.as_posix(),
+        "sha256": _digest(raw)}
+
+
+def validate_phase7_window_batch(root: Path, authorization_path: Path,
+        authorization_sha256: str, admission_path: Path, admission_sha256: str, *,
+        stage: str, source_head: str, now: datetime.datetime, scope_path: Path,
+        journal_path: Path, publication_copy: Path, preflight_path: Path,
+        output_path: Path, source_is_ancestor: Callable[[str, str], bool],
+        expected_source_paths: set[str]) -> dict[str, Any]:
+    """Validate source/candidate under the immutable Phase 7 four-hour route."""
+    root = Path(os.path.abspath(root)).resolve(strict=True)
+    window = _phase7_window_module().load_window(root)
+    _phase7_window_module().check_window(window, phase="preparation" if stage ==
+        "source-preparation" else "runtime", now=now,
+        started_at=os.environ.get("GENEWHIP_QUALIFICATION_STARTED_AT", WINDOW_STARTED_AT))
+    auth_value = Path(authorization_path)
+    if not auth_value.is_absolute():
+        auth_value = root / auth_value
+    scope_value = Path(scope_path)
+    if not scope_value.is_absolute():
+        scope_value = root / scope_value
+    if (auth_value.resolve(strict=False) != root / WINDOW_AUTH_PATH
+            or authorization_sha256 != WINDOW_AUTH_SHA256
+            or scope_value.resolve(strict=False) != root / WINDOW_SCOPE_PATH):
+        raise ValueError("phase7-window-authority-or-scope-path-invalid")
+    attempt_root, attempt_index = _phase7_window_admission_location(root, admission_path, stage)
+    expected_admission = attempt_root / ("source-admission.json" if stage ==
+        "source-preparation" else "public-admission.json")
+    expected_journal = attempt_root / "hosted-delivery-journal.json"
+    publication = publication_copy if publication_copy.is_absolute() else root / publication_copy
+    preflight = preflight_path if preflight_path.is_absolute() else root / preflight_path
+    output = output_path if output_path.is_absolute() else root / output_path
+    for label, value in (("journal", journal_path), ("publication", publication),
+                         ("preflight", preflight), ("output", output),
+                         ("admission", expected_admission)):
+        resolved = _resolve_no_symlink(root, Path(value),
+            label="phase7-window-" + label + "-path-invalid")
+        if resolved != Path(value).resolve(strict=False):
+            raise ValueError("phase7-window-" + label + "-path-invalid")
+    if (_resolve_no_symlink(root, scope_path,
+            label="phase7-window-scope-path-invalid") != root / WINDOW_SCOPE_PATH
+            or expected_journal != Path(journal_path if Path(journal_path).is_absolute()
+                else root / journal_path)
+            or attempt_root not in publication.resolve(strict=False).parents
+            or attempt_root not in preflight.resolve(strict=False).parents
+            or attempt_root not in output.resolve(strict=False).parents
+            or output.resolve(strict=False).exists()):
+        raise ValueError("phase7-window-output-layout-invalid")
+    protected_paths = [root / WINDOW_AUTH_PATH, root / WINDOW_SCOPE_PATH,
+        expected_admission, expected_journal]
+    if stage == "public-effects":
+        protected_paths.append(preflight.resolve(strict=False))
+    if (any(_paths_overlap(output.resolve(strict=False), protected)
+            for protected in protected_paths)
+            or any(_paths_overlap(publication.resolve(strict=False), protected)
+                for protected in protected_paths)
+            or _paths_overlap(output.resolve(strict=False), publication.resolve(strict=False))):
+        raise ValueError("phase7-window-output-aliases-input")
+    failure_path = attempt_root / "failure.json"
+    _require_no_entry(failure_path, "phase7-window-attempt-already-failed")
+    if not re.fullmatch(r"[0-9a-f]{40}", source_head) or not source_is_ancestor(
+            window["source_ancestor"], source_head):
+        raise ValueError("phase7-window-source-head-not-authorized-descendant")
+    raw = _read_regular(expected_admission, cap=MAX_ADMISSION_BYTES,
+                        label="phase7-window-admission-invalid")
+    if (not re.fullmatch(r"[0-9a-f]{64}", admission_sha256)
+            or _digest(raw) != admission_sha256):
+        raise ValueError("phase7-window-admission-digest-invalid")
+    admission = _json_object(raw, "phase7-window-admission-invalid")
+    expected_keys = {"schema", "status", "authorization_path", "authorization_sha256",
+        "scope_path", "scope_sha256", "batch_root", "attempt_index", "attempt_root",
+        "predecessor", "disposition", "started_at", "source_head", "source_pins",
+        "source_payload_sha256", "source_reviews"}
+    public_stage = stage == "public-effects"
+    if public_stage:
+        expected_keys.add("candidate")
+    attempt_relative = attempt_root.relative_to(root).as_posix()
+    if (set(admission) != expected_keys or admission.get("schema") != SCHEMA
+            or admission.get("status") != stage
+            or admission.get("authorization_path") != WINDOW_AUTH_PATH.as_posix()
+            or admission.get("authorization_sha256") != WINDOW_AUTH_SHA256
+            or admission.get("scope_path") != WINDOW_SCOPE_PATH.as_posix()
+            or admission.get("scope_sha256") != WINDOW_SCOPE_SHA256
+            or admission.get("batch_root") != attempt_relative
+            or admission.get("attempt_root") != attempt_relative
+            or admission.get("attempt_index") != attempt_index
+            or admission.get("started_at") != WINDOW_STARTED_AT
+            or admission.get("source_head") != source_head
+            or admission.get("disposition") not in DISPOSITIONS):
+        raise ValueError("phase7-window-admission-identity-invalid")
+    predecessor = _phase7_window_predecessor(root, admission,
+        attempt_index=attempt_index, window=window)
+    if admission.get("predecessor") != predecessor:
+        raise ValueError("phase7-window-predecessor-invalid")
+    if (not isinstance(admission.get("source_pins"), dict)
+            or set(admission["source_pins"]) != expected_source_paths):
+        raise ValueError("phase7-window-source-pin-roster-stale")
+    pins = _check_pins(root, admission["source_pins"], required_paths={
+        "scripts/release/v02_batch.py", "scripts/release/v02_qualification.py",
+        "tests/evidence/phase7_fresh_batch_contract.py", "scripts/ci/required-gate.sh"})
+    source_payload = phase7_window_source_admission_payload(attempt_root=attempt_relative,
+        attempt_index=attempt_index, predecessor=predecessor,
+        disposition=admission["disposition"], source_head=source_head, source_pins=pins)
+    source_payload_sha = _digest(_canonical(source_payload))
+    if admission.get("source_payload_sha256") != source_payload_sha:
+        raise ValueError("phase7-window-source-review-payload-stale")
+    reviews = admission.get("source_reviews")
+    if not isinstance(reviews, dict) or set(reviews) != set(SOURCE_ROLES):
+        raise ValueError("phase7-window-source-reviews-missing")
+    for key, role in SOURCE_ROLES.items():
+        _check_review(root, reviews[key], role=role, payload_sha256=source_payload_sha)
+
+    candidate = None
+    candidate_payload_sha = None
+    if public_stage:
+        candidate = admission.get("candidate")
+        if not isinstance(candidate, dict):
+            raise ValueError("phase7-window-candidate-admission-missing")
+        preparation_rel = _safe_relative(candidate.get("preparation_path"),
+            "phase7-window-preparation-path-invalid")
+        policy_rel = _safe_relative(candidate.get("repository_policy_path"),
+            "phase7-window-policy-path-invalid")
+        publication_rel = _safe_relative(candidate.get("publication_path"),
+            "phase7-window-publication-path-invalid")
+        if (preparation_rel != preflight.resolve(strict=True).relative_to(root)
+                or publication_rel != publication.resolve(strict=False).relative_to(root)
+                or attempt_root not in (root / policy_rel).resolve(strict=True).parents):
+            raise ValueError("phase7-window-candidate-layout-invalid")
+        prep_bytes = _read_regular(root / preparation_rel, cap=MAX_CANDIDATE_BYTES,
+            label="phase7-window-preparation-invalid")
+        policy_bytes = _read_regular(root / policy_rel, cap=MAX_CANDIDATE_BYTES,
+            label="phase7-window-policy-invalid")
+        prep = _json_object(prep_bytes, "phase7-window-preparation-invalid")
+        policy = _json_object(policy_bytes, "phase7-window-policy-invalid")
+        if (candidate.get("preparation_sha256") != _digest(prep_bytes)
+                or prep.get("status") != "prepared"
+                or prep.get("source_identity", {}).get("private_git_head") != source_head
+                or prep.get("publication_copy") != publication_rel.as_posix()
+                or prep.get("repository_preflight") != policy_rel.as_posix()
+                or prep.get("public_identity", {}).get("head_sha") != candidate.get("public_head")
+                or prep.get("public_identity", {}).get("base_sha") != candidate.get("public_base")
+                or prep.get("public_identity", {}).get("tree_sha") != candidate.get("public_tree")
+                or prep.get("source_manifest_sha256") != candidate.get("source_manifest_sha256")
+                or prep.get("privacy", {}).get("status") != "pass"
+                or prep.get("blockers") != []
+                or candidate.get("repository_policy_sha256") != _digest(policy_bytes)
+                or policy.get("repository_observations", {}).get("ready") is not True
+                or policy.get("privacy_scan", {}).get("publication_copy", {}).get("status") != "pass"
+                or not publication.is_dir() or publication.is_symlink()):
+            raise ValueError("phase7-window-candidate-or-policy-stale")
+        candidate_keys = {"preparation_path", "preparation_sha256", "publication_path",
+            "repository_policy_path", "repository_policy_sha256", "public_head", "public_base",
+            "public_tree", "source_manifest_sha256", "candidate_payload_sha256", "candidate_reviews"}
+        if set(candidate) != candidate_keys:
+            raise ValueError("phase7-window-candidate-admission-invalid")
+        candidate_payload = phase7_window_candidate_review_payload(source_payload, candidate)
+        candidate_payload_sha = _digest(_canonical(candidate_payload))
+        if candidate.get("candidate_payload_sha256") != candidate_payload_sha:
+            raise ValueError("phase7-window-candidate-review-payload-stale")
+        candidate_reviews = candidate.get("candidate_reviews")
+        if not isinstance(candidate_reviews, dict) or set(candidate_reviews) != set(CANDIDATE_ROLES):
+            raise ValueError("phase7-window-candidate-reviews-missing")
+        for key, role in CANDIDATE_ROLES.items():
+            _check_review(root, candidate_reviews[key], role=role,
+                          payload_sha256=candidate_payload_sha)
+    return {"phase7_window": True, "window": window,
+        "authorization": window["authority"], "admission": admission,
+        "started_at": WINDOW_STARTED_AT, "batch_root": attempt_root,
+        "attempt_root": attempt_root, "attempt_index": attempt_index,
+        "admission_path": expected_admission,
+        "source_payload_sha256": source_payload_sha,
+        "candidate_payload_sha256": candidate_payload_sha,
+        "admission_sha256": admission_sha256, "successor_claim": None}
+
+
+def create_phase7_window_dispatch_claim(root: Path, batch: dict[str, Any], nonce: str) -> Path:
+    """Consume one attempt immediately before its sole full workflow dispatch."""
+    if (not isinstance(batch, dict) or batch.get("phase7_window") is not True
+            or not re.fullmatch(r"[0-9a-f]{32}", nonce)):
+        raise ValueError("phase7-window-dispatch-claim-input-invalid")
+    root = Path(os.path.abspath(root)).resolve(strict=True)
+    attempt_root = Path(batch["attempt_root"])
+    if not attempt_root.is_absolute():
+        attempt_root = root / attempt_root
+    expected = phase7_window_attempt_root(root, batch["attempt_index"])
+    if attempt_root.resolve(strict=True) != expected:
+        raise ValueError("phase7-window-dispatch-claim-root-invalid")
+    window_module = _phase7_window_module()
+    window_module.load_window(root)
+    window_module.validate_public_clock(root,
+        scope_path=WINDOW_SCOPE_PATH.as_posix(), scope_sha256=WINDOW_SCOPE_SHA256,
+        started_at=WINDOW_STARTED_AT, phase="runtime")
+    admission_path = Path(batch.get("admission_path", ""))
+    if not admission_path.is_absolute():
+        admission_path = root / admission_path
+    if admission_path != expected / "public-admission.json":
+        raise ValueError("phase7-window-dispatch-claim-admission-invalid")
+    admission_bytes = _read_regular(admission_path, cap=MAX_ADMISSION_BYTES,
+        label="phase7-window-dispatch-claim-admission-invalid")
+    if (_digest(admission_bytes) != batch.get("admission_sha256")
+            or _json_object(admission_bytes, "phase7-window-dispatch-claim-admission-invalid")
+                != batch.get("admission")):
+        raise ValueError("phase7-window-dispatch-claim-admission-invalid")
+    _require_no_entry(expected / "failure.json",
+                      "phase7-window-dispatch-claim-attempt-failed")
+    claim = expected / "dispatch-claim.json"
+    payload = {"schema": "genewhip.phase7-four-hour-dispatch-claim.v1",
+        "authorization_sha256": WINDOW_AUTH_SHA256, "scope_sha256": WINDOW_SCOPE_SHA256,
+        "attempt_index": batch["attempt_index"],
+        "attempt_root": expected.relative_to(root).as_posix(),
+        "admission_sha256": batch["admission_sha256"],
+        "source_payload_sha256": batch["source_payload_sha256"],
+        "nonce": nonce, "started_at": WINDOW_STARTED_AT,
+        "claimed_at": datetime.datetime.now(datetime.timezone.utc).isoformat()}
+    raw = _canonical(payload) + b"\n"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    directory_fd, directory_identity = _open_phase7_window_attempt_dir(root,
+        batch["attempt_index"])
+    try:
+        descriptor = os.open("dispatch-claim.json", flags, 0o600, dir_fd=directory_fd)
+    except OSError as error:
+        os.close(directory_fd)
+        raise ValueError("phase7-window-dispatch-claim-unavailable") from error
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.fsync(directory_fd)
+        leaf_info = os.stat("dispatch-claim.json", dir_fd=directory_fd,
+                            follow_symlinks=False)
+        opened_directory = os.fstat(directory_fd)
+        if (not stat.S_ISREG(leaf_info.st_mode) or leaf_info.st_uid != os.getuid()
+                or leaf_info.st_nlink != 1 or leaf_info.st_size != len(raw)
+                or (opened_directory.st_dev, opened_directory.st_ino) != directory_identity[-1]):
+            raise ValueError("phase7-window-dispatch-claim-binding-invalid")
+        verify_fd, verify_identity = _open_phase7_window_attempt_dir(root,
+            batch["attempt_index"])
+        try:
+            verify_info = os.stat("dispatch-claim.json", dir_fd=verify_fd,
+                                  follow_symlinks=False)
+            if (verify_identity != directory_identity
+                    or (verify_info.st_dev, verify_info.st_ino) !=
+                        (leaf_info.st_dev, leaf_info.st_ino)):
+                raise ValueError("phase7-window-dispatch-claim-binding-invalid")
+            verify_leaf = os.open("dispatch-claim.json", os.O_RDONLY
+                | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),
+                dir_fd=verify_fd)
+            try:
+                chunks = []
+                total = 0
+                while True:
+                    chunk = os.read(verify_leaf, 8192)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > MAX_AUTH_BYTES:
+                        raise ValueError("phase7-window-dispatch-claim-binding-invalid")
+                    chunks.append(chunk)
+            finally:
+                os.close(verify_leaf)
+            if b"".join(chunks) != raw:
+                raise ValueError("phase7-window-dispatch-claim-binding-invalid")
+        finally:
+            os.close(verify_fd)
+    except BaseException:
+        # A claim that may have been durably created is never removed/retried.
+        os.close(directory_fd)
+        raise
+    batch["_dispatch_directory_fd"] = directory_fd
+    batch["_dispatch_directory_identity"] = directory_identity
+    batch["_dispatch_claim_identity"] = (leaf_info.st_dev, leaf_info.st_ino)
+    batch["dispatch_claim_path"] = claim
+    batch["dispatch_claim_sha256"] = _digest(raw)
+    return claim
+
+
+def _open_phase7_window_attempt_dir(root: Path, attempt_index: int) -> tuple[int, tuple[tuple[int, int], ...]]:
+    """Open the attempt directory component-by-component without following links."""
+    root = Path(os.path.abspath(root)).resolve(strict=True)
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        current = os.open(root, flags)
+    except OSError:
+        raise ValueError("phase7-window-attempt-directory-unavailable") from None
+    chain = []
+    try:
+        components = (*WINDOW_ATTEMPT_NAMESPACE.parts, f"attempt-{attempt_index:04d}")
+        for component in components:
+            following = None
+            try:
+                following = os.open(component, flags, dir_fd=current)
+                opened = os.fstat(following)
+                named = os.stat(component, dir_fd=current, follow_symlinks=False)
+            except OSError:
+                if type(following) is int:
+                    try:
+                        os.close(following)
+                    except OSError:
+                        pass
+                raise ValueError("phase7-window-attempt-directory-unavailable") from None
+            if (not stat.S_ISDIR(opened.st_mode) or not stat.S_ISDIR(named.st_mode)
+                    or opened.st_uid != os.getuid()
+                    or (opened.st_dev, opened.st_ino) != (named.st_dev, named.st_ino)):
+                os.close(following)
+                raise ValueError("phase7-window-attempt-directory-invalid")
+            chain.append((opened.st_dev, opened.st_ino))
+            os.close(current)
+            current = following
+        return current, tuple(chain)
+    except BaseException:
+        try:
+            os.close(current)
+        except OSError:
+            pass
+        raise
+
+
+def verify_phase7_window_dispatch_claim(root: Path, batch: dict[str, Any]) -> None:
+    """Reopen the exact directory chain and claim before the first dispatch call."""
+    if (not isinstance(batch, dict) or type(batch.get("_dispatch_directory_fd")) is not int
+            or batch.get("phase7_window") is not True):
+        raise ValueError("phase7-window-dispatch-claim-context-invalid")
+    root = Path(os.path.abspath(root)).resolve(strict=True)
+    opened = os.fstat(batch["_dispatch_directory_fd"])
+    current_fd, current_identity = _open_phase7_window_attempt_dir(root,
+        batch["attempt_index"])
+    try:
+        expected_attempt = phase7_window_attempt_root(root, batch["attempt_index"])
+        admission_path = Path(batch.get("admission_path", ""))
+        if not admission_path.is_absolute():
+            admission_path = Path(root) / admission_path
+        if admission_path != expected_attempt / "public-admission.json":
+            raise ValueError("phase7-window-dispatch-claim-binding-invalid")
+        try:
+            os.stat("failure.json", dir_fd=current_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        except OSError:
+            raise ValueError("phase7-window-dispatch-claim-binding-invalid") from None
+        else:
+            raise ValueError("phase7-window-dispatch-claim-binding-invalid")
+        admission_fd = os.open("public-admission.json", os.O_RDONLY
+            | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),
+            dir_fd=current_fd)
+        try:
+            admission_info = os.fstat(admission_fd)
+            if (not stat.S_ISREG(admission_info.st_mode) or admission_info.st_uid != os.getuid()
+                    or admission_info.st_nlink != 1):
+                raise ValueError("phase7-window-dispatch-claim-binding-invalid")
+            admission_chunks, admission_total = [], 0
+            while True:
+                chunk = os.read(admission_fd, 8192)
+                if not chunk:
+                    break
+                admission_total += len(chunk)
+                if admission_total > MAX_ADMISSION_BYTES:
+                    raise ValueError("phase7-window-dispatch-claim-binding-invalid")
+                admission_chunks.append(chunk)
+        finally:
+            os.close(admission_fd)
+        admission_raw = b"".join(admission_chunks)
+        if _digest(admission_raw) != batch.get("admission_sha256"):
+            raise ValueError("phase7-window-dispatch-claim-binding-invalid")
+        info = os.stat("dispatch-claim.json", dir_fd=current_fd, follow_symlinks=False)
+        raw_fd = os.open("dispatch-claim.json", os.O_RDONLY
+            | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),
+            dir_fd=current_fd)
+        try:
+            opened_info = os.fstat(raw_fd)
+            if (not stat.S_ISREG(opened_info.st_mode) or opened_info.st_uid != os.getuid()
+                    or opened_info.st_nlink != 1
+                    or (opened_info.st_dev, opened_info.st_ino) != (info.st_dev, info.st_ino)):
+                raise ValueError("phase7-window-dispatch-claim-binding-invalid")
+            chunks, total = [], 0
+            while True:
+                chunk = os.read(raw_fd, 8192)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > MAX_AUTH_BYTES:
+                    raise ValueError("phase7-window-dispatch-claim-binding-invalid")
+                chunks.append(chunk)
+        finally:
+            os.close(raw_fd)
+        raw = b"".join(chunks)
+        claim_payload = _json_object(raw, "phase7-window-dispatch-claim-binding-invalid")
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                or info.st_nlink != 1
+                or current_identity != batch.get("_dispatch_directory_identity")
+                or (opened.st_dev, opened.st_ino) != current_identity[-1]
+                or (info.st_dev, info.st_ino) != batch.get("_dispatch_claim_identity")
+                or _digest(raw) != batch.get("dispatch_claim_sha256")
+                or claim_payload.get("schema") != "genewhip.phase7-four-hour-dispatch-claim.v1"
+                or claim_payload.get("authorization_sha256") != WINDOW_AUTH_SHA256
+                or claim_payload.get("scope_sha256") != WINDOW_SCOPE_SHA256
+                or claim_payload.get("attempt_index") != batch["attempt_index"]
+                or claim_payload.get("attempt_root") != expected_attempt.relative_to(Path(root)).as_posix()
+                or claim_payload.get("admission_sha256") != batch.get("admission_sha256")
+                or claim_payload.get("source_payload_sha256") != batch.get("source_payload_sha256")
+                or claim_payload.get("started_at") != WINDOW_STARTED_AT
+                or not isinstance(claim_payload.get("nonce"), str)
+                or re.fullmatch(r"[0-9a-f]{32}", claim_payload["nonce"]) is None):
+            raise ValueError("phase7-window-dispatch-claim-binding-invalid")
+    finally:
+        os.close(current_fd)
+
+
+def close_phase7_window_dispatch_claim(batch: dict[str, Any]) -> None:
+    """Close the writer's retained directory descriptor without removing its claim."""
+    descriptor = batch.pop("_dispatch_directory_fd", None)
+    batch.pop("_dispatch_directory_identity", None)
+    batch.pop("_dispatch_claim_identity", None)
+    if type(descriptor) is int:
+        os.close(descriptor)
+
+
+def write_phase7_window_failure(root: Path, *, attempt_root: Path, stage: str,
+        reason: str, observed_at: str) -> Path:
+    """Write one immutable stop marker under the current prospective attempt."""
+    if (stage not in ("preparation", "publication", "preview-ci", "qualification", "package")
+            or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,95}", reason)):
+        raise ValueError("phase7-window-failure-input-invalid")
+    _utc(observed_at)
+    root = Path(os.path.abspath(root)).resolve(strict=True)
+    attempt = Path(attempt_root)
+    if not attempt.is_absolute():
+        attempt = root / attempt
+    attempt = attempt.resolve(strict=True)
+    namespace = (root / WINDOW_ATTEMPT_NAMESPACE).resolve(strict=True)
+    if (attempt.parent != namespace or re.fullmatch(r"attempt-[0-9]{4}", attempt.name) is None
+            or int(attempt.name[-4:]) < 1 or attempt.is_symlink()):
+        raise ValueError("phase7-window-failure-root-invalid")
+    payload = {"schema": "genewhip.phase7-four-hour-attempt-failure.v1",
+        "authorization_sha256": WINDOW_AUTH_SHA256, "scope_sha256": WINDOW_SCOPE_SHA256,
+        "attempt_index": int(attempt.name[-4:]),
+        "attempt_root": attempt.relative_to(root).as_posix(),
+        "stage": stage, "reason": reason, "observed_at": observed_at}
+    raw = _canonical(payload) + b"\n"
+    path = attempt / "failure.json"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(path, flags, 0o600)
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except OSError as error:
+        raise ValueError("phase7-window-failure-marker-unavailable") from error
+    return path
 
 
 def candidate_review_payload(source_payload: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
@@ -429,6 +2018,17 @@ def _resolve_no_symlink(root: Path, value: Path, *, label: str) -> Path:
 
 def _paths_overlap(left: Path, right: Path) -> bool:
     return left == right or left in right.parents or right in left.parents
+
+
+def _require_no_entry(path: Path, label: str) -> None:
+    """Reject present or unreadable marker paths; only ENOENT means absent."""
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return
+    except OSError:
+        raise ValueError(label) from None
+    raise ValueError(label)
 
 
 def _attempt_location(root: Path, admission_path: Path) -> tuple[Path, int, str]:
@@ -1733,8 +3333,14 @@ def _validate_accepted_native_diagnostic(root: Path, *, expected_root: str,
     # reviewed source admission is; require its join before executing validator
     # bytes from the temporary/public candidate tree.
     source_pins = source_admission.get("source_pins")
-    runtime_validator_path = root / "scripts/evidence/v02_run.py"
-    runtime_validator_bytes = _read_regular(_path(root, Path("scripts/evidence/v02_run.py")),
+    candidate = public_admission.get("candidate")
+    expected_publication = f"{expected_root}/candidate/publication-copy"
+    if (not isinstance(candidate, dict)
+            or candidate.get("publication_path") != expected_publication):
+        raise ValueError(label)
+    runtime_rel = Path(expected_publication) / "scripts/evidence/v02_run.py"
+    runtime_validator_path = _path(root, runtime_rel)
+    runtime_validator_bytes = _read_regular(runtime_validator_path,
         cap=MAX_SOURCE_BYTES, label=label)
     if (not isinstance(source_pins, dict)
             or source_pins.get("scripts/evidence/v02_run.py") != _digest(runtime_validator_bytes)):
@@ -2031,7 +3637,8 @@ def _validate_predecessor(root: Path, authorization: dict[str, Any], *,
                     for row in jobs))
             diagnostic_case = value.get("owning_case")
             event = (value.get("event") if diagnostic_case in
-                     (NATIVE_HOST_RUNTIME_CASE, NATIVE_RESULT_HANDOFF_CASE,
+                     (NATIVE_HOST_RUNTIME_CASE, NATIVE_PREFIX_PREDECESSOR_CASE,
+                      NATIVE_RESULT_HANDOFF_CASE,
                       NATIVE_INPUT_MASK_ALIGNMENT_CASE, NATIVE_DIAGNOSTIC_RESUMPTION_CASE)
                      else "pull_request" if isinstance(value.get("pull_request"), dict)
                      else value.get("event"))
@@ -2043,7 +3650,8 @@ def _validate_predecessor(root: Path, authorization: dict[str, Any], *,
                        if isinstance(row, dict) and isinstance(row.get("name"), str)} \
                 if isinstance(jobs, list) else {}
             if ((diagnostic or reviewed_resumption) and diagnostic_case in
-                    (NATIVE_HOST_RUNTIME_CASE, NATIVE_RESULT_HANDOFF_CASE,
+                    (NATIVE_HOST_RUNTIME_CASE, NATIVE_PREFIX_PREDECESSOR_CASE,
+                     NATIVE_RESULT_HANDOFF_CASE,
                      NATIVE_INPUT_MASK_ALIGNMENT_CASE, NATIVE_DIAGNOSTIC_RESUMPTION_CASE)):
                 roster_valid = (event == "workflow_dispatch"
                     and isinstance(jobs, list) and len(by_name) == 16
@@ -2052,7 +3660,8 @@ def _validate_predecessor(root: Path, authorization: dict[str, Any], *,
                 roster_valid = (event in ("pull_request", "push")
                 and len(by_name) == len(jobs) if isinstance(jobs, list) else False)
             if not no_ci and not ((diagnostic or reviewed_resumption) and diagnostic_case in
-                    (NATIVE_HOST_RUNTIME_CASE, NATIVE_RESULT_HANDOFF_CASE,
+                    (NATIVE_HOST_RUNTIME_CASE, NATIVE_PREFIX_PREDECESSOR_CASE,
+                     NATIVE_RESULT_HANDOFF_CASE,
                      NATIVE_INPUT_MASK_ALIGNMENT_CASE, NATIVE_DIAGNOSTIC_RESUMPTION_CASE)):
                 roster_valid = (roster_valid and set(by_name) == expected_jobs
                     and all(by_name[name].get("conclusion") in
@@ -2173,6 +3782,40 @@ def _validate_predecessor(root: Path, authorization: dict[str, Any], *,
                             or not isinstance(pull_request, dict)
                             or pull_request.get("merged") is not True
                             or pull_request.get("state") != "closed"
+                            or any(by_name[name].get("conclusion") != expected
+                                for name, expected in NATIVE_HOST_RUNTIME_OUTCOMES.items())):
+                        raise ValueError("fresh-batch-predecessor-diagnostic-classification-invalid")
+                elif diagnostic_case == NATIVE_PREFIX_PREDECESSOR_CASE:
+                    diagnostic_profile = NATIVE_PREFIX_PREDECESSOR_PROFILE
+                    if (not roster_valid or not jobs_terminal or event != "workflow_dispatch"
+                            or value.get("diagnostic_profile") != NATIVE_PREFIX_PREDECESSOR_PROFILE
+                            or value.get("failed_lane") != "v02-runtime"
+                            or value.get("run_status") != "completed"
+                            or value.get("run_conclusion") != "failure"
+                            or value.get("workflow_run_id") != NATIVE_PREFIX_ATTEMPT20_RUN_ID
+                            or value.get("run_attempt") != 1
+                            or value.get("head_sha") != NATIVE_PREFIX_ATTEMPT20_MERGE_SHA
+                            or value.get("local_monitor_safety_issue") is not False
+                            or value.get("local_monitor_cleanup") != "confirmed"
+                            or value.get("runtime_outer_cleanup") != "confirmed"
+                            or value.get("runtime_outer_return") != "nonzero"
+                            or value.get("runtime_outer_bound_violation") is not False
+                            or value.get("runtime_outer_rejection") != "nonzero-exit"
+                            or value.get("hosted_cleanup_outcome") != "unknown"
+                            or value.get("inner_row_cleanup") != "confirmed"
+                            or value.get("inner_row_bound") != "none"
+                            or type(value.get("batch_return")) is not int
+                            or value.get("batch_return") != 1
+                            or value.get("desktop_child_return") != "unknown"
+                            or value.get("original_failure_cause") != "unknown"
+                            or value.get("qualification_accepted") is not False
+                            or value.get("full_qualification_dispatched") is not True
+                            or value.get("merge_attempted") is not True
+                            or value.get("pull_request") != {
+                                "number": 45, "state": "closed", "merged": True,
+                                "head_sha": NATIVE_PREFIX_ATTEMPT20_CANDIDATE_SHA,
+                                "base_sha": NATIVE_PREFIX_ATTEMPT20_BASE_SHA,
+                                "merge_commit_sha": NATIVE_PREFIX_ATTEMPT20_MERGE_SHA}
                             or any(by_name[name].get("conclusion") != expected
                                 for name, expected in NATIVE_HOST_RUNTIME_OUTCOMES.items())):
                         raise ValueError("fresh-batch-predecessor-diagnostic-classification-invalid")
@@ -2410,6 +4053,26 @@ def _validate_predecessor(root: Path, authorization: dict[str, Any], *,
                         or value.get("batch_return") != 1
                         or value.get("desktop_child_return") != "unknown"
                         or value.get("original_failure_cause") != "unknown")
+                elif diagnostic_profile == NATIVE_PREFIX_PREDECESSOR_PROFILE:
+                    profile_invalid = (value.get("diagnostic_case") != NATIVE_PREFIX_PREDECESSOR_CASE
+                        or value.get("diagnostic_profile") != NATIVE_PREFIX_PREDECESSOR_PROFILE
+                        or value.get("safety_job_failed") is not False
+                        or value.get("had_safety_job_failure") is not False
+                        or value.get("full_qualification_dispatched") is not True
+                        or value.get("merge_attempted") is not True
+                        or value.get("local_monitor_safety_issue") is not False
+                        or value.get("local_monitor_cleanup") != "confirmed"
+                        or value.get("runtime_outer_cleanup") != "confirmed"
+                        or value.get("runtime_outer_return") != "nonzero"
+                        or value.get("runtime_outer_bound_violation") is not False
+                        or value.get("runtime_outer_rejection") != "nonzero-exit"
+                        or value.get("hosted_cleanup_outcome") != "unknown"
+                        or value.get("inner_row_cleanup") != "confirmed"
+                        or value.get("inner_row_bound") != "none"
+                        or type(value.get("batch_return")) is not int
+                        or value.get("batch_return") != 1
+                        or value.get("desktop_child_return") != "unknown"
+                        or value.get("original_failure_cause") != "unknown")
                 elif diagnostic_profile == "native-case-preparation":
                     profile_invalid = (value.get("diagnostic_case") != NATIVE_CASE_PREPARATION
                         or value.get("safety_job_failed") is not False
@@ -2526,6 +4189,12 @@ def _validate_predecessor(root: Path, authorization: dict[str, Any], *,
         _validate_native_host_runtime_artifacts(root, expected_root=expected_root,
             terminal=terminal_value, repair=repair_value, journal=journal_value,
             source_delivery=delivery_value, failure=failure_value)
+    if diagnostic_profile == NATIVE_PREFIX_PREDECESSOR_PROFILE:
+        if not all(isinstance(value, dict) for value in
+                   (terminal_value, repair_value, journal_value, failure_value)):
+            raise ValueError("fresh-batch-native-prefix-attempt20-evidence-invalid")
+        _validate_attempt20_native_failure(root, expected_root=expected_root,
+            terminal=terminal_value, journal=journal_value, failure=failure_value)
     if diagnostic_profile == "native-case-preparation":
         if not all(isinstance(value, dict) for value in (repair_value, journal_value, failure_value)):
             raise ValueError("native-diagnostic-assessed-preview-invalid")
@@ -2819,8 +4488,9 @@ def validate_batch(root: Path, authorization_path: Path, authorization_sha256: s
     expected_output = output_path if output_path.is_absolute() else root / output_path
     expected_admission = batch_root / (
         "source-admission.json" if stage == "source-preparation" else "public-admission.json")
-    diagnostic_effects = stage == "native-diagnostic"
-    if stage not in ("source-preparation", "public-effects", "native-diagnostic"):
+    diagnostic_effects = stage in ("native-diagnostic", "native-prefix-diagnostic")
+    if stage not in ("source-preparation", "public-effects", "native-diagnostic",
+                     "native-prefix-diagnostic"):
         raise ValueError("fresh-batch-stage-invalid")
     if diagnostic_effects != (diagnostic_readiness_path is not None and diagnostic_readiness_sha256 is not None):
         raise ValueError("native-diagnostic-readiness-required")
@@ -2849,11 +4519,13 @@ def validate_batch(root: Path, authorization_path: Path, authorization_sha256: s
         raise ValueError("fresh-batch-admission-path-invalid")
     expected_output_resolved = output_resolved
     protected_inputs = (expected_admission, expected_auth, expected_scope, expected_journal)
-    if stage in ("public-effects", "native-diagnostic"):
+    if stage in ("public-effects", "native-diagnostic", "native-prefix-diagnostic"):
         protected_inputs += (preflight_resolved,)
     if diagnostic_effects:
         protected_inputs += (diagnostic_readiness_path,)
-        if output_resolved != batch_root / "native-diagnostic/result.json":
+        expected_diagnostic_output = (batch_root / "native-prefix-diagnostic/result.json"
+            if stage == "native-prefix-diagnostic" else batch_root / "native-diagnostic/result.json")
+        if output_resolved != expected_diagnostic_output:
             raise ValueError("native-diagnostic-output-layout-invalid")
     if (_paths_overlap(expected_output_resolved, publication_resolved)
             or any(_paths_overlap(expected_output_resolved, protected) for protected in protected_inputs)
@@ -2941,7 +4613,7 @@ def validate_batch(root: Path, authorization_path: Path, authorization_sha256: s
         "scope_path", "scope_sha256", "batch_root", "attempt_index", "attempt_root",
         "predecessor", "disposition", "started_at", "source_head", "source_pins",
         "source_payload_sha256", "source_reviews"}
-    if stage in ("public-effects", "native-diagnostic"):
+    if stage in ("public-effects", "native-diagnostic", "native-prefix-diagnostic"):
         expected_admission_keys.add("candidate")
     if (set(admission) != expected_admission_keys
             or admission.get("schema") != SCHEMA
@@ -3029,6 +4701,8 @@ def validate_batch(root: Path, authorization_path: Path, authorization_sha256: s
                     diagnostic_paths = FIRST_PARTY_CLEANUP_CONTROL_SOURCE_PATHS
                 elif diagnostic_case == NATIVE_HOST_RUNTIME_CASE:
                     diagnostic_paths = NATIVE_HOST_RUNTIME_SOURCE_PATHS
+                elif diagnostic_case == NATIVE_PREFIX_PREDECESSOR_CASE:
+                    diagnostic_paths = NATIVE_PREFIX_SOURCE_PATHS
                 elif diagnostic_case == NATIVE_CASE_PREPARATION:
                     diagnostic_paths = NATIVE_CASE_PREPARATION_PATHS
                 elif diagnostic_case == WORKFLOW_TIMEOUT_CONTRACT_CASE:
@@ -3048,7 +4722,8 @@ def validate_batch(root: Path, authorization_path: Path, authorization_sha256: s
                                         WORKFLOW_TIMEOUT_CONTRACT_CASE,
                                         PUBLICATION_RSS_OBSERVATION_CASE,
                                         NATIVE_RESULT_HANDOFF_CASE,
-                                        NATIVE_INPUT_MASK_ALIGNMENT_CASE)
+                                        NATIVE_INPUT_MASK_ALIGNMENT_CASE,
+                                        NATIVE_PREFIX_PREDECESSOR_CASE)
                         and {name for name, digest in pins.items()
                              if prior_pins.get(name) != digest} != diagnostic_paths):
                     raise ValueError("fresh-batch-diagnostic-source-change-unproven")
@@ -3057,7 +4732,7 @@ def validate_batch(root: Path, authorization_path: Path, authorization_sha256: s
                 ("runner-transient", "observation-reconciliation")):
         raise ValueError("fresh-batch-infrastructure-retry-justification-required")
 
-    if stage in ("public-effects", "native-diagnostic"):
+    if stage in ("public-effects", "native-diagnostic", "native-prefix-diagnostic"):
         candidate = admission.get("candidate")
         if not isinstance(candidate, dict):
             raise ValueError("fresh-batch-candidate-admission-missing")
@@ -3118,9 +4793,14 @@ def validate_batch(root: Path, authorization_path: Path, authorization_sha256: s
                 source_pins=pins, prior_source=prior_source, repair=predecessor_evidence,
                 candidate=candidate)
     native_ready = None
+    native_prefix_ready = None
     if diagnostic_effects:
-        native_ready = _validate_native_readiness(root, batch_root, admission, admission_sha256,
-            diagnostic_readiness_path, diagnostic_readiness_sha256)
+        if stage == "native-prefix-diagnostic":
+            native_prefix_ready = _validate_native_prefix_readiness(root, batch_root, admission,
+                admission_sha256, diagnostic_readiness_path, diagnostic_readiness_sha256)
+        else:
+            native_ready = _validate_native_readiness(root, batch_root, admission, admission_sha256,
+                diagnostic_readiness_path, diagnostic_readiness_sha256)
         if (runtime_cutoff - current).total_seconds() < 2700:
             raise ValueError("native-diagnostic-job-window-unavailable")
     claim_identity_sha = _predecessor_identity_sha256(predecessor)
@@ -3135,7 +4815,8 @@ def validate_batch(root: Path, authorization_path: Path, authorization_sha256: s
             "attempt_index": attempt_index, "predecessor_sha256": predecessor_sha,
             "predecessor_identity_sha256": claim_identity_sha,
             "source_payload_sha256": source_payload_sha, "successor_claim": claim_path,
-            "native_diagnostic_readiness": native_ready}
+            "native_diagnostic_readiness": native_ready,
+            "native_prefix_readiness": native_prefix_ready}
 
 
 def require_output_under_batch(root: Path, value: Path, *, attempt_root: Path,
