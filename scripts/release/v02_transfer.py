@@ -16,6 +16,8 @@ MAX_MEMBERS = 256
 MAX_FILE_BYTES = 64 * 1024 * 1024
 MAX_TOTAL_BYTES = 512 * 1024 * 1024
 ROOT = pathlib.Path(__file__).resolve().parents[2]
+WINDOW_SCOPE_SHA256 = "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4"
+WINDOW_SCOPE_REL = pathlib.Path("evidence/v02-phase7-full-execution-scope.json")
 _HYGIENE_SPEC = importlib.util.spec_from_file_location("gw_v02_transfer_public_hygiene",
     ROOT / "scripts/ci/public_hygiene.py")
 _HYGIENE = importlib.util.module_from_spec(_HYGIENE_SPEC)
@@ -274,11 +276,32 @@ def _load_benchmark_module():
     return module
 
 
+def _qualification_scope_path(root, explicit=None):
+    """Select the old scope by default or the one exact four-hour public scope."""
+    root = pathlib.Path(root).resolve(strict=True)
+    selected_sha = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", "")
+    selected_path = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH", "")
+    if selected_sha not in ("", WINDOW_SCOPE_SHA256):
+        raise ValueError("transfer-qualification-scope-profile-invalid")
+    if selected_sha == WINDOW_SCOPE_SHA256:
+        path = root / WINDOW_SCOPE_REL
+        requested = pathlib.Path(explicit).resolve(strict=True) if explicit is not None else path.resolve(strict=True)
+        if (selected_path != WINDOW_SCOPE_REL.as_posix() or requested != path.resolve(strict=True)
+                or _sha(path.read_bytes()) != WINDOW_SCOPE_SHA256):
+            raise ValueError("transfer-qualification-scope-profile-invalid")
+        return path
+    legacy = root / "evidence/v02-execution.json"
+    if explicit is not None and pathlib.Path(explicit).resolve(strict=True) != legacy.resolve(strict=True):
+        raise ValueError("transfer-qualification-scope-not-selected")
+    return legacy
+
+
 def validate_benchmark_report(report_path, workload, scope_path, *, source_sha, head_sha,
                               base_sha, run_id, run_attempt):
     """Validate and privacy-scan one report before its independent CI upload."""
     report_path = pathlib.Path(report_path)
-    scope_path = pathlib.Path(scope_path)
+    scope_path = _qualification_scope_path(pathlib.Path(scope_path).resolve(strict=True).parents[1],
+        scope_path)
     report_bytes = report_path.read_bytes()
     document = json.loads(report_bytes)
     scope = json.loads(scope_path.read_text(encoding="utf-8"))
@@ -517,7 +540,7 @@ def prepare_package(root, out, *, expected_source_sha):
         expected_product_content_sha256=current_content_sha256)
     members, total = {}, 0
     benchmark = _load_benchmark_module()
-    scope_path = root / "evidence/v02-execution.json"
+    scope_path = _qualification_scope_path(root)
     scope = json.loads(scope_path.read_text(encoding="utf-8"))
     identity = json.loads((root / "build/v02/runtime-identity.json").read_text(encoding="utf-8"))
     for workload in BENCHMARKS:

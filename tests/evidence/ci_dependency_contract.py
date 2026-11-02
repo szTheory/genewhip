@@ -15,6 +15,14 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
+def current_tool_cache_root():
+    configured = os.environ.get("GENEWHIP_CI_DEPENDENCY_CACHE")
+    if configured:
+        path = pathlib.Path(configured)
+        return path if path.is_absolute() else ROOT / path
+    return ROOT / "build/tool-cache"
+
+
 class CIDependencyContract(unittest.TestCase):
     def test_current_keyring_pin_is_updated_without_rewriting_historical_lock(self):
         expected_current = "8013de59880f7a59f53b6bd207f4d2a408d67b84a82fa9cba1dbbf443428e2db"
@@ -43,6 +51,8 @@ class CIDependencyContract(unittest.TestCase):
         self.assertIn("--receipt", recipe)
         self.assertIn("--validate-current-receipt", validator)
         self.assertIn("validate_current_receipt", validator)
+        self.assertIn("payload={'schema':'genewhip-current-host-toolchain-v2'", recipe,
+                      "--record-current must emit the recorded-patch v2 variant")
         self.assertIn("genewhip-current-host-toolchain-v1", recipe)
         self.assertIn("--self-test-current-receipt", (ROOT / "scripts/ci/required-gate.sh").read_text())
         self.assertIn("tests/evidence/independent_game_toolchain.py", (ROOT / "scripts/ci/required-gate.sh").read_text())
@@ -50,8 +60,8 @@ class CIDependencyContract(unittest.TestCase):
 
     def test_current_receipt_cache_reuse_and_executable_tamper_rejection(self):
         for target, script in (("z80-elf", "z80-as.sh"), ("m68k-elf", "m68k-as.sh")):
-            binary = ROOT / "build/tool-cache" / f"{target}-as"
-            receipt = ROOT / "build/tool-cache" / f"{target}-as.receipt.json"
+            binary = current_tool_cache_root() / f"{target}-as"
+            receipt = current_tool_cache_root() / f"{target}-as.receipt.json"
             self.assertTrue(binary.is_file(), f"current-{target}-assembler-not-built")
             self.assertTrue(receipt.is_file(), f"current-{target}-receipt-not-built")
             with tempfile.TemporaryDirectory(prefix="genewhip-receipt-cache-") as temporary:
@@ -90,8 +100,8 @@ class CIDependencyContract(unittest.TestCase):
 
     def test_validated_receipt_logs_redacted_reproducible_identity(self):
         for target in ("z80-elf", "m68k-elf"):
-            receipt_path = ROOT / "build/tool-cache" / f"{target}-as.receipt.json"
-            binary_path = ROOT / "build/tool-cache" / f"{target}-as"
+            receipt_path = current_tool_cache_root() / f"{target}-as.receipt.json"
+            binary_path = current_tool_cache_root() / f"{target}-as"
             result = subprocess.run([
                 "python3", str(ROOT / "tests/evidence/independent_game_toolchain.py"),
                 "--validate-current-receipt", str(receipt_path), "--target", target,
@@ -102,12 +112,64 @@ class CIDependencyContract(unittest.TestCase):
                               if line.startswith("CURRENT_HOST_RECEIPT: ")]
             self.assertEqual(len(identity_lines), 1, f"{target}-receipt-identity-log-missing")
             identity = json.loads(identity_lines[0].split(": ", 1)[1])
-            self.assertEqual(identity["schema"], "genewhip-current-host-toolchain-v1")
+            receipt_bytes = receipt_path.read_bytes()
+            receipt = json.loads(receipt_bytes)
+            self.assertIn(receipt.get("schema"), {
+                "genewhip-current-host-toolchain-v1",
+                "genewhip-current-host-toolchain-v2",
+            })
+            self.assertEqual(identity["schema"], receipt["schema"])
             self.assertEqual(identity["target"], target)
             self.assertEqual(identity["receipt_sha256"],
-                             hashlib.sha256(receipt_path.read_bytes()).hexdigest())
+                             hashlib.sha256(receipt_bytes).hexdigest())
             self.assertEqual(identity["binutils"]["source_archive_sha256"],
                              "3068128c75cda9f898ccb4211d360246e8e195ffcc9dfb655b23ae23a54800e8")
+            if receipt["schema"] == "genewhip-current-host-toolchain-v2":
+                source_patch = receipt["record"]["source_patch"]
+                lock = json.loads((ROOT / "fixtures/independent-game/toolchain.lock").read_bytes())
+                lock_record = lock["assembler_z80"] if target == "z80-elf" else lock["assembler"]
+                locked_tree = re.search(
+                    r"extracted source tree SHA-256 ([0-9a-f]{64})$",
+                    lock_record["source_revision"])
+                self.assertIsNotNone(locked_tree, f"{target}-historical-upstream-tree-missing")
+                self.assertEqual(source_patch["id"],
+                                 "binutils-2.47-configure-parent-relative-probe")
+                self.assertEqual(source_patch["archive_sha256"],
+                                 "3068128c75cda9f898ccb4211d360246e8e195ffcc9dfb655b23ae23a54800e8")
+                self.assertEqual(source_patch["original_source_tree_sha256"], locked_tree.group(1))
+                self.assertEqual(identity["binutils"]["source_tree_sha256"],
+                                 source_patch["patched_source_tree_sha256"])
+                self.assertEqual(identity["binutils"]["original_source_tree_sha256"],
+                                 source_patch["original_source_tree_sha256"])
+                projected_patch = identity["binutils"]["source_patch"]
+                self.assertEqual(set(projected_patch), {
+                    "id", "manifest_sha256", "recipe_sha256", "helper_sha256",
+                    "patched_source_tree_sha256",
+                })
+                self.assertEqual(projected_patch, {
+                    "id": source_patch["id"],
+                    "manifest_sha256": source_patch["manifest_sha256"],
+                    "recipe_sha256": source_patch["recipe_sha256"],
+                    "helper_sha256": source_patch["helper_sha256"],
+                    "patched_source_tree_sha256": source_patch["patched_source_tree_sha256"],
+                })
+                self.assertEqual(set(identity["binutils"]), {
+                    "version", "source_archive_sha256", "source_tree_sha256",
+                    "signature_sha256", "keyring_sha256", "signing_fingerprint",
+                    "original_source_tree_sha256", "source_patch",
+                })
+            else:
+                source_tree = re.search(
+                    r"extracted source tree SHA-256 ([0-9a-f]{64})$",
+                    receipt["record"]["source_revision"])
+                self.assertIsNotNone(source_tree, f"{target}-legacy-upstream-tree-missing")
+                self.assertEqual(identity["binutils"]["source_tree_sha256"], source_tree.group(1))
+                self.assertNotIn("source_patch", identity["binutils"])
+                self.assertNotIn("original_source_tree_sha256", identity["binutils"])
+                self.assertEqual(set(identity["binutils"]), {
+                    "version", "source_archive_sha256", "source_tree_sha256",
+                    "signature_sha256", "keyring_sha256", "signing_fingerprint",
+                })
             self.assertEqual(identity["assembler"]["sha256"],
                              hashlib.sha256(binary_path.read_bytes()).hexdigest())
             self.assertNotIn("/Users/", identity_lines[0])
@@ -137,7 +199,16 @@ class CIDependencyContract(unittest.TestCase):
         desktop = workflow.split("  desktop:\n", 1)[1].split("  package:\n", 1)[0]
         self.assertLess(safety.index("prepare_evidence_dependencies.sh"),
                         safety.index("scripts/ci/required-gate.sh"))
-        self.assertLess(desktop.index("prepare_evidence_dependencies.sh"),
+        desktop_dependency = re.search(
+            r"(?ms)^      - name: Prepare pinned evidence dependencies\n        run: ([^\n]+)",
+            desktop)
+        self.assertIsNotNone(desktop_dependency,
+                             "desktop-bounded-dependency-step-missing")
+        self.assertIn('ci_desktop_setup_step("dependencies")', desktop_dependency.group(1),
+                      "desktop-dependencies-must-use-shared-bounded-setup")
+        self.assertLess(desktop.index("ci_desktop_setup_step(\"dependencies\")"),
+                        desktop.index("ci_desktop_setup_step(\"configure\")"))
+        self.assertLess(desktop.index("ci_desktop_setup_step(\"dependencies\")"),
                         desktop.index("ctest --test-dir build/desktop"))
 
     def test_required_tests_and_packages_use_the_locked_native_host(self):
@@ -182,6 +253,8 @@ class CIDependencyContract(unittest.TestCase):
             ctest = tools / "ctest"
             ctest.write_text("""#!/bin/sh
 printf 'ctest\\n' >> "$EVENTS"
+test "$ASAN_OPTIONS" = detect_leaks=0 || exit 96
+test "$UBSAN_OPTIONS" = halt_on_error=1 || exit 97
 for arg in "$@"; do
   if [ "$arg" = --output-on-failure ]; then printf 'PRIVATE_TEST_OUTPUT_MARKER\\n'; fi
 done
@@ -221,12 +294,14 @@ esac
             source = (helper.group(0) + "\nset -euo pipefail\n"
                 + 'run_required_ctest "$1" "$2" 0 || exit $?\n'
                 + 'printf "continued\\n" >> "$EVENTS"\n')
-            result = subprocess.run(["bash", "-c", source, "test", "native", str(junit)],
+            # Exercise the system Bash used by macOS CI (3.2), even when PATH has Bash 5.
+            result = subprocess.run(["/bin/bash", "-c", source, "test", "native", str(junit)],
                 cwd=root, text=True, capture_output=True,
                 env={**os.environ, "PATH": str(tools) + os.pathsep + os.environ.get("PATH", ""),
                      "EVENTS": str(events), "REAL_PYTHON": sys.executable,
                      "REPORT_SCRIPT": str(ROOT / "scripts/evidence/phase4_report.py")})
             self.assertEqual(result.returncode, 7, result.stderr)
+            self.assertRegex(result.stderr, r"ci-stage native-ctest [0-9.]+ seconds")
             self.assertNotIn("PRIVATE_TEST_OUTPUT_MARKER", result.stdout + result.stderr)
             self.assertIn("NativeParserContract.test_bounded_malformed_route_matrix_both_clients [failure]",
                           result.stdout)

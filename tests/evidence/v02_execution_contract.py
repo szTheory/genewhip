@@ -86,6 +86,243 @@ class SmokeFailureDiagnosticContract(unittest.TestCase):
 
 
 class Phase7ExecutionContract(unittest.TestCase):
+    def test_four_hour_prospective_scope_is_separate_from_immutable_legacy_scope(self) -> None:
+        import hashlib
+
+        legacy_path = ROOT / "evidence/v02-execution.json"
+        prospective_path = ROOT / "evidence/v02-phase7-full-execution-scope.json"
+        legacy_raw = legacy_path.read_bytes()
+        prospective_raw = prospective_path.read_bytes()
+        self.assertEqual(hashlib.sha256(legacy_raw).hexdigest(),
+            "05eb7f5fa91d759fbef8fb86bbc9db402dc41812261235bcf5085a0e2aa9b1a5")
+        self.assertEqual(hashlib.sha256(prospective_raw).hexdigest(),
+            "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4")
+        self.assertNotEqual(legacy_path, prospective_path)
+
+        legacy = json.loads(legacy_raw)
+        prospective = json.loads(prospective_raw)
+        expected_prospective = json.loads(legacy_raw)
+        expected_prospective["qualification_batch"].update({
+            "wall_seconds": 14400, "runtime_wall_seconds": 10800,
+            "package_wall_seconds": 2700, "close_wall_seconds": 900})
+        self.assertEqual(prospective, expected_prospective,
+            "the prospective scope changes only its four-hour qualification budgets")
+        legacy_partitions = {key: legacy["qualification_batch"][key] for key in (
+            "wall_seconds", "runtime_wall_seconds", "package_wall_seconds", "close_wall_seconds")}
+        self.assertEqual(legacy_partitions, {
+            "wall_seconds": 86400, "runtime_wall_seconds": 64800,
+            "package_wall_seconds": 14400, "close_wall_seconds": 7200})
+        self.assertEqual(prospective["qualification_batch"]["wall_seconds"], 14400)
+        self.assertEqual(prospective["qualification_batch"]["runtime_wall_seconds"], 10800)
+        self.assertEqual(prospective["qualification_batch"]["package_wall_seconds"], 2700)
+        self.assertEqual(prospective["qualification_batch"]["close_wall_seconds"], 900)
+
+    def test_four_hour_window_partitions_and_queue_delay_use_one_fixed_start(self) -> None:
+        import datetime
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "phase7_four_hour_window_contract", ROOT / "scripts/release/v02_window.py")
+        window_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(window_module)
+        self.assertEqual((window_module.STARTED_AT, window_module.RUNTIME_CUTOFF,
+            window_module.PACKAGE_CUTOFF, window_module.GLOBAL_CUTOFF), (
+                "2026-11-02T16:56:30+00:00", "2026-11-02T19:56:30+00:00",
+                "2026-11-02T20:41:30+00:00", "2026-11-02T20:56:30+00:00"))
+        window = {"started_at": window_module.STARTED_AT,
+            "scope_sha256": window_module.SCOPE_SHA256}
+        start = datetime.datetime.fromisoformat(window_module.STARTED_AT)
+        runtime = datetime.datetime.fromisoformat(window_module.RUNTIME_CUTOFF)
+        package = datetime.datetime.fromisoformat(window_module.PACKAGE_CUTOFF)
+        hard = datetime.datetime.fromisoformat(window_module.GLOBAL_CUTOFF)
+
+        at_start = window_module.check_window(window, phase="preparation", now=start)
+        self.assertEqual(at_start["remaining_seconds"], 10800)
+        self.assertEqual(at_start["phase_cutoff"], window_module.RUNTIME_CUTOFF)
+        self.assertEqual(at_start["hard_cutoff"], window_module.GLOBAL_CUTOFF)
+        self.assertEqual(window_module.check_window(window, phase="close",
+            now=start)["remaining_seconds"], 14400)
+        self.assertEqual(window_module.check_window(window, phase="runtime",
+            now=runtime - datetime.timedelta(seconds=1))["remaining_seconds"], 1)
+        self.assertEqual(window_module.check_window(window, phase="package",
+            now=runtime)["remaining_seconds"], 2700)
+        self.assertEqual(window_module.check_window(window, phase="package",
+            now=package - datetime.timedelta(seconds=1))["remaining_seconds"], 1)
+        self.assertEqual(window_module.check_window(window, phase="close",
+            now=package)["remaining_seconds"], 900)
+        self.assertEqual(window_module.check_window(window, phase="close",
+            now=hard - datetime.timedelta(seconds=1))["remaining_seconds"], 1)
+
+        for phase, boundary in (("runtime", runtime), ("package", package), ("close", hard)):
+            with self.subTest(phase=phase, boundary="exclusive"):
+                with self.assertRaisesRegex(ValueError, "phase7-window-phase-expired"):
+                    window_module.check_window(window, phase=phase, now=boundary)
+        with self.assertRaisesRegex(ValueError, "phase7-window-not-started"):
+            window_module.check_window(window, phase="preparation",
+                now=start - datetime.timedelta(seconds=1))
+
+        queued_at = start + datetime.timedelta(hours=2)
+        consumed = window_module.check_window(window, phase="runtime", now=queued_at,
+            workflow_created_at=(start + datetime.timedelta(hours=1)).isoformat())
+        self.assertEqual(consumed["remaining_seconds"], 3600)
+        retried_at = start + datetime.timedelta(hours=2, minutes=30)
+        retried = window_module.check_window(window, phase="runtime", now=retried_at,
+            workflow_created_at=retried_at.isoformat())
+        self.assertEqual(retried["remaining_seconds"], 1800,
+            "a retry consumes the original runtime allowance instead of restarting it")
+        with self.assertRaisesRegex(ValueError, "phase7-window-start-replaced"):
+            window_module.check_window(window, phase="runtime", now=queued_at,
+                started_at=queued_at.isoformat())
+        with self.assertRaisesRegex(ValueError, "phase7-window-start-replaced"):
+            window_module.check_window({**window, "started_at": queued_at.isoformat()},
+                phase="runtime", now=queued_at)
+        with self.assertRaisesRegex(ValueError, "phase7-window-context-invalid"):
+            window_module.check_window({**window, "scope_sha256": "0" * 64},
+                phase="runtime", now=queued_at)
+        with self.assertRaisesRegex(ValueError, "phase7-window-workflow-clock-invalid"):
+            window_module.check_window(window, phase="runtime", now=queued_at,
+                workflow_created_at=(queued_at + datetime.timedelta(seconds=1)).isoformat())
+        with self.assertRaisesRegex(ValueError, "phase7-window-workflow-clock-invalid"):
+            window_module.check_window(window, phase="runtime", now=queued_at,
+                workflow_created_at=(start - datetime.timedelta(seconds=1)).isoformat())
+
+    def test_four_hour_window_loader_rejects_legacy_or_unpinned_scope_selection(self) -> None:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "phase7_four_hour_window_scope_pin_contract", ROOT / "scripts/release/v02_window.py")
+        window_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(window_module)
+        with self.assertRaisesRegex(ValueError, "phase7-window-authority-or-scope-pin-invalid"):
+            window_module.load_window(ROOT, scope_path=window_module.LEGACY_SCOPE_PATH)
+        with self.assertRaisesRegex(ValueError, "phase7-window-authority-or-scope-pin-invalid"):
+            window_module.load_window(ROOT, scope_sha256="0" * 64)
+
+    def test_public_runner_clock_reopens_both_scope_snapshots_and_charges_queue_time(self) -> None:
+        import datetime
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "phase7_four_hour_public_clock_contract", ROOT / "scripts/release/v02_window.py")
+        window_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(window_module)
+        start = datetime.datetime.fromisoformat(window_module.STARTED_AT)
+        current = start + datetime.timedelta(hours=2)
+        queued = start + datetime.timedelta(hours=1)
+        with tempfile.TemporaryDirectory(prefix="phase7-window-public-clock-") as temporary:
+            root = pathlib.Path(temporary).resolve()
+            evidence = root / "evidence"
+            evidence.mkdir()
+            new_scope = ROOT / window_module.SCOPE_PATH
+            legacy_scope = ROOT / window_module.LEGACY_SCOPE_PATH
+            (evidence / new_scope.name).write_bytes(new_scope.read_bytes())
+            (evidence / legacy_scope.name).write_bytes(legacy_scope.read_bytes())
+
+            checked = window_module.validate_public_clock(root,
+                scope_path=window_module.SCOPE_PATH.as_posix(),
+                scope_sha256=window_module.SCOPE_SHA256,
+                started_at=window_module.STARTED_AT, phase="runtime", now=current,
+                workflow_created_at=queued.isoformat())
+            self.assertEqual(checked["remaining_seconds"], 3600)
+            self.assertEqual(window_module.load_public_scope(root)["qualification_batch"],
+                json.loads(new_scope.read_bytes())["qualification_batch"])
+
+            (evidence / new_scope.name).write_bytes(new_scope.read_bytes() + b" ")
+            with self.assertRaisesRegex(ValueError, "phase7-window-scope-stale"):
+                window_module.validate_public_clock(root,
+                    scope_path=window_module.SCOPE_PATH.as_posix(),
+                    scope_sha256=window_module.SCOPE_SHA256,
+                    started_at=window_module.STARTED_AT, phase="runtime", now=current,
+                    workflow_created_at=queued.isoformat())
+            (evidence / new_scope.name).write_bytes(new_scope.read_bytes())
+            (evidence / legacy_scope.name).write_bytes(b"{}\n")
+            with self.assertRaisesRegex(ValueError, "phase7-window-legacy-scope-stale"):
+                window_module.load_public_scope(root)
+
+    def test_four_hour_source_event_window_selection_charges_queue_and_never_falls_back(self) -> None:
+        import datetime
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "phase7_four_hour_source_event_selector", ROOT / "scripts/release/v02_window.py")
+        window_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(window_module)
+        start = datetime.datetime.fromisoformat(window_module.STARTED_AT)
+        runtime = datetime.datetime.fromisoformat(window_module.RUNTIME_CUTOFF)
+        hard = datetime.datetime.fromisoformat(window_module.GLOBAL_CUTOFF)
+        with tempfile.TemporaryDirectory(prefix="phase7-source-event-window-") as temporary:
+            root = pathlib.Path(temporary).resolve()
+            evidence = root / "evidence"
+            evidence.mkdir()
+            for relative in (window_module.SCOPE_PATH, window_module.LEGACY_SCOPE_PATH):
+                (root / relative).write_bytes((ROOT / relative).read_bytes())
+
+            selected = window_module.select_public_event_window(root,
+                workflow_created_at=(start + datetime.timedelta(minutes=1)).isoformat(),
+                now=start + datetime.timedelta(minutes=5))
+            self.assertTrue(selected["selected"])
+            self.assertEqual(selected["scope_path"], window_module.SCOPE_PATH.as_posix())
+            self.assertEqual(selected["scope_sha256"], window_module.SCOPE_SHA256)
+            self.assertEqual(selected["started_at"], window_module.STARTED_AT)
+            self.assertEqual(selected["remaining_seconds"], 10500)
+
+            with self.assertRaisesRegex(ValueError, "phase7-window-phase-expired"):
+                window_module.select_public_event_window(root,
+                    workflow_created_at=(start + datetime.timedelta(minutes=1)).isoformat(),
+                    now=runtime)
+
+            with self.assertRaisesRegex(ValueError, "phase7-window-workflow-clock-invalid"):
+                window_module.select_public_event_window(root,
+                    workflow_created_at=(start + datetime.timedelta(minutes=10)).isoformat(),
+                    now=start + datetime.timedelta(minutes=5))
+
+            for outside, observed in ((start - datetime.timedelta(seconds=1), start),
+                    (hard, hard)):
+                with self.subTest(workflow_created_at=outside.isoformat()):
+                    legacy = window_module.select_public_event_window(root,
+                        workflow_created_at=outside.isoformat(), now=observed)
+                    self.assertFalse(legacy["selected"])
+                    self.assertEqual(legacy["scope_path"],
+                        window_module.LEGACY_SCOPE_PATH.as_posix())
+                    self.assertEqual(legacy["scope_sha256"],
+                        window_module.LEGACY_SCOPE_SHA256)
+                    self.assertIsNone(legacy["started_at"])
+
+            with self.assertRaisesRegex(ValueError, "phase7-window-public-scope-pin-invalid"):
+                window_module.validate_public_clock(root,
+                    scope_path=selected["scope_path"],
+                    scope_sha256=window_module.LEGACY_SCOPE_SHA256,
+                    started_at=selected["started_at"], phase="preparation",
+                    now=start + datetime.timedelta(minutes=5))
+
+    def test_child_runner_rejects_legacy_scope_under_four_hour_window_environment(self) -> None:
+        import importlib.util
+        from unittest import mock
+
+        spec = importlib.util.spec_from_file_location(
+            "phase7_four_hour_child_scope_contract", ROOT / "scripts/evidence/v02_run.py")
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        with tempfile.TemporaryDirectory(prefix="phase7-window-child-scope-") as temporary:
+            root = pathlib.Path(temporary).resolve()
+            for relative in (pathlib.Path("evidence/v02-phase7-full-execution-scope.json"),
+                    pathlib.Path("evidence/v02-execution.json"),
+                    pathlib.Path("scripts/release/v02_window.py")):
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((ROOT / relative).read_bytes())
+            runner.ROOT = root
+            new_scope = root / "evidence/v02-phase7-full-execution-scope.json"
+            old_scope = root / "evidence/v02-execution.json"
+            env = {"GENEWHIP_QUALIFICATION_SCOPE_PATH": new_scope.relative_to(root).as_posix(),
+                "GENEWHIP_QUALIFICATION_SCOPE_SHA256":
+                    "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4",
+                "GENEWHIP_QUALIFICATION_STARTED_AT": "2026-11-02T16:56:30+00:00",
+                "GENEWHIP_QUALIFICATION_PHASE": "runtime"}
+            with mock.patch.dict(os.environ, env, clear=True):
+                with self.assertRaisesRegex(ValueError, "phase7-window-scope-profile-invalid"):
+                    runner.validate_execution_scope(old_scope, "smoke")
+
     def test_active_scope_cmake_provenance_uses_the_consumer_build_root(self) -> None:
         import importlib.util
         spec = importlib.util.spec_from_file_location(

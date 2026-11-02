@@ -110,6 +110,17 @@ print(h.hexdigest())
 PY
 
 SOURCE_TREE=$(cat "$TMP/source-tree.sha256")
+SOURCE_TREE_UPSTREAM=$SOURCE_TREE
+SOURCE_PATCH_JSON='{}'
+if [ "$MODE" = --record-current ]; then
+  # The current-host evidence recipe may use this exact configure-probe fix.
+  # It runs only after archive/signature checks and the original extracted-tree
+  # digest have both passed; legacy --record/--verify-lock stay on upstream bytes.
+  SOURCE_PATCH_JSON=$(python3 "$ROOT/fixtures/independent-game/toolchain/configure_probe.py" \
+    --apply "$TMP/binutils-2.47" --archive-sha256 "$ACTUAL_ARCHIVE" \
+    --manifest "$TMP/configure-probe-patch.json") || fail 'verified upstream configure-probe patch refused the source tree'
+  SOURCE_TREE=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["patched_source_tree_sha256"])' "$SOURCE_PATCH_JSON") || fail 'configure-probe patch tree identity missing'
+fi
 COMPILE_FLAGS="-O2 -g0 -ffile-prefix-map=$TMP=."
 LOCK_COMPILE_FLAGS='-O2 -g0 -ffile-prefix-map=<BUILD_ROOT>=.'
 LICENSES=$(python3 - "$TMP/binutils-2.47" <<'PY'
@@ -250,10 +261,10 @@ if [ -n "$OUTPUT" ]; then
   [ "$(shasum -a 256 "$OUTPUT/$TARGET-as" | awk '{print $1}')" = "$AS_SHA" ] || fail 'copied assembler identity changed'
 fi
 
-python3 - "$LOCK" "$MODE" "$ACTUAL_ARCHIVE" "$ACTUAL_SIGNATURE" "$ACTUAL_KEYRING" "$PRIMARY" "$SIGNING_FPR" "$SIG_TIME" "$ANNOUNCEMENT" "$SOURCE_TREE" "$LICENSES" "$HOST_OS" "$HOST_BUILD" "$HOST_ARCH" "$XCODE" "$SDK" "$SDK_BUILD" "$CLANG" "$MAKE" "$GPGV_VERSION" "$GPGV_SHA" "$GPGV_TYPE" "$GPGV_LINKS_JSON" "$GPGV_INVENTORY" "$GCC_VERSION" "$GCC_SHA" "$COREUTILS_VERSION" "$COREUTILS_SOURCE_SHA" "$COREUTILS_FORMULA_SHA" "$COREUTILS_LICENSE_SHA" "$GMK_SHA" "$GINSTALL_SHA" "$COREUTILS_LINKS" "$GINSTALL_LINKS" "$PYTHON_VERSION" "$PYTHON_SHA" "$PYTHON_TYPE" "$PYTHON_SOURCE_SHA" "$PYTHON_SOURCE_URL" "$PYTHON_FORMULA_SHA" "$PYTHON_LICENSE_SHA" "$PYTHON_FRAMEWORK_SHA" "$PYTHON_TREE_SHA" "$PYTHON_INVENTORY" "$AS_SHA" "$AS_TYPE" "$VERSION" "$AS_LINKS_JSON" "${FLAGS[*]}; CFLAGS=$LOCK_COMPILE_FLAGS; SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH" "$BUILD_COMMAND" "$TARGET" "$LOCK_KEY" "$RECEIPT" "$CURRENT_RECEIPT" <<'PY'
+python3 - "$LOCK" "$MODE" "$ACTUAL_ARCHIVE" "$ACTUAL_SIGNATURE" "$ACTUAL_KEYRING" "$PRIMARY" "$SIGNING_FPR" "$SIG_TIME" "$ANNOUNCEMENT" "$SOURCE_TREE" "$SOURCE_TREE_UPSTREAM" "$SOURCE_PATCH_JSON" "$LICENSES" "$HOST_OS" "$HOST_BUILD" "$HOST_ARCH" "$XCODE" "$SDK" "$SDK_BUILD" "$CLANG" "$MAKE" "$GPGV_VERSION" "$GPGV_SHA" "$GPGV_TYPE" "$GPGV_LINKS_JSON" "$GPGV_INVENTORY" "$GCC_VERSION" "$GCC_SHA" "$COREUTILS_VERSION" "$COREUTILS_SOURCE_SHA" "$COREUTILS_FORMULA_SHA" "$COREUTILS_LICENSE_SHA" "$GMK_SHA" "$GINSTALL_SHA" "$COREUTILS_LINKS" "$GINSTALL_LINKS" "$PYTHON_VERSION" "$PYTHON_SHA" "$PYTHON_TYPE" "$PYTHON_SOURCE_SHA" "$PYTHON_SOURCE_URL" "$PYTHON_FORMULA_SHA" "$PYTHON_LICENSE_SHA" "$PYTHON_FRAMEWORK_SHA" "$PYTHON_TREE_SHA" "$PYTHON_INVENTORY" "$AS_SHA" "$AS_TYPE" "$VERSION" "$AS_LINKS_JSON" "${FLAGS[*]}; CFLAGS=$LOCK_COMPILE_FLAGS; SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH" "$BUILD_COMMAND" "$TARGET" "$LOCK_KEY" "$RECEIPT" "$CURRENT_RECEIPT" <<'PY'
 import json, pathlib, sys
 (path, mode, archive, sig, keyring, primary, signing, sigtime, announcement,
- tree, licenses, osver, osbuild, arch, xcode, sdk, sdkbuild, clang, make,
+ tree, upstream_tree, source_patch_json, licenses, osver, osbuild, arch, xcode, sdk, sdkbuild, clang, make,
  gpgv, gpgvsha, gpgvtype, gpgvlinks, gpgv_inventory, gcc_version, gcc_sha,
  coreutils_version, coreutils_source, coreutils_formula, coreutils_license,
  gmkdir_sha, ginstall_sha, gmkdir_links, ginstall_links,
@@ -262,9 +273,15 @@ import json, pathlib, sys
  flags, build, target, lock_key, receipt, current_receipt_path) = sys.argv[1:]
 p=pathlib.Path(path); doc=json.loads(p.read_text()); before_mame=doc.get('mame')
 host_dependency = ({'name':'Apple system directory/install utilities','identity':'/bin/mkdir and /usr/bin/install on macOS '+osbuild,'license':'Apple macOS system tools; host build only','executables':[{'name':'mkdir','sha256':gmkdir_sha,'linked_images':[gmkdir_links]},{'name':'install','sha256':ginstall_sha,'linked_images':[ginstall_links]}]} if coreutils_version.startswith('not-installed') else {'name':'GNU Coreutils install tools','version':coreutils_version,'source_archive_sha256':coreutils_source,'formula_sha256':coreutils_formula,'license':'GPL-3.0-or-later','license_notice_sha256':coreutils_license,'executables':[{'name':'gmkdir','sha256':gmkdir_sha,'linked_images':[x for x in gmkdir_links.split(';') if x]},{'name':'ginstall','sha256':ginstall_sha,'linked_images':[x for x in ginstall_links.split(';') if x]}]})
+source_patch = json.loads(source_patch_json)
+is_current_receipt = mode == '--record-current'
+source_revision = ('binutils-2.47 official release archive; verified upstream source tree SHA-256 '
+    + upstream_tree + '; applied exact local source patch ' + source_patch['id']
+    + '; patched source tree SHA-256 ' + tree) if is_current_receipt else (
+    'binutils-2.47 official release archive; extracted source tree SHA-256 ' + tree)
 new={
  'name':'GNU Binutils assembler','version':'2.47','source_url':'https://ftp.gnu.org/gnu/binutils/binutils-2.47.tar.bz2',
- 'source_revision':'binutils-2.47 official release archive; extracted source tree SHA-256 '+tree,
+ 'source_revision':source_revision,
  'source_archive_sha256':archive,
  'signature':{'url':'https://ftp.gnu.org/gnu/binutils/binutils-2.47.tar.bz2.sig','sha256':sig,'keyring_url':'https://ftp.gnu.org/gnu/gnu-keyring.gpg','keyring_sha256':keyring,'primary_fingerprint':primary,'signing_fingerprint':signing,'timestamp_unix':int(sigtime),'outcome':'GOODSIG and VALIDSIG; no expired, revoked, bad-signature, or missing-key status','release_announcement':announcement},
  'license':'GNU GPL-3.0-or-later for GNU assembler; upstream exact notices retained in source archive and identified below; no Binutils source or executable redistributed',
@@ -273,19 +290,21 @@ new={
  'flags':['target='+target,'configure='+flags,'build='+build],
  'build_dependencies':[{'name':'Apple Xcode and macOS SDK','identity':xcode.replace(';','; ')+', macOS SDK '+sdk+' ('+sdkbuild+')','license':'Apple proprietary host tools; not redistributed'}, {'name':'Apple clang driver','command':'gcc','identity':gcc_version,'sha256':gcc_sha,'license':'Apple Xcode toolchain; host compiler only'}, {'name':'Apple GNU Make','identity':make,'license':'Apple command-line developer tools; host build only'}, host_dependency, {'name':'GNU Binutils release verifier gpgv','identity':gpgv,'sha256':gpgvsha,'file_type':gpgvtype,'license':'GnuPG GPL-3.0-or-later; verification only, not linked into assembler','linked_images':json.loads(gpgv_inventory)}],
  'candidate_builder':{'name':'Python candidate builder and identity recorder','version':python_version,'file_type':python_type,'sha256':python_sha,'source_url':python_source_url,'source_archive_sha256':python_source,'formula_sha256':python_formula,'license':'Python-2.0','license_notice_sha256':python_license,'framework_sha256':python_framework_sha,'package_tree_sha256':python_tree,'linked_images':json.loads(python_inventory)},
- 'inputs':['official GNU Binutils 2.47 archive SHA-256 '+archive,'detached signature SHA-256 '+sig,'official GNU keyring SHA-256 '+keyring,'extracted source tree SHA-256 '+tree,'No assembler-linked non-system libraries; linked images: '+', '.join(x['path'] for x in json.loads(aslinks))],
+ 'inputs':['official GNU Binutils 2.47 archive SHA-256 '+archive,'detached signature SHA-256 '+sig,'official GNU keyring SHA-256 '+keyring] + (['verified upstream source tree SHA-256 '+upstream_tree,'recorded local source patch '+source_patch['id']+'; manifest SHA-256 '+source_patch['manifest_sha256'],'patched source tree SHA-256 '+tree] if is_current_receipt else ['extracted source tree SHA-256 '+tree]) + ['No assembler-linked non-system libraries; linked images: '+', '.join(x['path'] for x in json.loads(aslinks))],
  'executable':{'name':target+'-as','version_output':version,'target':target,'file_type':astype,'sha256':assha,'linked_images':json.loads(aslinks)},
- 'disposition':'source-built from official archive; no Homebrew Binutils bottle used'
+ 'disposition':'verified upstream source; recorded local configure-probe patch applied; no Homebrew Binutils bottle used' if is_current_receipt else 'source-built from official archive; no Homebrew Binutils bottle used'
 }
+if is_current_receipt: new['source_patch'] = source_patch
 if before_mame is None: raise SystemExit('BLOCKED: MAME lock record missing')
 if mode=='--record-current':
  if not receipt: raise SystemExit('BLOCKED: current-host receipt path missing')
- payload={'schema':'genewhip-current-host-toolchain-v1','receipt_basis':'fresh source build; separate from immutable historical toolchain.lock','historical_lock_sha256':__import__('hashlib').sha256(p.read_bytes()).hexdigest(),'target':target,'record':new}
+ payload={'schema':'genewhip-current-host-toolchain-v2','receipt_basis':'fresh source build from verified upstream with recorded local configure-probe patch; separate from immutable historical toolchain.lock','historical_lock_sha256':__import__('hashlib').sha256(p.read_bytes()).hexdigest(),'target':target,'record':new}
  target_path=pathlib.Path(receipt)
- temporary=target_path.with_name(target_path.name+'.tmp')
- temporary.write_text(json.dumps(payload,indent=2)+'\n')
- temporary.replace(target_path)
- print('RECORDED: current-host '+target+' toolchain receipt; historical toolchain.lock unchanged')
+ root=p.resolve().parents[2]
+ sys.path.insert(0,str(root/'tests/evidence'))
+ import independent_game_toolchain as receipt_writer
+ receipt_writer.write_current_receipt(target_path,payload)
+ print('RECORDED: current-host '+target+' toolchain receipt; verified upstream configure-probe patch '+source_patch['id']+'; historical toolchain.lock unchanged')
  raise SystemExit(0)
 if mode=='--verify-lock' and doc.get(lock_key) != new:
  current_path=pathlib.Path(current_receipt_path) if current_receipt_path else None
