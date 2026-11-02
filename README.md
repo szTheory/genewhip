@@ -41,6 +41,8 @@ ctest --test-dir "$BUILD_DIR" -R '^installed_consumer$' --output-on-failure --no
 
 For a clean checkout's full local gate, use `bash scripts/ci/required-gate.sh`. API 4 is a source/structure version; the package version is 0.1.0. This is a pre-1.0 project: recompile consumers for an API version change, and do not assume a stable cross-compiler binary ABI. Input logs have their own `genewhip-input-log 1` format version; changing that header is independent of either version number.
 
+For no-emulator contract feedback and the SDL-free core build, see the [local testing guide](docs/local-testing.md).
+
 The C API documents ownership, sizes, units, lifetimes, errors, serialization, and allocation behavior in [`include/genewhip/genewhip.h`](include/genewhip/genewhip.h) and [the core contract](docs/core.md). `Genewhip::core` is SDL-free. ROM bytes are copied on load. Instances are single-thread-at-a-time; independent instances may run concurrently. Create/load allocate; ordinary run/query/output calls are bounded and allocation-free. Only the pixel pointer returned by `gw_get_video_field` is borrowed, read-only, and valid until the next run/load/cold-init/console-reset/destroy on that machine. Other outputs are copied.
 
 ## Obtainable packages
