@@ -7,6 +7,7 @@ import importlib.util
 import io
 import json
 import pathlib
+import os
 import sys
 import tarfile
 import tempfile
@@ -320,6 +321,15 @@ class V02PublisherContract(unittest.TestCase):
 
 class V02DownloadContract(unittest.TestCase):
     def setUp(self):
+        environment = mock.patch.dict(os.environ)
+        environment.start()
+        self.addCleanup(environment.stop)
+        for key in ("GENEWHIP_QUALIFICATION_SCOPE_PATH",
+                    "GENEWHIP_QUALIFICATION_SCOPE_SHA256",
+                    "GENEWHIP_QUALIFICATION_STARTED_AT",
+                    "GENEWHIP_QUALIFICATION_PHASE",
+                    "GENEWHIP_QUALIFICATION_NONCE"):
+            os.environ.pop(key, None)
         self.packet = V02PublisherContract.make_packet()
 
     def identities(self):
@@ -353,6 +363,40 @@ class V02DownloadContract(unittest.TestCase):
         changed["publisher"]["run_attempt"] = 2
         self.assertEqual(qualify_delivery.validate_v02_authenticated_packet(
             changed, changed["repository"], *facts), ["v02-publisher-run-attempt-mismatch"])
+
+    def test_v02_main_dispatch_qualification_retains_actual_event_and_identity(self):
+        packet = copy.deepcopy(self.packet)
+        packet["qualification"]["event"] = "workflow_dispatch"
+        facts = self.identities()
+        facts[0]["event"] = "workflow_dispatch"
+        facts[1].update(event="workflow_dispatch", head_branch="main")
+        self.assertEqual(qualify_delivery.validate_v02_authenticated_packet(
+            packet, packet["repository"], *facts), [])
+        # The v0.1 main-run contract remains push-only.
+        self.assertEqual(qualify_delivery.validate_main_run(facts[0], SOURCE),
+                         ["main-run-event-invalid"])
+
+        mutations = [
+            (0, "event", "pull_request", "v02-qualification-event-invalid"),
+            (1, "event", "push", "workflow-source-or-event-mismatch"),
+            (1, "head_branch", "topic", "v02-qualification-branch-invalid"),
+            (1, "head_sha", "d" * 40, "workflow-source-or-event-mismatch"),
+            (1, "path", ".github/workflows/release.yml", "workflow-path-mismatch"),
+            (1, "run_attempt", 3, "v02-qualification-workflow-attempt-mismatch"),
+            (1, "id", 12346, "v02-qualification-workflow-attempt-mismatch"),
+        ]
+        for index, field, value, reason in mutations:
+            with self.subTest(field=field, value=value):
+                changed = copy.deepcopy(facts)
+                changed[index][field] = value
+                self.assertEqual(qualify_delivery.validate_v02_authenticated_packet(
+                    packet, packet["repository"], *changed), [reason])
+        for field, value in (("event", "pull_request"), ("ref", "refs/heads/topic")):
+            with self.subTest(packet_field=field):
+                changed = copy.deepcopy(packet)
+                changed["qualification"][field] = value
+                self.assertEqual(qualify_delivery.validate_v02_publisher_packet(changed),
+                                 ["v02-publisher-packet-qualification-identity-invalid"])
 
     def test_cancelled_or_missing_v02_qualification_and_each_unproven_claim_reject(self):
         changed = copy.deepcopy(self.packet)
@@ -430,6 +474,24 @@ class V02DownloadContract(unittest.TestCase):
         docs["packages"]["sdk"]["source_state"] = "development-only"
         with self.assertRaisesRegex(qualify_delivery.DeliveryError, "downloaded-adoption-not-qualified"):
             qualify_delivery.make_v02_adoption_receipt(packet, release_info, docs)
+
+    def test_window_adoption_uses_owned_group_and_reserves_cleanup(self):
+        from scripts.release import v02_qualification as coordinator
+        command = ["python3", "docs_commands.py"]
+        with mock.patch.object(qualify_delivery.promote, "execution_window_active", return_value=True), \
+                mock.patch.object(qualify_delivery.promote, "execution_window_timeout", return_value=120), \
+                mock.patch.object(coordinator, "_external") as launch:
+            qualify_delivery._run_v02_download_docs(command, ROOT / "build/v02/downloads")
+        self.assertEqual(launch.call_args.args, (command,))
+        self.assertEqual(launch.call_args.kwargs["phase"], "close")
+        self.assertEqual(launch.call_args.kwargs["timeout"], 90)
+        self.assertFalse(launch.call_args.kwargs["check"])
+        with mock.patch.object(qualify_delivery.promote, "execution_window_active", return_value=True), \
+                mock.patch.object(qualify_delivery.promote, "execution_window_timeout", return_value=30), \
+                mock.patch.object(coordinator, "_external") as launch:
+            with self.assertRaisesRegex(qualify_delivery.DeliveryError, "cleanup-reserve-exhausted"):
+                qualify_delivery._run_v02_download_docs(command, ROOT / "build/v02/downloads")
+        launch.assert_not_called()
 
     def test_failed_actual_adoption_writes_external_nonqualified_receipt(self):
         packet = copy.deepcopy(self.packet)
@@ -531,16 +593,22 @@ class V02DownloadContract(unittest.TestCase):
             assets["inventory.json"] = hashlib.sha256((directory / "inventory.json").read_bytes()).hexdigest()
             self.packet["inventory_sha256"] = assets["inventory.json"]
             calls = []
+            events = []
+            def verified_subject(*args, **kwargs):
+                calls.append(args)
+                events.append(kwargs.get("expected_event"))
+                return {"outcome": "verified"}
             with mock.patch.object(promote, "verify_attestation",
-                                   side_effect=lambda *args: calls.append(args) or {"outcome": "verified"}):
+                                   side_effect=verified_subject):
                 qualify_delivery.verify_v02_subject_attestations(directory, self.packet)
             self.assertEqual([call[0].name for call in calls], [
                 name for name in assets if name.endswith(".tar.gz")] + ["inventory.json"])
             self.assertEqual(len(calls), 3)
+            self.assertEqual(events, [self.packet["qualification"]["event"]] * 3)
             (directory / next(name for name in assets if name.endswith(".tar.gz"))).write_bytes(b"changed")
             calls.clear()
             with mock.patch.object(promote, "verify_attestation",
-                                   side_effect=lambda *args: calls.append(args)):
+                                   side_effect=lambda *args, **kwargs: calls.append(args)):
                 with self.assertRaisesRegex(qualify_delivery.DeliveryError, "release-asset-digest-mismatch"):
                     qualify_delivery.verify_v02_subject_attestations(directory, self.packet)
             self.assertEqual(calls, [])

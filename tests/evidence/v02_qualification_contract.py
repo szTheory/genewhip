@@ -3,23 +3,96 @@
 """Production consumer contracts for the v0.2 qualification coordinator."""
 import base64
 import ast
+import builtins
 import importlib.util
 import json
 import hashlib
 import inspect
+import re
 import subprocess
 import tempfile
 import unittest
 import datetime
+import email.utils
 import os
 import signal
 import stat
 import sys
+import symtable
 import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 MODULE = ROOT / "scripts/release/v02_qualification.py"
+
+
+def evaluate_ci_condition(expression, *, event, diagnostic_case):
+    """Evaluate the small boolean/equality subset used by these workflow jobs."""
+    token_pattern = re.compile(r"\s*(\(|\)|&&|\|\||==|!=|'[^']*'|[A-Za-z_][A-Za-z0-9_.-]*)")
+    tokens = []
+    offset = 0
+    while offset < len(expression):
+        match = token_pattern.match(expression, offset)
+        if match is None:
+            raise AssertionError("unsupported-workflow-condition-token")
+        tokens.append(match.group(1))
+        offset = match.end()
+    index = 0
+
+    def take(expected=None):
+        nonlocal index
+        if index >= len(tokens) or (expected is not None and tokens[index] != expected):
+            raise AssertionError("invalid-workflow-condition:" + str(tokens[index:index + 2]))
+        value = tokens[index]
+        index += 1
+        return value
+
+    def value():
+        token = take()
+        if token.startswith("'"):
+            return token[1:-1]
+        if token == "github.event_name":
+            return event
+        if token == "inputs.native_diagnostic_case":
+            return diagnostic_case
+        raise AssertionError("unsupported-workflow-condition-operand")
+
+    def comparison():
+        left = value()
+        if index < len(tokens) and tokens[index] in ("==", "!="):
+            operator = take()
+            right = value()
+            return left == right if operator == "==" else left != right
+        return bool(left)
+
+    def primary():
+        if index < len(tokens) and tokens[index] == "(":
+            take("(")
+            result = disjunction()
+            take(")")
+            return result
+        return comparison()
+
+    def conjunction():
+        result = primary()
+        while index < len(tokens) and tokens[index] == "&&":
+            take("&&")
+            right = primary()
+            result = bool(result and right)
+        return result
+
+    def disjunction():
+        result = conjunction()
+        while index < len(tokens) and tokens[index] == "||":
+            take("||")
+            right = conjunction()
+            result = bool(result or right)
+        return result
+
+    result = disjunction()
+    if index != len(tokens):
+        raise AssertionError("unsupported-workflow-condition-expression")
+    return bool(result)
 
 
 def require_process_context():
@@ -100,6 +173,1580 @@ def synthetic_qualified_reports(benchmark, identity, source_digest, scope_id, sc
 
 
 class QualificationCoordinatorContract(unittest.TestCase):
+    def test_native_prefix_producer_has_no_unresolved_module_globals(self):
+        table = symtable.symtable(MODULE.read_text(encoding="utf-8"), str(MODULE), "exec")
+        module_names = set(table.get_identifiers())
+        child = next((item for item in table.get_children()
+            if item.get_name() == "run_native_prefix_diagnostic"), None)
+        self.assertIsNotNone(child)
+        unresolved = sorted(symbol.get_name() for symbol in child.get_symbols()
+            if symbol.is_referenced() and symbol.is_global()
+            and symbol.get_name() not in module_names and symbol.get_name() not in vars(builtins))
+        self.assertEqual(unresolved, [])
+
+    def test_native_prefix_producer_finalizes_real_legacy_and_queue_handoffs(self):
+        from unittest import mock
+        from types import SimpleNamespace
+        module = load_module(self)
+        native_spec = importlib.util.spec_from_file_location("q_native_prefix_finalization_fixture",
+            ROOT / "tests/evidence/phase7_native_diagnostic_contract.py")
+        native_fixture = importlib.util.module_from_spec(native_spec)
+        native_spec.loader.exec_module(native_fixture)
+        identity = {"source_sha": "a" * 40, "head_sha": "a" * 40,
+            "base_sha": "b" * 40, "run_id": "12345", "run_attempt": "1"}
+
+        for mode in ("queue", "legacy", "invalid-clock", "malformed-handoff"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory(prefix="native-prefix-finalize-") as temporary:
+                root = Path(temporary).resolve()
+                (root / "evidence").mkdir()
+                scope = root / "evidence/v02-execution.json"
+                scope.write_bytes((ROOT / "evidence/v02-execution.json").read_bytes())
+                (root / "build/v02/results").mkdir(parents=True)
+                (root / "scripts/release").mkdir(parents=True)
+                (root / "scripts/release/v02_single_native.py").write_bytes(
+                    (ROOT / "scripts/release/v02_single_native.py").read_bytes())
+                (root / "scripts/evidence").mkdir(parents=True)
+                (root / "scripts/evidence/v02_run.py").write_bytes(
+                    (ROOT / "scripts/evidence/v02_run.py").read_bytes())
+                now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+                started = now - datetime.timedelta(seconds=700 if mode != "legacy" else 120)
+                duration = 5400 if mode != "legacy" else 2700
+                started_text = started.isoformat().replace("+00:00", "Z")
+                deadline_text = (started + datetime.timedelta(seconds=duration)).isoformat().replace("+00:00", "Z")
+                source, branch, nonce, claim_sha = "a" * 40, "v0.2-source-" + "a" * 12, "c" * 32, "d" * 64
+                finalizer_now = 1_000_000_000_000
+                env = {"GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_SHA": source,
+                    "GITHUB_RUN_ID": "12345", "GITHUB_RUN_ATTEMPT": "1",
+                    "GITHUB_REPOSITORY": "szTheory/genewhip", "GITHUB_REF_NAME": branch,
+                    "GENEWHIP_NATIVE_DIAGNOSTIC_CASE": module.NATIVE_PREFIX_DIAGNOSTIC_CASE,
+                    "GENEWHIP_NATIVE_DIAGNOSTIC_SOURCE_SHA": source,
+                    "GENEWHIP_QUALIFICATION_STARTED_AT": started_text,
+                    "GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT": started_text,
+                    "GENEWHIP_NATIVE_DIAGNOSTIC_DEADLINE": deadline_text,
+                    "GENEWHIP_QUALIFICATION_NONCE": nonce}
+                runtime_fixture = native_fixture.runner
+                record = native_fixture.NativePrefixDiagnosticContract.passing_record()
+                expected_clock = None
+                if mode != "legacy":
+                    env["GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE"] = "native-prefix-queue-v1"
+                    receipt_path = root / "runner-temp/native-prefix-job-clock.json"
+                    receipt_path.parent.mkdir()
+                    if mode != "invalid-clock":
+                        validator = module._load_single_native_validator()
+                        job_started = now - datetime.timedelta(seconds=650)
+                        local_request = now - datetime.timedelta(seconds=1)
+                        # A fixed positive epoch works on fresh runners whose uptime is under 650 seconds.
+                        monotonic_end = 1_000_000_000_000
+                        projection = validator.queue_clock_projection(
+                            claim_started_at=started_text, claim_deadline=deadline_text,
+                            job_started_at=job_started.isoformat().replace("+00:00", "Z"),
+                            server_date=now.isoformat().replace("+00:00", "Z"),
+                            round_trip_ns=1_000_000_000,
+                            response_received_monotonic_ns=monotonic_end,
+                            local_request_started_at=local_request.isoformat().replace("+00:00", "Z"),
+                            local_response_at=now.isoformat().replace("+00:00", "Z"))
+                        receipt = {"schema": validator.QUEUE_RECEIPT_SCHEMA,
+                            "clock_profile": validator.QUEUE_PROFILE, "claim_sha256": claim_sha,
+                            "claim_nonce": nonce, "repository": "szTheory/genewhip",
+                            "run_id": "12345", "run_attempt": 1, "job_id": 712,
+                            "job_name": "v02-runtime", "job_status_at_observation": "in_progress",
+                            "head_sha": source, "head_branch": branch,
+                            "claim_started_at": started_text, "claim_deadline": deadline_text,
+                            "job_started_at": job_started.isoformat().replace("+00:00", "Z"),
+                            "server_date": now.isoformat().replace("+00:00", "Z"),
+                            "round_trip_ns": 1_000_000_000, "timestamp_precision_seconds": 1,
+                            "local_request_started_at": local_request.isoformat().replace("+00:00", "Z"),
+                            "local_response_at": now.isoformat().replace("+00:00", "Z"),
+                            "request_started_monotonic_ns": monotonic_end - 1_000_000_000,
+                            "response_received_monotonic_ns": monotonic_end, **projection}
+                        receipt_path.write_text(json.dumps(receipt, sort_keys=True))
+                        env.update({"GENEWHIP_NATIVE_DIAGNOSTIC_CLAIM_SHA256": claim_sha,
+                            "GENEWHIP_NATIVE_JOB_CLOCK_RECEIPT": str(receipt_path)})
+                        expected_clock = {"receipt_sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
+                            "collector_deadline_monotonic_ns": projection["collector_deadline_monotonic_ns"]}
+                        if mode == "queue":
+                            # Final report settlement may follow setup cutoff S while still before collector start cutoff L.
+                            finalizer_now = projection["setup_deadline_monotonic_ns"] + 1
+                            self.assertGreater(finalizer_now, projection["setup_deadline_monotonic_ns"])
+                            self.assertLess(finalizer_now,
+                                projection["collector_start_cutoff_monotonic_ns"])
+                            record["clock_completion"] = {"schema": runtime_fixture._NATIVE_PREFIX_CLOCK_COMPLETION_SCHEMA,
+                                **expected_clock, "completion_monotonic_ns":
+                                    projection["collector_deadline_monotonic_ns"] - 1}
+                    else:
+                        env.update({"GENEWHIP_NATIVE_DIAGNOSTIC_CLAIM_SHA256": claim_sha,
+                            "GENEWHIP_NATIVE_JOB_CLOCK_RECEIPT": str(receipt_path)})
+                evidence = root / "build/v02/prefix"
+                evidence.mkdir()
+                for case in runtime_fixture._NATIVE_PREFIX_CASES:
+                    masks = list(runtime_fixture._NATIVE_PREFIX_ROUTE_MASKS[case])
+                    native_name = f"native-{case}.json"
+                    host_name = f"host-{case}.json"
+                    (evidence / native_name).write_text(json.dumps({"status": 0,
+                        "active_ticks": 3600, "fields": 3631, "boundary_calls": 99,
+                        "inputs": [{"port": 0, "desired": mask, "effective": mask}
+                            for mask in masks]}))
+                    (evidence / host_name).write_text(json.dumps({"input_events": [
+                        {"port": 0, "requested_mask": mask, "effective_mask": mask,
+                         "joystick_mask": mask, "handler": "SDL_Gamepad/sample_port"}
+                        for mask in masks]}))
+                for stage_index, stage in enumerate(record["stages"][1:], 1):
+                    for row in stage["cases"]:
+                        facts = row["facts"]
+                        if stage_index == 1:
+                            facts["row"]["native_report"]["path"] = f"build/v02/prefix/native-{row['case']}.json"
+                        else:
+                            facts["row"]["raw_outputs"] = {
+                                "native": {"path": f"build/v02/prefix/native-{row['case']}.json"},
+                                "host": {"path": f"build/v02/prefix/host-{row['case']}.json"}}
+                with mock.patch.object(runtime_fixture, "ROOT", root):
+                    handoff = runtime_fixture.native_prefix_diagnostic_handoff(record)
+                if mode == "malformed-handoff":
+                    handoff_bytes = b"{"
+                else:
+                    handoff_bytes = (json.dumps(handoff, sort_keys=True, separators=(",", ":")) + "\n").encode()
+                out = root / f"build/v02/results/{mode}.json"
+                outer_attempt = {"returncode": 0, "launch_error": None,
+                    "process_group_cleanup": "confirmed", "processes": [{
+                        "status": "completed", "return_code": 0,
+                        "process_group_cleanup": "confirmed", "bound_violation": False}]}
+                def bounded(command, **kwargs):
+                    self.assertEqual(command[command.index("--mode") + 1], "native-prefix-diagnostic")
+                    private_out = Path(command[command.index("--out") + 1])
+                    private_out.write_text(json.dumps(record))
+                    private_out.with_name(private_out.stem + "-handoff.json").write_bytes(handoff_bytes)
+                    return outer_attempt
+                with mock.patch.object(module, "ROOT", root), \
+                     mock.patch.object(module, "time", SimpleNamespace(
+                         monotonic_ns=lambda: finalizer_now)), \
+                     mock.patch.object(module, "_bounded_command", side_effect=bounded), \
+                     mock.patch.object(module, "_identity", return_value=identity), \
+                     mock.patch.dict(os.environ, env, clear=True):
+                    if mode in ("invalid-clock", "malformed-handoff"):
+                        with self.assertRaises(ValueError):
+                            module.run_native_prefix_diagnostic(root / "build", scope, out)
+                        self.assertFalse(out.exists())
+                    else:
+                        result = module.run_native_prefix_diagnostic(root / "build", scope, out)
+                        self.assertEqual(result["status"], "pass")
+                        self.assertIs(result["qualification_accepted"], False)
+                        self.assertEqual(json.loads(out.read_text()), result)
+                        if mode == "queue":
+                            self.assertEqual(result["clock_completion"], record["clock_completion"])
+                            self.assertEqual(result["schema"], "genewhip-phase7-native-prefix-diagnostic-v2")
+                        else:
+                            self.assertNotIn("clock_completion", result)
+                            self.assertEqual(result["schema"], "genewhip-phase7-native-prefix-diagnostic-v1")
+
+    def test_retired_single_native_namespace_cannot_route_new_authority(self):
+        module = load_module(self)
+        self.assertEqual(module.SINGLE_NATIVE_POLICY_ROOT.as_posix(),
+            "build/v02/native-capture-retest-20261102T034752Z-repair")
+        self.assertEqual(module.RETIRED_SINGLE_NATIVE_POLICY_ROOT.as_posix(),
+            "build/v02/native-prefix-one-shot-20261101T112701Z")
+        self.assertEqual(tuple(path.as_posix() for path in module.RETIRED_SINGLE_NATIVE_POLICY_ROOTS), (
+            "build/v02/native-prefix-one-shot-20261101T112701Z",
+            "build/v02/native-media-retest-20261101T143706Z",
+            "build/v02/native-stop-context-20261101T161645Z",
+            "build/v02/native-queue-window-20261101T182756Z",
+            "build/v02/native-setup-retest-20261101T211431Z",
+            "build/v02/native-shared-setup-retest-20261101T224403Z",
+            "build/v02/native-complete-setup-retest-20261102T000552Z",
+            "build/v02/native-report-retest-20261102T020902Z",
+            "build/v02/native-capture-retest-20261102T034752Z"))
+        validator = module._load_single_native_validator()
+        self.assertEqual(validator.CLAIM_REL.as_posix(),
+            "build/v02/native-capture-retest-20261102T034752Z/native-dispatch-claim.json")
+        self.assertEqual(validator.LOCAL_CLAIM_REL.as_posix(),
+            "build/v02/native-capture-retest-20261102T034752Z-repair/native-dispatch-claim.json")
+        for old_root in module.RETIRED_SINGLE_NATIVE_POLICY_ROOTS:
+            with self.subTest(old_root=old_root.as_posix()):
+                retired_route = ROOT / old_root / "attempt-0003/admission.json"
+                with self.assertRaisesRegex(ValueError, "single-native-retired-authority"):
+                    module._reject_legacy_batch_paths(retired_route)
+
+    def test_single_native_direct_entry_rejects_partial_authority_before_external_work(self):
+        from unittest import mock
+        module = load_module(self)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            args = (root / "packet.json", root / "publication", root / "scope.json",
+                    root / "result.json", root / "journal.json")
+            with mock.patch.object(module, "_external", side_effect=AssertionError("external-work")):
+                with self.assertRaisesRegex(ValueError,
+                        "single-native-authority-and-admission-required"):
+                    module.run_native_prefix_diagnostic_hosted(*args,
+                        batch_authorization=None, batch_authorization_sha256=None,
+                        batch_admission=None, batch_admission_sha256=None,
+                        prefix_readiness=root / "readiness.json", prefix_readiness_sha256="a" * 64,
+                        single_native_admission=root / "admission.json")
+
+    def test_iteration_cli_rejects_old_revision_and_enters_real_guard_for_current_source(self):
+        from contextlib import redirect_stderr
+        from io import StringIO
+        from types import SimpleNamespace
+        from unittest import mock
+
+        fixture_spec = importlib.util.spec_from_file_location("gw_q_iteration_cli_fixture",
+            ROOT / "tests/evidence/phase7_single_native_contract.py")
+        fixture_module = importlib.util.module_from_spec(fixture_spec)
+        fixture_spec.loader.exec_module(fixture_module)
+        fixture = fixture_module.SingleNativeAuthorityContract(
+            "test_iteration_source_admission_is_revision_bound_and_failed_preparation_advances_immutably")
+        validator = fixture_module.MOD
+
+        with tempfile.TemporaryDirectory(prefix="q-iteration-cli-guard-") as temporary:
+            root = Path(temporary).resolve()
+            authority = fixture._write_iteration_authority(root)
+            validator.write_iteration_baseline(root)
+            attempt = validator.allocate_attempt(root, reason="Q CLI guard fixture")
+            first = validator.allocate_revision(root, attempt["attempt_root"],
+                reason="first source revision")
+            first_context = validator.iteration_context(root, authority,
+                first["preparation_revision"] / "source-admission.json")
+            first_admission, first_record = fixture._iteration_source_admission_fixture(root, first_context)
+            validator.validate_admission(root, attempt["attempt_root"], first_admission,
+                stage="source-preparation", source_head=first_record["source_head"],
+                source_roster=set(first_record["source_pins"]), authority_path=authority,
+                authority_sha256=validator.ITERATION_AUTH_SHA256,
+                admission_sha256=hashlib.sha256(first_admission.read_bytes()).hexdigest())
+            validator.write_local_preparation_failure(root, attempt["attempt_root"],
+                first["preparation_revision"], source_head=first_record["source_head"],
+                stage="source-preparation", reason="source preparation requires correction")
+
+            source_path = root / next(iter(first_record["source_pins"]))
+            source_path.write_bytes(b"int fixture_source(void) { return 2; }\n")
+            second = validator.allocate_revision(root, attempt["attempt_root"],
+                reason="corrected source at the same working-tree path")
+            second_context = validator.iteration_context(root, authority,
+                second["preparation_revision"] / "source-admission.json")
+            second_admission, second_record = fixture._iteration_source_admission_fixture(root,
+                second_context, source_head="b" * 40,
+                source_bytes=b"int fixture_source(void) { return 2; }\n")
+            self.assertNotEqual(first_record["source_pins"], second_record["source_pins"])
+
+            validator_path = root / "scripts/release/v02_single_native.py"
+            validator_path.parent.mkdir(parents=True, exist_ok=True)
+            validator_path.write_bytes((ROOT / "scripts/release/v02_single_native.py").read_bytes())
+            module = load_module(self)
+            module.ROOT = root
+            real_prepare = module.prepare_public_snapshot
+
+            def prepare_in_fixture(*args, **kwargs):
+                return real_prepare(*args, **kwargs, root=root)
+
+            authorization = root / "build/phase4/delivery-preflight.json"
+            authorization.parent.mkdir(parents=True, exist_ok=True)
+            authorization.write_text(json.dumps({
+                "schema": "genewhip.publication-readiness-packet.v1",
+                "history_disposition": "sanitized-snapshots-preserve-local-history",
+                "repository": "fixture/project",
+                "destination": {"visibility": "public", "owner_repository": "fixture/project"}},
+                sort_keys=True), encoding="utf-8")
+            scope = root / validator.SCOPE_REL
+            publication_copy = second["preparation_revision"] / "cli-publication-copy"
+            output = second["preparation_revision"] / "cli-preparation.json"
+
+            def argv(admission):
+                return ["--mode", "stage-public", "--prepare-only",
+                    "--scope", str(scope), "--publication-copy", str(publication_copy),
+                    "--authorization", str(authorization), "--out", str(output),
+                    "--single-native-authority", str(authority),
+                    "--single-native-authority-sha256", validator.ITERATION_AUTH_SHA256,
+                    "--single-native-admission", str(admission),
+                    "--single-native-admission-sha256", hashlib.sha256(admission.read_bytes()).hexdigest()]
+
+            external_calls = []
+
+            def denied_external(command, **kwargs):
+                external_calls.append(tuple(command))
+                if command[:3] == ["git", "ls-files", "-z"]:
+                    source_name = next(iter(second_record["source_pins"]))
+                    return SimpleNamespace(returncode=0, stdout=source_name + "\0")
+                if command[:3] == ["git", "merge-base", "--is-ancestor"]:
+                    return SimpleNamespace(returncode=0, stdout="")
+                raise AssertionError("unexpected external process boundary")
+
+            # The real CLI must reject a superseded preparation revision before
+            # it enters either Git/process boundary.
+            with mock.patch.object(module, "_external", side_effect=denied_external), \
+                 mock.patch.object(module, "_git", side_effect=AssertionError("stale revision reached Git")), \
+                 mock.patch.dict(os.environ, {}, clear=True), redirect_stderr(StringIO()) as stderr:
+                rejected = module.main(argv(first_admission))
+            self.assertEqual(rejected, 1)
+            self.assertIn("single-native-iteration-revision-not-current", stderr.getvalue())
+            self.assertEqual(external_calls, [])
+
+            class ReachedGitBoundary(AssertionError):
+                pass
+
+            git_calls = []
+
+            def current_git_boundary(path, *arguments, **kwargs):
+                git_calls.append(arguments)
+                if len(git_calls) <= 2 and arguments == ("rev-parse", "HEAD"):
+                    return second_record["source_head"]
+                if len(git_calls) == 3 and arguments == ("rev-parse", "HEAD"):
+                    raise ReachedGitBoundary("reached first post-guard source Git read")
+                raise AssertionError("unexpected Git boundary")
+
+            external_calls.clear()
+            with mock.patch.object(module, "_external", side_effect=denied_external), \
+                 mock.patch.object(module, "_git", side_effect=current_git_boundary), \
+                 mock.patch.object(module, "prepare_public_snapshot", side_effect=prepare_in_fixture), \
+                 mock.patch.dict(os.environ, {}, clear=True):
+                with self.assertRaises(ReachedGitBoundary):
+                    module.main(argv(second_admission))
+                self.assertEqual(len(external_calls), 4)
+                self.assertEqual(len(git_calls), 3)
+                self.assertEqual(os.environ["GENEWHIP_SINGLE_NATIVE_ROOT"], str(attempt["attempt_root"]))
+                self.assertEqual(os.environ["GENEWHIP_SINGLE_NATIVE_PREPARATION_ROOT"],
+                    str(second["preparation_revision"]))
+                self.assertEqual(os.environ["GENEWHIP_SINGLE_NATIVE_PREPARATION_REVISION"],
+                    second["preparation_revision_rel"])
+
+    def test_iteration_native_prefix_route_reopens_real_claim_result_and_terminal(self):
+        from io import StringIO
+        from types import SimpleNamespace
+        from unittest import mock
+
+        require_process_context()
+
+        fixture_spec = importlib.util.spec_from_file_location("gw_q_iteration_dispatch_fixture",
+            ROOT / "tests/evidence/phase7_single_native_contract.py")
+        fixture_module = importlib.util.module_from_spec(fixture_spec)
+        fixture_spec.loader.exec_module(fixture_module)
+        fixture = fixture_module.SingleNativeAuthorityContract(
+            "test_iteration_terminal_reader_preserves_attempt1_and_allows_distinct_same_source_attempt2_claim")
+        validator = fixture_module.MOD
+
+        with tempfile.TemporaryDirectory(prefix="q-iteration-native-prefix-") as temporary:
+            root = Path(temporary).resolve()
+            process_env = {"PATH": os.environ.get("PATH", os.defpath),
+                "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
+                "GIT_TERMINAL_PROMPT": "0", "GIT_AUTHOR_NAME": "Genewhip Test Fixture",
+                "GIT_AUTHOR_EMAIL": "fixture@invalid.example",
+                "GIT_COMMITTER_NAME": "Genewhip Test Fixture",
+                "GIT_COMMITTER_EMAIL": "fixture@invalid.example",
+                "GIT_AUTHOR_DATE": "2026-11-02T00:00:00+00:00",
+                "GIT_COMMITTER_DATE": "2026-11-02T00:00:00+00:00"}
+            subprocess.run(["git", "init", "--quiet", str(root)], check=True,
+                capture_output=True, text=True, timeout=10, env=process_env)
+
+            def git_fixture(*arguments):
+                subprocess.run(["git", *arguments], cwd=root, check=True,
+                    capture_output=True, text=True, timeout=10, env=process_env)
+
+            initial_source = root / "src/iteration-fixture.c"
+            initial_source.parent.mkdir(parents=True)
+            initial_source.write_bytes(b"int fixture_source(void) { return 0; }\n")
+            git_fixture("add", "--", "src/iteration-fixture.c")
+            git_fixture("commit", "--quiet", "-m", "synthetic guard fixture baseline")
+            source_head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root,
+                check=True, capture_output=True, text=True, timeout=10,
+                env=process_env).stdout.strip()
+            source_ancestor = fixture_module.MOD.ITERATION_AUTHORITY_CONTRACT["source_ancestor"]
+
+            authority = fixture._write_iteration_authority(root)
+            validator.write_iteration_baseline(root)
+            runtime_module = root / "scripts/evidence/v02_run.py"
+            runtime_module.parent.mkdir(parents=True, exist_ok=True)
+            runtime_module.write_bytes((ROOT / "scripts/evidence/v02_run.py").read_bytes())
+            validator_copy = root / "scripts/release/v02_single_native.py"
+            validator_copy.parent.mkdir(parents=True, exist_ok=True)
+            validator_copy.write_bytes((ROOT / "scripts/release/v02_single_native.py").read_bytes())
+            attempt = validator.allocate_attempt(root, reason="Q native-prefix route contract")
+            closed_revision = validator.allocate_revision(root, attempt["attempt_root"],
+                reason="closed preparation retained before current candidate")
+            closed_ref = validator.write_local_preparation_failure(root, attempt["attempt_root"],
+                closed_revision["preparation_revision"], source_head=source_head,
+                stage="source-preparation", reason="prior revision settled before current candidate")
+            self.assertEqual(json.loads((root / closed_ref["path"]).read_text(encoding="utf-8"))["status"],
+                "pre-publication-failed")
+            revision = validator.allocate_revision(root, attempt["attempt_root"],
+                reason="current candidate after retained closed preparation")
+            context = validator.iteration_context(root, authority,
+                revision["preparation_revision"] / "public-admission.json")
+            started_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            admission, admission_record = fixture._iteration_public_admission_fixture(root, context,
+                source_head=source_head, source_bytes=b"int fixture_source(void) { return 1; }\n",
+                started_at=started_at)
+            git_fixture("add", "--", "src/iteration-fixture.c")
+            readiness_path, readiness_sha, candidate = fixture._readiness_fixture(root,
+                revision["preparation_revision"], admission, admission_record,
+                iteration_context=context)
+            self.assertNotEqual(admission_record["source_head"], candidate["public_head"])
+
+            scope = root / validator.SCOPE_REL
+            packet = root / json.loads(readiness_path.read_text(encoding="utf-8"))["diagnostic_assessment"]["path"]
+            publication = root / candidate["publication_path"]
+            journal = revision["preparation_revision"] / "hosted-delivery-journal.json"
+            output = attempt["attempt_root"] / "native-prefix-diagnostic/result.json"
+            preview_packet = json.loads(packet.read_text(encoding="utf-8"))
+            preview = preview_packet["github"]["workflow_run"]
+            pr_number = int(json.loads(journal.read_text(encoding="utf-8"))["pull_request"])
+            source, base = candidate["public_head"], candidate["public_base"]
+            branch = "v0.2-source-" + source[:12]
+            run_id = 98765432
+            nonce = "d" * 32
+            expected_success = {"safety", "gameplay", "desktop", "package", "performance",
+                "product-smoke", "phase7-fast", "required-ci"}
+            expected_skip = {"v02-runtime", "extended", "attestation", "v02-benchmark-control",
+                "v02-benchmark-recursion94", "v02-benchmark-tank-battle", "v02-package",
+                "v02-release-qualification"}
+            preview_jobs = {"total_count": 16, "jobs": [{"name": name, "status": "completed",
+                "conclusion": "success" if name in expected_success else "skipped"}
+                for name in sorted(expected_success | expected_skip)]}
+            boundary_commands = []
+            workflow_calls = []
+            provider_observation = {}
+            held_claim_revision_results = []
+            report_case = fixture_module.SingleNativeAuthorityContract(
+                "test_iteration_terminal_reader_preserves_attempt1_and_allows_distinct_same_source_attempt2_claim")
+            git_reads = []
+            git_heads = []
+
+            def github(_repository, endpoint, **_kwargs):
+                if endpoint == f"pulls/{pr_number}":
+                    return {"state": "open", "merged": False,
+                        "head": {"sha": source, "ref": branch,
+                            "repo": {"full_name": "szTheory/genewhip"}},
+                        "base": {"sha": base, "ref": "main"}}
+                if endpoint == "git/ref/heads/" + branch:
+                    return {"object": {"sha": source}}
+                if endpoint == "actions/runs/" + str(preview["id"]):
+                    return {"event": "pull_request", "head_sha": source, "head_branch": branch,
+                        "path": ".github/workflows/ci.yml", "status": "completed",
+                        "conclusion": "success", "run_attempt": preview["run_attempt"]}
+                if endpoint == f"actions/runs/{run_id}/jobs?filter=latest&per_page=100":
+                    return {"total_count": 16, "jobs": [{"name": name, "status": "completed",
+                        "conclusion": "success" if name == "v02-runtime" else "skipped",
+                        **({"id": run_id + 1, "run_id": run_id, "run_attempt": 1,
+                            "head_sha": source, "head_branch": branch,
+                            "started_at": provider_observation["job_started_at"]}
+                            if name == "v02-runtime" else {})}
+                        for name in sorted(expected_success | expected_skip)]}
+                if endpoint == f"actions/runs/{preview['id']}/jobs?filter=latest&per_page=100":
+                    return preview_jobs
+                raise AssertionError("unexpected mocked GitHub endpoint: " + endpoint)
+
+            def workflow_runs(*_args, **_kwargs):
+                workflow_calls.append(True)
+                if len(workflow_calls) == 1:
+                    return []
+                dispatch = json.loads((attempt["attempt_root"]
+                    / "native-prefix-diagnostic/dispatch.json").read_text(encoding="utf-8"))
+                run = {"id": run_id, "run_attempt": 1, "event": "workflow_dispatch",
+                    "head_sha": source, "head_branch": branch,
+                    "path": ".github/workflows/ci.yml@refs/heads/" + branch,
+                    "display_title": "Plan10 native prefix diagnostic " + nonce,
+                    "repository": {"full_name": "szTheory/genewhip"},
+                    "status": "in_progress", "conclusion": None,
+                    "created_at": dispatch["requested_at"]}
+                if len(workflow_calls) >= 3:
+                    run["status"] = "completed"
+                    run["conclusion"] = "success"
+                return [run]
+
+            def observe_job(**kwargs):
+                self.assertEqual((kwargs["repository"], kwargs["run_id"], kwargs["run_attempt"],
+                    kwargs["source_sha"], kwargs["branch"], kwargs["allow_unstarted"]),
+                    ("szTheory/genewhip", str(run_id), 1, source, branch, True))
+                claim = json.loads(context["claim_path"].read_text(encoding="utf-8"))
+                claim_start = datetime.datetime.fromisoformat(claim["started_at"])
+                local_request = claim_start + datetime.timedelta(seconds=5)
+                local_response = claim_start + datetime.timedelta(seconds=6)
+                job_started = claim_start + datetime.timedelta(seconds=1)
+                server_date = local_response.replace(microsecond=0)
+                request_ns = time.monotonic_ns()
+                response_ns = request_ns + 1_000_000_000
+                provider_observation.update({"job_started_at": job_started.isoformat(),
+                    "server_date": server_date.isoformat(), "request_ns": request_ns,
+                    "response_ns": response_ns, "rtt_ns": 1_000_000_000,
+                    "local_request": local_request.isoformat(),
+                    "local_response": local_response.isoformat()})
+                job = {"id": run_id + 1, "run_id": run_id, "run_attempt": 1,
+                    "name": "v02-runtime", "status": "in_progress", "head_sha": source,
+                    "head_branch": branch, "started_at": job_started.isoformat()}
+                return (job, server_date.isoformat(), request_ns, response_ns,
+                    1_000_000_000, local_request.isoformat(), local_response.isoformat())
+
+            def download(_repository, selected, run_attempt, artifact, destination, **_kwargs):
+                self.assertEqual((selected, run_attempt, artifact),
+                    (str(run_id), "1", "native-prefix-diagnostic"))
+                claim_raw = context["claim_path"].read_bytes()
+                claim = json.loads(claim_raw)
+                observation = provider_observation
+                projection = validator.queue_clock_projection(
+                    claim_started_at=claim["started_at"], claim_deadline=claim["deadline"],
+                    job_started_at=observation["job_started_at"], server_date=observation["server_date"],
+                    round_trip_ns=observation["rtt_ns"],
+                    response_received_monotonic_ns=observation["response_ns"],
+                    local_request_started_at=observation["local_request"],
+                    local_response_at=observation["local_response"])
+                clock = {"schema": validator.QUEUE_RECEIPT_SCHEMA,
+                    "clock_profile": validator.QUEUE_PROFILE,
+                    "claim_sha256": hashlib.sha256(claim_raw).hexdigest(),
+                    "claim_nonce": claim["nonce"], "claim_started_at": claim["started_at"],
+                    "claim_deadline": claim["deadline"], "repository": "szTheory/genewhip",
+                    "run_id": str(run_id), "run_attempt": 1, "job_id": run_id + 1,
+                    "job_name": "v02-runtime", "job_status_at_observation": "in_progress",
+                    "head_sha": source, "head_branch": branch,
+                    "job_started_at": observation["job_started_at"],
+                    "server_date": observation["server_date"],
+                    "round_trip_ns": observation["rtt_ns"], "timestamp_precision_seconds": 1,
+                    "local_request_started_at": observation["local_request"],
+                    "local_response_at": observation["local_response"],
+                    "request_started_monotonic_ns": observation["request_ns"],
+                    "response_received_monotonic_ns": observation["response_ns"], **projection}
+                clock_raw = (json.dumps(clock, sort_keys=True) + "\n").encode()
+                identity = {"source_sha": source, "head_sha": source, "base_sha": base,
+                    "run_id": str(run_id), "run_attempt": "1"}
+                report = report_case._strict_report(root, identity)
+                report["schema"] = "genewhip-phase7-native-prefix-diagnostic-v2"
+                report["clock_completion"] = {"schema": "genewhip.phase7-native-prefix-clock-completion.v1",
+                    "receipt_sha256": hashlib.sha256(clock_raw).hexdigest(),
+                    "collector_deadline_monotonic_ns": projection["collector_deadline_monotonic_ns"],
+                    "completion_monotonic_ns": projection["collector_deadline_monotonic_ns"] - 1}
+                destination.mkdir(parents=True)
+                (destination / "native-prefix-diagnostic.json").write_text(
+                    json.dumps(report, sort_keys=True), encoding="utf-8")
+                (destination / "native-prefix-job-clock.json").write_bytes(clock_raw)
+
+            module = load_module(self)
+            module.ROOT = root
+            real_single_native_guard = module._single_native_guard
+            guard_observations = []
+
+            def external_boundary(command, **kwargs):
+                if command[:3] == ["git", "ls-files", "-z"]:
+                    self.assertEqual(command, ["git", "ls-files", "-z"])
+                    git_reads.append(tuple(command))
+                    # This route regression needs real Git roster/HEAD reads,
+                    # but not the full hosted-delivery launcher fixture. Keep
+                    # the child boundary limited to this exact local query in
+                    # the synthetic repo, with a short timeout and controlled
+                    # environment. Separate contracts exercise the launcher.
+                    result = subprocess.run(command, cwd=root, capture_output=True,
+                        text=True, timeout=5, env=process_env, check=False)
+                    return SimpleNamespace(returncode=result.returncode,
+                        stdout=result.stdout, stderr=result.stderr)
+                if command[:3] == ["git", "merge-base", "--is-ancestor"]:
+                    git_reads.append(tuple(command))
+                    # The public policy's fixed source ancestor is intentionally
+                    # absent from this synthetic, self-contained repository.
+                    # Stub only that ancestry relation; roster and HEAD reads
+                    # still execute bounded Git commands in the fixture repo.
+                    self.assertEqual(command[3:], [source_ancestor, source_head])
+                    return SimpleNamespace(returncode=0, stdout="", stderr="")
+                if command[:3] == ["gh", "workflow", "run"]:
+                    boundary_commands.append(list(command))
+                    return SimpleNamespace(returncode=0, stdout="", stderr="")
+                raise AssertionError("unexpected external command: " + " ".join(command))
+
+            def current_head(repo, *arguments, **kwargs):
+                self.assertEqual(arguments, ("rev-parse", "HEAD"))
+                git_heads.append(arguments)
+                result = subprocess.run(["git", *arguments], cwd=repo,
+                    capture_output=True, text=True, timeout=5, env=process_env, check=False)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                return result.stdout.strip()
+
+            def observed_real_guard(**kwargs):
+                try:
+                    result = real_single_native_guard(**kwargs)
+                except Exception as exc:
+                    guard_observations.append({"allow_claim": kwargs.get("allow_claim", False),
+                        "success": False, "error": str(exc)})
+                    raise
+                context_value = result.get("iteration_context")
+                guard_observations.append({"allow_claim": kwargs.get("allow_claim", False),
+                    "success": True, "revision_index": context_value.get("revision_index")
+                        if isinstance(context_value, dict) else None})
+                return result
+
+            load_validator = module._load_single_native_validator
+
+            def load_validator_with_held_claim_race():
+                loaded = load_validator()
+                create_claim = loaded._create_claim_at_anchor
+
+                def create_then_attempt_successor(*arguments, **keywords):
+                    result = create_claim(*arguments, **keywords)
+                    try:
+                        loaded.allocate_revision(root, attempt["attempt_root"],
+                            reason="concurrent successor blocked by held native claim")
+                    except ValueError as exc:
+                        held_claim_revision_results.append(str(exc))
+                    else:
+                        raise AssertionError("held native claim allowed a successor revision")
+                    return result
+
+                loaded._create_claim_at_anchor = create_then_attempt_successor
+                return loaded
+
+            route_stdout = StringIO()
+            route_stderr = StringIO()
+            argv = ["--mode", "native-prefix-diagnostic-hosted", "--preflight", str(packet),
+                "--publication-copy", str(publication), "--scope", str(scope), "--out", str(output),
+                "--journal", str(journal), "--single-native-authority", str(authority),
+                "--single-native-authority-sha256", validator.ITERATION_AUTH_SHA256,
+                "--single-native-admission", str(admission), "--single-native-admission-sha256",
+                hashlib.sha256(admission.read_bytes()).hexdigest(), "--diagnostic-readiness",
+                str(readiness_path), "--diagnostic-readiness-sha256", readiness_sha]
+            with mock.patch.object(module, "_external", side_effect=external_boundary), \
+                 mock.patch.object(module, "_git", side_effect=current_head), \
+                 mock.patch.object(module, "_single_native_guard", side_effect=observed_real_guard), \
+                 mock.patch.object(module, "_gh_json", side_effect=github), \
+                 mock.patch.object(module, "_workflow_runs", side_effect=workflow_runs), \
+                 mock.patch.object(module, "_native_prefix_queue_provider_observation",
+                    side_effect=observe_job), \
+                 mock.patch.object(module, "_download_run_artifact", side_effect=download), \
+                 mock.patch.object(module, "_load_single_native_validator",
+                    side_effect=load_validator_with_held_claim_race), \
+                 mock.patch.object(module.time, "sleep", side_effect=lambda _seconds: None), \
+                 mock.patch.object(module.uuid, "uuid4", return_value=SimpleNamespace(hex=nonce)), \
+                 mock.patch.dict(os.environ, {**process_env,
+                    "GENEWHIP_PROCESS_CONTEXT": "host-cleanup-v1"}, clear=True), \
+                 mock.patch.object(module.sys, "stdout", route_stdout), \
+                 mock.patch.object(module.sys, "stderr", route_stderr):
+                route_status = module.main(argv)
+                self.assertEqual(route_status, 0,
+                    f"{route_stderr.getvalue()} guard_observations={guard_observations!r} "
+                    f"git_reads={git_reads!r} git_heads={git_heads!r}")
+                self.assertEqual(sum(command[:3] == ("git", "ls-files", "-z")
+                    for command in git_reads), 4)
+                self.assertEqual(sum(command[:3] == ("git", "merge-base", "--is-ancestor")
+                    for command in git_reads), 4)
+                self.assertEqual(len(git_heads), 4)
+                self.assertEqual(guard_observations, [
+                    {"allow_claim": False, "success": True, "revision_index": 2},
+                    {"allow_claim": False, "success": True, "revision_index": 2},
+                    {"allow_claim": False, "success": True, "revision_index": 2},
+                    {"allow_claim": True, "success": True, "revision_index": 2}])
+                self.assertEqual(context["preparation_revision_rel"],
+                    "build/v02/phase7-iterations/attempt-0001/preparations/revision-0002")
+                claim_raw = context["claim_path"].read_bytes()
+                claim = json.loads(claim_raw)
+                self.assertEqual(context["claim_path"].stat().st_nlink, 1)
+                terminal_path = attempt["attempt_root"] / "terminal-assessment.json"
+                terminal_raw = terminal_path.read_bytes()
+                delivered = json.loads(output.read_text(encoding="utf-8"))
+                self.assertEqual((delivered["status"], delivered["qualification_accepted"],
+                    delivered["assessment_required"]), ("pass", False, True))
+                self.assertEqual(output.relative_to(root).as_posix(),
+                    (Path(attempt["attempt_root_rel"])
+                        / "native-prefix-diagnostic/result.json").as_posix())
+                assessment = validator.validate_result(root, attempt_root=attempt["attempt_root"],
+                    authority_path=authority)
+                self.assertEqual((assessment["status"], assessment["remote_cleanup_status"]),
+                    ("pass", "confirmed"))
+                self.assertFalse(assessment["qualification_accepted"])
+                self.assertEqual(claim["authority_sha256"], validator.ITERATION_AUTH_SHA256)
+                self.assertEqual(claim["preparation_revision"], context["preparation_revision_rel"])
+                self.assertEqual(claim["source_sha"], source)
+                self.assertEqual(claim["base_sha"], base)
+                self.assertEqual(datetime.datetime.fromisoformat(claim["deadline"])
+                    - datetime.datetime.fromisoformat(claim["started_at"]),
+                    datetime.timedelta(seconds=5400))
+                terminal = json.loads(terminal_raw)
+                dispatch = json.loads((attempt["attempt_root"]
+                    / "native-prefix-diagnostic/dispatch.json").read_text(encoding="utf-8"))
+                self.assertEqual(dispatch.get("dispatch_boundary"), "entered")
+                self.assertEqual(dispatch["remote_cleanup_status"], "confirmed")
+                self.assertEqual(terminal["result_sha256"], hashlib.sha256(output.read_bytes()).hexdigest())
+                clock_ref = terminal["job_clock_receipt"]
+                clock_raw = (root / clock_ref["path"]).read_bytes()
+                clock = json.loads(clock_raw)
+                projection = validator.validate_job_clock_receipt(clock,
+                    claim_sha256=hashlib.sha256(claim_raw).hexdigest(),
+                    claim_nonce=claim["nonce"], source_sha=source, run_id=str(run_id),
+                    run_attempt=1, repository="szTheory/genewhip", branch=branch)
+                self.assertEqual(projection["job_deadline_monotonic_ns"]
+                    - projection["job_started_monotonic_ns"], 2700 * 1_000_000_000)
+                self.assertLessEqual(projection["setup_deadline_monotonic_ns"]
+                    - projection["job_started_monotonic_ns"], 600 * 1_000_000_000)
+                self.assertEqual(len([command for command in boundary_commands
+                    if command[:3] == ["gh", "workflow", "run"]]), 1)
+                self.assertTrue(held_claim_revision_results)
+                self.assertEqual(set(held_claim_revision_results),
+                    {"single-native-iteration-claim-already-created"})
+                self.assertTrue((attempt["attempt_root"] / "preparations/revision-0002").is_dir())
+                self.assertFalse((attempt["attempt_root"] / "preparations/revision-0003").exists())
+                self.assertIn("native_diagnostic_claim_sha256=" + hashlib.sha256(claim_raw).hexdigest(),
+                    boundary_commands[-1])
+                self.assertEqual(len(workflow_calls), 3)
+                self.assertEqual((root / "build/v02/phase7-iterations/attempt-0001/native-prefix-diagnostic"
+                    / "dispatch.json").is_file(), True)
+
+                before_replay = (claim_raw, output.read_bytes(), terminal_raw)
+                self.assertEqual(module.main(argv), 1)
+                self.assertIn("single-native-iteration-claim-already-created", route_stderr.getvalue())
+                self.assertEqual((context["claim_path"].read_bytes(), output.read_bytes(),
+                    terminal_path.read_bytes()), before_replay)
+                self.assertEqual(len([command for command in boundary_commands
+                    if command[:3] == ["gh", "workflow", "run"]]), 1)
+
+    def test_iteration_preclaim_refresh_rejects_successor_revision_created_during_github_preflight(self):
+        from io import StringIO
+        from types import SimpleNamespace
+        from unittest import mock
+
+        fixture_spec = importlib.util.spec_from_file_location("gw_q_iteration_race_fixture",
+            ROOT / "tests/evidence/phase7_single_native_contract.py")
+        fixture_module = importlib.util.module_from_spec(fixture_spec)
+        fixture_spec.loader.exec_module(fixture_module)
+        fixture = fixture_module.SingleNativeAuthorityContract(
+            "test_iteration_source_ci_failure_terminal_requires_complete_exact_provider_records")
+        validator = fixture_module.MOD
+
+        with tempfile.TemporaryDirectory(prefix="q-iteration-preclaim-race-") as temporary:
+            root = Path(temporary).resolve()
+            authority = fixture._write_iteration_authority(root)
+            validator.write_iteration_baseline(root)
+            runtime_module = root / "scripts/evidence/v02_run.py"
+            runtime_module.parent.mkdir(parents=True, exist_ok=True)
+            runtime_module.write_bytes((ROOT / "scripts/evidence/v02_run.py").read_bytes())
+            validator_copy = root / "scripts/release/v02_single_native.py"
+            validator_copy.parent.mkdir(parents=True, exist_ok=True)
+            validator_copy.write_bytes((ROOT / "scripts/release/v02_single_native.py").read_bytes())
+            attempt = validator.allocate_attempt(root, reason="preclaim race candidate")
+            revision = validator.allocate_revision(root, attempt["attempt_root"],
+                reason="first reviewed source candidate")
+            context = validator.iteration_context(root, authority,
+                revision["preparation_revision"] / "public-admission.json")
+            started_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            admission, admission_record = fixture._iteration_public_admission_fixture(root, context,
+                source_head="a" * 40, source_bytes=b"int fixture_source(void) { return 1; }\n",
+                started_at=started_at)
+            readiness_path, readiness_sha, candidate = fixture._readiness_fixture(root,
+                revision["preparation_revision"], admission, admission_record,
+                iteration_context=context)
+            scope = root / validator.SCOPE_REL
+            packet = root / json.loads(readiness_path.read_text(encoding="utf-8"))["diagnostic_assessment"]["path"]
+            publication = root / candidate["publication_path"]
+            journal = revision["preparation_revision"] / "hosted-delivery-journal.json"
+            output = attempt["attempt_root"] / "native-prefix-diagnostic/result.json"
+            preview_packet = json.loads(packet.read_text(encoding="utf-8"))
+            preview = preview_packet["github"]["workflow_run"]
+            preview_jobs = {"total_count": len(preview_packet["github"]["jobs"]),
+                "jobs": preview_packet["github"]["jobs"]}
+            pr_number = int(json.loads(journal.read_text(encoding="utf-8"))["pull_request"])
+            source, base = candidate["public_head"], candidate["public_base"]
+            branch = "v0.2-source-" + source[:12]
+            dispatch_calls = []
+            workflow_queries = []
+            successor = {}
+
+            def external(command, **_kwargs):
+                if command[:3] == ["git", "ls-files", "-z"]:
+                    source_name = next(iter(admission_record["source_pins"]))
+                    return SimpleNamespace(returncode=0, stdout=source_name + "\0", stderr="")
+                if command[:3] == ["git", "merge-base", "--is-ancestor"]:
+                    return SimpleNamespace(returncode=0, stdout="", stderr="")
+                if command[:3] == ["gh", "workflow", "run"]:
+                    dispatch_calls.append(list(command))
+                    raise AssertionError("stale preparation reached hosted dispatch")
+                raise AssertionError("unexpected real external command: " + " ".join(command))
+
+            def current_head(_root, *arguments, **_kwargs):
+                self.assertEqual(arguments, ("rev-parse", "HEAD"))
+                return admission_record["source_head"]
+
+            def github(_repository, endpoint, **_kwargs):
+                if endpoint == f"pulls/{pr_number}":
+                    return {"state": "open", "merged": False,
+                        "head": {"sha": source, "ref": branch,
+                            "repo": {"full_name": "szTheory/genewhip"}},
+                        "base": {"sha": base, "ref": "main"}}
+                if endpoint == "git/ref/heads/" + branch:
+                    return {"object": {"sha": source}}
+                if endpoint == "actions/runs/" + str(preview["id"]):
+                    return {"event": "pull_request", "head_sha": source, "head_branch": branch,
+                        "path": ".github/workflows/ci.yml", "status": "completed",
+                        "conclusion": "success", "run_attempt": preview["run_attempt"]}
+                if endpoint == f"actions/runs/{preview['id']}/jobs?filter=latest&per_page=100":
+                    return preview_jobs
+                raise AssertionError("unexpected mocked GitHub endpoint: " + endpoint)
+
+            def inject_successor_during_github_query(*_args, **_kwargs):
+                workflow_queries.append(True)
+                ci = fixture._source_ci_failure_fixture(root, authority=authority,
+                    attempt=attempt, revision=revision, public_record=admission_record)
+                terminal_ref = validator.write_preparation_terminal(root, attempt["attempt_root"],
+                    revision["preparation_revision"], status="source-ci-failed",
+                    reason="settled source CI failure during remote preflight",
+                    source_head=admission_record["source_head"], candidate_head=source,
+                    pull_request=str(pr_number), evidence_path=ci["evidence_path"],
+                    source_ci_workflow=ci["refs"]["source_ci_workflow"],
+                    source_ci_jobs=ci["refs"]["source_ci_jobs"],
+                    source_ci_pull_request=ci["refs"]["source_ci_pull_request"])
+                self.assertEqual((root / terminal_ref["path"]).is_file(), True)
+                next_revision = validator.allocate_revision(root, attempt["attempt_root"],
+                    reason="successor allocated while coordinator is querying provider")
+                next_context = validator.iteration_context(root, authority,
+                    next_revision["preparation_revision"] / "source-admission.json")
+                next_admission, next_record = fixture._iteration_public_admission_fixture(root,
+                    next_context, source_head="e" * 40,
+                    source_bytes=b"int fixture_source(void) { return 2; }\n",
+                    started_at=(datetime.datetime.now(datetime.timezone.utc)
+                        + datetime.timedelta(seconds=1)).isoformat())
+                for stage, candidate_admission in (("source-preparation",
+                        next_revision["preparation_revision"] / "source-admission.json"),
+                        ("public-effects", next_admission)):
+                    raw = candidate_admission.read_bytes()
+                    validator.validate_admission(root, attempt["attempt_root"], candidate_admission,
+                        stage=stage, source_head=next_record["source_head"],
+                        source_roster=set(next_record["source_pins"]), authority_path=authority,
+                        authority_sha256=validator.ITERATION_AUTH_SHA256,
+                        admission_sha256=hashlib.sha256(raw).hexdigest())
+                successor.update({"revision": next_revision, "record": next_record,
+                    "admission": next_admission, "terminal": terminal_ref})
+                return []
+
+            module = load_module(self)
+            module.ROOT = root
+            route_stdout, route_stderr = StringIO(), StringIO()
+            argv = ["--mode", "native-prefix-diagnostic-hosted", "--preflight", str(packet),
+                "--publication-copy", str(publication), "--scope", str(scope), "--out", str(output),
+                "--journal", str(journal), "--single-native-authority", str(authority),
+                "--single-native-authority-sha256", validator.ITERATION_AUTH_SHA256,
+                "--single-native-admission", str(admission), "--single-native-admission-sha256",
+                hashlib.sha256(admission.read_bytes()).hexdigest(), "--diagnostic-readiness",
+                str(readiness_path), "--diagnostic-readiness-sha256", readiness_sha]
+            with mock.patch.object(module, "_external", side_effect=external), \
+                 mock.patch.object(module, "_git", side_effect=current_head), \
+                 mock.patch.object(module, "_gh_json", side_effect=github), \
+                 mock.patch.object(module, "_workflow_runs",
+                    side_effect=inject_successor_during_github_query), \
+                 mock.patch.object(module.time, "sleep", side_effect=lambda _seconds: None), \
+                 mock.patch.dict(os.environ, {}, clear=True), \
+                 mock.patch.object(module.sys, "stdout", route_stdout), \
+                 mock.patch.object(module.sys, "stderr", route_stderr):
+                status = module.main(argv)
+            self.assertNotEqual(status, 0)
+            self.assertEqual(len(workflow_queries), 1)
+            self.assertEqual(successor["revision"]["revision_index"], 2)
+            self.assertEqual(successor["record"]["source_head"], "e" * 40)
+            self.assertNotEqual(successor["record"]["source_head"], admission_record["source_head"])
+            self.assertIn("single-native-iteration-revision-not-current", route_stderr.getvalue())
+            self.assertFalse((attempt["attempt_root"] / validator.ITERATION_CLAIM_LEAF).exists())
+            self.assertFalse((attempt["attempt_root"] / "native-prefix-diagnostic").exists())
+            self.assertFalse(output.exists())
+            self.assertEqual(dispatch_calls, [])
+
+    def test_single_native_claim_pair_is_optional_only_as_a_complete_legacy_absence(self):
+        from unittest import mock
+        module = load_module(self)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(module._native_prefix_claim_bounds())
+        with mock.patch.dict(os.environ, {"GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT": "",
+                "GENEWHIP_NATIVE_DIAGNOSTIC_DEADLINE": "",
+                "GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE": "",
+                "GENEWHIP_NATIVE_DIAGNOSTIC_CLAIM_SHA256": ""}, clear=True):
+            self.assertIsNone(module._native_prefix_claim_bounds())
+        with mock.patch.dict(os.environ, {"GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT":
+                "2026-11-01T11:27:01Z"}, clear=True):
+            with self.assertRaisesRegex(ValueError, "claim-clock-invalid"):
+                module._native_prefix_claim_bounds()
+        start = "2026-11-01T11:27:01Z"
+        deadline = "2026-11-01T12:12:01Z"
+        now_type = datetime.datetime
+        class FixedClock(now_type):
+            @classmethod
+            def now(cls, tz=None):
+                return now_type(2026, 11, 1, 11, 27, 2, tzinfo=datetime.timezone.utc)
+        with mock.patch.object(module, "datetime", mock.Mock(datetime=FixedClock,
+                timedelta=datetime.timedelta, timezone=datetime.timezone)), mock.patch.dict(os.environ, {
+                    "GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT": start,
+                    "GENEWHIP_NATIVE_DIAGNOSTIC_DEADLINE": deadline,
+                    "GENEWHIP_QUALIFICATION_STARTED_AT": start}, clear=True):
+            self.assertEqual(module._native_prefix_claim_bounds(required_reserve=1830)[2], 2699)
+
+    def test_queue_profile_uses_ninety_minute_claim_without_changing_legacy_clock(self):
+        from unittest import mock
+        module = load_module(self)
+        start = "2026-11-01T18:00:00Z"
+        now_type = datetime.datetime
+        class FixedClock(now_type):
+            @classmethod
+            def now(cls, tz=None):
+                value = now_type(2026, 11, 1, 18, 1, tzinfo=datetime.timezone.utc)
+                return value if tz is not None else value.replace(tzinfo=None)
+        with mock.patch.object(module, "datetime", mock.Mock(datetime=FixedClock,
+                timedelta=datetime.timedelta, timezone=datetime.timezone)), mock.patch.dict(os.environ, {
+                    "GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT": start,
+                    "GENEWHIP_NATIVE_DIAGNOSTIC_DEADLINE": "2026-11-01T19:30:00Z",
+                    "GENEWHIP_QUALIFICATION_STARTED_AT": start,
+                    "GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE": module.NATIVE_PREFIX_QUEUE_PROFILE}, clear=True):
+            self.assertEqual(module._native_prefix_claim_bounds(required_reserve=1830)[2], 5340)
+        with mock.patch.object(module, "datetime", mock.Mock(datetime=FixedClock,
+                timedelta=datetime.timedelta, timezone=datetime.timezone)), mock.patch.dict(os.environ, {
+                    "GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT": start,
+                    "GENEWHIP_NATIVE_DIAGNOSTIC_DEADLINE": "2026-11-01T18:45:00Z",
+                    "GENEWHIP_QUALIFICATION_STARTED_AT": start}, clear=True):
+            self.assertEqual(module._native_prefix_claim_bounds()[2], 2640)
+        with mock.patch.dict(os.environ, {
+                "GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT": start,
+                "GENEWHIP_NATIVE_DIAGNOSTIC_DEADLINE": "2026-11-01T19:30:00Z",
+                "GENEWHIP_QUALIFICATION_STARTED_AT": start,
+                "GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE": "unrecognized"}, clear=True):
+            with self.assertRaisesRegex(ValueError, "claim-clock-invalid"):
+                module._native_prefix_claim_bounds()
+
+    def test_iteration_policy_retains_limits_and_expired_legacy_windows_still_fail(self):
+        from unittest import mock
+
+        module = load_module(self)
+        fixture_spec = importlib.util.spec_from_file_location("gw_q_iteration_policy_fixture",
+            ROOT / "tests/evidence/phase7_single_native_contract.py")
+        fixture_module = importlib.util.module_from_spec(fixture_spec)
+        fixture_spec.loader.exec_module(fixture_module)
+        authority = json.loads(fixture_module.MOD.public_iteration_authority_fixture_bytes())
+        self.assertEqual((authority["controller_wall_seconds"], authority["job_wall_seconds"],
+            authority["setup_wall_seconds"]), (5400, 2700, 600))
+        self.assertEqual(authority["per_child_limits"]["wall_seconds"], 600)
+        self.assertIsNone(authority["attempt_count_limit"])
+        self.assertFalse(authority["per_attempt_user_approval"])
+
+        now_type = datetime.datetime
+        class ExpiredClock(now_type):
+            @classmethod
+            def now(cls, tz=None):
+                return now_type(2026, 11, 2, 14, 20, tzinfo=datetime.timezone.utc)
+
+        expired_windows = (
+            {"GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT": "2026-11-01T11:27:01Z",
+                "GENEWHIP_NATIVE_DIAGNOSTIC_DEADLINE": "2026-11-01T12:12:01Z",
+                "GENEWHIP_QUALIFICATION_STARTED_AT": "2026-11-01T11:27:01Z"},
+            {"GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT": "2026-11-01T18:00:00Z",
+                "GENEWHIP_NATIVE_DIAGNOSTIC_DEADLINE": "2026-11-01T19:30:00Z",
+                "GENEWHIP_QUALIFICATION_STARTED_AT": "2026-11-01T18:00:00Z",
+                "GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE": module.NATIVE_PREFIX_QUEUE_PROFILE})
+        for env in expired_windows:
+            with self.subTest(clock_profile=env.get("GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE", "legacy")), \
+                 mock.patch.object(module, "datetime", mock.Mock(datetime=ExpiredClock,
+                    timedelta=datetime.timedelta, timezone=datetime.timezone)), \
+                 mock.patch.dict(os.environ, env, clear=True):
+                with self.assertRaisesRegex(ValueError, "claim-window-unavailable"):
+                    module._native_prefix_claim_bounds()
+
+    def test_single_native_q_guard_uses_pinned_validator_and_real_candidate_checks(self):
+        from unittest import mock
+        from types import SimpleNamespace
+        spec = importlib.util.spec_from_file_location("gw_q_single_native_fixture",
+            ROOT / "tests/evidence/phase7_single_native_contract.py")
+        fixture_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture_module)
+        fixture_case = fixture_module.SingleNativeAuthorityContract("test_real_admission_validator_checks_complete_candidate_and_rejects_forgery")
+        with tempfile.TemporaryDirectory(prefix="q-single-native-guard-") as temp:
+            root = Path(temp)
+            attempt, admission, record = fixture_case._admission_fixture(root)
+            validator_copy = root / "scripts/release/v02_single_native.py"
+            validator_copy.parent.mkdir(parents=True)
+            validator_copy.write_bytes((ROOT / "scripts/release/v02_single_native.py").read_bytes())
+            module = load_module(self)
+            module.ROOT = root
+            def external(command, **_kwargs):
+                if command[:3] == ["git", "ls-files", "-z"]:
+                    return SimpleNamespace(returncode=0, stdout="src/source.c\0", stderr="")
+                if command[:3] == ["git", "merge-base", "--is-ancestor"]:
+                    return SimpleNamespace(returncode=0, stdout="", stderr="")
+                raise AssertionError("unexpected external command")
+            source_head = record["source_head"]
+            with mock.patch.object(module, "_external", side_effect=external), \
+                 mock.patch.object(module, "_git", return_value=source_head):
+                accepted = module._single_native_guard(admission_path=admission,
+                    stage="public-effects", authority_path=None,
+                    authority_sha256=fixture_module.MOD.AUTH_SHA256,
+                    admission_sha256=hashlib.sha256(admission.read_bytes()).hexdigest())
+            self.assertEqual(accepted["candidate"]["public_head"], record["candidate"]["public_head"])
+            self.assertEqual(os.environ["GENEWHIP_SINGLE_NATIVE_ADMITTED"], "1")
+
+    def test_single_native_prepare_cli_accepts_current_authority_through_real_guard(self):
+        """Exercise the CLI, pinned validator, admission and path guards to the clone boundary."""
+        from types import SimpleNamespace
+        from unittest import mock
+        from io import StringIO
+
+        require_process_context()
+
+        spec = importlib.util.spec_from_file_location("gw_q_single_native_prepare_fixture",
+            ROOT / "tests/evidence/phase7_single_native_contract.py")
+        fixture_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture_module)
+        case = fixture_module.SingleNativeAuthorityContract(
+            "test_real_admission_validator_checks_complete_candidate_and_rejects_forgery")
+        with tempfile.TemporaryDirectory(prefix="q-single-native-main-prepare-") as temp:
+            root = Path(temp).resolve()
+            template_root = root / "template"
+            (template_root / "src").mkdir(parents=True)
+            (template_root / "src/source.c").write_text("int source(void) { return 1; }\n")
+            scope_template = template_root / fixture_module.MOD.SCOPE_REL
+            scope_template.parent.mkdir(parents=True)
+            scope_template.write_bytes((ROOT / fixture_module.MOD.SCOPE_REL).read_bytes())
+            fixture_module.ROOT = template_root
+            attempt, _public_admission, record = case._admission_fixture(root, source_paths={"src/source.c"})
+            record["stage"] = "source-preparation"
+            record.pop("candidate")
+            record.pop("candidate_reviews")
+            admission = attempt / "source-admission.json"
+            admission.write_text(json.dumps(record, sort_keys=True))
+            validator_copy = root / "scripts/release/v02_single_native.py"
+            validator_copy.parent.mkdir(parents=True)
+            validator_copy.write_bytes((ROOT / "scripts/release/v02_single_native.py").read_bytes())
+            # The publication roster is read by real Git; only service-boundary commands are stubbed.
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "src/source.c"], check=True)
+            authority = root / fixture_module.MOD.AUTH_REL
+            scope = root / fixture_module.MOD.SCOPE_REL
+            authorization = root / "authorization.json"
+            authorization.write_text(json.dumps({
+                "schema": "genewhip.publication-readiness-packet.v1",
+                "history_disposition": "sanitized-snapshots-preserve-local-history",
+                "repository": "szTheory/genewhip",
+                "destination": {"owner_repository": "szTheory/genewhip", "visibility": "public"}},
+                sort_keys=True))
+            module = load_module(self)
+            module.ROOT = root
+            real_prepare = module.prepare_public_snapshot
+            def prepare_in_fixture(*args, **kwargs):
+                return real_prepare(*args, **kwargs, root=root)
+            clone_calls = []
+
+            def external(command, **_kwargs):
+                if command[:3] == ["git", "ls-files", "-z"]:
+                    return SimpleNamespace(returncode=0, stdout="src/source.c\0", stderr="")
+                if command[:3] == ["git", "merge-base", "--is-ancestor"]:
+                    return SimpleNamespace(returncode=0, stdout="", stderr="")
+                if command[:2] == ["git", "clone"]:
+                    clone_calls.append(command)
+                    return SimpleNamespace(returncode=1, stdout="", stderr="offline fixture")
+                raise AssertionError("unexpected external service command")
+
+            out = attempt / "prepare-result.json"
+            publication = attempt / "candidate" / "publication-copy"
+            argv = ["--mode", "stage-public", "--prepare-only", "--scope", str(scope),
+                "--out", str(out), "--publication-copy", str(publication),
+                "--authorization", str(authorization),
+                "--single-native-authority", str(authority),
+                "--single-native-authority-sha256", fixture_module.MOD.AUTH_SHA256,
+                "--single-native-admission", str(admission),
+                "--single-native-admission-sha256", hashlib.sha256(admission.read_bytes()).hexdigest()]
+            captured_err = StringIO()
+            with mock.patch.object(module, "_external", side_effect=external), \
+                 mock.patch.object(module, "_git", return_value="a" * 40), \
+                 mock.patch.object(module, "prepare_public_snapshot", side_effect=prepare_in_fixture), \
+                 mock.patch.object(module.sys, "stdout", StringIO()), \
+                 mock.patch.object(module.sys, "stderr", captured_err):
+                result = module.main(argv)
+            self.assertEqual(result, 1)  # The fixture intentionally stops at the external clone boundary.
+            self.assertEqual(len(clone_calls), 1, captured_err.getvalue())
+            self.assertEqual(os.environ.get("GENEWHIP_SINGLE_NATIVE_ADMITTED"), "1")
+            self.assertFalse(out.exists())
+
+    def _run_single_native_controller_contract(self, interleaving=None):
+        from unittest import mock
+        from types import SimpleNamespace
+        spec = importlib.util.spec_from_file_location("gw_q_single_native_controller_fixture",
+            ROOT / "tests/evidence/phase7_single_native_contract.py")
+        fixture_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture_module)
+        case = fixture_module.SingleNativeAuthorityContract("test_real_admission_validator_checks_complete_candidate_and_rejects_forgery")
+        with tempfile.TemporaryDirectory(prefix="q-single-native-controller-") as temp:
+            root = Path(temp).resolve()
+            attempt, admission, public_record = case._admission_fixture(root)
+            mod = fixture_module.MOD
+            for rel in ("scripts/release/v02_single_native.py", "scripts/release/v02_batch.py",
+                        "scripts/evidence/v02_run.py"):
+                target = root / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((ROOT / rel).read_bytes())
+            source = public_record["source_head"]
+            candidate = public_record["candidate"]
+            source_record = {"source_head": source, "started_at": public_record["started_at"],
+                "source_payload_sha256": public_record["source_payload_sha256"]}
+            source_admission = attempt / "source-admission.json"
+            source_admission.write_text(json.dumps(source_record, sort_keys=True))
+            source_rel = source_admission.relative_to(root).as_posix()
+            admission_rel = admission.relative_to(root).as_posix()
+            admission_sha = hashlib.sha256(admission.read_bytes()).hexdigest()
+            candidate_head, base = candidate["public_head"], candidate["public_base"]
+            branch, pr_number, preview_id = "v0.2-source-" + candidate_head[:12], 46, 99001
+            jobs_for_preview = [{"id": i + 1, "name": name, "status": "completed",
+                "conclusion": "success" if name in mod.PREVIEW_REQUIRED else "skipped"}
+                for i, name in enumerate(sorted(mod.PREVIEW_REQUIRED | mod.PREVIEW_SKIPPED))]
+            source_delivery = {"status": "diagnostic-ci-complete", "diagnostic_only": True,
+                "assessment_required": True, "merge_attempted": False,
+                "repository": "szTheory/genewhip", "candidate_sha": candidate_head,
+                "public_base_sha": base, "pull_request": str(pr_number)}
+            journal = {"repository": "szTheory/genewhip", "source_head": candidate_head,
+                "public_base_sha": base, "branch": branch, "push_performed": True,
+                "started_at": fixture_module.PUBLIC_STARTED_AT, "diagnostic_only": True,
+                "diagnostic_ci_status": "passed", "assessment_required": True,
+                "merge_attempted": False, "pull_request": str(pr_number)}
+            for name, value in (("source-delivery.json", source_delivery),
+                                ("hosted-delivery-journal.json", journal)):
+                (attempt / name).write_text(json.dumps(value, sort_keys=True))
+            delivery = {name: {"path": (attempt / filename).relative_to(root).as_posix(),
+                "sha256": hashlib.sha256((attempt / filename).read_bytes()).hexdigest()}
+                for name, filename in (("source_delivery", "source-delivery.json"),
+                    ("journal", "hosted-delivery-journal.json"))}
+            module = load_module(self)
+            module.ROOT = root
+            fixed_now = datetime.datetime(2026, 11, 1, 13, 9, 16, tzinfo=datetime.timezone.utc)
+            actual_datetime = datetime.datetime
+            class FixedClock(actual_datetime):
+                @classmethod
+                def now(cls, tz=None):
+                    return fixed_now if tz is not None else fixed_now.replace(tzinfo=None)
+            packet = {"disposition": "diagnostic-preview-green-assessment-required",
+                "qualification_credit": False,
+                "source_and_candidate": {"source_admission_path": source_rel,
+                    "source_admission_sha256": hashlib.sha256(source_admission.read_bytes()).hexdigest(),
+                    "public_admission_path": admission_rel, "public_admission_sha256": admission_sha,
+                    "private_source_head": source, "candidate_head": candidate_head,
+                    "public_head": candidate_head, "public_base": base,
+                    "public_tree": candidate["public_tree"],
+                    "manifest_sha256": candidate["source_manifest_sha256"],
+                    "preparation_sha256": candidate["preparation_sha256"],
+                    "candidate_review_payload_sha256": candidate["candidate_payload_sha256"]},
+                "hosted_source_delivery": {"source_delivery_path": delivery["source_delivery"]["path"],
+                    "source_delivery_sha256": delivery["source_delivery"]["sha256"],
+                    "journal_path": delivery["journal"]["path"], "journal_sha256": delivery["journal"]["sha256"]},
+                "github": {"repository": "szTheory/genewhip", "pull_request": pr_number,
+                    "pull_request_state": "open", "merged": False, "head_sha": candidate_head,
+                    "base_sha": base, "workflow_run": {"id": preview_id, "run_attempt": 1,
+                        "event": "pull_request", "status": "completed", "conclusion": "success",
+                        "workflow_path": ".github/workflows/ci.yml"}, "jobs": jobs_for_preview}}
+            ci_dir = attempt / "ci-failure"
+            ci_dir.mkdir()
+            assessment_path = ci_dir / "assessment.json"
+            assessment_path.write_text(json.dumps(packet, sort_keys=True))
+            assessment_ref = {"path": assessment_path.relative_to(root).as_posix(),
+                "sha256": hashlib.sha256(assessment_path.read_bytes()).hexdigest()}
+            plan_spec = importlib.util.spec_from_file_location("gw_test_single_native_plan", root / "scripts/release/v02_batch.py")
+            plan_module = importlib.util.module_from_spec(plan_spec); plan_spec.loader.exec_module(plan_module)
+            readiness_payload = {"schema": "genewhip.phase7-native-prefix-diagnostic-readiness.v1",
+                "diagnostic_only": True, "qualification_accepted": False,
+                "plan": plan_module.native_prefix_diagnostic_plan(),
+                "started_at": public_record["started_at"], "source_head": source,
+                "candidate_head": candidate_head,
+                "public_admission": {"path": admission_rel, "sha256": admission_sha},
+                "diagnostic_assessment": assessment_ref}
+            ready_digest = hashlib.sha256(json.dumps(readiness_payload, sort_keys=True,
+                separators=(",", ":")).encode()).hexdigest()
+            reviews = {}
+            for name, role in mod.SOURCE_ROLES.items():
+                path = root / ".planning/phases/GW-07-controller-fixture" / (name + ".md")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                raw = f"---\nstatus: accepted\nreviewer_role: {role}\npayload_sha256: {ready_digest}\n---\nfixture review\n"
+                path.write_text(raw)
+                reviews[name] = {"path": path.relative_to(root).as_posix(),
+                    "sha256": hashlib.sha256(raw.encode()).hexdigest(), "reviewer_role": role,
+                    "status": "accepted", "payload_sha256": ready_digest}
+            readiness_payload["assessment_reviews"] = reviews
+            readiness_path = attempt / "native-prefix-diagnostic-readiness.json"
+            readiness_path.write_text(json.dumps(readiness_payload, sort_keys=True))
+            readiness_sha = hashlib.sha256(readiness_path.read_bytes()).hexdigest()
+            self.assertEqual(readiness_payload["started_at"], public_record["started_at"])
+            self.assertGreater(datetime.datetime.fromisoformat(journal["started_at"]),
+                datetime.datetime.fromisoformat(readiness_payload["started_at"].replace("Z", "+00:00")))
+            module = load_module(self)
+            module.ROOT = root
+            fixed_now = datetime.datetime(2026, 11, 1, 13, 9, 16, tzinfo=datetime.timezone.utc)
+            actual_datetime = datetime.datetime
+            class FixedClock(actual_datetime):
+                @classmethod
+                def now(cls, tz=None):
+                    return fixed_now if tz is not None else fixed_now.replace(tzinfo=None)
+            github_run = {"id": 99887, "run_attempt": 1, "event": "workflow_dispatch",
+                "head_sha": candidate_head, "head_branch": branch, "path": ".github/workflows/ci.yml",
+                "display_title": "Plan10 native prefix diagnostic " + "f" * 32,
+                "repository": {"full_name": "szTheory/genewhip"}, "status": "completed",
+                "conclusion": "success", "created_at": fixed_now.isoformat().replace("+00:00", "Z")}
+            runtime_jobs_names = {"safety", "gameplay", "desktop", "package", "performance", "product-smoke",
+                "phase7-fast", "v02-runtime", "extended", "attestation", "required-ci",
+                "v02-benchmark-control", "v02-benchmark-recursion94", "v02-benchmark-tank-battle",
+                "v02-package", "v02-release-qualification"}
+            runtime_jobs = {"total_count": 16, "jobs": [{"name": name, "status": "completed",
+                "conclusion": "success" if name == "v02-runtime" else "skipped",
+                **({"id": 881122, "run_id": github_run["id"], "run_attempt": 1,
+                    "head_sha": candidate_head, "head_branch": branch,
+                    "started_at": "2026-11-01T13:10:00+00:00"} if name == "v02-runtime" else {})}
+                for name in sorted(runtime_jobs_names)]}
+            preview_jobs = {"total_count": 16, "jobs": jobs_for_preview}
+            api_endpoints = []
+            def github(_repo, endpoint, **_kwargs):
+                api_endpoints.append(endpoint)
+                if endpoint == f"pulls/{pr_number}":
+                    return {"state": "open", "merged": False,
+                        "head": {"sha": candidate_head, "ref": branch, "repo": {"full_name": "szTheory/genewhip"}},
+                        "base": {"sha": base, "ref": "main"}}
+                if endpoint == "git/ref/heads/" + branch:
+                    return {"object": {"sha": candidate_head}}
+                if endpoint == f"actions/runs/{preview_id}":
+                    return {"id": preview_id, "run_attempt": 1, "event": "pull_request",
+                        "head_sha": candidate_head, "head_branch": branch, "path": ".github/workflows/ci.yml",
+                        "status": "completed", "conclusion": "success"}
+                if endpoint == f"actions/runs/{preview_id}/jobs?filter=latest&per_page=100":
+                    return preview_jobs
+                if endpoint == f"actions/runs/{github_run['id']}/jobs?filter=latest&per_page=100":
+                    return runtime_jobs
+                raise AssertionError("unexpected GitHub endpoint: " + endpoint)
+            report_module_spec = importlib.util.spec_from_file_location("gw_q_test_runtime", ROOT / "scripts/evidence/v02_run.py")
+            report_runtime = importlib.util.module_from_spec(report_module_spec); report_module_spec.loader.exec_module(report_runtime)
+            native_spec = importlib.util.spec_from_file_location("gw_q_native_report_fixture",
+                ROOT / "tests/evidence/phase7_native_diagnostic_contract.py")
+            native_fixture = importlib.util.module_from_spec(native_spec); native_spec.loader.exec_module(native_fixture)
+            report_case = native_fixture.NativePrefixDiagnosticContract("test_fixed_two_case_projector_passes_and_checks_both_port_observations")
+            report = report_case.public()
+            report["identity"] = {"source_sha": candidate_head, "head_sha": candidate_head,
+                "base_sha": base, "run_id": str(github_run["id"]), "run_attempt": "1"}
+            dispatches = []
+            def external(command, **_kwargs):
+                if command[:3] == ["git", "ls-files", "-z"]:
+                    return SimpleNamespace(returncode=0, stdout="src/source.c\0", stderr="")
+                if command[:3] == ["git", "merge-base", "--is-ancestor"]:
+                    return SimpleNamespace(returncode=0, stdout="", stderr="")
+                if command[:3] == ["gh", "workflow", "run"]:
+                    dispatches.append(command)
+                    return SimpleNamespace(returncode=0, stdout="", stderr="")
+                raise AssertionError("unexpected production external command")
+            active_run = {**github_run, "status": "in_progress", "conclusion": None}
+            runs = [[], [active_run], [github_run]]
+            def workflow_runs(*_args, **_kwargs):
+                return runs.pop(0)
+            def download(_repo, run_id, attempt_number, artifact, destination, **_kwargs):
+                self.assertEqual((run_id, attempt_number, artifact), (str(github_run["id"]), "1", "native-prefix-diagnostic"))
+                destination.mkdir(parents=True)
+                (destination / "native-prefix-diagnostic.json").write_text(json.dumps(report))
+                global_claim_path = root / mod.CLAIM_REL
+                claim_raw = global_claim_path.read_bytes()
+                claim = json.loads(claim_raw)
+                started = "2026-11-01T13:10:00+00:00"
+                server_date = "2026-11-01T13:10:05+00:00"
+                response_end = 2_000_000_000_000
+                rtt = 2_000_000_000
+                projection = module._load_single_native_validator().queue_clock_projection(
+                    claim_started_at=claim["started_at"], claim_deadline=claim["deadline"],
+                    job_started_at=started, server_date=server_date,
+                    round_trip_ns=rtt, response_received_monotonic_ns=response_end,
+                    local_request_started_at="2026-11-01T13:10:03+00:00",
+                    local_response_at="2026-11-01T13:10:05+00:00")
+                receipt = {"schema": "genewhip.phase7-native-prefix-job-clock.v2",
+                    "clock_profile": "native-prefix-queue-v1",
+                    "claim_sha256": hashlib.sha256(claim_raw).hexdigest(),
+                    "claim_nonce": claim["nonce"], "claim_started_at": claim["started_at"],
+                    "claim_deadline": claim["deadline"], "repository": "szTheory/genewhip",
+                    "run_id": str(github_run["id"]), "run_attempt": 1,
+                    "job_id": 881122, "job_name": "v02-runtime",
+                    "job_status_at_observation": "in_progress", "head_sha": candidate_head,
+                    "head_branch": branch, "job_started_at": started, "server_date": server_date,
+                    "local_request_started_at": "2026-11-01T13:10:03+00:00",
+                    "local_response_at": server_date,
+                    "round_trip_ns": rtt, "timestamp_precision_seconds": 1,
+                    "request_started_monotonic_ns": response_end - rtt,
+                    "response_received_monotonic_ns": response_end, **projection}
+                clock_path = destination / "native-prefix-job-clock.json"
+                clock_path.write_text(json.dumps(receipt, sort_keys=True))
+                report["schema"] = "genewhip-phase7-native-prefix-diagnostic-v2"
+                report["clock_completion"] = {"schema": "genewhip.phase7-native-prefix-clock-completion.v1",
+                    "receipt_sha256": hashlib.sha256(clock_path.read_bytes()).hexdigest(),
+                    "collector_deadline_monotonic_ns": projection["collector_deadline_monotonic_ns"],
+                    "completion_monotonic_ns": projection["collector_deadline_monotonic_ns"] - 1}
+                (destination / "native-prefix-diagnostic.json").write_text(json.dumps(report))
+            output = attempt / "native-prefix-diagnostic/result.json"
+            scope = root / mod.SCOPE_REL
+            self.assertEqual(scope.resolve(), (module.ROOT / "evidence/v02-execution.json").resolve())
+            self.assertEqual(hashlib.sha256(scope.read_bytes()).hexdigest(), mod.SCOPE_SHA256)
+            self.assertEqual(module._sha(scope), "05eb7f5fa91d759fbef8fb86bbc9db402dc41812261235bcf5085a0e2aa9b1a5")
+            module._single_native_scope(scope)
+            source_path = attempt / "preparation.json"
+            provider_started = "2026-11-01T13:10:00+00:00"
+            provider_response_end = 1_000_000_000_000
+            queue_projection = module._load_single_native_validator().queue_clock_projection(
+                claim_started_at="2026-11-01T13:10:00+00:00",
+                claim_deadline="2026-11-01T14:40:00+00:00",
+                job_started_at=provider_started, server_date="2026-11-01T13:10:05+00:00",
+                round_trip_ns=1_000_000_000, response_received_monotonic_ns=provider_response_end,
+                local_request_started_at="2026-11-01T13:10:04+00:00",
+                local_response_at="2026-11-01T13:10:05+00:00")
+            monotonic_now = {"value": 1000.0}
+            provider_job = {"id": 881122, "name": "v02-runtime", "run_id": github_run["id"],
+                "run_attempt": 1, "head_sha": candidate_head, "head_branch": branch,
+                "status": "in_progress", "started_at": provider_started}
+            with mock.patch.dict(os.environ, {}, clear=False), \
+                 mock.patch.object(module, "datetime", SimpleNamespace(datetime=FixedClock,
+                    timezone=datetime.timezone, timedelta=datetime.timedelta)), \
+                 mock.patch.object(module.uuid, "uuid4", return_value=SimpleNamespace(hex="f" * 32)), \
+                 mock.patch.object(module, "_external", side_effect=external), \
+                 mock.patch.object(module, "_git", return_value=source), \
+                 mock.patch.object(module, "_gh_json", side_effect=github), \
+                 mock.patch.object(module, "_workflow_runs", side_effect=workflow_runs), \
+                 mock.patch.object(module, "_native_prefix_queue_provider_observation",
+                    side_effect=lambda **_kwargs: (monotonic_now.update({"value":
+                        queue_projection["collector_deadline_monotonic_ns"] / 1_000_000_000 + 5})
+                        or (provider_job, "2026-11-01T13:10:05+00:00",
+                            provider_response_end - 1_000_000_000, provider_response_end,
+                        1_000_000_000, "2026-11-01T13:10:04+00:00",
+                        "2026-11-01T13:10:05+00:00"))) as clock_observation, \
+                 mock.patch.object(module.time, "monotonic", side_effect=lambda: monotonic_now["value"]), \
+                 mock.patch.object(module.time, "monotonic_ns",
+                    side_effect=lambda: int(monotonic_now["value"] * 1_000_000_000)), \
+                 mock.patch.object(module.time, "sleep"), \
+                 mock.patch.object(module, "_download_run_artifact", side_effect=download), \
+                 mock.patch.object(module, "_load_runtime_module", return_value=report_runtime):
+                if interleaving is not None:
+                    shared_parent = (root / mod.CLAIM_REL).parent
+                    saved_parent = root / "shared-claim-parent-saved"
+                    decoy_parent = root / "shared-claim-parent-decoy"
+                    original_stat = shared_parent.stat()
+                    before_fds = len(os.listdir("/dev/fd"))
+                    if interleaving == "before-create":
+                        real_open = os.open
+                        swapped = False
+
+                        def open_then_swap(path, flags, mode=0o777, *, dir_fd=None):
+                            nonlocal swapped
+                            if (not swapped and dir_fd is not None
+                                    and path == mod.CLAIM_REL.parts[-2]):
+                                shared_parent.rename(saved_parent)
+                                decoy_parent.mkdir()
+                                shared_parent.symlink_to(decoy_parent, target_is_directory=True)
+                                swapped = True
+                            return real_open(path, flags, mode, dir_fd=dir_fd)
+
+                        with mock.patch.object(os, "open", side_effect=open_then_swap):
+                            with self.assertRaisesRegex(ValueError,
+                                    "native-prefix-diagnostic-global-claim-parent-invalid"):
+                                module.run_native_prefix_diagnostic_hosted(
+                                    source_path, attempt / "publication", scope,
+                                    attempt / "native-prefix-diagnostic/result.json",
+                                    attempt / "hosted-delivery-journal.json",
+                                    batch_authorization=None, batch_authorization_sha256=None,
+                                    batch_admission=None, batch_admission_sha256=None,
+                                    prefix_readiness=readiness_path, prefix_readiness_sha256=readiness_sha,
+                                    single_native_admission=admission,
+                                    single_native_admission_sha256=admission_sha,
+                                    single_native_authority=root / mod.AUTH_REL,
+                                    single_native_authority_sha256=mod.AUTH_SHA256)
+                        self.assertTrue(swapped)
+                    elif interleaving in ("after-create", "after-create-direct"):
+                        real_fsync = os.fsync
+                        swapped = False
+
+                        def fsync_then_swap(descriptor):
+                            nonlocal swapped
+                            result = real_fsync(descriptor)
+                            info = os.fstat(descriptor)
+                            if (not swapped
+                                    and (info.st_dev, info.st_ino) ==
+                                    (original_stat.st_dev, original_stat.st_ino)):
+                                shared_parent.rename(saved_parent)
+                                decoy_parent.mkdir()
+                                shared_parent.symlink_to(decoy_parent, target_is_directory=True)
+                                swapped = True
+                            return result
+
+                        with mock.patch.object(os, "fsync", side_effect=fsync_then_swap):
+                            with self.assertRaisesRegex(ValueError,
+                                    "native-prefix-diagnostic-global-claim-binding-invalid"):
+                                # Direct implementation entry leaves context absent; its
+                                # descriptor-owning wrapper must still close every fd.
+                                dispatch = (module._run_native_prefix_diagnostic_hosted_dispatch
+                                    if interleaving == "after-create-direct"
+                                    else module.run_native_prefix_diagnostic_hosted)
+                                dispatch(source_path, attempt / "publication", scope,
+                                    attempt / "native-prefix-diagnostic/result.json",
+                                    attempt / "hosted-delivery-journal.json",
+                                    batch_authorization=None, batch_authorization_sha256=None,
+                                    batch_admission=None, batch_admission_sha256=None,
+                                    prefix_readiness=readiness_path, prefix_readiness_sha256=readiness_sha,
+                                    single_native_admission=admission,
+                                    single_native_admission_sha256=admission_sha,
+                                    single_native_authority=root / mod.AUTH_REL,
+                                    single_native_authority_sha256=mod.AUTH_SHA256)
+                        self.assertTrue(swapped)
+                    else:
+                        raise AssertionError("unknown claim-anchor interleaving")
+                    self.assertEqual(dispatches, [])
+                    # A failed anchor check now stops before the runtime output
+                    # directory is created; the immutable claim location and
+                    # descriptor receipts below distinguish the three races.
+                    self.assertFalse((attempt / "native-prefix-diagnostic").exists())
+                    self.assertFalse((attempt / "native-prefix-diagnostic/result.json").exists())
+                    if interleaving in ("after-create", "after-create-direct"):
+                        self.assertTrue((saved_parent / mod.CLAIM_REL.name).is_file())
+                    else:
+                        self.assertFalse((saved_parent / mod.CLAIM_REL.name).exists())
+                    self.assertFalse((decoy_parent / mod.CLAIM_REL.name).exists())
+                    self.assertEqual(len(os.listdir("/dev/fd")), before_fds)
+                    return
+                success_fd_count = len(os.listdir("/dev/fd"))
+                result = module.run_native_prefix_diagnostic_hosted(source_path,
+                    attempt / "publication", scope, output, attempt / "hosted-delivery-journal.json",
+                    batch_authorization=None, batch_authorization_sha256=None,
+                    batch_admission=None, batch_admission_sha256=None,
+                    prefix_readiness=readiness_path, prefix_readiness_sha256=readiness_sha,
+                    single_native_admission=admission, single_native_admission_sha256=admission_sha,
+                    single_native_authority=root / mod.AUTH_REL, single_native_authority_sha256=mod.AUTH_SHA256)
+            self.assertEqual(len(os.listdir("/dev/fd")), success_fd_count)
+            self.assertEqual(result["status"], "pass")
+            self.assertFalse(result["qualification_accepted"])
+            self.assertEqual(len(dispatches), 1)
+            clock_observation.assert_called_once()
+            self.assertGreater(monotonic_now["value"],
+                queue_projection["collector_deadline_monotonic_ns"] / 1_000_000_000)
+            self.assertLess(monotonic_now["value"],
+                queue_projection["job_deadline_monotonic_ns"] / 1_000_000_000)
+            self.assertIn("native_diagnostic_clock_profile=native-prefix-queue-v1", dispatches[0])
+            self.assertTrue(any(value.startswith("native_diagnostic_claim_sha256=") for value in dispatches[0]))
+            dispatch = json.loads((attempt / "native-prefix-diagnostic/dispatch.json").read_text())
+            self.assertEqual(dispatch["dispatches"], 1)
+            claim_path = root / mod.CLAIM_REL
+            claim = json.loads(claim_path.read_text())
+            self.assertEqual(claim, mod.claim_payload(attempt_root=mod.ROOT_REL.as_posix(),
+                source_sha=candidate_head, base_sha=base, branch=branch, nonce=dispatch["nonce"],
+                started_at=claim["started_at"], deadline=claim["deadline"],
+                readiness_sha256=readiness_sha))
+            self.assertEqual(claim["qualification_started_at"], claim["started_at"])
+            self.assertEqual(dispatch["native_diagnostic_started_at"], claim["started_at"])
+            self.assertEqual(dispatch["native_diagnostic_deadline"], claim["deadline"])
+            downloaded = attempt / "native-prefix-diagnostic/download"
+            strict = module._load_runtime_module()
+            proof_report = json.loads((downloaded / "native-prefix-diagnostic.json").read_text())
+            receipt_path = downloaded / "native-prefix-job-clock.json"
+            proof_receipt = json.loads(receipt_path.read_text())
+            expected_clock = {"receipt_sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
+                "collector_deadline_monotonic_ns": proof_receipt["collector_deadline_monotonic_ns"]}
+            expected_identity = {"source_sha": candidate_head, "head_sha": candidate_head,
+                "base_sha": base, "run_id": str(github_run["id"]), "run_attempt": "1"}
+            self.assertTrue(strict.validate_native_prefix_diagnostic_public(proof_report,
+                expected_identity, expected_clock=expected_clock))
+            for forged in ("late", "wrong-receipt", "wrong-cutoff"):
+                bad = json.loads(json.dumps(proof_report))
+                if forged == "late":
+                    bad["clock_completion"]["completion_monotonic_ns"] = expected_clock[
+                        "collector_deadline_monotonic_ns"]
+                elif forged == "wrong-receipt":
+                    bad["clock_completion"]["receipt_sha256"] = "f" * 64
+                else:
+                    bad["clock_completion"]["collector_deadline_monotonic_ns"] -= 1
+                with self.subTest(clock_proof=forged), self.assertRaises(ValueError):
+                    strict.validate_native_prefix_diagnostic_public(bad,
+                        expected_identity, expected_clock=expected_clock)
+
+    def test_single_native_controller_uses_real_guard_assessment_and_candidate(self):
+        self._run_single_native_controller_contract()
+
+    def test_shared_claim_parent_swap_after_validation_stops_before_creation(self):
+        self._run_single_native_controller_contract("before-create")
+
+    def test_shared_claim_parent_swap_after_creation_stops_before_dispatch_and_closes_fds(self):
+        self._run_single_native_controller_contract("after-create-direct")
+
+    def test_public_controller_does_not_query_cleanup_before_dispatch_attempt(self):
+        self._run_single_native_controller_contract("after-create")
+
+    def test_single_native_reentry_does_not_touch_existing_claim_or_query_api(self):
+        from unittest import mock
+        from types import SimpleNamespace
+        spec = importlib.util.spec_from_file_location("gw_q_single_native_reentry_fixture",
+            ROOT / "tests/evidence/phase7_single_native_contract.py")
+        fixture_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture_module)
+        case = fixture_module.SingleNativeAuthorityContract("test_real_admission_validator_checks_complete_candidate_and_rejects_forgery")
+        with tempfile.TemporaryDirectory(prefix="q-single-native-reentry-") as temp:
+            root = Path(temp).resolve()
+            attempt, admission, record = case._admission_fixture(root)
+            for rel in ("scripts/release/v02_single_native.py",):
+                target = root / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((ROOT / rel).read_bytes())
+            source = record["source_head"]
+            module = load_module(self)
+            module.ROOT = root
+            journal = attempt / "hosted-delivery-journal.json"
+            journal.write_text("{}")
+            readiness = attempt / "native-prefix-diagnostic-readiness.json"
+            readiness.write_text("{}")
+            output = attempt / "native-prefix-diagnostic/result.json"
+            scope = root / fixture_module.MOD.SCOPE_REL
+            source_path = attempt / "preparation.json"
+            claim_path = root / fixture_module.MOD.CLAIM_REL
+            claim_path.parent.mkdir(parents=True, exist_ok=True)
+            existing_claim = b"preserved global claim fixture\n"
+            claim_path.write_bytes(existing_claim)
+            def external(command, **_kwargs):
+                if command[:3] == ["git", "ls-files", "-z"]:
+                    return SimpleNamespace(returncode=0, stdout="src/source.c\0", stderr="")
+                if command[:3] == ["git", "merge-base", "--is-ancestor"]:
+                    return SimpleNamespace(returncode=0, stdout="", stderr="")
+                raise AssertionError("unexpected local git operation")
+            def assert_rejected_before_remote():
+                with mock.patch.object(module, "_external", side_effect=external), \
+                     mock.patch.object(module, "_git", return_value=source), \
+                     mock.patch.object(module, "_gh_json", side_effect=AssertionError("remote API queried")), \
+                     mock.patch.object(module, "_workflow_runs", side_effect=AssertionError("workflow queried")):
+                    with self.assertRaisesRegex(ValueError,
+                            "already-claimed|lineage-conflict|claim-parent-invalid"):
+                        module.run_native_prefix_diagnostic_hosted(source_path, attempt / "publication",
+                            scope, output, journal, batch_authorization=None,
+                            batch_authorization_sha256=None, batch_admission=None,
+                            batch_admission_sha256=None, prefix_readiness=readiness,
+                            prefix_readiness_sha256=hashlib.sha256(readiness.read_bytes()).hexdigest(),
+                            single_native_admission=admission,
+                            single_native_admission_sha256=hashlib.sha256(admission.read_bytes()).hexdigest(),
+                            single_native_authority=root / fixture_module.MOD.AUTH_REL,
+                            single_native_authority_sha256=fixture_module.MOD.AUTH_SHA256)
+                self.assertFalse((attempt / "native-prefix-diagnostic").exists())
+
+            assert_rejected_before_remote()
+            self.assertEqual(claim_path.read_bytes(), existing_claim)
+
+            claim_path.unlink()
+            local_claim = root / fixture_module.MOD.LOCAL_CLAIM_REL
+            local_claim.write_text("unexpected repair claim\n")
+            assert_rejected_before_remote()
+            local_claim.unlink()
+
+            shared_parent = claim_path.parent
+            saved_parent = root / "shared-claim-parent-original"
+            shared_parent.rename(saved_parent)
+            shared_parent.symlink_to(saved_parent, target_is_directory=True)
+            assert_rejected_before_remote()
+            shared_parent.unlink()
+            saved_parent.rename(shared_parent)
+
+            old_attempt_claim = (root / fixture_module.MOD.PREVIOUS_ATTEMPT_REL
+                                 / "native-prefix-diagnostic")
+            old_attempt_claim.mkdir(parents=True)
+            assert_rejected_before_remote()
+            old_attempt_claim.rmdir()
+
+            prior_attempt_claim = (root / "build/v02/native-prefix-one-shot-20261101T112701Z"
+                                   / "attempt-0001/native-prefix-diagnostic")
+            prior_attempt_claim.mkdir(parents=True)
+            assert_rejected_before_remote()
+            prior_attempt_claim.rmdir()
+
+            # An inaccessible coordinator-side marker is a conflict, not absence.
+            denied_marker = (root / module.SINGLE_NATIVE_POLICY_ROOT
+                             / "attempt-0001/native-prefix-diagnostic")
+            denied_marker.parent.mkdir(parents=True, exist_ok=True)
+            path_type = type(root)
+            original_lstat = path_type.lstat
+
+            def deny_coordinator_marker(path, *args, **kwargs):
+                if path == denied_marker:
+                    raise PermissionError("controlled inaccessible coordinator marker")
+                return original_lstat(path, *args, **kwargs)
+
+            with mock.patch.object(path_type, "lstat", new=deny_coordinator_marker):
+                assert_rejected_before_remote()
+            self.assertFalse(claim_path.exists())
+
     def test_native_private_handoff_reader_preserves_typed_read_failures(self):
         module = load_module(self)
         with tempfile.TemporaryDirectory() as temp:
@@ -240,6 +1887,591 @@ class QualificationCoordinatorContract(unittest.TestCase):
             module._workflow_runs("szTheory/genewhip", source, branch="review/a&b")
             self.assertIn("?branch=review%2Fa%26b&per_page=100", effect.call_args.args[0][2])
 
+    def test_queue_job_observation_requires_authenticated_identity_and_uncached_server_date(self):
+        from unittest import mock
+        from types import SimpleNamespace
+        module = load_module(self)
+        provider_now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+        provider_date = email.utils.format_datetime(provider_now, usegmt=True)
+        job_start = (provider_now - datetime.timedelta(seconds=5)).isoformat().replace("+00:00", "Z")
+        payload = {"total_count": 1, "jobs": [{"id": 712, "name": "v02-runtime",
+            "run_id": 12345, "run_attempt": 1, "head_sha": "a" * 40,
+            "head_branch": "v0.2-source-aaaaaaaaaaaa", "status": "in_progress",
+            "started_at": job_start}]}
+        response = "HTTP/2 200 OK\r\nDate: " + provider_date + "\r\n\r\n" + json.dumps(payload)
+        with mock.patch.object(module.time, "monotonic_ns", side_effect=(100, 200)), \
+             mock.patch.object(module, "_external", return_value=SimpleNamespace(returncode=0,
+                 stdout=response)) as external:
+            job, date, began, ended, rtt, local_request, local_at = module._native_prefix_queue_provider_observation(
+                repository="szTheory/genewhip", run_id="12345", run_attempt=1,
+                source_sha="a" * 40, branch="v0.2-source-aaaaaaaaaaaa", nonce="b" * 32)
+        self.assertEqual((job["id"], date, began, ended, rtt),
+            (712, provider_now.isoformat(), 100, 200, 100))
+        local_elapsed = (datetime.datetime.fromisoformat(local_at)
+            - datetime.datetime.fromisoformat(local_request)).total_seconds()
+        self.assertGreaterEqual(local_elapsed, 0)
+        self.assertLessEqual(abs(local_elapsed - rtt / 1_000_000_000), 2)
+        self.assertEqual(external.call_args.kwargs["timeout"], 20)
+        self.assertIn("--include", external.call_args.args[0])
+        self.assertIn("Cache-Control: no-cache", external.call_args.args[0])
+        old_date = email.utils.format_datetime(provider_now - datetime.timedelta(seconds=120), usegmt=True)
+        future_date = email.utils.format_datetime(provider_now + datetime.timedelta(seconds=120), usegmt=True)
+        for invalid in (response.replace("Date: " + provider_date, "Date: " + old_date),
+                        response.replace("Date: " + provider_date, "Date: " + future_date),
+                        response.replace("Date: " + provider_date, "Date: " + provider_date + "\r\nAge: 1"),
+                        response.replace("Date: " + provider_date, "Date: " + provider_date + "\r\nX-Cache: HIT")):
+            with mock.patch.object(module.time, "monotonic_ns", side_effect=(100, 200)), \
+                 mock.patch.object(module, "_external", return_value=SimpleNamespace(returncode=0,
+                     stdout=invalid)):
+                with self.assertRaisesRegex(ValueError, "cached|provider-time-invalid|provider-date-stale"):
+                    module._native_prefix_queue_provider_observation(repository="szTheory/genewhip",
+                        run_id="12345", run_attempt=1, source_sha="a" * 40,
+                        branch="v0.2-source-aaaaaaaaaaaa", nonce="b" * 32)
+
+    def test_queue_settlement_observes_through_h_after_u_and_rejects_late_api_return(self):
+        from unittest import mock
+        module = load_module(self)
+        source = "a" * 40
+        response = json.dumps({"workflow_runs": [{"head_sha": source, "event": "workflow_dispatch"}]})
+        for limiting_deadline in ("job", "controller"):
+            with self.subTest(limiting_deadline=limiting_deadline), tempfile.TemporaryDirectory(
+                    prefix="queue-settlement-") as temporary:
+                root = Path(temporary).resolve()
+                (root / "evidence").mkdir()
+                (root / "evidence/v02-execution.json").write_bytes(
+                    (ROOT / "evidence/v02-execution.json").read_bytes())
+                now_ns = time.monotonic_ns()
+                h_ns = now_ns + 2_000_000_000
+                projection = {"collector_deadline_monotonic_ns": now_ns - 1,
+                    "controller_deadline_monotonic_ns": h_ns if limiting_deadline == "controller" else h_ns + 5_000_000_000,
+                    "job_deadline_monotonic_ns": h_ns if limiting_deadline == "job" else h_ns + 5_000_000_000}
+                wall_start = datetime.datetime.now(datetime.timezone.utc)
+                env = {"GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE": "native-prefix-queue-v1",
+                    "GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT": wall_start.isoformat(),
+                    "GENEWHIP_NATIVE_DIAGNOSTIC_DEADLINE": (wall_start + datetime.timedelta(seconds=5400)).isoformat(),
+                    "GENEWHIP_QUALIFICATION_STARTED_AT": wall_start.isoformat(),
+                    "GENEWHIP_NATIVE_DIAGNOSTIC_CONTROLLER_STOP": (wall_start + datetime.timedelta(seconds=5400)).isoformat(),
+                    "GENEWHIP_NATIVE_CONTROLLER_WORK_CUTOFF_MONOTONIC_NS": str(now_ns - 2),
+                    "GENEWHIP_NATIVE_CONTROLLER_HARD_DEADLINE_MONOTONIC_NS": str(projection[
+                        "controller_deadline_monotonic_ns"]),
+                    "GENEWHIP_NATIVE_JOB_COLLECTOR_DEADLINE_MONOTONIC_NS": str(now_ns - 1),
+                    "GENEWHIP_NATIVE_JOB_HARD_DEADLINE_MONOTONIC_NS": str(projection[
+                        "job_deadline_monotonic_ns"]),
+                    "GENEWHIP_NATIVE_CONTROLLER_CLEANUP_MODE": "0"}
+                clock = {"now": now_ns}
+                def bounded(_argv, **_kwargs):
+                    if clock.get("late"):
+                        clock["now"] = h_ns + 1
+                    return {"returncode": 0, "process_group_cleanup": "confirmed",
+                        "streams": {"stdout": {"text": response, "truncated": False,
+                            "observed_bytes": len(response.encode()), "retained_bytes": len(response.encode()),
+                            "sha256": hashlib.sha256(response.encode()).hexdigest()},
+                            "stderr": {"text": "", "truncated": False, "observed_bytes": 0,
+                                "retained_bytes": 0, "sha256": hashlib.sha256(b"").hexdigest()}}}
+                with mock.patch.object(module, "ROOT", root), mock.patch.dict(os.environ, env, clear=True), \
+                     mock.patch.object(module.time, "monotonic_ns", side_effect=lambda: clock["now"]), \
+                     mock.patch.object(module, "_bounded_command", side_effect=bounded) as launch:
+                    result = module._native_prefix_settled_workflow_runs("szTheory/genewhip", source,
+                        "v0.2-source-aaaaaaaaaaaa", projection)
+                    self.assertEqual(result[0]["head_sha"], source)
+                    self.assertEqual(os.environ["GENEWHIP_NATIVE_CONTROLLER_CLEANUP_MODE"], "1")
+                    timeout = launch.call_args.kwargs["limits"]["wall_seconds"]
+                    self.assertGreater(timeout, 0)
+                    self.assertLessEqual(timeout, 2.01)
+                    clock["late"] = True
+                    with self.assertRaisesRegex(ValueError, "settlement-deadline-exhausted"):
+                        module._native_prefix_settled_workflow_runs("szTheory/genewhip", source,
+                            "v0.2-source-aaaaaaaaaaaa", projection)
+
+    def test_queue_unknown_start_cleanup_uses_earliest_possible_job_deadline_without_credit(self):
+        module = load_module(self)
+        claim_mono = time.monotonic_ns()
+        fallback = module._native_prefix_unknown_start_fallback(claim_mono)
+        self.assertEqual(fallback["job_deadline_monotonic_ns"], claim_mono + 2700 * 1_000_000_000)
+        self.assertEqual(fallback["collector_deadline_monotonic_ns"],
+            claim_mono + 2670 * 1_000_000_000)
+        self.assertNotIn("job_started_at", fallback)
+        validator = module._load_single_native_validator()
+        with self.assertRaisesRegex(ValueError, "order-invalid"):
+            validator.queue_clock_projection(claim_started_at="2026-11-01T18:00:00Z",
+                claim_deadline="2026-11-01T19:30:00Z", job_started_at="2026-11-01T17:59:59Z",
+                server_date="2026-11-01T18:00:10Z", round_trip_ns=1_000_000_000,
+                response_received_monotonic_ns=10_000_000_000,
+                local_request_started_at="2026-11-01T18:00:09Z",
+                local_response_at="2026-11-01T18:00:10Z")
+
+    def test_queue_second_provider_projection_can_only_tighten_first_valid_deadlines(self):
+        module = load_module(self)
+        validator = module._load_single_native_validator()
+        claim_start = "2026-11-01T18:00:00Z"
+        claim_end = "2026-11-01T19:30:00Z"
+        job_start = "2026-11-01T18:10:00Z"
+        first = validator.queue_clock_projection(claim_started_at=claim_start,
+            claim_deadline=claim_end, job_started_at=job_start, server_date="2026-11-01T18:10:20Z",
+            round_trip_ns=10_000_000_000, response_received_monotonic_ns=1_000_000_000_000,
+            local_request_started_at="2026-11-01T18:10:10Z",
+            local_response_at="2026-11-01T18:10:20Z")
+        second = validator.queue_clock_projection(claim_started_at=claim_start,
+            claim_deadline=claim_end, job_started_at=job_start, server_date="2026-11-01T18:10:18Z",
+            round_trip_ns=1_000_000_000, response_received_monotonic_ns=1_003_000_000_000,
+            local_request_started_at="2026-11-01T18:10:17Z",
+            local_response_at="2026-11-01T18:10:18Z")
+        self.assertGreater(second["controller_deadline_monotonic_ns"],
+            first["controller_deadline_monotonic_ns"])
+        self.assertGreater(second["job_deadline_monotonic_ns"], first["job_deadline_monotonic_ns"])
+        claim_mono_deadline = 1_000_000_000_000 + 5400 * 1_000_000_000
+        tightened = module._tighten_native_prefix_projection(first, second, claim_mono_deadline)
+        for key in ("job_started_monotonic_ns", "job_deadline_monotonic_ns",
+                "controller_deadline_monotonic_ns", "controller_cleanup_deadline_monotonic_ns",
+                "job_cleanup_deadline_monotonic_ns", "collector_deadline_monotonic_ns",
+                "collector_start_cutoff_monotonic_ns", "setup_deadline_monotonic_ns"):
+            with self.subTest(bound=key):
+                self.assertLessEqual(tightened[key], first[key])
+        self.assertEqual(tightened["job_deadline_monotonic_ns"], first["job_deadline_monotonic_ns"])
+        self.assertEqual(tightened["controller_deadline_monotonic_ns"],
+            min(first["controller_deadline_monotonic_ns"], claim_mono_deadline))
+
+    def test_queue_receipt_publisher_reopens_real_receipt_and_uses_validated_projection(self):
+        from unittest import mock
+        module = load_module(self)
+        validator_source = ROOT / "scripts/release/v02_single_native.py"
+        with tempfile.TemporaryDirectory(prefix="queue-clock-publish-") as temporary:
+            root = Path(temporary).resolve()
+            runner_temp = root / "runner-temp"; runner_temp.mkdir()
+            trusted = root / "scripts/release"; trusted.mkdir(parents=True)
+            (trusted / validator_source.name).write_bytes(validator_source.read_bytes())
+            build = root / "build/v02"; build.mkdir(parents=True)
+            env_file = root / "github-env"; env_file.write_text("")
+            local_now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+            server_date = local_now.isoformat()
+            job_started = (local_now - datetime.timedelta(seconds=5)).isoformat()
+            claim_start = (local_now - datetime.timedelta(seconds=30)).isoformat()
+            claim_deadline = (local_now + datetime.timedelta(seconds=5370)).isoformat()
+            response_end = 20_000_000_000
+            request_start = response_end - 2_000_000_000
+            validator = module._load_single_native_validator()
+            projection = validator.queue_clock_projection(claim_started_at=claim_start,
+                claim_deadline=claim_deadline, job_started_at=job_started, server_date=server_date,
+                round_trip_ns=2_000_000_000, response_received_monotonic_ns=response_end,
+                local_request_started_at=(local_now - datetime.timedelta(seconds=2)).isoformat(),
+                local_response_at=local_now.isoformat())
+            receipt = {"schema": validator.QUEUE_RECEIPT_SCHEMA,
+                "clock_profile": validator.QUEUE_PROFILE, "claim_sha256": "a" * 64,
+                "claim_nonce": "b" * 32, "repository": "szTheory/genewhip", "run_id": "12345",
+                "run_attempt": 1, "job_id": 712, "job_name": "v02-runtime",
+                "job_status_at_observation": "in_progress", "head_sha": "c" * 40,
+                "head_branch": "v0.2-source-cccccccccccc", "claim_started_at": claim_start,
+                "claim_deadline": claim_deadline, "job_started_at": job_started,
+                "server_date": server_date,
+                "local_request_started_at": (local_now - datetime.timedelta(seconds=2)).isoformat(),
+                "local_response_at": local_now.isoformat(),
+                "round_trip_ns": 2_000_000_000, "timestamp_precision_seconds": 1,
+                "request_started_monotonic_ns": request_start,
+                "response_received_monotonic_ns": response_end, **projection}
+            receipt_path = runner_temp / "native-prefix-job-clock.json"
+            receipt_path.write_text(json.dumps(receipt, sort_keys=True))
+            validator.validate_job_clock_receipt(receipt, claim_sha256="a" * 64,
+                claim_nonce="b" * 32, source_sha="c" * 40, run_id="12345", run_attempt=1,
+                repository="szTheory/genewhip", branch="v0.2-source-cccccccccccc")
+            stale = dict(receipt)
+            stale["local_response_at"] = (local_now + datetime.timedelta(seconds=120)).isoformat()
+            with self.assertRaisesRegex(ValueError, "provider-date-stale"):
+                validator.validate_job_clock_receipt(stale, claim_sha256="a" * 64,
+                    claim_nonce="b" * 32, source_sha="c" * 40, run_id="12345", run_attempt=1,
+                    repository="szTheory/genewhip", branch="v0.2-source-cccccccccccc")
+            env = {"GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE": validator.QUEUE_PROFILE,
+                "GENEWHIP_NATIVE_JOB_CLOCK_RECEIPT": str(receipt_path),
+                "GENEWHIP_NATIVE_DIAGNOSTIC_CLAIM_SHA256": "a" * 64,
+                "GENEWHIP_QUALIFICATION_NONCE": "b" * 32, "GITHUB_SHA": "c" * 40,
+                "GITHUB_RUN_ID": "12345", "GITHUB_RUN_ATTEMPT": "1",
+                "GITHUB_REPOSITORY": "szTheory/genewhip",
+                "GITHUB_REF_NAME": "v0.2-source-cccccccccccc", "RUNNER_TEMP": str(runner_temp),
+                "GITHUB_ENV": str(env_file)}
+            with mock.patch.object(module, "ROOT", root), \
+                 mock.patch.object(module.time, "monotonic_ns", return_value=response_end + 1_000_000_000), \
+                 mock.patch.dict(os.environ, env, clear=True):
+                destination = module.publish_native_prefix_job_clock_receipt()
+            # Setup must stop at S, but the collector entry remains valid
+            # between S and L until the fixed comparison reserve is reached.
+            setup_plus_one = projection["setup_deadline_monotonic_ns"] + 1
+            collector_cutoff = projection["collector_start_cutoff_monotonic_ns"]
+            workload_cutoff = projection["collector_deadline_monotonic_ns"]
+            with mock.patch.object(module, "ROOT", root), mock.patch.dict(os.environ, env, clear=True), \
+                 mock.patch.object(module.time, "monotonic_ns", return_value=setup_plus_one):
+                loaded, actual_projection, _ = module._load_native_prefix_job_clock(
+                    require_live=True, live_window="collector")
+                self.assertEqual(loaded["job_id"], 712)
+                self.assertEqual(actual_projection, projection)
+                with self.assertRaisesRegex(ValueError, "receipt-invalid"):
+                    module._load_native_prefix_job_clock(require_live=True)
+            self.assertLess(setup_plus_one, collector_cutoff)
+            self.assertLess(collector_cutoff, workload_cutoff)
+            for late_now in (collector_cutoff, workload_cutoff):
+                with mock.patch.object(module, "ROOT", root), mock.patch.dict(os.environ, env, clear=True), \
+                     mock.patch.object(module.time, "monotonic_ns", return_value=late_now):
+                    with self.assertRaisesRegex(ValueError, "receipt-invalid"):
+                        module._load_native_prefix_job_clock(require_live=True, live_window="collector")
+            self.assertEqual(destination, build / "native-prefix-job-clock.json")
+            updates = env_file.read_text()
+            self.assertIn("GENEWHIP_NATIVE_JOB_HARD_DEADLINE_MONOTONIC_NS="
+                + str(projection["job_deadline_monotonic_ns"]), updates)
+            self.assertEqual(destination.read_bytes(), receipt_path.read_bytes())
+
+    def test_inline_queue_bootstrap_flows_through_real_receipt_loader_and_setup_gate(self):
+        from unittest import mock
+        import textwrap
+        from types import SimpleNamespace
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        job = workflow.split("  v02-runtime:", 1)[1].split("\n  v02-benchmark-control:", 1)[0]
+        section = job.split("      - name: Capture queue-aware job start before checkout", 1)[1]
+        inline = section.split("          python3 - <<'PY'\n", 1)[1].split("\n          PY\n", 1)[0]
+        inline = textwrap.dedent(inline)
+        now = datetime.datetime(2026, 11, 1, 20, 0, 0, tzinfo=datetime.timezone.utc)
+        provider_now = now - datetime.timedelta(seconds=59)
+        server_date = email.utils.format_datetime(provider_now, usegmt=True)
+        started = (provider_now - datetime.timedelta(seconds=5)).isoformat().replace("+00:00", "Z")
+        source = "c" * 40
+        branch = "v0.2-source-" + source[:12]
+        payload = {"total_count": 1, "jobs": [{"id": 712, "name": "v02-runtime",
+            "run_id": 12345, "run_attempt": 1, "head_sha": source, "head_branch": branch,
+            "status": "in_progress", "started_at": started}]}
+        class Response:
+            status = 200
+            headers = {"Date": server_date}
+            def __enter__(self): return self
+            def __exit__(self, *_args): return False
+            def read(self, _limit): return json.dumps(payload).encode()
+            def geturl(self): return "https://api.github.com/repos/szTheory/genewhip/actions/runs/12345/attempts/1/jobs?per_page=100"
+        class FixedClock(datetime.datetime):
+            calls = 0
+            @classmethod
+            def now(cls, tz=None):
+                value = now - datetime.timedelta(seconds=2) if cls.calls == 0 else now
+                cls.calls += 1
+                return value if tz is not None else value.replace(tzinfo=None)
+        with tempfile.TemporaryDirectory(prefix="queue-bootstrap-integration-") as temporary:
+            root = Path(temporary).resolve()
+            runner_temp = root / "runner-temp"; runner_temp.mkdir()
+            (root / "build").mkdir()
+            (root / "evidence").mkdir()
+            (root / "evidence/v02-execution.json").write_bytes(
+                (ROOT / "evidence/v02-execution.json").read_bytes())
+            trusted = root / "scripts/release"; trusted.mkdir(parents=True)
+            (trusted / "v02_single_native.py").write_bytes((ROOT / "scripts/release/v02_single_native.py").read_bytes())
+            env_file = root / "github-env"; env_file.write_text("")
+            output_file = root / "github-output"; output_file.write_text("")
+            claim_start = (now - datetime.timedelta(seconds=120)).isoformat().replace("+00:00", "Z")
+            env = {"GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REPOSITORY": "szTheory/genewhip",
+                "GITHUB_RUN_ID": "12345", "GITHUB_RUN_ATTEMPT": "1", "GITHUB_SHA": source,
+                "GITHUB_REF_NAME": branch, "GH_TOKEN": "fixture-token",
+                "GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE": "native-prefix-queue-v1",
+                "GENEWHIP_NATIVE_DIAGNOSTIC_CASE": "recursion94-native-prefix",
+                "GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT": claim_start,
+                "GENEWHIP_NATIVE_DIAGNOSTIC_DEADLINE": (datetime.datetime.fromisoformat(claim_start.replace("Z", "+00:00"))
+                    + datetime.timedelta(seconds=5400)).isoformat().replace("+00:00", "Z"),
+                "GENEWHIP_QUALIFICATION_STARTED_AT": claim_start,
+                "GENEWHIP_QUALIFICATION_NONCE": "b" * 32,
+                "GENEWHIP_NATIVE_DIAGNOSTIC_SOURCE_SHA": source,
+                "GENEWHIP_NATIVE_DIAGNOSTIC_CLAIM_SHA256": "a" * 64,
+                "RUNNER_TEMP": str(runner_temp), "GITHUB_ENV": str(env_file),
+                "GITHUB_OUTPUT": str(output_file)}
+            response_end = 20_000_000_000_000
+            monotonic_values = iter((response_end - 2_000_000_000,
+                response_end, *([response_end + 1_000_000_000] * 10)))
+            module = load_module(self)
+            with mock.patch.object(module, "ROOT", root), mock.patch.dict(os.environ, env, clear=True), \
+                 mock.patch.object(datetime, "datetime", FixedClock), \
+                 mock.patch("urllib.request.urlopen", return_value=Response()), \
+                 mock.patch.object(module.time, "monotonic_ns", side_effect=lambda: next(monotonic_values)), \
+                 mock.patch.object(module, "_external", return_value=subprocess.CompletedProcess([], 0, "", "")) as launch:
+                exec(compile(inline, "<queue-clock-bootstrap>", "exec"), {})
+                for entry in env_file.read_text().splitlines():
+                    key, value = entry.split("=", 1)
+                    os.environ[key] = value
+                published = module.publish_native_prefix_job_clock_receipt()
+                module.native_prefix_setup_step("configure")
+                loaded, projection, _ = module._load_native_prefix_job_clock(require_live=True)
+                with mock.patch.object(module.time, "monotonic_ns",
+                        return_value=response_end + 2_000_000_000), \
+                     mock.patch.object(module, "_external",
+                        return_value=subprocess.CompletedProcess([], 0, "", "")) as dependencies:
+                    module.native_prefix_setup_step("dependencies")
+            self.assertEqual(loaded["job_id"], 712)
+            self.assertEqual(loaded["job_name"], "v02-runtime")
+            self.assertEqual(loaded["job_status_at_observation"], "in_progress")
+            self.assertEqual(loaded["job_started_at"], started)
+            self.assertEqual(loaded["run_id"], "12345")
+            self.assertEqual(loaded["run_attempt"], 1)
+            self.assertEqual(loaded["head_sha"], source)
+            self.assertEqual(loaded["head_branch"], branch)
+            self.assertEqual(loaded["claim_nonce"], "b" * 32)
+            self.assertEqual(loaded["claim_sha256"], "a" * 64)
+            self.assertEqual(loaded["server_date"], provider_now.isoformat())
+            self.assertEqual(loaded["round_trip_ns"], 2_000_000_000)
+            local_response = datetime.datetime.fromisoformat(loaded["local_response_at"])
+            provider_response = datetime.datetime.fromisoformat(loaded["server_date"])
+            skew = (local_response - provider_response).total_seconds()
+            self.assertGreater(skew, 58)
+            self.assertLess(skew, 60)
+            def utc_ns(value):
+                parsed = datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+                delta = parsed.astimezone(datetime.timezone.utc) - datetime.datetime(1970, 1, 1,
+                    tzinfo=datetime.timezone.utc)
+                return (delta.days * 86400 + delta.seconds) * 1_000_000_000 + delta.microseconds * 1000
+            conservative_now = max(utc_ns(loaded["server_date"]) + loaded["round_trip_ns"] + 1_000_000_000,
+                utc_ns(loaded["local_response_at"]))
+            expected_job_start = loaded["response_received_monotonic_ns"] - (
+                conservative_now - utc_ns(loaded["job_started_at"]))
+            self.assertEqual(projection["job_started_monotonic_ns"], expected_job_start)
+            self.assertEqual(published.read_bytes(), (runner_temp / "native-prefix-job-clock.json").read_bytes())
+            self.assertEqual(projection["job_deadline_monotonic_ns"]
+                - projection["job_started_monotonic_ns"], 2700 * 1_000_000_000)
+            self.assertEqual(projection["job_cleanup_deadline_monotonic_ns"],
+                projection["job_deadline_monotonic_ns"] - 30 * 1_000_000_000)
+            self.assertEqual(projection["collector_deadline_monotonic_ns"], min(
+                projection["controller_cleanup_deadline_monotonic_ns"],
+                projection["job_cleanup_deadline_monotonic_ns"]))
+            self.assertEqual(projection["collector_start_cutoff_monotonic_ns"],
+                projection["collector_deadline_monotonic_ns"] - 1800 * 1_000_000_000)
+            self.assertEqual(projection["setup_deadline_monotonic_ns"], min(
+                projection["job_started_monotonic_ns"] + 600 * 1_000_000_000,
+                projection["collector_start_cutoff_monotonic_ns"]))
+            self.assertEqual(launch.call_args.args[0][:2], ["cmake", "-S"])
+            self.assertEqual(launch.call_args.kwargs["file_size_limit_bytes"], 2 * 1024**3)
+            self.assertFalse(launch.call_args.kwargs["check"])
+            self.assertTrue(launch.call_args.kwargs["allow_build_file_links"])
+            self.assertEqual(launch.call_args.kwargs["owned_roots"], (root / "build/v02",))
+            self.assertEqual(dependencies.call_args.args[0],
+                ["bash", "scripts/ci/prepare_evidence_dependencies.sh"])
+            self.assertTrue(dependencies.call_args.kwargs["allow_build_file_links"])
+            self.assertEqual(dependencies.call_args.kwargs["owned_roots"],
+                (root / "build/v02", root / "build/tool-cache", root / "build/audio-refs"))
+            self.assertIn("checkout_timeout_minutes=", output_file.read_text())
+
+            import contextlib
+            import io
+            failure_output = io.StringIO()
+            failure_env = dict(env)
+            for entry in env_file.read_text().splitlines():
+                key, value = entry.split("=", 1)
+                failure_env[key] = value
+            with mock.patch.object(module, "ROOT", root), mock.patch.dict(os.environ, failure_env, clear=True), \
+                 mock.patch.object(module.time, "monotonic_ns",
+                    return_value=response_end + 2_000_000_000), \
+                 mock.patch.object(module, "_external", return_value=subprocess.CompletedProcess(
+                    ["bash", "scripts/ci/prepare_evidence_dependencies.sh"], 7,
+                    "", "private diagnostic text")) as failed_launch, \
+                 contextlib.redirect_stdout(failure_output):
+                with self.assertRaisesRegex(ValueError, "native-prefix-setup-command-failed"):
+                    module.native_prefix_setup_step("dependencies")
+            self.assertEqual(failed_launch.call_args.kwargs["file_size_limit_bytes"], 2 * 1024**3)
+            self.assertFalse(failed_launch.call_args.kwargs["check"])
+            self.assertTrue(failed_launch.call_args.kwargs["allow_build_file_links"])
+            marker = failure_output.getvalue().strip()
+            self.assertTrue(marker.startswith("GENEWHIP_NATIVE_SETUP_FAILURE:"))
+            self.assertNotIn("private diagnostic text", marker)
+            failure = json.loads(marker.split(":", 1)[1])
+            self.assertEqual(failure, {"schema": "genewhip.native-prefix-setup-failure.v1",
+                "step": "dependencies", "reason": "child-exit-nonzero", "returncode": 7,
+                "file_size_limit_bytes": 2 * 1024**3})
+
+    def test_shared_setup_helper_accounts_for_benign_owned_links_while_default_rejects(self):
+        require_process_context()
+        import shutil
+        import sys
+        import contextlib
+        import io
+        from unittest import mock
+        module = load_module(self)
+        with tempfile.TemporaryDirectory(prefix="gw-shared-setup-helper-") as temporary:
+            root = Path(temporary).resolve()
+            (root / "evidence").mkdir()
+            shutil.copyfile(ROOT / "evidence/v02-execution.json", root / "evidence/v02-execution.json")
+            (root / "tests/session").mkdir(parents=True)
+            shutil.copyfile(ROOT / "tests/session/phase6_route_contract.py",
+                root / "tests/session/phase6_route_contract.py")
+            (root / "scripts/evidence").mkdir(parents=True)
+            shutil.copyfile(ROOT / "scripts/evidence/phase5_process.py",
+                root / "scripts/evidence/phase5_process.py")
+            owned = root / "build/v02/setup-output"
+            owned.mkdir(parents=True)
+            target = owned / "libmetadata.la"
+            target.write_text("static metadata")
+            (owned / ".libs").mkdir()
+            (owned / ".libs/libmetadata.la.1").symlink_to("../libmetadata.la")
+            (owned / ".libs/libmetadata.la").symlink_to("libmetadata.la.1")
+            hardlink_target = owned / "libarchive.a"
+            hardlink_target.write_bytes(b"archive metadata")
+            os.link(hardlink_target, owned / "libarchive-copy.a")
+            command = [sys.executable, "-c", "pass"]
+            with mock.patch.object(module, "ROOT", root):
+                result = module._run_bounded_setup_command(command, step="configure",
+                    owned_roots=(owned,), timeout=30, phase="preparation")
+                failure_output = io.StringIO()
+                with contextlib.redirect_stderr(failure_output):
+                    with self.assertRaisesRegex(ValueError, "hosted-delivery-command-unavailable"):
+                        module._external(command, timeout=30, phase="preparation",
+                            owned_roots=(owned,), check=False)
+            self.assertEqual(result.returncode, 0)
+            marker = failure_output.getvalue().strip().splitlines()[-1]
+            self.assertTrue(marker.startswith("GENEWHIP_COORDINATOR_FAILURE:"))
+            projected = json.loads(marker.split(":", 1)[1])
+            self.assertEqual(projected["scratch_kind"], "hardlink-file",
+                "the default guest/untrusted scanner must reject the same setup tree")
+
+    def test_ci_setup_failure_uses_typed_ci_marker_without_changing_native_marker(self):
+        import contextlib
+        import io
+        import shutil
+        from unittest import mock
+        module = load_module(self)
+        with tempfile.TemporaryDirectory(prefix="gw-ci-setup-failure-") as temporary:
+            root = Path(temporary).resolve()
+            (root / "evidence").mkdir()
+            shutil.copyfile(ROOT / "evidence/v02-execution.json", root / "evidence/v02-execution.json")
+            owned = root / "build/desktop"
+            owned.mkdir(parents=True)
+            secret = "PRIVATE_PATH /private/stderr-token"
+            output = io.StringIO()
+            argv = ["cmake", "-S", "."]
+            with mock.patch.object(module, "ROOT", root), \
+                 mock.patch.object(module, "_external", return_value=subprocess.CompletedProcess(
+                    argv, 7, "", secret)), contextlib.redirect_stdout(output):
+                with self.assertRaisesRegex(ValueError, "ci-desktop-setup-command-failed"):
+                    module._run_bounded_setup_command(argv, step="ci-desktop-configure",
+                        owned_roots=(owned,), timeout=30, phase="preparation")
+            marker = output.getvalue().strip()
+            self.assertTrue(marker.startswith("GENEWHIP_CI_SETUP_FAILURE:"))
+            self.assertNotIn(secret, marker)
+            self.assertNotIn(str(root), marker)
+            failure = json.loads(marker.split(":", 1)[1])
+            self.assertEqual(failure, {"schema": "genewhip.ci-setup-failure.v1",
+                "step": "ci-desktop-configure", "reason": "child-exit-nonzero",
+                "returncode": 7, "file_size_limit_bytes": 2 * 1024**3})
+
+    def test_external_explicit_binary_cap_allows_benign_output_over_legacy_trace_cap(self):
+        require_process_context()
+        import sys
+        module = load_module(self)
+        size = 17 * 1024 * 1024
+        with tempfile.TemporaryDirectory(prefix="gw-native-setup-file-cap-") as temporary:
+            output = Path(temporary) / "bounded-output.bin"
+            command = [sys.executable, "-c",
+                "import pathlib,sys;pathlib.Path(sys.argv[1]).write_bytes(b'x'*(17*1024*1024))",
+                str(output)]
+            result = module._external(command, timeout=30, phase="runtime",
+                file_size_limit_bytes=2 * 1024**3)
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(output.stat().st_size, size)
+
+    def test_queue_clock_bootstrap_precedes_checkout_and_bounds_all_setup(self):
+        text = (ROOT / ".github/workflows/ci.yml").read_text()
+        job = text.split("  v02-runtime:", 1)[1].split("\n  v02-benchmark-control:", 1)[0]
+        bootstrap = job.index("Capture queue-aware job start before checkout")
+        checkout = job.index("Check out source within the remaining setup window")
+        exact_source = job.index("Verify exact queue-aware diagnostic checkout before reading project code")
+        setup = job.index("Prepare dependencies under the native setup cutoff")
+        self.assertLess(bootstrap, checkout)
+        self.assertLess(checkout, exact_source)
+        self.assertLess(exact_source, setup)
+        self.assertIn("fromJSON(steps.native_prefix_queue_clock.outputs.checkout_timeout_minutes)", job)
+        self.assertIn('native_prefix_setup_step("configure")', job)
+        self.assertIn('native_prefix_setup_step("build")', job)
+        self.assertIn("actions: read", job)
+        self.assertIn("build/v02/native-prefix-job-clock.json", job)
+        self.assertIn("build/v02/native-prefix-diagnostic.json", job)
+        self.assertIn('abs((local_response_at - server_date).total_seconds()) > 60', job)
+        self.assertIn('abs(local_elapsed_ns - rtt) > 2 * NS', job)
+        self.assertIn('"local_request_started_at": local_request_started_at.isoformat()', job)
+        self.assertIn('"local_response_at": local_response_at.isoformat()', job)
+        self.assertIn('provider_now_upper_ns = max(server_date_ns + rtt + NS,', job)
+        self.assertIn("seconds = (setup_deadline_ns - time.monotonic_ns() - 120 * NS) // NS", job)
+        self.assertIn("timeout=10", job)
+        self.assertIn('time.monotonic_ns() >= cutoff', job)
+        action = (ROOT / ".github/actions/qualification-clock/action.yml").read_text()
+        self.assertIn("publish_native_prefix_job_clock_receipt", action)
+
+    def test_desktop_workflow_runblock_executes_shared_bounded_setup_helper(self):
+        import shlex
+        import shutil
+        from unittest import mock
+        module = load_module(self)
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        desktop = re.search(r"(?ms)^  desktop:\n(.*?)(?=^  package:\n)", workflow).group(1)
+        dependency_command = shlex.split(re.search(
+            r"(?m)^      - name: Prepare pinned evidence dependencies\n        run: (.+)$",
+            desktop).group(1))
+        marker = "      - name: Build SDL desktop tests\n        run: |\n"
+        block = desktop.split(marker, 1)[1].split("\n      - name:", 1)[0]
+        commands = [dependency_command, *[
+            shlex.split(line.strip()) for line in block.splitlines() if line.strip()]]
+        self.assertEqual(len(commands), 3)
+        self.assertTrue(all(command[:3] == ["python3", "-I", "-c"] for command in commands))
+        with tempfile.TemporaryDirectory(prefix="gw-desktop-setup-workflow-") as temporary:
+            root = Path(temporary).resolve()
+            (root / "evidence").mkdir()
+            shutil.copyfile(ROOT / "evidence/v02-execution.json", root / "evidence/v02-execution.json")
+            calls = []
+            module_name = "scripts.release.v02_qualification"
+            prior = sys.modules.get(module_name)
+            sys.modules[module_name] = module
+            try:
+                with mock.patch.object(module, "ROOT", root), \
+                     mock.patch.object(module, "_external",
+                        side_effect=lambda argv, **kwargs: (calls.append((argv, kwargs))
+                            or subprocess.CompletedProcess(argv, 0, "", ""))):
+                    for command in commands:
+                        exec(compile(command[command.index("-c") + 1],
+                            "<desktop-workflow-runblock>", "exec"), {})
+            finally:
+                if prior is None:
+                    sys.modules.pop(module_name, None)
+                else:
+                    sys.modules[module_name] = prior
+        self.assertEqual([call[0] for call in calls], [
+            ["bash", "scripts/ci/prepare_evidence_dependencies.sh"],
+            ["cmake", "-S", ".", "-B", str(root / "build/desktop"),
+                "-DCMAKE_BUILD_TYPE=Release", "-DGENEWHIP_BUILD_DESKTOP=ON"],
+            ["cmake", "--build", str(root / "build/desktop"), "--parallel", "2"]])
+        self.assertEqual([call[1]["phase"] for call in calls], ["preparation"] * 3)
+        self.assertEqual([call[1]["allow_build_file_links"] for call in calls], [True] * 3)
+        self.assertEqual([call[1]["file_size_limit_bytes"] for call in calls], [2 * 1024**3] * 3)
+        self.assertEqual(calls[0][1]["owned_roots"], (root / "build/v02",
+            root / "build/tool-cache", root / "build/audio-refs"))
+        self.assertEqual(calls[1][1]["owned_roots"], (root / "build/desktop",))
+        self.assertEqual(calls[2][1]["owned_roots"], (root / "build/desktop",))
+
+    def test_queue_profile_external_commands_use_frozen_monotonic_work_and_cleanup_cutoffs(self):
+        from unittest import mock
+        module = load_module(self)
+        completed = {"returncode": 0, "process_group_cleanup": "confirmed",
+            "streams": {"stdout": {"text": "", "truncated": False,
+                "observed_bytes": 0, "retained_bytes": 0, "sha256": hashlib.sha256(b"").hexdigest()},
+                "stderr": {"text": "", "truncated": False, "observed_bytes": 0,
+                    "retained_bytes": 0, "sha256": hashlib.sha256(b"").hexdigest()}}}
+        started_at = datetime.datetime.now(datetime.timezone.utc)
+        deadline_at = started_at + datetime.timedelta(seconds=5400)
+        base_env = {"GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE": "native-prefix-queue-v1",
+            "GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT": started_at.isoformat(),
+            "GENEWHIP_NATIVE_DIAGNOSTIC_DEADLINE": deadline_at.isoformat(),
+            "GENEWHIP_QUALIFICATION_STARTED_AT": started_at.isoformat(),
+            "GENEWHIP_NATIVE_CONTROLLER_WORK_CUTOFF_MONOTONIC_NS": "3000000000",
+            "GENEWHIP_NATIVE_CONTROLLER_HARD_DEADLINE_MONOTONIC_NS": "5000000000",
+            "GENEWHIP_NATIVE_JOB_COLLECTOR_DEADLINE_MONOTONIC_NS": "2500000000",
+            "GENEWHIP_NATIVE_JOB_HARD_DEADLINE_MONOTONIC_NS": "4000000000",
+            "GENEWHIP_NATIVE_CONTROLLER_CLEANUP_MODE": "0"}
+        with mock.patch.object(module.time, "monotonic_ns", return_value=1_000_000_000), \
+             mock.patch.object(module, "_bounded_command", return_value=completed) as bounded, \
+             mock.patch.dict(os.environ, base_env, clear=True):
+            module._external(["fixture"], timeout=120, phase="runtime")
+        self.assertEqual(bounded.call_args.kwargs["limits"]["wall_seconds"], 1.5)
+        with mock.patch.object(module.time, "monotonic_ns", return_value=1_000_000_000), \
+             mock.patch.object(module, "_bounded_command", return_value=completed) as bounded, \
+             mock.patch.dict(os.environ, {**base_env,
+                 "GENEWHIP_NATIVE_CONTROLLER_CLEANUP_MODE": "1"}, clear=True):
+            module._external(["fixture"], timeout=120, phase="runtime")
+        self.assertEqual(bounded.call_args.kwargs["limits"]["wall_seconds"], 3.0)
+
     def test_native_diagnostic_workflow_excludes_qualification_jobs(self):
         import re
         from types import SimpleNamespace
@@ -257,7 +2489,9 @@ class QualificationCoordinatorContract(unittest.TestCase):
             ("push", "refs/heads/main", "", ordinary | {"attestation"}),
             ("workflow_dispatch", "refs/heads/main", "none", set(jobs) - {"extended"}),
             ("workflow_dispatch", "refs/heads/reviewed", "recursion94-withhold-first-plate", {"v02-runtime"}),
+            ("workflow_dispatch", "refs/heads/reviewed", "recursion94-native-prefix", {"v02-runtime"}),
             ("workflow_dispatch", "refs/heads/main", "recursion94-withhold-first-plate", {"v02-runtime"}),
+            ("workflow_dispatch", "refs/heads/main", "recursion94-native-prefix", {"v02-runtime"}),
             ("workflow_dispatch", "refs/heads/reviewed", "unrecognized", {"v02-runtime"})]
         for event, ref, selector, expected in scenarios:
             selected = set()
@@ -285,13 +2519,241 @@ class QualificationCoordinatorContract(unittest.TestCase):
             command.append(line.strip())
         argv = shlex.split(" ".join(command))
         self.assertEqual(argv[:3], ["python3", "-I", "-c"])
-        for selector in ("", "none", "recursion94-withhold-first-plate", "unrecognized"):
+        for selector in ("", "none", "recursion94-withhold-first-plate", "recursion94-native-prefix", "unrecognized"):
             with mock.patch.dict(os.environ, {"GENEWHIP_NATIVE_DIAGNOSTIC_CASE": selector}):
                 if selector == "unrecognized":
                     with self.assertRaisesRegex(AssertionError, "selector-invalid"):
                         exec(compile(argv[3], "<trusted-workflow-selector-guard>", "exec"), {})
                 else:
                     exec(compile(argv[3], "<trusted-workflow-selector-guard>", "exec"), {})
+
+    def test_native_prefix_hosted_cli_uses_reviewed_guard_route_only(self):
+        from unittest import mock
+        from io import StringIO
+        module = load_module(self)
+        argv = ["--mode", "native-prefix-diagnostic-hosted", "--out", "build/v02/prefix-result.json",
+            "--journal", "build/v02/ci-continuation-20261031T124319Z/attempt-0016/hosted-delivery-journal.json",
+            "--publication-copy", "build/v02/ci-continuation-20261031T124319Z/attempt-0016/candidate/publication-copy",
+            "--batch-authorization", "build/v02/ci-continuation-20261031T124319Z/authorization.json",
+            "--batch-authorization-sha256", "a" * 64, "--batch-admission", "build/v02/admission.json",
+            "--batch-admission-sha256", "b" * 64, "--diagnostic-readiness", "build/v02/prefix-readiness.json",
+            "--diagnostic-readiness-sha256", "c" * 64]
+        for outcome in ({"status": "pass"}, {"status": "fail"}):
+            with mock.patch.object(module, "_fresh_batch_guard", side_effect=AssertionError("duplicate main guard")), \
+                 mock.patch.object(module, "run_native_prefix_diagnostic_hosted") as owner, \
+                 mock.patch.object(module, "_write_fresh_batch_failure", side_effect=AssertionError("old latch written")), \
+                 mock.patch.object(module.sys, "stdout", StringIO()), mock.patch.object(module.sys, "stderr", StringIO()):
+                owner.return_value = outcome
+                result = module.main(argv)
+                self.assertEqual(result, 0 if outcome == {"status": "pass"} else 1)
+                self.assertEqual(owner.call_count, 1)
+        wrong_route = ["--mode", "native-diagnostic", "--out", "build/v02/prefix-result.json",
+            "--diagnostic-readiness", "build/v02/prefix-readiness.json",
+            "--diagnostic-readiness-sha256", "c" * 64]
+        with mock.patch.object(module, "run_native_prefix_diagnostic_hosted") as owner, \
+             mock.patch.object(module.sys, "stdout", StringIO()), mock.patch.object(module.sys, "stderr", StringIO()):
+            self.assertEqual(module.main(wrong_route), 1)
+            owner.assert_not_called()
+
+    def test_native_prefix_hosted_controller_uses_real_batch_validator(self):
+        from types import SimpleNamespace
+        from unittest import mock
+        from io import StringIO
+        import copy
+
+        if os.environ.get("GENEWHIP_PREFIX_REAL_GUARD_CHILD") != "1":
+            module = load_module(self)
+            require_process_context()
+            scope = json.loads((ROOT / "evidence/v02-execution.json").read_bytes())
+            code = (
+                "import importlib.util,sys,unittest\n"
+                f"root={str(ROOT)!r}\n"
+                "spec=importlib.util.spec_from_file_location('qcontracts_child', root + '/tests/evidence/v02_qualification_contract.py')\n"
+                "m=importlib.util.module_from_spec(spec); sys.modules[spec.name]=m; spec.loader.exec_module(m)\n"
+                "test=unittest.defaultTestLoader.loadTestsFromName('test_native_prefix_hosted_controller_uses_real_batch_validator', m.QualificationCoordinatorContract)\n"
+                "result=unittest.TextTestRunner(verbosity=2).run(test)\n"
+                "raise SystemExit(0 if result.wasSuccessful() else 1)\n")
+            with tempfile.TemporaryDirectory(prefix="native-prefix-real-guard-", dir=ROOT / "build/v02") as temp:
+                scratch = Path(temp).resolve()
+                attempt = module._bounded_command([sys.executable, "-I", "-c", code],
+                    limits=scope["per_child_limits"], scratch=scratch, timeout=180,
+                    label="native-prefix-real-guard-contract", check=False,
+                    env={**os.environ, "GENEWHIP_PREFIX_REAL_GUARD_CHILD": "1"},
+                    scratch_roots=(scratch,))
+                retain_control_receipt("native-prefix-real-guard", attempt)
+                self.assertEqual(attempt.get("returncode"), 0,
+                    "isolated real-guard contract failed: " + str(attempt.get("streams", {}).get("stderr", {}).get("text", ""))[-1000:])
+                self.assertEqual(attempt.get("process_group_cleanup"), "confirmed")
+                self.assertEqual(attempt.get("processes", [{}])[0].get("bound_violation"), False)
+            return
+
+        def load_contract(path, name):
+            spec = importlib.util.spec_from_file_location(name, path)
+            loaded = importlib.util.module_from_spec(spec)
+            sys.modules[name] = loaded
+            spec.loader.exec_module(loaded)
+            return loaded
+        fixture_module = load_contract(ROOT / "tests/evidence/phase7_fresh_batch_contract.py",
+            "gw_native_prefix_hosted_real_guard_fixture")
+        fixture_module.FreshBatchContracts.setUpClass()
+        module = load_module(self)
+        fixed_now = datetime.datetime.fromisoformat("2026-10-31T12:50:00+00:00")
+        actual_datetime = datetime.datetime
+        class FixedCoordinatorClock(actual_datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return fixed_now if tz is not None else fixed_now.replace(tzinfo=None)
+        coordinator_clock = SimpleNamespace(datetime=FixedCoordinatorClock,
+            timezone=datetime.timezone, timedelta=datetime.timedelta)
+        nonce = "e" * 32
+        for runtime_conclusion in ("success", "failure"):
+            case = fixture_module.FreshBatchContracts(
+                "test_native_prefix_stage_uses_full_production_guard_and_disallows_legacy_route")
+            case.setUp()
+            self.addCleanup(case.doCleanups)
+            fixture = case._native_prefix_readiness_successor()
+            attempt = fixture["root"]
+            scope_path = case.root / fixture_module.BATCH.SCOPE_PATH
+            publication = attempt / "candidate/publication-copy"
+            preparation = attempt / "candidate/preparation.json"
+            journal = attempt / "hosted-delivery-journal.json"
+            output = attempt / "native-prefix-diagnostic/result.json"
+            auth_sha = fixture_module.BATCH.AUTH_SHA256
+            source = json.loads(fixture["admission_path"].read_bytes())["candidate"]["public_head"]
+            base = json.loads(fixture["admission_path"].read_bytes())["candidate"]["public_base"]
+            branch = "v0.2-source-" + source[:12]
+            pr_number = int(json.loads(journal.read_bytes())["pull_request"])
+            readiness = json.loads(fixture["readiness_path"].read_bytes())
+            assessment_path = case.root / readiness["diagnostic_assessment"]["path"]
+            assessment = json.loads(assessment_path.read_bytes())
+            preview = assessment["github"]["workflow_run"]
+            run_id = 87654321 if runtime_conclusion == "success" else 87654322
+            run = {"id": run_id, "run_attempt": 1, "event": "workflow_dispatch",
+                "head_sha": source, "head_branch": branch, "path": ".github/workflows/ci.yml",
+                "display_title": "Plan10 native prefix diagnostic " + nonce,
+                "repository": {"full_name": "szTheory/genewhip"}, "status": "completed",
+                "conclusion": runtime_conclusion, "created_at": fixed_now.isoformat().replace("+00:00", "Z")}
+            job_names = {"safety", "gameplay", "desktop", "package", "performance", "product-smoke",
+                "phase7-fast", "v02-runtime", "extended", "attestation", "required-ci",
+                "v02-benchmark-control", "v02-benchmark-recursion94", "v02-benchmark-tank-battle",
+                "v02-package", "v02-release-qualification"}
+            jobs = {"total_count": 16, "jobs": [{"name": name, "status": "completed",
+                "conclusion": runtime_conclusion if name == "v02-runtime" else "skipped"}
+                for name in sorted(job_names)]}
+            dispatches = []
+            workflow_checks = [[], [run]]
+
+            def real_guard(**kwargs):
+                return fixture_module.BATCH.validate_batch(case.root, case.auth, auth_sha,
+                    kwargs["batch_admission"], kwargs["batch_admission_sha256"],
+                    stage=kwargs["stage"], source_head=case.source_head,
+                    now=datetime.datetime.fromisoformat("2026-10-31T12:50:00+00:00"),
+                    scope_path=scope_path, journal_path=kwargs["journal_path"],
+                    publication_copy=kwargs["publication_copy"],
+                    preflight_path=kwargs["preflight_path"], output_path=kwargs["output_path"],
+                    source_is_ancestor=lambda _ancestor, _descendant: True,
+                    expected_source_paths=set(case.source_paths),
+                    diagnostic_readiness_path=kwargs["diagnostic_readiness_path"],
+                    diagnostic_readiness_sha256=kwargs["diagnostic_readiness_sha256"])
+
+            def github(_repository, endpoint, **_kwargs):
+                if endpoint == f"pulls/{pr_number}":
+                    return {"state": "open", "merged": False,
+                        "head": {"sha": source, "ref": branch, "repo": {"full_name": "szTheory/genewhip"}},
+                        "base": {"sha": base, "ref": "main"}}
+                if endpoint == "git/ref/heads/" + branch:
+                    return {"object": {"sha": source}}
+                if endpoint == "actions/runs/" + str(preview["id"]):
+                    return {"event": "pull_request", "head_sha": source, "status": "completed",
+                        "conclusion": "success", "run_attempt": preview["run_attempt"]}
+                if endpoint == f"actions/runs/{run_id}/jobs?filter=latest&per_page=100":
+                    return jobs
+                raise AssertionError("unexpected GitHub endpoint: " + endpoint)
+
+            native_module = load_contract(ROOT / "tests/evidence/phase7_native_diagnostic_contract.py",
+                "gw_native_prefix_report_fixture")
+            report_case = native_module.NativePrefixDiagnosticContract(
+                "test_fixed_two_case_projector_passes_and_checks_both_port_observations")
+            self.addCleanup(report_case.doCleanups)
+            report = report_case.public()
+            if runtime_conclusion == "failure":
+                record = report_case.passing_record()
+                record["status"] = "fail"
+                record["failure_category"] = "bounded-workload-failed"
+                record["stages"][1]["cases"][0]["status"] = "fail"
+                record["stages"][1]["status"] = "fail"
+                report = report_case.public(record)
+            report["identity"] = {"source_sha": source, "head_sha": source, "base_sha": base,
+                "run_id": str(run_id), "run_attempt": "1"}
+
+            def download(_repo, selected, attempt_number, artifact, destination, **_kwargs):
+                self.assertEqual((selected, attempt_number, artifact), (str(run_id), "1", "native-prefix-diagnostic"))
+                destination.mkdir(parents=True)
+                (destination / "native-prefix-diagnostic.json").write_text(json.dumps(report))
+
+            argv = ["gh", "workflow", "run"]
+            def external(command, **_kwargs):
+                dispatches.append(list(command))
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            def workflow_runs(*_args, **_kwargs):
+                return workflow_checks.pop(0)
+
+            with mock.patch.object(module, "ROOT", case.root), \
+                 mock.patch.object(module, "datetime", coordinator_clock), \
+                 mock.patch.object(module, "_fresh_batch_guard", side_effect=real_guard), \
+                 mock.patch.object(module, "_load_runtime_module", return_value=native_module.runner), \
+                 mock.patch.object(module, "_gh_json", side_effect=github), \
+                 mock.patch.object(module, "_workflow_runs", side_effect=workflow_runs), \
+                 mock.patch.object(module, "_external", side_effect=external), \
+                 mock.patch.object(module, "_download_run_artifact", side_effect=download), \
+                 mock.patch.object(module.uuid, "uuid4", return_value=SimpleNamespace(hex=nonce)), \
+                 mock.patch.object(fixture_module.BATCH, "NATIVE_PREFIX_ATTEMPT20_ROOT",
+                     fixture["predecessor"]["attempt_root"]), \
+                 mock.patch.object(fixture_module.BATCH, "NATIVE_PREFIX_ATTEMPT20_EVIDENCE_PATHS",
+                     fixture["attempt20_paths"]), \
+                 mock.patch.object(fixture_module.BATCH, "NATIVE_PREFIX_ATTEMPT20_EVIDENCE_SHA256",
+                     fixture["attempt20_hashes"]), \
+                 mock.patch.object(module.time, "monotonic", return_value=100.0), \
+                 mock.patch.object(module.time, "sleep", side_effect=AssertionError("completed run must not sleep")):
+                result = module.run_native_prefix_diagnostic_hosted(preparation, publication, scope_path,
+                    output, journal, batch_authorization=case.auth,
+                    batch_authorization_sha256=auth_sha, batch_admission=fixture["admission_path"],
+                    batch_admission_sha256=fixture["admission_sha"], prefix_readiness=fixture["readiness_path"],
+                    prefix_readiness_sha256=fixture["readiness_sha"])
+                self.assertEqual(result["status"], "pass" if runtime_conclusion == "success" else "fail")
+                self.assertFalse(result["qualification_accepted"])
+                self.assertTrue(result["assessment_required"])
+                self.assertEqual(len(dispatches), 1)
+                self.assertEqual(dispatches[0][dispatches[0].index("--field") + 1],
+                    "qualification_started_at=" + case.started)
+                self.assertIn("native_diagnostic_case=recursion94-native-prefix", dispatches[0])
+                self.assertIn("qualification_base_sha=" + base, dispatches[0])
+                self.assertIn("diagnostic_source_sha=" + source, dispatches[0])
+                with self.assertRaises(ValueError):
+                    module.run_native_prefix_diagnostic_hosted(preparation, publication, scope_path,
+                        output, journal, batch_authorization=case.auth,
+                        batch_authorization_sha256=auth_sha, batch_admission=fixture["admission_path"],
+                        batch_admission_sha256=fixture["admission_sha"], prefix_readiness=fixture["readiness_path"],
+                        prefix_readiness_sha256=fixture["readiness_sha"])
+                self.assertEqual(len(dispatches), 1)
+
+    def test_native_prefix_runtime_cli_dispatches_only_fixed_collector(self):
+        from unittest import mock
+        from io import StringIO
+        module = load_module(self)
+        with tempfile.TemporaryDirectory() as temp:
+            out = Path(temp) / "native-prefix.json"
+            argv = ["--mode", "native-prefix-diagnostic", "--build", str(ROOT / "build/phase6"),
+                "--scope", str(ROOT / "evidence/v02-execution.json"), "--out", str(out)]
+            for status in ("pass", "fail"):
+                with mock.patch.object(module, "run_native_prefix_diagnostic",
+                        return_value={"status": status, "qualification_accepted": False}) as owner, \
+                     mock.patch.object(module.sys, "stdout", StringIO()), \
+                     mock.patch.object(module.sys, "stderr", StringIO()):
+                    self.assertEqual(module.main(argv), 0 if status == "pass" else 1)
+                    owner.assert_called_once_with(Path(ROOT / "build/phase6"),
+                        Path(ROOT / "evidence/v02-execution.json"), out)
 
     def test_native_hosted_cli_uses_its_own_guard_and_cannot_write_old_failure_latch(self):
         from unittest import mock
@@ -304,16 +2766,28 @@ class QualificationCoordinatorContract(unittest.TestCase):
             "--batch-authorization-sha256", "a" * 64, "--batch-admission", "build/v02/admission.json",
             "--batch-admission-sha256", "b" * 64, "--diagnostic-readiness", "build/v02/readiness.json",
             "--diagnostic-readiness-sha256", "c" * 64]
-        for outcome in ({"status": "pass"}, {"status": "fail"}, ValueError("diagnostic-rejected")):
-            with mock.patch.object(module, "_fresh_batch_guard", side_effect=AssertionError("duplicate guard")), \
-                 mock.patch.object(module, "run_native_diagnostic_hosted") as owner, \
-                 mock.patch.object(module, "_write_fresh_batch_failure", side_effect=AssertionError("old latch written")), \
-                 mock.patch.object(module.sys, "stdout", StringIO()), mock.patch.object(module.sys, "stderr", StringIO()):
-                if isinstance(outcome, Exception): owner.side_effect = outcome
-                else: owner.return_value = outcome
-                result = module.main(argv)
-                self.assertEqual(result, 0 if outcome == {"status": "pass"} else 1)
-                self.assertEqual(owner.call_count, 1)
+        for mode, owner_name in (("native-diagnostic-hosted", "run_native_diagnostic_hosted"),
+                                 ("native-prefix-diagnostic-hosted", "run_native_prefix_diagnostic_hosted")):
+            mode_argv = list(argv)
+            mode_argv[mode_argv.index("--mode") + 1] = mode
+            if mode.startswith("native-prefix"):
+                mode_argv[mode_argv.index("--journal") + 1] = mode_argv[mode_argv.index("--journal") + 1].replace(
+                    "attempt-0015", "attempt-0016")
+            for outcome in ({"status": "pass"}, {"status": "fail"}, ValueError("diagnostic-rejected")):
+                with self.subTest(mode=mode, outcome=repr(outcome)), \
+                     mock.patch.object(module, "_fresh_batch_guard", side_effect=AssertionError("duplicate guard")), \
+                     mock.patch.object(module, owner_name) as owner, \
+                     mock.patch.object(module, "_fresh_batch_attempt_root",
+                         side_effect=AssertionError("hosted diagnostic must not use legacy failure root")) as old_root, \
+                     mock.patch.object(module, "_write_fresh_batch_failure", side_effect=AssertionError("old latch written")) as old_latch, \
+                     mock.patch.object(module.sys, "stdout", StringIO()), mock.patch.object(module.sys, "stderr", StringIO()):
+                    if isinstance(outcome, Exception): owner.side_effect = outcome
+                    else: owner.return_value = outcome
+                    result = module.main(mode_argv)
+                    self.assertEqual(result, 0 if outcome == {"status": "pass"} else 1)
+                    self.assertEqual(owner.call_count, 1)
+                    old_root.assert_not_called()
+                    old_latch.assert_not_called()
 
     def test_native_diagnostic_driver_forwards_actual_outer_receipt_after_failure(self):
         from unittest import mock
@@ -495,6 +2969,39 @@ class QualificationCoordinatorContract(unittest.TestCase):
             self.assertNotIn(secret, text)
             self.assertEqual(value["return"], "other")
 
+    def test_outer_failure_marker_projects_only_typed_scratch_kind_and_reason(self):
+        module = load_module(self)
+        secret = "PRIVATE_PATH /private/token"
+        attempt = {"returncode": 1, "processes": [{
+            "process_group_cleanup": "confirmed", "status": "failed",
+            "scratch_tree_diagnostics": [
+                {"kind": "path-disappeared-during-scan", "path": secret},
+                {"kind": "unsafe-file-symlink", "reason": "target-invalid", "path": secret},
+            ]}]}
+        text = module._coordinator_failure_diagnostic(attempt, "bound-violation")
+        value = json.loads(text.split(":", 1)[1])
+        self.assertEqual(value["scratch_kind"], "unsafe-file-symlink")
+        self.assertEqual(value["scratch_reason"], "target-invalid")
+        self.assertNotIn(secret, text)
+        self.assertLessEqual(len(text.encode("utf-8")), 1024)
+        attempt["processes"][0]["scratch_tree_diagnostics"][1]["reason"] = "target-identity-changed"
+        text = module._coordinator_failure_diagnostic(attempt, "bound-violation")
+        value = json.loads(text.split(":", 1)[1])
+        self.assertEqual(value["scratch_reason"], "target-identity-changed")
+        self.assertNotIn(secret, text)
+        attempt["processes"][0]["scratch_tree_diagnostics"][1]["reason"] = "target-symlink-rejected"
+        text = module._coordinator_failure_diagnostic(attempt, "bound-violation")
+        value = json.loads(text.split(":", 1)[1])
+        self.assertEqual(value["scratch_reason"], "target-symlink-rejected")
+        self.assertNotIn(secret, text)
+        malformed = {"returncode": 1, "processes": [{"scratch_tree_diagnostics": [
+            {"kind": secret, "reason": secret, "path": secret}]}]}
+        text = module._coordinator_failure_diagnostic(malformed, "bound-violation")
+        value = json.loads(text.split(":", 1)[1])
+        self.assertEqual(value["scratch_kind"], "other")
+        self.assertEqual(value["scratch_reason"], "other")
+        self.assertNotIn(secret, text)
+
     def test_nested_cancellation_fixture_is_durable_bounded_and_narrow(self):
         from types import SimpleNamespace
         source = inspect.getsource(
@@ -589,7 +3096,8 @@ class QualificationCoordinatorContract(unittest.TestCase):
         environment.start()
         self.addCleanup(environment.stop)
         for key in ("GENEWHIP_QUALIFICATION_STARTED_AT", "GENEWHIP_QUALIFICATION_PHASE",
-                    "GENEWHIP_QUALIFICATION_NONCE"):
+                    "GENEWHIP_QUALIFICATION_NONCE", "GENEWHIP_QUALIFICATION_SCOPE_PATH",
+                    "GENEWHIP_QUALIFICATION_SCOPE_SHA256"):
             os.environ.pop(key, None)
         for key in tuple(os.environ):
             if key.startswith("GENEWHIP_RECOVERY_"):
@@ -1508,6 +4016,813 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
         with self.assertRaisesRegex(ValueError, "dispatch-nonce"):
             module._validate_workflow_clock(start, "2026-10-29T00:01:00Z", "bad", base,
                 now="2026-10-29T00:02:00Z")
+
+    def test_four_hour_workflow_clock_uses_public_scope_and_keeps_retry_time_consumed(self):
+        from unittest import mock
+        module = load_module(self)
+        with tempfile.TemporaryDirectory(prefix="phase7-window-workflow-clock-") as temporary:
+            root = Path(temporary).resolve()
+            evidence = root / "evidence"
+            release = root / "scripts/release"
+            evidence.mkdir()
+            release.mkdir(parents=True)
+            for relative in (Path("evidence/v02-phase7-full-execution-scope.json"),
+                    Path("evidence/v02-execution.json"),
+                    Path("scripts/release/v02_window.py")):
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((ROOT / relative).read_bytes())
+            module.ROOT = root
+            window_spec = importlib.util.spec_from_file_location(
+                "phase7_four_hour_workflow_window", release / "v02_window.py")
+            window_module = importlib.util.module_from_spec(window_spec)
+            window_spec.loader.exec_module(window_module)
+            scope = window_module.load_public_scope(root)
+            start = datetime.datetime.fromisoformat(window_module.STARTED_AT)
+            queued_at = start + datetime.timedelta(hours=2)
+            retry_at = start + datetime.timedelta(hours=2, minutes=30)
+            nonce, base = "a" * 32, "b" * 40
+            env = {"GENEWHIP_QUALIFICATION_SCOPE_PATH": window_module.SCOPE_PATH.as_posix(),
+                "GENEWHIP_QUALIFICATION_SCOPE_SHA256": window_module.SCOPE_SHA256}
+            with mock.patch.dict(os.environ, env, clear=True):
+                self.assertEqual(module._validate_workflow_clock(window_module.STARTED_AT,
+                    (start + datetime.timedelta(hours=1)).isoformat(), nonce, base,
+                    now=queued_at.isoformat(), phase="runtime"), window_module.STARTED_AT)
+                self.assertEqual(module._require_hosted_budget(window_module.STARTED_AT,
+                    queued_at.isoformat(), scope, phase="runtime"), 3600)
+                self.assertEqual(module._require_hosted_budget(window_module.STARTED_AT,
+                    retry_at.isoformat(), scope, phase="runtime"), 1800)
+                with self.assertRaisesRegex(ValueError, "phase7-window-start-replaced"):
+                    module._validate_workflow_clock(
+                        (start + datetime.timedelta(minutes=30)).isoformat(),
+                        (start + datetime.timedelta(hours=1)).isoformat(), nonce, base,
+                        now=queued_at.isoformat(), phase="runtime")
+                with self.assertRaisesRegex(ValueError, "phase7-window-phase-expired"):
+                    module._require_hosted_budget(window_module.STARTED_AT,
+                        window_module.RUNTIME_CUTOFF, scope, phase="runtime")
+            with mock.patch.dict(os.environ, {**env,
+                    "GENEWHIP_QUALIFICATION_SCOPE_SHA256": "0" * 64}, clear=True):
+                with self.assertRaisesRegex(ValueError, "qualification-scope-pin-invalid"):
+                    module._require_hosted_budget(window_module.STARTED_AT,
+                        queued_at.isoformat(), scope, phase="runtime")
+
+    def test_four_hour_scope_resolver_pairs_environment_pin_with_explicit_cli_scope(self):
+        from unittest import mock
+        module = load_module(self)
+        with tempfile.TemporaryDirectory(prefix="phase7-window-scope-route-") as temporary:
+            root = Path(temporary).resolve()
+            for relative in (Path("evidence/v02-phase7-full-execution-scope.json"),
+                    Path("evidence/v02-execution.json"),
+                    Path("scripts/release/v02_window.py")):
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((ROOT / relative).read_bytes())
+            legacy = root / "evidence/v02-execution.json"
+            prospective = root / "evidence/v02-phase7-full-execution-scope.json"
+            with mock.patch.dict(os.environ, {}, clear=True):
+                self.assertEqual(module.phase7_execution_scope_path(root=root), legacy)
+                self.assertEqual(module.phase7_execution_scope_path(root=root, explicit=legacy), legacy)
+            selected = {"GENEWHIP_QUALIFICATION_SCOPE_PATH":
+                    "evidence/v02-phase7-full-execution-scope.json",
+                "GENEWHIP_QUALIFICATION_SCOPE_SHA256":
+                    "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4"}
+            with mock.patch.dict(os.environ, selected, clear=True):
+                self.assertEqual(module.phase7_execution_scope_path(root=root), prospective)
+                self.assertEqual(module.phase7_execution_scope_path(root=root,
+                    explicit=prospective), prospective)
+                with self.assertRaisesRegex(ValueError, "qualification-scope-profile-conflict"):
+                    module.phase7_execution_scope_path(root=root, explicit=legacy)
+            with mock.patch.dict(os.environ, {**selected,
+                    "GENEWHIP_QUALIFICATION_SCOPE_PATH": "evidence/v02-execution.json"}, clear=True):
+                with self.assertRaisesRegex(ValueError, "qualification-scope-path-invalid"):
+                    module.phase7_execution_scope_path(root=root)
+            with mock.patch.dict(os.environ, {**selected,
+                    "GENEWHIP_QUALIFICATION_SCOPE_SHA256": "0" * 64}, clear=True):
+                with self.assertRaisesRegex(ValueError, "qualification-scope-pin-invalid"):
+                    module.phase7_execution_scope_path(root=root)
+
+    def test_phase7_external_preparation_timeout_stops_at_runtime_cutoff_minus_cleanup(self):
+        from unittest import mock
+        import shutil
+        module = load_module(self)
+        with tempfile.TemporaryDirectory(prefix="phase7-preparation-cutoff-") as temporary:
+            root = Path(temporary).resolve()
+            (root / "scripts/release").mkdir(parents=True)
+            shutil.copyfile(ROOT / "scripts/release/v02_window.py",
+                root / "scripts/release/v02_window.py")
+            for relative in (Path("evidence/v02-phase7-full-execution-scope.json"),
+                    Path("evidence/v02-execution.json")):
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ROOT / relative, target)
+            (root / "build/v02/coordinator-external-attempts").mkdir(parents=True)
+            module.ROOT = root
+            real_datetime = datetime.datetime
+            fixed_now = real_datetime.fromisoformat("2026-11-02T19:00:00+00:00")
+
+            class FrozenDateTime(real_datetime):
+                @classmethod
+                def now(cls, tz=None):
+                    return fixed_now.astimezone(tz) if tz is not None else fixed_now.replace(tzinfo=None)
+
+            observed = {}
+
+            def bounded(command, *, limits, timeout, **kwargs):
+                observed.update({"command": command, "limits": limits, "timeout": timeout,
+                    "kwargs": kwargs})
+                empty_sha = hashlib.sha256(b"").hexdigest()
+                return {"returncode": 0, "process_group_cleanup": "confirmed",
+                    "stdout_tail": "", "stderr_tail": "", "streams": {
+                        "stdout": {"text": "", "truncated": False, "observed_bytes": 0,
+                            "retained_bytes": 0, "sha256": empty_sha}}}
+
+            start = "2026-11-02T16:56:30+00:00"
+            with mock.patch.object(module.datetime, "datetime", FrozenDateTime), \
+                 mock.patch.dict(os.environ, {
+                    "GENEWHIP_QUALIFICATION_SCOPE_PATH":
+                        "evidence/v02-phase7-full-execution-scope.json",
+                    "GENEWHIP_QUALIFICATION_SCOPE_SHA256": module.PHASE7_WINDOW_SCOPE_SHA256,
+                    "GENEWHIP_QUALIFICATION_STARTED_AT": start,
+                    "GENEWHIP_QUALIFICATION_PHASE": "preparation"}, clear=True), \
+                 mock.patch.object(module, "_bounded_command", side_effect=bounded):
+                result = module._external(["cmake", "--version"], cwd=root,
+                    timeout=10800, phase="preparation", check=False)
+
+            cleanup = json.loads((root / "evidence/v02-phase7-full-execution-scope.json").read_text())[
+                "per_child_limits"]["cleanup_grace_seconds"]
+            runtime_cutoff = real_datetime.fromisoformat("2026-11-02T19:56:30+00:00")
+            expected = (runtime_cutoff - fixed_now).total_seconds() - cleanup
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(observed["timeout"], expected)
+            self.assertEqual(observed["limits"]["wall_seconds"], expected)
+            self.assertEqual(cleanup, 30)
+
+    def test_phase7_bounded_cmake_forwards_owned_build_root_and_file_link_cap(self):
+        from unittest import mock
+        import shutil
+        module = load_module(self)
+        with tempfile.TemporaryDirectory(prefix="phase7-bounded-cmake-") as temporary:
+            root = Path(temporary).resolve()
+            scope = root / module.PHASE7_WINDOW_SCOPE_PATH
+            scope.parent.mkdir(parents=True)
+            shutil.copyfile(ROOT / module.PHASE7_WINDOW_SCOPE_PATH, scope)
+            module.ROOT = root
+            build = root / "build/v02/window-configure"
+            command = ["cmake", "-S", ".", "-B", str(build), "-DGENEWHIP_BUILD_DESKTOP=OFF"]
+            expected_cap = json.loads(scope.read_text())["per_child_limits"]["max_binary_file_bytes"]
+            completed = subprocess.CompletedProcess(command, 0, "", "")
+            with mock.patch.object(module, "_external", return_value=completed) as external:
+                result = module._run_bounded_phase7_cmake(command, timeout=600, phase="runtime")
+            self.assertIs(result, completed)
+            external.assert_called_once()
+            self.assertEqual(external.call_args.args[0], command)
+            self.assertEqual(external.call_args.kwargs["phase"], "runtime")
+            self.assertEqual(external.call_args.kwargs["timeout"], 600)
+            self.assertEqual(external.call_args.kwargs["owned_roots"], (build,))
+            self.assertEqual(external.call_args.kwargs["file_size_limit_bytes"], expected_cap)
+            self.assertTrue(external.call_args.kwargs["allow_build_file_links"])
+
+    def test_phase7_runtime_bundle_requires_exact_attempt_and_completes_by_runtime_cutoff(self):
+        from unittest import mock
+        module = load_module(self)
+        repository, source_sha, nonce = "szTheory/genewhip", "a" * 40, "b" * 32
+        run = {"id": 12345, "run_attempt": 2, "head_sha": source_sha,
+            "head_branch": "main", "event": "workflow_dispatch",
+            "path": ".github/workflows/ci.yml@refs/heads/main",
+            "display_title": "Plan10 qualification " + nonce,
+            "repository": {"full_name": repository}, "created_at": "2026-11-02T17:01:00Z",
+            "status": "completed", "conclusion": "success"}
+        identity = module._phase7_selected_qualification_identity(run, repository, source_sha,
+            nonce, expected_id="12345", expected_attempt=2,
+            expected_created_at="2026-11-02T17:01:00Z")
+        self.assertEqual(identity["run_attempt"], 2)
+        with self.assertRaisesRegex(ValueError, "phase7-qualification-run-identity-changed"):
+            module._phase7_selected_qualification_identity(run, repository, source_sha,
+                nonce, expected_id="12345", expected_attempt=1,
+                expected_created_at="2026-11-02T17:01:00Z")
+
+        with tempfile.TemporaryDirectory(prefix="phase7-runtime-bundle-cutoff-") as temporary:
+            root = Path(temporary).resolve()
+            attempt = root / module.PHASE7_WINDOW_ATTEMPT_NAMESPACE / "attempt-0001"
+            attempt.mkdir(parents=True)
+            module.ROOT = root
+            names = ("v02-runtime", "v02-benchmark-control", "v02-benchmark-recursion94",
+                "v02-benchmark-tank-battle")
+            cutoff = datetime.datetime.fromisoformat("2026-11-02T19:56:30+00:00")
+            rows = [{"id": 100 + index, "run_id": 12345, "run_attempt": 2,
+                "name": name, "status": "completed", "conclusion": "success",
+                "head_sha": source_sha, "head_branch": "main",
+                "completed_at": (cutoff + datetime.timedelta(seconds=1)
+                    if name == "v02-runtime" else cutoff - datetime.timedelta(seconds=1)).isoformat()}
+                for index, name in enumerate(names)]
+            payload = {"total_count": len(rows), "jobs": rows}
+            raw = json.dumps(payload, sort_keys=True).encode()
+            journal, journal_path = {}, attempt / "hosted-delivery-journal.json"
+            batch = {"phase7_window": True, "attempt_root": attempt}
+            with mock.patch.dict(os.environ, {"GENEWHIP_PHASE7_WINDOW_ACTIVE": "1",
+                    "GENEWHIP_FRESH_BATCH_ROOT": attempt.relative_to(root).as_posix()}, clear=True), \
+                 mock.patch.object(module, "_fresh_batch_attempt_root", return_value=attempt), \
+                 mock.patch.object(module, "_phase7_window_external_json",
+                    return_value=(raw, payload)) as provider:
+                ready = module._phase7_runtime_bundle_ready(batch, repository, source_sha,
+                    "12345", 2, cutoff, journal_path, journal, phase="runtime")
+            self.assertFalse(ready)
+            self.assertEqual(journal["qualification_cutoff_settlement"]["runtime_bundle_status"],
+                "runtime-job-completed-after-cutoff")
+            provider.assert_called_once()
+            self.assertEqual(provider.call_args.kwargs["phase"], "runtime")
+
+    def _phase7_merge_push_fixture(self, root):
+        module_path = root / "scripts/release/v02_qualification.py"
+        module_path.parent.mkdir(parents=True)
+        module_path.write_bytes(MODULE.read_bytes())
+        module_spec = importlib.util.spec_from_file_location(
+            "phase7_merge_push_fixture_" + str(id(root)), module_path)
+        module = importlib.util.module_from_spec(module_spec)
+        module_spec.loader.exec_module(module)
+        attempt = root / module.PHASE7_WINDOW_ATTEMPT_NAMESPACE / "attempt-0001"
+        attempt.mkdir(parents=True)
+        started = "2026-11-02T16:56:30+00:00"
+        repository = "szTheory/genewhip"
+        source_sha, candidate_sha = "a" * 40, "b" * 40
+        merge_at = "2026-11-02T17:00:00Z"
+        batch = {"phase7_window": True, "attempt_root": attempt}
+        journal_path = root / "hosted-delivery-journal.json"
+        journal = {"schema": "synthetic-delivery-journal.v1", "started_at": started,
+            "repository": repository}
+        scope = {"qualification_batch": {"close_wall_seconds": 900}}
+        environment = {"GENEWHIP_PHASE7_WINDOW_ACTIVE": "1",
+            "GENEWHIP_FRESH_BATCH_ROOT": attempt.relative_to(root).as_posix()}
+        pull = {"number": 42, "state": "closed", "merged": True,
+            "head": {"sha": candidate_sha,
+                "repo": {"full_name": repository}},
+            "base": {"ref": "main", "repo": {"full_name": repository}},
+            "merge_commit_sha": source_sha, "merged_at": merge_at}
+        return module, attempt, repository, source_sha, candidate_sha, merge_at, started, \
+            batch, journal_path, journal, scope, environment, pull
+
+    @staticmethod
+    def _phase7_merge_push_run(source_sha, *, run_id=881, attempt=2,
+            status="in_progress", conclusion=None, created_at="2026-11-02T17:01:00Z",
+            repository="szTheory/genewhip", branch="main", event="push",
+            path=".github/workflows/ci.yml@refs/heads/main"):
+        return {"id": run_id, "run_attempt": attempt, "path": path,
+            "event": event, "head_branch": branch, "head_sha": source_sha,
+            "status": status, "conclusion": conclusion,
+            "repository": {"full_name": repository}, "created_at": created_at}
+
+    @staticmethod
+    def _phase7_merge_push_jobs(kind):
+        preview = {"safety", "gameplay", "desktop", "package", "performance",
+            "product-smoke", "phase7-fast"}
+        conditional = {"v02-runtime", "extended", "v02-benchmark-control",
+            "v02-benchmark-recursion94", "v02-benchmark-tank-battle", "v02-package",
+            "v02-release-qualification"}
+        successful = preview | {"required-ci", "attestation"}
+        if kind == "active":
+            names = sorted(successful | conditional)[:-2]
+            rows = [{"name": name, "status": "in_progress", "conclusion": None}
+                for name in names]
+        elif kind == "cancelled":
+            # Early cancellation may expose only the complete subset created so far.
+            names = sorted(successful | conditional)[:-2]
+            rows = [{"name": name, "status": "completed", "conclusion": "cancelled"}
+                for name in names]
+        elif kind == "success":
+            rows = ([{"name": name, "status": "completed", "conclusion": "success"}
+                for name in sorted(successful)]
+                + [{"name": name, "status": "completed", "conclusion": "skipped"}
+                    for name in sorted(conditional)])
+        else:
+            raise AssertionError("unknown synthetic preview jobs shape")
+        for index, row in enumerate(rows, 1):
+            row.update({"id": 9000 + index, "run_id": 881, "run_attempt": 2})
+        return {"total_count": len(rows), "jobs": rows}
+
+    def test_four_hour_merge_push_settlement_cancels_only_exact_active_attempt_and_reopens_all_jobs(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory(prefix="phase7-merge-push-cancel-") as temporary:
+            root = Path(temporary).resolve()
+            (root / "build/v02/phase7-qualification-20261102T165630Z/attempts").mkdir(parents=True)
+            setup = self._phase7_merge_push_fixture(root)
+            (module, attempt, repository, source_sha, candidate_sha, merge_at, started,
+                batch, journal_path, journal, scope, environment, pull) = setup
+            run = self._phase7_merge_push_run(source_sha)
+            unrelated = self._phase7_merge_push_run("c" * 40, run_id=882)
+            unrelated_branch = self._phase7_merge_push_run(source_sha, run_id=883,
+                branch="review/other")
+            current = dict(run)
+            settled = {**run, "status": "completed", "conclusion": "cancelled"}
+            jobs = [self._phase7_merge_push_jobs("active"),
+                self._phase7_merge_push_jobs("cancelled")]
+            job_reads = []
+            events = []
+            commands = []
+            run_reads = 0
+
+            def response(argv, value=None, returncode=0):
+                return subprocess.CompletedProcess(argv, returncode,
+                    "" if value is None else json.dumps(value, sort_keys=True), "")
+
+            def provider(argv, **_kwargs):
+                nonlocal run_reads
+                commands.append(list(argv))
+                if argv[:2] == ["gh", "api"]:
+                    endpoint = argv[2]
+                    if endpoint.endswith("/pulls/42"):
+                        events.append("pull")
+                        return response(argv, pull)
+                    if "actions/workflows/ci.yml/runs?" in endpoint:
+                        events.append("list")
+                        rows = [unrelated, unrelated_branch, run]
+                        return response(argv, {"total_count": len(rows), "workflow_runs": rows})
+                    if endpoint.endswith("/actions/runs/881"):
+                        events.append("run")
+                        run_reads += 1
+                        value = current if run_reads < 3 else settled
+                        return response(argv, value)
+                    if endpoint.endswith("/attempts/2/jobs?per_page=100"):
+                        events.append("jobs")
+                        job_reads.append(endpoint)
+                        return response(argv, jobs.pop(0))
+                if argv[:3] == ["gh", "run", "cancel"]:
+                    events.append("cancel")
+                    return response(argv)
+                raise AssertionError("unexpected mocked provider command: " + " ".join(argv))
+
+            with mock.patch.dict(os.environ, environment, clear=False), \
+                 mock.patch.object(module, "_external", side_effect=provider), \
+                 mock.patch.object(module, "_require_hosted_budget", return_value=3600), \
+                 mock.patch.object(module.time, "monotonic", return_value=100.0), \
+                 mock.patch.object(module.time, "sleep"):
+                result = module._settle_phase7_window_merge_push_ci(repository, source_sha,
+                    candidate_sha, "42", started, scope, batch, journal_path, journal)
+
+            self.assertEqual(events,
+                ["pull", "list", "run", "jobs", "run", "cancel", "run", "jobs"])
+            self.assertEqual(len(job_reads), 2)
+            self.assertEqual(job_reads[0], job_reads[1])
+            cancel_commands = [argv for argv in commands if argv[:3] == ["gh", "run", "cancel"]]
+            self.assertEqual(cancel_commands,
+                [["gh", "run", "cancel", "881", "--repo", repository]])
+            self.assertEqual(result["run"]["run_id"], "881")
+            self.assertEqual(result["run"]["run_attempt"], 2)
+            self.assertEqual(result["disposition"], "superseded-not-qualification-credit")
+            self.assertTrue(result["cancelled_by_controller"])
+            self.assertIs(result["qualification_credit"], False)
+            self.assertEqual(result["terminal_job_count"], 14)
+            self.assertEqual(result["controller_action_refs"][-1]["name"], "cancel-command.json")
+            self.assertEqual(journal["merge_push_settlement"], result)
+            persisted = json.loads(journal_path.read_text())
+            self.assertEqual(persisted["merge_push_settlement"]["provider_refs"][-1]["name"],
+                "terminal-jobs.json")
+
+    def test_four_hour_merge_push_settlement_accepts_success_without_cancellation_or_credit(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory(prefix="phase7-merge-push-success-") as temporary:
+            root = Path(temporary).resolve()
+            (root / "build/v02/phase7-qualification-20261102T165630Z/attempts").mkdir(parents=True)
+            setup = self._phase7_merge_push_fixture(root)
+            (module, _attempt, repository, source_sha, candidate_sha, _merge_at, started,
+                batch, journal_path, journal, scope, environment, pull) = setup
+            run = self._phase7_merge_push_run(source_sha, status="completed", conclusion="success")
+            events = []
+
+            def provider(argv, **_kwargs):
+                if argv[:2] != ["gh", "api"]:
+                    events.append("non-api")
+                    return subprocess.CompletedProcess(argv, 0, "", "")
+                endpoint = argv[2]
+                if endpoint.endswith("/pulls/42"):
+                    events.append("pull")
+                    value = pull
+                elif "actions/workflows/ci.yml/runs?" in endpoint:
+                    events.append("list")
+                    value = {"total_count": 1, "workflow_runs": [run]}
+                elif endpoint.endswith("/actions/runs/881"):
+                    events.append("run")
+                    value = run
+                elif endpoint.endswith("/attempts/2/jobs?per_page=100"):
+                    events.append("jobs")
+                    value = self._phase7_merge_push_jobs("success")
+                else:
+                    raise AssertionError("unexpected provider endpoint: " + endpoint)
+                return subprocess.CompletedProcess(argv, 0, json.dumps(value, sort_keys=True), "")
+
+            with mock.patch.dict(os.environ, environment, clear=False), \
+                 mock.patch.object(module, "_external", side_effect=provider), \
+                 mock.patch.object(module, "_require_hosted_budget", return_value=3600), \
+                 mock.patch.object(module.time, "monotonic", return_value=100.0):
+                result = module._settle_phase7_window_merge_push_ci(repository, source_sha,
+                    candidate_sha, "42", started, scope, batch, journal_path, journal)
+            self.assertEqual(events, ["pull", "list", "run", "jobs"])
+            self.assertEqual(result["disposition"], "already-successful-not-qualification-credit")
+            self.assertFalse(result["cancelled_by_controller"])
+            self.assertIs(result["qualification_credit"], False)
+            self.assertEqual(result["terminal_job_count"], 16)
+
+    def test_four_hour_merge_push_settlement_requires_exact_protected_merge_receipt(self):
+        import copy
+        from unittest import mock
+        mutations = (
+            ("not-merged", lambda value: value.update(merged=False)),
+            ("candidate-sha", lambda value: value["head"].update(sha="c" * 40)),
+            ("base-branch", lambda value: value["base"].update(ref="release")),
+            ("merge-commit", lambda value: value.update(merge_commit_sha="c" * 40)),
+            ("head-repository", lambda value: value["head"]["repo"].update(
+                full_name="other/project")),
+            ("base-repository", lambda value: value["base"]["repo"].update(
+                full_name="other/project")))
+        for name, mutate in mutations:
+            with self.subTest(mutation=name), tempfile.TemporaryDirectory(
+                    prefix="phase7-merge-push-pr-reject-") as temporary:
+                root = Path(temporary).resolve()
+                (root / "build/v02/phase7-qualification-20261102T165630Z/attempts").mkdir(parents=True)
+                setup = self._phase7_merge_push_fixture(root)
+                (module, _attempt, repository, source_sha, candidate_sha, _merge_at, started,
+                    batch, journal_path, journal, scope, environment, pull) = setup
+                bad_pull = copy.deepcopy(pull)
+                mutate(bad_pull)
+                calls = []
+
+                def provider(argv, **_kwargs):
+                    calls.append(list(argv))
+                    if argv[:2] != ["gh", "api"] or not argv[2].endswith("/pulls/42"):
+                        raise AssertionError("run discovery/cancellation preceded merge verification")
+                    return subprocess.CompletedProcess(argv, 0,
+                        json.dumps(bad_pull, sort_keys=True), "")
+
+                with mock.patch.dict(os.environ, environment, clear=False), \
+                     mock.patch.object(module, "_external", side_effect=provider):
+                    with self.assertRaisesRegex(ValueError,
+                            "phase7-merge-push-merge-receipt-invalid"):
+                        module._settle_phase7_window_merge_push_ci(repository, source_sha,
+                            candidate_sha, "42", started, scope, batch, journal_path, journal)
+                self.assertEqual(len(calls), 1)
+
+    def test_four_hour_merge_push_settlement_rejects_failed_unknown_ambiguous_and_rebound_runs(self):
+        from unittest import mock
+        source = "a" * 40
+        base_run = self._phase7_merge_push_run(source)
+        active_failure_jobs = self._phase7_merge_push_jobs("active")
+        active_failure_jobs["jobs"][0].update(
+            status="completed", conclusion="failure")
+        cases = (
+            ("ambiguous", [base_run, {**base_run, "id": 882}], base_run, None,
+                "phase7-merge-push-run-ambiguous"),
+            ("wrong-source", [{**base_run, "head_sha": "c" * 40}], None, None,
+                "phase7-merge-push-run-not-found"),
+            ("wrong-branch", [{**base_run, "head_branch": "review/other"}], None, None,
+                "phase7-merge-push-run-not-found"),
+            ("wrong-workflow", [{**base_run, "path": ".github/workflows/other.yml"}], None, None,
+                "phase7-merge-push-run-not-found"),
+            ("wrong-created-at", [{**base_run, "created_at": "2026-11-02T16:59:59Z"}], None, None,
+                "phase7-merge-push-run-not-found"),
+            ("unknown-status", [{**base_run, "status": "mystery"}], None, None,
+                "phase7-merge-push-run-status-invalid"),
+            ("changed-attempt", [base_run], {**base_run, "run_attempt": 3}, None,
+                "phase7-merge-push-run-identity-mismatch"),
+            ("changed-created-at", [base_run],
+                {**base_run, "created_at": "2026-11-02T17:02:00Z"}, None,
+                "phase7-merge-push-run-identity-mismatch"),
+            ("foreign-repository", [{**base_run,
+                "repository": {"full_name": "other/project"}}], None, None,
+                "phase7-merge-push-run-identity-mismatch"),
+            ("completed-failure", [{**base_run, "status": "completed", "conclusion": "failure"}],
+                {**base_run, "status": "completed", "conclusion": "failure"},
+                self._phase7_merge_push_jobs("success"), "phase7-merge-push-completed-unsuccessfully"),
+            ("active-failed-job", [base_run], base_run, active_failure_jobs,
+                "phase7-merge-push-active-run-has-failure"),
+        )
+        for name, rows, selected, job_response, error in cases:
+            with self.subTest(case=name), tempfile.TemporaryDirectory(
+                    prefix="phase7-merge-push-reject-") as temporary:
+                root = Path(temporary).resolve()
+                (root / "build/v02/phase7-qualification-20261102T165630Z/attempts").mkdir(parents=True)
+                setup = self._phase7_merge_push_fixture(root)
+                (module, _attempt, repository, source_sha, candidate_sha, _merge_at, started,
+                    batch, journal_path, journal, scope, environment, pull) = setup
+                calls = []
+                read_run_count = 0
+                def provider(argv, **_kwargs):
+                    nonlocal read_run_count
+                    calls.append(list(argv))
+                    if argv[:3] == ["gh", "api", "repos/szTheory/genewhip/pulls/42"]:
+                        value = pull
+                    elif argv[:2] == ["gh", "api"] and "actions/workflows/ci.yml/runs?" in argv[2]:
+                        value = {"total_count": len(rows), "workflow_runs": rows}
+                    elif argv[:2] == ["gh", "api"] and argv[2].endswith("/actions/runs/881"):
+                        read_run_count += 1
+                        value = selected
+                    elif argv[:2] == ["gh", "api"] and argv[2].endswith("/attempts/2/jobs?per_page=100"):
+                        value = job_response
+                    elif argv[:3] == ["gh", "run", "cancel"]:
+                        raise AssertionError("invalid or failed push CI must not be canceled")
+                    else:
+                        raise AssertionError("unexpected provider command: " + " ".join(argv))
+                    return subprocess.CompletedProcess(argv, 0,
+                        "" if value is None else json.dumps(value, sort_keys=True), "")
+
+                with mock.patch.dict(os.environ, environment, clear=False), \
+                     mock.patch.object(module, "_external", side_effect=provider), \
+                     mock.patch.object(module, "_require_hosted_budget", return_value=3600), \
+                     mock.patch.object(module.time, "monotonic", side_effect=[100.0, 401.0]), \
+                     mock.patch.object(module.time, "sleep"):
+                    with self.assertRaisesRegex(ValueError, error):
+                        module._settle_phase7_window_merge_push_ci(repository, source_sha,
+                            candidate_sha, "42", started, scope, batch, journal_path, journal)
+                self.assertFalse(any(argv[:3] == ["gh", "run", "cancel"] for argv in calls))
+
+    def test_four_hour_merge_push_job_rosters_bind_attempt_and_only_claim_provider_reported_jobs(self):
+        import copy
+        module = load_module(self)
+        active = self._phase7_merge_push_jobs("active")
+        cancelled = self._phase7_merge_push_jobs("cancelled")
+        success = self._phase7_merge_push_jobs("success")
+        self.assertEqual(len(active["jobs"]), 14)
+        self.assertEqual(len(cancelled["jobs"]), 14)
+        self.assertEqual(len(success["jobs"]), 16)
+        active_rows = module._phase7_window_push_jobs(active, run_id=881,
+            run_attempt=2, state="active")
+        cancelled_rows = module._phase7_window_push_jobs(cancelled, run_id=881,
+            run_attempt=2, state="cancelled")
+        success_rows = module._phase7_window_push_jobs(success, run_id=881,
+            run_attempt=2, state="successful")
+        self.assertEqual(len(active_rows), 14)
+        self.assertEqual(len(cancelled_rows), 14,
+            "a canceled run records only the jobs the provider says existed")
+        self.assertEqual(len(success_rows), 16)
+        self.assertEqual(sum(row["conclusion"] == "SUCCESS" for row in success_rows), 9)
+        self.assertEqual(sum(row["conclusion"] == "SKIPPED" for row in success_rows), 7)
+        self.assertEqual(module._phase7_window_push_jobs({"total_count": 0, "jobs": []},
+            run_id=881, run_attempt=2, state="cancelled"), [])
+
+        mutations = (
+            ("wrong-run", lambda value: value["jobs"][0].update(run_id=882),
+                "phase7-merge-push-job-record-invalid"),
+            ("wrong-attempt", lambda value: value["jobs"][0].update(run_attempt=3),
+                "phase7-merge-push-job-record-invalid"),
+            ("duplicate-id", lambda value: value["jobs"][1].update(
+                id=value["jobs"][0]["id"]), "phase7-merge-push-job-record-invalid"),
+            ("duplicate-name", lambda value: value["jobs"][1].update(
+                name=value["jobs"][0]["name"]), "phase7-merge-push-job-record-invalid"),
+            ("unknown-job", lambda value: value["jobs"][0].update(name="not-a-ci-job"),
+                "phase7-merge-push-job-record-invalid"),
+            ("pending-terminal-job", lambda value: value["jobs"][0].update(
+                status="in_progress", conclusion=None),
+                "phase7-merge-push-terminal-roster-unsettled"),
+            ("failed-terminal-job", lambda value: value["jobs"][0].update(
+                conclusion="failure"), "phase7-merge-push-terminal-roster-unsettled"),
+            ("count-mismatch", lambda value: value.update(total_count=13),
+                "phase7-merge-push-jobs-incomplete"))
+        for name, mutate, error in mutations:
+            with self.subTest(mutation=name):
+                corrupted = copy.deepcopy(cancelled)
+                mutate(corrupted)
+                with self.assertRaisesRegex(ValueError, error):
+                    module._phase7_window_push_jobs(corrupted, run_id=881,
+                        run_attempt=2, state="cancelled")
+
+    def test_phase7_merge_push_settlement_precedes_dispatch_and_legacy_wait_is_unchanged(self):
+        from unittest import mock
+
+        class ReachedDispatch(Exception):
+            pass
+
+        for phase7_window, main_matches in ((True, True), (True, False), (False, True)):
+            with self.subTest(phase7_window=phase7_window, main_matches=main_matches), \
+                 tempfile.TemporaryDirectory(
+                    prefix="phase7-merge-push-route-") as temporary:
+                root = Path(temporary).resolve()
+                (root / "build/v02/phase7-qualification-20261102T165630Z/attempts").mkdir(parents=True)
+                setup = self._phase7_merge_push_fixture(root)
+                (module, attempt, repository, source_sha, candidate_sha, _merge_at, started,
+                    _batch, journal_path, _journal, _scope, environment, _pull) = setup
+                batch = {"phase7_window": phase7_window, "attempt_root": attempt,
+                    "started_at": started,
+                    "admission": {"disposition": "routine-source-repair"}}
+                scope_path = root / "evidence/v02-phase7-full-execution-scope.json"
+                scope_path.parent.mkdir(parents=True, exist_ok=True)
+                scope_path.write_text(json.dumps({"qualification_batch":
+                    {"close_wall_seconds": 900}}))
+                packet = root / "preflight.json"
+                publication = root / "publication"
+                output = root / "qualification-out.json"
+                events = []
+                guard_calls = 0
+                settlement_records = []
+                source_receipt = {"public_source_sha": source_sha,
+                    "candidate_sha": candidate_sha, "pull_request": "42",
+                    "public_base_sha": "c" * 40}
+
+                def guard(**_kwargs):
+                    nonlocal guard_calls
+                    guard_calls += 1
+                    events.append("initial-admission" if guard_calls == 1 else "current-admission")
+                    return batch
+
+                def publish(*_args, **_kwargs):
+                    events.append("publish-merged-source")
+                    journal_path.write_text(json.dumps({"started_at": started,
+                        "repository": repository}))
+                    return source_receipt
+
+                def settle(*args, **_kwargs):
+                    events.append("settle-push-preview")
+                    self.assertEqual(args[1], source_sha)
+                    self.assertEqual(args[2], candidate_sha)
+                    self.assertEqual(args[3], "42")
+                    settlement_directory = attempt / "merge-preview-settlement"
+                    settlement_directory.mkdir()
+                    record = {"disposition": "superseded-not-qualification-credit",
+                        "qualification_credit": False, "terminal_job_count": 14,
+                        "provider_refs": []}
+                    settlement_records.append(record)
+                    args[8]["merge_push_settlement"] = record
+                    module._write_json(args[7], args[8])
+                    return record
+
+                def main_ref(*_args, **_kwargs):
+                    events.append("initial-main-ref")
+                    return {"object": {"sha": source_sha}}
+
+                def final_main_ref(*args, **_kwargs):
+                    self.assertEqual(args[1], "repos/szTheory/genewhip/git/ref/heads/main")
+                    self.assertEqual(args[2], "main-ref-before-dispatch.json")
+                    events.append("main-ref-before-dispatch")
+                    observed_sha = source_sha if main_matches else "e" * 40
+                    value = {"object": {"sha": observed_sha}}
+                    return json.dumps(value, sort_keys=True).encode(), value
+
+                def wait_push(*_args, **_kwargs):
+                    events.append("legacy-push-wait")
+                    return {"status": "completed"}
+
+                def dispatch(*args, **_kwargs):
+                    events.append("dispatch-full-workflow")
+                    self.assertEqual(args[1], source_sha)
+                    self.assertEqual(args[2], source_receipt["public_base_sha"])
+                    raise ReachedDispatch()
+
+                with mock.patch.dict(os.environ, environment, clear=False), \
+                     mock.patch.object(module, "_fresh_batch_guard", side_effect=guard), \
+                     mock.patch.object(module, "publish_sanitized_source", side_effect=publish), \
+                     mock.patch.object(module, "_gh_json", side_effect=main_ref), \
+                     mock.patch.object(module, "_settle_phase7_window_merge_push_ci",
+                        side_effect=settle if phase7_window else AssertionError(
+                            "legacy route must not call the new settlement")), \
+                     mock.patch.object(module, "_wait_for_fresh_batch_push_ci",
+                        side_effect=AssertionError("window route must not wait for full push CI")
+                            if phase7_window else wait_push), \
+                     mock.patch.object(module, "_phase7_window_external_json",
+                        side_effect=final_main_ref if phase7_window else AssertionError(
+                            "legacy route must not run the Phase 7 window refetch")), \
+                     mock.patch.object(module, "_dispatch_qualification_run", side_effect=dispatch):
+                    if phase7_window and not main_matches:
+                        with self.assertRaisesRegex(ValueError,
+                                "public-main-moved-before-full-qualification-dispatch"):
+                            module.run_hosted_qualification(packet, publication, scope_path, output,
+                                journal_path=journal_path)
+                    else:
+                        with self.assertRaises(ReachedDispatch):
+                            module.run_hosted_qualification(packet, publication, scope_path, output,
+                                journal_path=journal_path)
+
+                if phase7_window and main_matches:
+                    self.assertEqual(events, ["initial-admission", "publish-merged-source",
+                        "initial-main-ref", "settle-push-preview", "current-admission",
+                        "main-ref-before-dispatch", "dispatch-full-workflow"])
+                    self.assertEqual(settlement_records[0]["main_sha_before_dispatch"], source_sha)
+                elif phase7_window:
+                    self.assertEqual(events, ["initial-admission", "publish-merged-source",
+                        "initial-main-ref", "settle-push-preview", "current-admission",
+                        "main-ref-before-dispatch"])
+                    self.assertEqual(settlement_records[0]["disposition"],
+                        "main-moved-before-dispatch-stop")
+                else:
+                    self.assertEqual(events, ["initial-admission", "publish-merged-source",
+                        "initial-main-ref", "legacy-push-wait", "dispatch-full-workflow"])
+
+    def test_four_hour_dispatch_calls_create_verify_then_external_and_closes_claim(self):
+        from unittest import mock
+        module = load_module(self)
+        with tempfile.TemporaryDirectory(prefix="phase7-window-dispatch-boundary-") as temporary:
+            root = Path(temporary).resolve()
+            source_directory = root / "scripts/release"
+            evidence = root / "evidence"
+            source_directory.mkdir(parents=True)
+            evidence.mkdir()
+            batch_path = source_directory / "v02_batch.py"
+            batch_path.write_bytes((ROOT / "scripts/release/v02_batch.py").read_bytes())
+            window_relative = Path("scripts/release/v02_window.py")
+            window_source = (ROOT / window_relative).read_text()
+            fixed_now = "2026-11-02T17:01:30+00:00"
+            synthetic_window = {"authority_sha256": module.PHASE7_WINDOW_AUTH_SHA256,
+                "scope_sha256": module.PHASE7_WINDOW_SCOPE_SHA256,
+                "started_at": "2026-11-02T16:56:30+00:00"}
+            test_seam = (
+                "\n_PHASE7_TEST_WINDOW = json.loads(" + repr(json.dumps(synthetic_window)) + ")\n"
+                "_PHASE7_TEST_NOW = " + repr(fixed_now) + "\n"
+                "_PHASE7_REAL_LOAD_WINDOW = load_window\n"
+                "_PHASE7_REAL_VALIDATE_PUBLIC_CLOCK = validate_public_clock\n"
+                "def load_window(root, **kwargs):\n"
+                "    return _PHASE7_TEST_WINDOW\n"
+                "def validate_public_clock(root, **kwargs):\n"
+                "    kwargs['now'] = _PHASE7_TEST_NOW\n"
+                "    return _PHASE7_REAL_VALIDATE_PUBLIC_CLOCK(root, **kwargs)\n")
+            window_path = root / window_relative
+            window_path.parent.mkdir(parents=True, exist_ok=True)
+            window_path.write_text(window_source + test_seam)
+            for relative in (Path("evidence/v02-phase7-full-execution-scope.json"),
+                    Path("evidence/v02-execution.json")):
+                (root / relative).write_bytes((ROOT / relative).read_bytes())
+
+            attempt = root / module.PHASE7_WINDOW_ATTEMPT_NAMESPACE / "attempt-0001"
+            attempt.mkdir(parents=True)
+            admission = {"schema": "synthetic-previously-validated-public-admission.v1",
+                "attempt_index": 1, "source_head": "a" * 40}
+            admission_path = attempt / "public-admission.json"
+            admission_bytes = json.dumps(admission, sort_keys=True,
+                separators=(",", ":")).encode() + b"\n"
+            admission_path.write_bytes(admission_bytes)
+            batch = {"phase7_window": True, "attempt_root": attempt,
+                "attempt_index": 1, "admission": admission,
+                "admission_path": admission_path,
+                "admission_sha256": hashlib.sha256(admission_bytes).hexdigest(),
+                "source_payload_sha256": "b" * 64}
+            journal_path = attempt / "hosted-delivery-journal.json"
+            started = "2026-11-02T16:56:30+00:00"
+            journal = {"schema": "genewhip.v02-delivery-journal.v1",
+                "started_at": started, "qualification_started_at": started}
+            scope = json.loads((root / "evidence/v02-phase7-full-execution-scope.json").read_text())
+            module.ROOT = root
+            events = []
+            original_spec = importlib.util.spec_from_file_location
+
+            def instrumented_spec(name, location, *args, **kwargs):
+                spec = original_spec(name, location, *args, **kwargs)
+                if spec is None or spec.loader is None or Path(location).resolve() != batch_path:
+                    return spec
+                loader = spec.loader
+
+                class InstrumentedLoader:
+                    def create_module(self, requested_spec):
+                        return None
+
+                    def exec_module(self, loaded_module):
+                        loader.exec_module(loaded_module)
+                        create = loaded_module.create_phase7_window_dispatch_claim
+                        verify = loaded_module.verify_phase7_window_dispatch_claim
+                        close = loaded_module.close_phase7_window_dispatch_claim
+
+                        def create_observed(*call_args, **call_kwargs):
+                            events.append("create")
+                            return create(*call_args, **call_kwargs)
+
+                        def verify_observed(*call_args, **call_kwargs):
+                            events.append("verify")
+                            return verify(*call_args, **call_kwargs)
+
+                        def close_observed(*call_args, **call_kwargs):
+                            events.append("close")
+                            return close(*call_args, **call_kwargs)
+
+                        loaded_module.create_phase7_window_dispatch_claim = create_observed
+                        loaded_module.verify_phase7_window_dispatch_claim = verify_observed
+                        loaded_module.close_phase7_window_dispatch_claim = close_observed
+
+                spec.loader = InstrumentedLoader()
+                return spec
+
+            def fake_external(argv, **kwargs):
+                events.append("external")
+                self.assertEqual(events, ["create", "verify", "external"])
+                self.assertIn("qualification_scope_sha256=" + module.PHASE7_WINDOW_SCOPE_SHA256,
+                    argv)
+                self.assertIn("qualification_started_at=" + started, argv)
+                self.assertTrue((attempt / "dispatch-claim.json").is_file())
+                self.assertIs(type(batch.get("_dispatch_directory_fd")), int)
+                return subprocess.CompletedProcess(argv, 0, "", "")
+
+            with mock.patch.dict(os.environ, {
+                    "GENEWHIP_QUALIFICATION_SCOPE_PATH": "evidence/v02-phase7-full-execution-scope.json",
+                    "GENEWHIP_QUALIFICATION_SCOPE_SHA256": module.PHASE7_WINDOW_SCOPE_SHA256}, clear=True), \
+                 mock.patch.object(importlib.util, "spec_from_file_location",
+                    side_effect=instrumented_spec), \
+                 mock.patch.object(module, "_external", side_effect=fake_external) as external:
+                nonce = module._dispatch_qualification_run("szTheory/genewhip", "c" * 40,
+                    "d" * 40, journal_path, journal, scope, batch=batch)
+                self.assertRegex(nonce, r"^[0-9a-f]{32}$")
+                self.assertEqual(events, ["create", "verify", "external", "close"])
+                self.assertNotIn("_dispatch_directory_fd", batch)
+                self.assertEqual(external.call_count, 1)
+                self.assertEqual(module._dispatch_qualification_run("szTheory/genewhip",
+                    "c" * 40, "d" * 40, journal_path, journal, scope, batch=batch), nonce)
+                self.assertEqual(external.call_count, 1, "a submitted attempt cannot dispatch twice")
+            recorded = json.loads(journal_path.read_text())
+            self.assertTrue(recorded["qualification_dispatch_submitted"])
+            self.assertEqual(recorded["qualification_dispatch_nonce"], nonce)
+            self.assertEqual(json.loads((attempt / "dispatch-claim.json").read_text())["nonce"], nonce)
 
     def test_qualification_dispatch_carries_journal_clock_and_resumes_same_nonce(self):
         import subprocess
@@ -2510,8 +5825,53 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
 
     def test_workflow_wires_real_product_smoke_and_serial_full_jobs(self):
         text = (ROOT / ".github/workflows/ci.yml").read_text()
+        smoke_job = text.split("  product-smoke:", 1)[1].split("\n  phase7-fast:", 1)[0]
+        fast_job = text.split("  phase7-fast:", 1)[1].split("\n  desktop:", 1)[0]
+        import re
+        aggregate_match = re.search(r"(?ms)^  required-aggregate:\n(.*?)(?=^  [a-z0-9-]+:|\Z)", text)
+        self.assertIsNotNone(aggregate_match)
+        aggregate = aggregate_match.group(1)
         self.assertRegex(text, r"(?m)^  product-smoke:\s*$")
+        smoke_predicate = next(line.strip()[4:] for line in smoke_job.splitlines() if line.strip().startswith("if:"))
+        fast_predicate = next(line.strip()[4:] for line in fast_job.splitlines() if line.strip().startswith("if:"))
+        expected_predicate = "github.event_name != 'schedule' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')"
+        self.assertEqual(smoke_predicate, fast_predicate)
+        self.assertEqual(smoke_predicate, expected_predicate)
+        trigger_block = text.split("jobs:", 1)[0]
+        for event in ("pull_request", "push", "merge_group", "schedule", "workflow_dispatch"):
+            self.assertIn(event + ":", trigger_block)
+        self.assertIn("branches: [main]", trigger_block)
+        event_cases = (("pull_request", "", True), ("push", "", True),
+            ("merge_group", "", True), ("workflow_dispatch", "", True),
+            ("workflow_dispatch", "none", True),
+            ("workflow_dispatch", "recursion94-native-prefix", False),
+            ("workflow_dispatch", "recursion94-withhold-first-plate", False),
+            ("schedule", "", False), ("schedule", "none", False),
+            ("schedule", "recursion94-native-prefix", False))
+        for event, diagnostic_case, expected in event_cases:
+            eligible = evaluate_ci_condition(smoke_predicate, event=event,
+                diagnostic_case=diagnostic_case)
+            self.assertEqual(eligible, expected, f"event eligibility changed: {event}/{diagnostic_case}")
+        self.assertIn("needs:", aggregate)
+        self.assertIn("product-smoke", aggregate)
+        self.assertIn("phase7-fast", aggregate)
+        for required_job in ("safety", "gameplay", "desktop", "package", "performance",
+                "v02-release-qualification", "attestation"):
+            self.assertIn(required_job, aggregate)
+        self.assertIn("always()", aggregate)
+        aggregate_predicate = next(line.strip()[4:] for line in aggregate.splitlines()
+            if line.strip().startswith("if:"))
+        self.assertIn("always()", aggregate_predicate)
+        self.assertEqual(aggregate_predicate,
+            "always() && " + expected_predicate)
+        self.assertIn("required-aggregate", text)
         self.assertIn("scripts/evidence/v02_run.py --mode smoke", text)
+        self.assertNotIn("v02_execution_contract.py --contracts", smoke_job)
+        gate_text = (ROOT / "scripts/ci/required-gate.sh").read_text()
+        fast_gate = gate_text.split('if [[ "${1:-}" == "--phase7-fast" ]]; then', 1)[1].split("  exit 0", 1)[0]
+        self.assertIn("v02_execution_contract.py --contracts", fast_gate)
+        smoke_source = (ROOT / "scripts/evidence/v02_run.py").read_text()
+        self.assertIn('"status": "pass" if core_ok and host_ok and observations_match else "fail"', smoke_source)
         self.assertRegex(text, r"(?m)^  v02-release-qualification:\s*$")
         qualification_job = text.split("  v02-release-qualification:", 1)[1].split("\n  required-aggregate:", 1)[0]
         mutant_step = qualification_job.index("--mode semantic-mutants")
@@ -2525,16 +5885,19 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
                          "--base-sha \"$GITHUB_BASE_SHA\"", "--run-id \"$GITHUB_RUN_ID\"",
                          "--run-attempt \"$GITHUB_RUN_ATTEMPT\""):
             self.assertIn(argument, package_job, "semantic-mutant-identity-not-explicit:" + argument)
-        import re
         runtime_job = text.split("  v02-runtime:", 1)[1].split("\n  v02-benchmark-control:", 1)[0]
         timeout = next(line.strip().split(": ", 1)[1] for line in runtime_job.splitlines()
                        if line.startswith("    timeout-minutes: "))
-        conditional = re.fullmatch(r"\$\{\{\s*inputs\.native_diagnostic_case\s*==\s*'([^']+)'\s*&&\s*([0-9]+)\s*\|\|\s*([0-9]+)\s*\}\}", timeout)
+        conditional = re.fullmatch(r"\$\{\{\s*\(inputs\.native_diagnostic_case\s*==\s*'([^']+)'\s*\|\|\s*inputs\.native_diagnostic_case\s*==\s*'([^']+)'\)\s*&&\s*([0-9]+)\s*\|\|\s*([0-9]+)\s*\}\}", timeout)
         self.assertIsNotNone(conditional, "runtime timeout must select fixed diagnostic and ordinary limits")
-        selected_case, diagnostic_minutes, ordinary_minutes = conditional.groups()
-        for selector, expected in (("", 360), ("none", 360), ("recursion94-withhold-first-plate", 45)):
+        selected_cases = set(conditional.groups()[:2])
+        diagnostic_minutes, ordinary_minutes = map(int, conditional.groups()[2:])
+        self.assertEqual(selected_cases, {"recursion94-withhold-first-plate", "recursion94-native-prefix"})
+        self.assertEqual((diagnostic_minutes, ordinary_minutes), (45, 180))
+        for selector, expected in (("", 180), ("none", 180),
+                ("recursion94-withhold-first-plate", 45), ("recursion94-native-prefix", 45)):
             with self.subTest(selector=selector):
-                self.assertEqual(int(diagnostic_minutes if selector == selected_case else ordinary_minutes), expected)
+                self.assertEqual(diagnostic_minutes if selector in selected_cases else ordinary_minutes, expected)
         for name in ("v02-benchmark-control", "v02-benchmark-recursion94", "v02-benchmark-tank-battle"):
             self.assertIn(name, text)
         self.assertIn("name: v02-runtime-${{ github.run_id }}-${{ github.run_attempt }}", text)
@@ -2549,9 +5912,50 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
         self.assertIn("scripts/release/v02_transfer.py prepare-package", text)
         self.assertGreaterEqual(text.count("uses: ./.github/actions/qualification-clock"), 15)
         self.assertNotIn("GENEWHIP_QUALIFICATION_STARTED_AT: ${{ github.run_started_at }}", text)
+        workflow_inputs = text.split("jobs:", 1)[0]
+        self.assertIn("qualification_scope_sha256:", workflow_inputs)
+        self.assertIn("GENEWHIP_QUALIFICATION_SCOPE_SHA256: ${{ inputs.qualification_scope_sha256 }}", text)
+        self.assertIn("GENEWHIP_QUALIFICATION_SCOPE_PATH: ${{ inputs.qualification_scope_sha256 == '" +
+            "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4'", text)
+        self.assertIn('command.extend(["--field", "qualification_scope_sha256=" + PHASE7_WINDOW_SCOPE_SHA256])',
+            (ROOT / "scripts/release/v02_qualification.py").read_text())
+        job_headers = list(re.finditer(r"(?m)^  [A-Za-z0-9_-]+:\s*$", text))
+        job_sections = {match.group(0).strip().rstrip(":"): text[match.start():
+            (job_headers[index + 1].start() if index + 1 < len(job_headers) else len(text))]
+            for index, match in enumerate(job_headers)}
+        for workload in ("product-smoke", "v02-runtime", "v02-benchmark-control",
+                "v02-benchmark-recursion94", "v02-benchmark-tank-battle",
+                "v02-package", "v02-release-qualification"):
+            section = job_sections[workload]
+            self.assertIn("$GENEWHIP_QUALIFICATION_SCOPE_PATH", section,
+                "job must consume the shared selected public scope: " + workload)
+        for workload, clock_phase in (("desktop", "preparation"), ("package", "package")):
+            with self.subTest(workload=workload):
+                section = job_sections[workload]
+                timeout = re.search(r"(?m)^    timeout-minutes: ([0-9]+)$", section)
+                self.assertIsNotNone(timeout)
+                self.assertEqual(timeout.group(1), "45")
+                self.assertIn("with: {phase: " + clock_phase + "}", section)
+        close_job = job_sections["required-aggregate"]
+        self.assertIn("with: {phase: close}", close_job,
+            "the final aggregate must use the reserved close partition")
         clock_action = (ROOT / ".github/actions/qualification-clock/action.yml").read_text()
         self.assertIn("actions/runs/$GITHUB_RUN_ID", clock_action)
         self.assertIn("--jq .created_at", clock_action)
+        self.assertIn("select_public_event_window", clock_action)
+        self.assertIn("github.event_name == 'merge_group'", clock_action)
+        self.assertIn('selected["scope_sha256"]', clock_action)
+        self.assertIn('selected["started_at"]', clock_action)
+        source_selector = clock_action.split(
+            "    - name: Select the prospective Phase 7 clock", 1)[1].split(
+            "    - name: Check immutable journal start", 1)[0]
+        self.assertNotIn("inputs.phase", source_selector,
+            "source-event selection must use its fixed preparation cutoff")
+        window_source = (ROOT / "scripts/release/v02_window.py").read_text()
+        selector_body = window_source.split("def select_public_event_window", 1)[1].split(
+            "\ndef load_public_scope", 1)[0]
+        self.assertIn('phase="preparation"', selector_body,
+            "nondispatch source events must remain bounded by the preparation cutoff")
         self.assertIn("prepare-package --root . --out build/v02/package-transfer --source-sha \"$GITHUB_SHA\"", text)
         self.assertIn("build/v02/package-transfer/payload/**", text)
         self.assertIn("scripts/release/v02_transfer.py install-package", text)

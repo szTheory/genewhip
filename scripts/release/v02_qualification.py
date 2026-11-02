@@ -15,7 +15,9 @@ import subprocess
 import sys
 import tempfile
 import time
+import types
 import datetime
+import email.utils
 import functools
 import urllib.parse
 import uuid
@@ -25,6 +27,32 @@ from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 FRESH_BATCH_POLICY_ROOT = pathlib.Path("build/v02/ci-continuation-20261031T124319Z")
+PHASE7_WINDOW_AUTH_PATH = pathlib.Path("build/v02/phase7-qualification-20261102T165630Z/authorization.json")
+PHASE7_WINDOW_AUTH_SHA256 = "d9aa7ecce2826cc3832dd99333cc637ba8ef9d4cdb6e261331abec89ac0b4ebf"
+PHASE7_WINDOW_SCOPE_PATH = pathlib.Path("evidence/v02-phase7-full-execution-scope.json")
+PHASE7_WINDOW_SCOPE_SHA256 = "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4"
+PHASE7_WINDOW_ATTEMPT_NAMESPACE = pathlib.Path("build/v02/phase7-qualification-20261102T165630Z/attempts")
+PHASE7_MERGE_PUSH_EVIDENCE_LIMIT_BYTES = 4 * 1024 * 1024
+SINGLE_NATIVE_POLICY_ROOT = pathlib.Path("build/v02/native-capture-retest-20261102T034752Z-repair")
+ITERATION_POLICY_ROOT = pathlib.Path("build/v02/phase7-iterations")
+RETIRED_SINGLE_NATIVE_POLICY_ROOT = pathlib.Path("build/v02/native-prefix-one-shot-20261101T112701Z")
+PREVIOUS_SINGLE_NATIVE_POLICY_ROOT = pathlib.Path("build/v02/native-media-retest-20261101T143706Z")
+PRIOR_SINGLE_NATIVE_POLICY_ROOT = pathlib.Path("build/v02/native-stop-context-20261101T161645Z")
+OLDER_SINGLE_NATIVE_POLICY_ROOT = pathlib.Path("build/v02/native-queue-window-20261101T182756Z")
+PRECEDING_SINGLE_NATIVE_POLICY_ROOT = pathlib.Path("build/v02/native-setup-retest-20261101T211431Z")
+SIXTH_SINGLE_NATIVE_POLICY_ROOT = pathlib.Path("build/v02/native-shared-setup-retest-20261101T224403Z")
+SEVENTH_SINGLE_NATIVE_POLICY_ROOT = pathlib.Path("build/v02/native-complete-setup-retest-20261102T000552Z")
+EIGHTH_SINGLE_NATIVE_POLICY_ROOT = pathlib.Path("build/v02/native-report-retest-20261102T020902Z")
+# This preparation was retired before dispatch; it is a ninth retired namespace,
+# not a ninth spent claim.
+NINTH_SINGLE_NATIVE_POLICY_ROOT = pathlib.Path("build/v02/native-capture-retest-20261102T034752Z")
+RETIRED_SINGLE_NATIVE_POLICY_ROOTS = (RETIRED_SINGLE_NATIVE_POLICY_ROOT,
+    PREVIOUS_SINGLE_NATIVE_POLICY_ROOT, PRIOR_SINGLE_NATIVE_POLICY_ROOT, OLDER_SINGLE_NATIVE_POLICY_ROOT,
+    PRECEDING_SINGLE_NATIVE_POLICY_ROOT, SIXTH_SINGLE_NATIVE_POLICY_ROOT,
+    SEVENTH_SINGLE_NATIVE_POLICY_ROOT, EIGHTH_SINGLE_NATIVE_POLICY_ROOT,
+    NINTH_SINGLE_NATIVE_POLICY_ROOT)
+SINGLE_NATIVE_VALIDATOR_SHA256 = "10965f32f3c259db35b37be1e149162ccd9c0aa99e1995b7f3b012d99b42377c"
+NATIVE_PREFIX_QUEUE_PROFILE = "native-prefix-queue-v1"
 LEGACY_BATCH_ROOTS = (pathlib.Path("build/v02/batch-20261031T124319Z"),
                       pathlib.Path("build/v02/batch-20261031T124319Z-retry1"),
                       FRESH_BATCH_POLICY_ROOT)
@@ -32,6 +60,12 @@ LEGACY_BATCH_ROOTS = (pathlib.Path("build/v02/batch-20261031T124319Z"),
 
 def _fresh_batch_attempt_root(root: pathlib.Path = ROOT) -> pathlib.Path:
     relative = os.environ.get("GENEWHIP_FRESH_BATCH_ROOT")
+    if os.environ.get("GENEWHIP_PHASE7_WINDOW_ACTIVE") == "1":
+        prefix = PHASE7_WINDOW_ATTEMPT_NAMESPACE.as_posix()
+        if not isinstance(relative, str) or not re.fullmatch(
+                re.escape(prefix) + r"/attempt-[0-9]{4}", relative):
+            raise ValueError("phase7-window-attempt-root-unavailable")
+        return _canonical_batch_attempt_root(root, root / relative)
     expected_prefix = FRESH_BATCH_POLICY_ROOT.as_posix()
     if not isinstance(relative, str) or not re.fullmatch(
             re.escape(expected_prefix) + r"/attempt-[0-9]{4}", relative):
@@ -52,6 +86,17 @@ def _canonical_batch_attempt_root(root: pathlib.Path, value: pathlib.Path) -> pa
         cursor = cursor / part
         if cursor.is_symlink():
             raise ValueError("fresh-batch-attempt-namespace-invalid")
+    if (os.environ.get("GENEWHIP_PHASE7_WINDOW_ACTIVE") == "1"
+            and relative.parts[:len(PHASE7_WINDOW_ATTEMPT_NAMESPACE.parts)]
+                == PHASE7_WINDOW_ATTEMPT_NAMESPACE.parts):
+        suffix = relative.parts[len(PHASE7_WINDOW_ATTEMPT_NAMESPACE.parts):]
+        if len(suffix) != 1 or re.fullmatch(r"attempt-[0-9]{4}", suffix[0]) is None:
+            raise ValueError("phase7-window-attempt-namespace-invalid")
+        policy = (root / PHASE7_WINDOW_ATTEMPT_NAMESPACE).resolve(strict=True)
+        resolved = candidate.resolve(strict=True)
+        if resolved.parent != policy or not resolved.is_dir():
+            raise ValueError("phase7-window-attempt-namespace-invalid")
+        return resolved
     policy = (root / FRESH_BATCH_POLICY_ROOT).resolve(strict=True)
     resolved = candidate.resolve(strict=True)
     if (resolved.parent != policy or not re.fullmatch(r"attempt-[0-9]{4}", resolved.name)
@@ -124,8 +169,15 @@ def _git(root: pathlib.Path, *args: str, check: bool = True) -> str:
 
 def _reject_legacy_batch_paths(*values: pathlib.Path) -> None:
     roots = tuple((ROOT / relative).resolve(strict=False) for relative in LEGACY_BATCH_ROOTS)
+    single_root = (ROOT / SINGLE_NATIVE_POLICY_ROOT).resolve(strict=False)
+    retired_single_roots = tuple((ROOT / relative).resolve(strict=False)
+        for relative in RETIRED_SINGLE_NATIVE_POLICY_ROOTS)
     for value in values:
         path = (value if value.is_absolute() else ROOT / value).resolve(strict=False)
+        if path == single_root or single_root in path.parents:
+            raise ValueError("single-native-authorization-required")
+        if any(path == retired or retired in path.parents for retired in retired_single_roots):
+            raise ValueError("single-native-retired-authority")
         if any(path == root or root in path.parents for root in roots):
             raise ValueError("fresh-batch-authorization-required")
 
@@ -142,17 +194,27 @@ def _fresh_batch_guard(*, batch_authorization: pathlib.Path | None,
     os.environ["GENEWHIP_FRESH_BATCH_ADMITTED"] = "0"
     os.environ["GENEWHIP_FRESH_BATCH_RUNTIME"] = "0"
     os.environ["GENEWHIP_FRESH_BATCH_STAGE"] = "unadmitted"
+    os.environ["GENEWHIP_PHASE7_WINDOW_ACTIVE"] = "0"
     supplied = (batch_authorization, batch_authorization_sha256,
                 batch_admission, batch_admission_sha256)
     journal_resolved = (journal_path if journal_path.is_absolute() else ROOT / journal_path).resolve(strict=False)
     protected_batch_roots = tuple(ROOT / relative for relative in LEGACY_BATCH_ROOTS)
-    resolved_batch_roots = tuple(path.resolve(strict=False) for path in protected_batch_roots)
+    resolved_batch_roots = (tuple(path.resolve(strict=False) for path in protected_batch_roots)
+        + tuple((ROOT / relative).resolve(strict=False) for relative in RETIRED_SINGLE_NATIVE_POLICY_ROOTS)
+        + ((ROOT / PHASE7_WINDOW_ATTEMPT_NAMESPACE).resolve(strict=False),))
+    resolved_single_root = (ROOT / SINGLE_NATIVE_POLICY_ROOT).resolve(strict=False)
     mutable_inputs = (journal_path, publication_copy, preflight_path, output_path)
     uses_fresh_root = any(
         any((value if value.is_absolute() else ROOT / value).resolve(strict=False) == batch_root
             or batch_root in (value if value.is_absolute() else ROOT / value).resolve(strict=False).parents
             for batch_root in resolved_batch_roots)
         for value in mutable_inputs)
+    uses_single_root = any(value is not None and (
+        (value if value.is_absolute() else ROOT / value).resolve(strict=False) == resolved_single_root
+        or resolved_single_root in (value if value.is_absolute() else ROOT / value).resolve(strict=False).parents)
+        for value in mutable_inputs)
+    if uses_single_root:
+        raise ValueError("single-native-authorization-required")
     if not any(item is not None for item in supplied):
         if (journal_resolved in {batch_root / "hosted-delivery-journal.json"
                 for batch_root in resolved_batch_roots} or uses_fresh_root):
@@ -167,6 +229,49 @@ def _fresh_batch_guard(*, batch_authorization: pathlib.Path | None,
     spec.loader.exec_module(module)
     def rooted(value: pathlib.Path) -> pathlib.Path:
         return value if value.is_absolute() else ROOT / value
+
+    auth_value = rooted(batch_authorization)
+    window_auth = (auth_value.resolve(strict=False) == ROOT / PHASE7_WINDOW_AUTH_PATH
+        and batch_authorization_sha256 == PHASE7_WINDOW_AUTH_SHA256)
+    window_auth_partial = (auth_value.resolve(strict=False) == ROOT / PHASE7_WINDOW_AUTH_PATH
+        or batch_authorization_sha256 == PHASE7_WINDOW_AUTH_SHA256)
+    if window_auth_partial and not window_auth:
+        raise ValueError("phase7-window-authority-and-admission-required")
+    if window_auth:
+        os.environ["GENEWHIP_PHASE7_WINDOW_ACTIVE"] = "1"
+        os.environ["GENEWHIP_QUALIFICATION_WINDOW_AUTH_SHA256"] = PHASE7_WINDOW_AUTH_SHA256
+        os.environ["GENEWHIP_QUALIFICATION_SCOPE_PATH"] = PHASE7_WINDOW_SCOPE_PATH.as_posix()
+        os.environ["GENEWHIP_QUALIFICATION_SCOPE_SHA256"] = PHASE7_WINDOW_SCOPE_SHA256
+        named_attempt_root, attempt_index = module._phase7_window_admission_location(
+            ROOT, rooted(batch_admission), stage)
+        safe_attempt_root = module.phase7_window_attempt_root(ROOT, attempt_index)
+        source_head = _git(ROOT, "rev-parse", "HEAD")
+
+        def window_source_is_ancestor(ancestor: str, descendant: str) -> bool:
+            result = _external(["git", "merge-base", "--is-ancestor", ancestor, descendant],
+                cwd=ROOT, timeout=30, check=False, phase="runtime",
+                fresh_batch_scratch=safe_attempt_root / "coordinator-external-attempts")
+            return result.returncode == 0
+
+        expected_paths = set(_bounded_publication_paths(ROOT,
+            fresh_attempt_root=safe_attempt_root))
+        result = module.validate_phase7_window_batch(ROOT, rooted(batch_authorization),
+            batch_authorization_sha256, rooted(batch_admission), batch_admission_sha256,
+            stage=stage, source_head=source_head,
+            now=datetime.datetime.now(datetime.timezone.utc), scope_path=rooted(scope_path),
+            journal_path=rooted(journal_path), publication_copy=rooted(publication_copy),
+            preflight_path=rooted(preflight_path), output_path=rooted(output_path),
+            source_is_ancestor=window_source_is_ancestor,
+            expected_source_paths=expected_paths)
+        if result["batch_root"] != safe_attempt_root:
+            raise ValueError("phase7-window-attempt-root-conflict")
+        os.environ["GENEWHIP_QUALIFICATION_STARTED_AT"] = result["started_at"]
+        os.environ["GENEWHIP_QUALIFICATION_PHASE"] = "runtime"
+        os.environ["GENEWHIP_FRESH_BATCH_RUNTIME"] = "1"
+        os.environ["GENEWHIP_FRESH_BATCH_ADMITTED"] = "1"
+        os.environ["GENEWHIP_FRESH_BATCH_STAGE"] = stage
+        os.environ["GENEWHIP_FRESH_BATCH_ROOT"] = safe_attempt_root.relative_to(ROOT).as_posix()
+        return result
 
     named_attempt_root, _, _ = module._attempt_location(ROOT, rooted(batch_admission))
     safe_attempt_root = _canonical_batch_attempt_root(ROOT, named_attempt_root)
@@ -199,12 +304,180 @@ def _fresh_batch_guard(*, batch_authorization: pathlib.Path | None,
     return result
 
 
+def _single_native_guard(*, admission_path: pathlib.Path, stage: str,
+                         authority_path: pathlib.Path | None,
+                         authority_sha256: str | None,
+                         admission_sha256: str | None,
+                         source_head: str | None = None,
+                         readiness_path: pathlib.Path | None = None,
+                         readiness_sha256: str | None = None,
+                         allow_claim: bool = False) -> dict[str, Any]:
+    """Validate the additive one-shot authority independently of legacy batch state."""
+    os.environ["GENEWHIP_SINGLE_NATIVE_ADMITTED"] = "0"
+    os.environ.pop("GENEWHIP_SINGLE_NATIVE_CLAIMED", None)
+    module = _load_single_native_validator()
+    iteration = (authority_sha256 == module.ITERATION_AUTH_SHA256)
+    if iteration:
+        if authority_path is None:
+            raise ValueError("single-native-iteration-authority-required")
+        iteration_ctx = module.iteration_context(ROOT, authority_path, admission_path,
+            allow_claim=allow_claim)
+        root = iteration_ctx["attempt_root"]
+        ancestor_sha = module.ITERATION_AUTHORITY_CONTRACT["source_ancestor"]
+    else:
+        if allow_claim:
+            raise ValueError("single-native-claim-recheck-requires-iteration-authority")
+        iteration_ctx = None
+        root = module.canonical_root(ROOT, module.ROOT_REL)
+        ancestor_sha = "ad5f24316654fdb1b2044e751f1df9083811688f"
+    scratch = ((iteration_ctx["preparation_revision"] if iteration_ctx is not None else root)
+        / "coordinator-external-attempts")
+    if scratch.exists() or scratch.is_symlink():
+        module._owned_directory(scratch,
+            label="single-native-coordinator-scratch-invalid")
+    else:
+        scratch.mkdir(mode=0o700)
+        module._owned_directory(scratch,
+            label="single-native-coordinator-scratch-invalid")
+    result = _external(["git", "ls-files", "-z"], cwd=ROOT, timeout=30,
+        stdout_limit_bytes=8 * 1024 * 1024, fresh_batch_scratch=scratch)
+    try:
+        names = [part.decode("utf-8") for part in result.stdout.encode("utf-8").split(b"\0") if part]
+    except UnicodeDecodeError:
+        raise ValueError("single-native-source-roster-invalid") from None
+    paths = set(_publication_paths_from_names(ROOT, names))
+    current_head = _git(ROOT, "rev-parse", "HEAD") if source_head is None else source_head
+    ancestor = _external(["git", "merge-base", "--is-ancestor",
+        ancestor_sha, current_head], cwd=ROOT,
+        timeout=30, check=False, phase="preparation", fresh_batch_scratch=scratch)
+    if ancestor.returncode != 0:
+        raise ValueError("single-native-source-ancestor-invalid")
+    value = module.validate_admission(ROOT, root, admission_path, stage=stage,
+        source_head=current_head, source_roster=paths,
+        authority_path=authority_path, authority_sha256=authority_sha256,
+        admission_sha256=admission_sha256,
+        readiness_path=readiness_path, readiness_sha256=readiness_sha256,
+        _terminal_reopen=allow_claim)
+    os.environ["GENEWHIP_SINGLE_NATIVE_ADMITTED"] = "1"
+    os.environ["GENEWHIP_SINGLE_NATIVE_STAGE"] = stage
+    os.environ["GENEWHIP_SINGLE_NATIVE_ROOT"] = str(root)
+    os.environ["GENEWHIP_SINGLE_NATIVE_PREPARATION_ROOT"] = str(value["preparation_root"])
+    os.environ["GENEWHIP_SINGLE_NATIVE_AUTHORITY_SHA256"] = (
+        module.ITERATION_AUTH_SHA256 if iteration else module.AUTH_SHA256)
+    if iteration_ctx is not None:
+        os.environ["GENEWHIP_SINGLE_NATIVE_CLAIM_REL"] = iteration_ctx["claim_rel"].as_posix()
+        os.environ["GENEWHIP_SINGLE_NATIVE_PREPARATION_REVISION"] = iteration_ctx["preparation_revision_rel"]
+    else:
+        os.environ.pop("GENEWHIP_SINGLE_NATIVE_CLAIM_REL", None)
+        os.environ.pop("GENEWHIP_SINGLE_NATIVE_PREPARATION_REVISION", None)
+    value["validator_module"] = module
+    return value
+
+
+def _assert_same_current_iteration_admission(current: dict[str, Any],
+        previous: dict[str, Any]) -> None:
+    """Bind a fresh late guard to the exact attempt, revision, source, and candidate."""
+    current_context = current.get("iteration_context")
+    previous_context = previous.get("iteration_context")
+    current_admission = current.get("admission")
+    previous_admission = previous.get("admission")
+    current_candidate = current_admission.get("candidate") if isinstance(current_admission, dict) else None
+    previous_candidate = previous_admission.get("candidate") if isinstance(previous_admission, dict) else None
+    context_fields = ("attempt_root_rel", "attempt_index", "preparation_revision_rel",
+        "revision_index", "attempt_allocation_sha256", "preparation_allocation_sha256",
+        "predecessor_ref", "claim_rel")
+    if (not isinstance(current_context, dict) or not isinstance(previous_context, dict)
+            or any(current_context.get(field) != previous_context.get(field) for field in context_fields)
+            or not isinstance(current_admission, dict) or not isinstance(previous_admission, dict)
+            or current_admission.get("source_head") != previous_admission.get("source_head")
+            or not isinstance(current_candidate, dict) or not isinstance(previous_candidate, dict)
+            or any(current_candidate.get(field) != previous_candidate.get(field)
+                for field in ("public_head", "public_base", "public_tree", "source_manifest_sha256",
+                    "preparation_sha256", "candidate_payload_sha256"))):
+        raise ValueError("native-prefix-diagnostic-admission-changed-before-claim")
+
+
+def _load_single_native_validator():
+    """Verify trusted validator bytes before executing any validator code."""
+    path = ROOT / "scripts/release/v02_single_native.py"
+    try:
+        info = path.lstat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.getuid()
+                or info.st_size > 1024 * 1024):
+            raise ValueError("single-native-validator-unavailable")
+        raw = path.read_bytes()
+    except OSError:
+        raise ValueError("single-native-validator-unavailable") from None
+    if hashlib.sha256(raw).hexdigest() != SINGLE_NATIVE_VALIDATOR_SHA256:
+        raise ValueError("single-native-validator-pin-invalid")
+    module = types.ModuleType("gw_v02_single_native")
+    module.__file__ = str(path)
+    module.__package__ = ""
+    exec(compile(raw, str(path), "exec"), module.__dict__)
+    return module
+
+
+def _single_native_paths(*paths: pathlib.Path | None,
+                         outputs: tuple[pathlib.Path | None, ...] = (),
+                         admission_path: pathlib.Path | None = None,
+                         authority_path: pathlib.Path | None = None,
+                         authority_sha256: str | None = None,
+                         attempt_root: pathlib.Path | None = None) -> None:
+    module = _load_single_native_validator()
+    if attempt_root is None and admission_path is not None and authority_path is not None:
+        if authority_sha256 == module.ITERATION_AUTH_SHA256:
+            ctx = module.iteration_context(ROOT, authority_path, admission_path)
+            attempt_root = ctx["attempt_root"]
+        else:
+            attempt_root = module.ROOT_REL
+    module.validate_route_paths(ROOT, list(paths), outputs=outputs,
+        attempt_root=attempt_root)
+
+
+def _single_native_scope(scope_path: pathlib.Path) -> None:
+    expected = ROOT / "evidence/v02-execution.json"
+    if scope_path.resolve(strict=True) != expected or _sha(scope_path) != "05eb7f5fa91d759fbef8fb86bbc9db402dc41812261235bcf5085a0e2aa9b1a5":
+        raise ValueError("single-native-scope-pin-invalid")
+
+
+def _single_native_failure_latch(function):
+    """Persist one failure after the exact new admission has been accepted."""
+    @functools.wraps(function)
+    def wrapped(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except Exception:
+            if os.environ.get("GENEWHIP_SINGLE_NATIVE_ADMITTED") == "1":
+                module = _load_single_native_validator()
+                failure = pathlib.Path(os.environ.get("GENEWHIP_SINGLE_NATIVE_ROOT",
+                    (ROOT / module.ROOT_REL).as_posix()))
+                preparation = pathlib.Path(os.environ.get("GENEWHIP_SINGLE_NATIVE_PREPARATION_ROOT",
+                    str(failure)))
+                authority_sha = os.environ.get("GENEWHIP_SINGLE_NATIVE_AUTHORITY_SHA256",
+                    module.AUTH_SHA256)
+                claimed = os.environ.get("GENEWHIP_SINGLE_NATIVE_CLAIMED") == "1"
+                failure_root = failure if claimed else preparation
+                path = failure_root / "failure.json"
+                if not module._lineage_entry_present(ROOT, path.relative_to(ROOT)):
+                    module.write_failure(ROOT, stage=os.environ.get("GENEWHIP_SINGLE_NATIVE_STAGE", "unknown"),
+                        reason="single-native-route-failed", attempt_root=failure,
+                        preparation_revision=None if claimed else preparation,
+                        authority_sha256=authority_sha)
+            raise
+    return wrapped
+
+
 def _write_fresh_batch_failure(*, stage: str, reason: str) -> None:
     spec = importlib.util.spec_from_file_location("gw_v02_fresh_batch_failure", ROOT / "scripts/release/v02_batch.py")
     if spec is None or spec.loader is None:
         raise ValueError("fresh-batch-validator-unavailable")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    if os.environ.get("GENEWHIP_PHASE7_WINDOW_ACTIVE") == "1":
+        module.write_phase7_window_failure(ROOT, attempt_root=_fresh_batch_attempt_root(),
+            stage=stage, reason=reason,
+            observed_at=datetime.datetime.now(datetime.timezone.utc).isoformat())
+        return
     module.write_failure_sentinel(ROOT, attempt_root=_fresh_batch_attempt_root(),
         stage=stage, reason=reason,
         observed_at=datetime.datetime.now(datetime.timezone.utc).isoformat())
@@ -243,12 +516,17 @@ def _external(argv: list[str], *, cwd: pathlib.Path = ROOT, timeout: int = 120,
               scratch_limit_bytes: int | None = None,
               stdout_limit_bytes: int | None = None,
               fresh_batch_scratch: pathlib.Path | None = None,
-              file_size_limit_bytes: int | None = None) -> subprocess.CompletedProcess[str]:
+              file_size_limit_bytes: int | None = None,
+              allow_build_file_links: bool = False) -> subprocess.CompletedProcess[str]:
     """Run delivery commands under the established monitored PGID boundary."""
-    scope = json.loads((ROOT / "evidence/v02-execution.json").read_text(encoding="utf-8"))
     child_env = os.environ.copy()
     if env:
         child_env.update(env)
+    scope_path = pathlib.Path(child_env.get("GENEWHIP_QUALIFICATION_SCOPE_PATH",
+        "evidence/v02-execution.json"))
+    if not scope_path.is_absolute():
+        scope_path = ROOT / scope_path
+    scope = json.loads(scope_path.read_text(encoding="utf-8"))
     started_at = child_env.get("GENEWHIP_QUALIFICATION_STARTED_AT")
     phase = phase or child_env.get("GENEWHIP_QUALIFICATION_PHASE") or "preparation"
     if phase == "preparation" and child_env.get("GENEWHIP_FRESH_BATCH_RUNTIME") == "1":
@@ -257,14 +535,80 @@ def _external(argv: list[str], *, cwd: pathlib.Path = ROOT, timeout: int = 120,
         phase = "runtime"
     if started_at:
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        _require_hosted_budget(started_at, now, scope, phase=phase)
-        elapsed = (_parse_utc(now) - _parse_utc(started_at)).total_seconds()
-        batch = scope["qualification_batch"]
-        boundary = (batch["runtime_wall_seconds"] if phase == "runtime" else
-            batch["runtime_wall_seconds"] + batch["package_wall_seconds"] if phase == "package" else
-            batch["wall_seconds"] if phase == "close" else
-            batch["wall_seconds"] - batch["close_wall_seconds"])
-        timeout = min(timeout, max(0.001, boundary - elapsed))
+        remaining_budget = _require_hosted_budget(started_at, now, scope, phase=phase)
+        if child_env.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256") == PHASE7_WINDOW_SCOPE_SHA256:
+            remaining_phase = remaining_budget
+            per_child = scope.get("per_child_limits") if isinstance(scope, dict) else None
+            cleanup_reserve = per_child.get("cleanup_grace_seconds") if isinstance(per_child, dict) else None
+            if type(cleanup_reserve) is not int or cleanup_reserve <= 0:
+                raise ValueError("phase7-window-cleanup-reserve-invalid")
+            remaining_phase -= cleanup_reserve
+            if remaining_phase <= 0:
+                raise ValueError("phase7-window-work-cutoff-cleanup-reserve-exhausted")
+        else:
+            elapsed = (_parse_utc(now) - _parse_utc(started_at)).total_seconds()
+            batch = scope["qualification_batch"]
+            boundary = (batch["runtime_wall_seconds"] if phase == "runtime" else
+                batch["runtime_wall_seconds"] + batch["package_wall_seconds"] if phase == "package" else
+                batch["wall_seconds"] if phase == "close" else
+                batch["wall_seconds"] - batch["close_wall_seconds"])
+            remaining_phase = boundary - elapsed
+        timeout = min(timeout, max(0.001, remaining_phase))
+    native_profile = child_env.get("GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE")
+    native_start = child_env.get("GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT")
+    native_deadline = child_env.get("GENEWHIP_NATIVE_DIAGNOSTIC_DEADLINE")
+    if (native_profile not in (None, "", NATIVE_PREFIX_QUEUE_PROFILE)
+            or (native_profile == NATIVE_PREFIX_QUEUE_PROFILE and (not native_start or not native_deadline))):
+        raise ValueError("native-prefix-diagnostic-claim-clock-invalid")
+    if (native_profile != NATIVE_PREFIX_QUEUE_PROFILE
+            and native_start and native_deadline):
+        try:
+            claim_start = _parse_utc(child_env["GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT"])
+            claim_deadline = _parse_utc(child_env["GENEWHIP_NATIVE_DIAGNOSTIC_DEADLINE"])
+        except (TypeError, ValueError):
+            raise ValueError("native-prefix-diagnostic-claim-clock-invalid") from None
+        profile = child_env.get("GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE")
+        claim_seconds = 5400 if profile == NATIVE_PREFIX_QUEUE_PROFILE else 2700
+        if (claim_deadline != claim_start + datetime.timedelta(seconds=claim_seconds)
+                or child_env.get("GENEWHIP_QUALIFICATION_STARTED_AT") != child_env["GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT"]):
+            raise ValueError("native-prefix-diagnostic-claim-clock-invalid")
+        now_claim = datetime.datetime.now(datetime.timezone.utc)
+        remaining = (claim_deadline - now_claim).total_seconds()
+        reserved = int(scope["per_child_limits"]["cleanup_grace_seconds"])
+        if remaining <= reserved:
+            raise ValueError("native-prefix-diagnostic-claim-deadline-exhausted")
+        stop_value = child_env.get("GENEWHIP_NATIVE_DIAGNOSTIC_CONTROLLER_STOP")
+        stop_remaining = remaining - reserved
+        if stop_value:
+            stop_remaining = min(stop_remaining, (_parse_utc(stop_value) - now_claim).total_seconds())
+            if stop_remaining <= 0:
+                raise ValueError("native-prefix-diagnostic-controller-stop-reached")
+        timeout = min(timeout, stop_remaining)
+    if native_profile == NATIVE_PREFIX_QUEUE_PROFILE:
+        cleanup_mode = child_env.get("GENEWHIP_NATIVE_CONTROLLER_CLEANUP_MODE") == "1"
+        is_job = bool(child_env.get("GENEWHIP_NATIVE_JOB_CLOCK_RECEIPT"))
+        deadline_names = []
+        if is_job:
+            deadline_names.append("GENEWHIP_NATIVE_JOB_HARD_DEADLINE_MONOTONIC_NS"
+                if cleanup_mode else "GENEWHIP_NATIVE_JOB_SETUP_DEADLINE_MONOTONIC_NS")
+            if not cleanup_mode:
+                deadline_names.append("GENEWHIP_NATIVE_JOB_COLLECTOR_DEADLINE_MONOTONIC_NS")
+        else:
+            controller_name = ("GENEWHIP_NATIVE_CONTROLLER_HARD_DEADLINE_MONOTONIC_NS"
+                if cleanup_mode else "GENEWHIP_NATIVE_CONTROLLER_WORK_CUTOFF_MONOTONIC_NS")
+            deadline_names.append(controller_name)
+            job_name = ("GENEWHIP_NATIVE_JOB_HARD_DEADLINE_MONOTONIC_NS"
+                if cleanup_mode else "GENEWHIP_NATIVE_JOB_COLLECTOR_DEADLINE_MONOTONIC_NS")
+            if child_env.get(job_name) is not None:
+                deadline_names.append(job_name)
+        for name in deadline_names:
+            value = child_env.get(name)
+            if not isinstance(value, str) or not value.isdigit():
+                raise ValueError("native-prefix-monotonic-deadline-invalid")
+            remaining = (int(value) - time.monotonic_ns()) / 1_000_000_000
+            if remaining <= 0:
+                raise ValueError("native-prefix-monotonic-deadline-exhausted")
+            timeout = min(timeout, remaining)
     limits = dict(scope["per_child_limits"])
     if file_size_limit_bytes is not None:
         binary_cap = limits.get("max_binary_file_bytes")
@@ -279,7 +623,12 @@ def _external(argv: list[str], *, cwd: pathlib.Path = ROOT, timeout: int = 120,
         for key in ("max_stdout_stderr_bytes", "max_capture_bytes", "max_retained_bytes"):
             limits[key] = min(limits[key], stdout_limit_bytes)
     limits["wall_seconds"] = timeout
-    if fresh_batch_scratch is not None:
+    single_scratch_root = child_env.get("GENEWHIP_SINGLE_NATIVE_ROOT")
+    if (fresh_batch_scratch is None and isinstance(single_scratch_root, str)
+            and pathlib.Path(single_scratch_root).resolve(strict=False)
+                == (ROOT / SINGLE_NATIVE_POLICY_ROOT / "attempt-0003").resolve(strict=False)):
+        scratch = pathlib.Path(single_scratch_root) / "coordinator-external-attempts"
+    elif fresh_batch_scratch is not None:
         scratch = fresh_batch_scratch
     elif child_env.get("GENEWHIP_FRESH_BATCH_RUNTIME") == "1":
         scratch = _fresh_batch_attempt_root() / "coordinator-external-attempts"
@@ -292,6 +641,8 @@ def _external(argv: list[str], *, cwd: pathlib.Path = ROOT, timeout: int = 120,
                       "TEMP": str(temporary_root)})
     try:
         bounded_options = {"scratch_roots": (temporary_root, *owned_roots)}
+        if allow_build_file_links:
+            bounded_options["allow_build_file_links"] = True
         if file_size_limit_bytes is not None:
             bounded_options["file_size_limit_bytes"] = file_size_limit_bytes
         attempt = _bounded_command(argv, limits=limits, scratch=scratch, timeout=timeout,
@@ -319,6 +670,110 @@ def _external(argv: list[str], *, cwd: pathlib.Path = ROOT, timeout: int = 120,
     return result
 
 
+def _advance_native_prefix_settlement_if_due(projection: dict[str, Any]) -> int:
+    """At collector cutoff U, allow provider settlement only through H=min(C,J)."""
+    if (not isinstance(projection, dict)
+            or type(projection.get("collector_deadline_monotonic_ns")) is not int
+            or type(projection.get("controller_deadline_monotonic_ns")) is not int
+            or type(projection.get("job_deadline_monotonic_ns")) is not int):
+        raise ValueError("native-prefix-settlement-clock-invalid")
+    now_ns = time.monotonic_ns()
+    u_ns = projection["collector_deadline_monotonic_ns"]
+    h_ns = min(projection["controller_deadline_monotonic_ns"],
+        projection["job_deadline_monotonic_ns"])
+    if h_ns <= u_ns or now_ns >= h_ns:
+        raise ValueError("native-prefix-settlement-window-exhausted")
+    if now_ns >= u_ns:
+        if os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE") != NATIVE_PREFIX_QUEUE_PROFILE:
+            raise ValueError("native-prefix-settlement-profile-invalid")
+        # One-way transition: only provider settlement moves from U to H.
+        # _external still reserves child cleanup grace inside the hard window.
+        os.environ["GENEWHIP_NATIVE_CONTROLLER_CLEANUP_MODE"] = "1"
+        h_remaining = (h_ns - now_ns) / 1_000_000_000
+        os.environ["GENEWHIP_NATIVE_DIAGNOSTIC_CONTROLLER_STOP"] = (
+            datetime.datetime.now(datetime.timezone.utc)
+            + datetime.timedelta(seconds=h_remaining)).isoformat()
+    return h_ns
+
+
+def _require_native_prefix_before_settlement_deadline(deadline_ns: int) -> None:
+    if type(deadline_ns) is not int or time.monotonic_ns() >= deadline_ns:
+        raise ValueError("native-prefix-settlement-deadline-exhausted")
+
+
+def _native_prefix_unknown_start_fallback(claim_monotonic_ns: int) -> dict[str, int]:
+    """Conservatively bound cleanup when authenticated actual job start is unavailable."""
+    if type(claim_monotonic_ns) is not int or claim_monotonic_ns <= 0:
+        raise ValueError("native-prefix-settlement-clock-invalid")
+    earliest_job_deadline = claim_monotonic_ns + 2700 * 1_000_000_000
+    return {"collector_deadline_monotonic_ns": earliest_job_deadline - 30 * 1_000_000_000,
+        "job_deadline_monotonic_ns": earliest_job_deadline,
+        "controller_deadline_monotonic_ns": claim_monotonic_ns + 5400 * 1_000_000_000}
+
+
+def _tighten_native_prefix_projection(first: dict[str, int] | None,
+        observed: dict[str, int], controller_creation_deadline_ns: int) -> dict[str, int]:
+    """Freeze the first valid job projection; later provider samples can only tighten it."""
+    deadline_keys = ("job_started_monotonic_ns", "job_deadline_monotonic_ns",
+        "controller_deadline_monotonic_ns", "controller_cleanup_deadline_monotonic_ns",
+        "job_cleanup_deadline_monotonic_ns", "collector_deadline_monotonic_ns",
+        "collector_start_cutoff_monotonic_ns", "setup_deadline_monotonic_ns")
+    if (not isinstance(observed, dict) or type(controller_creation_deadline_ns) is not int
+            or controller_creation_deadline_ns <= 0
+            or any(type(observed.get(key)) is not int or observed[key] <= 0 for key in deadline_keys)
+            or (first is not None and (not isinstance(first, dict)
+                or any(type(first.get(key)) is not int or first[key] <= 0 for key in deadline_keys)))):
+        raise ValueError("native-prefix-settlement-clock-invalid")
+    result = {key: min(first[key], observed[key]) if first is not None else observed[key]
+        for key in deadline_keys}
+    result["controller_deadline_monotonic_ns"] = min(
+        result["controller_deadline_monotonic_ns"], controller_creation_deadline_ns)
+    result["controller_cleanup_deadline_monotonic_ns"] = min(
+        result["controller_cleanup_deadline_monotonic_ns"],
+        result["controller_deadline_monotonic_ns"] - 300 * 1_000_000_000)
+    result["job_cleanup_deadline_monotonic_ns"] = min(
+        result["job_cleanup_deadline_monotonic_ns"],
+        result["job_deadline_monotonic_ns"] - 30 * 1_000_000_000)
+    result["collector_deadline_monotonic_ns"] = min(result["collector_deadline_monotonic_ns"],
+        result["controller_cleanup_deadline_monotonic_ns"],
+        result["job_cleanup_deadline_monotonic_ns"])
+    result["collector_start_cutoff_monotonic_ns"] = min(
+        result["collector_start_cutoff_monotonic_ns"],
+        result["collector_deadline_monotonic_ns"] - 1800 * 1_000_000_000)
+    result["setup_deadline_monotonic_ns"] = min(result["setup_deadline_monotonic_ns"],
+        result["job_started_monotonic_ns"] + 600 * 1_000_000_000,
+        result["collector_start_cutoff_monotonic_ns"])
+    if (result["collector_start_cutoff_monotonic_ns"] <= 0
+            or result["setup_deadline_monotonic_ns"] <= 0
+            or result["collector_deadline_monotonic_ns"] <= result["setup_deadline_monotonic_ns"]):
+        raise ValueError("native-prefix-settlement-window-unavailable")
+    return result
+
+
+def _accept_native_prefix_job_projection(observed: dict[str, int],
+        previous: dict[str, int] | None, *, previous_valid: bool,
+        claim_monotonic_ns: int, job_id: int, job_started_at: str,
+        claim_context: dict[str, Any] | None = None) -> tuple[dict[str, int], int]:
+    """Bind only authenticated job projections and publish their tightened limits."""
+    if type(job_id) is not int or job_id <= 0 or not isinstance(job_started_at, str):
+        raise ValueError("native-prefix-settlement-job-identity-invalid")
+    projection = _tighten_native_prefix_projection(
+        previous if previous_valid else None, observed,
+        claim_monotonic_ns + 5400 * 1_000_000_000)
+    settlement_deadline_ns = min(projection["controller_deadline_monotonic_ns"],
+        projection["job_deadline_monotonic_ns"])
+    os.environ["GENEWHIP_NATIVE_JOB_COLLECTOR_DEADLINE_MONOTONIC_NS"] = str(
+        projection["collector_deadline_monotonic_ns"])
+    os.environ["GENEWHIP_NATIVE_JOB_HARD_DEADLINE_MONOTONIC_NS"] = str(
+        projection["job_deadline_monotonic_ns"])
+    if claim_context is not None:
+        claim_context["job_id"] = job_id
+        claim_context["job_started_at"] = job_started_at
+        claim_context["workload_cutoff_monotonic_ns"] = projection["collector_deadline_monotonic_ns"]
+        claim_context["cleanup_deadline_monotonic_ns"] = settlement_deadline_ns
+    return projection, settlement_deadline_ns
+
+
 def read_bounded_git_blob(candidate: pathlib.Path, ref: str) -> bytes:
     """Read a small Git blob through the monitored process-group boundary."""
     ceiling = 128 * 1024
@@ -344,6 +799,370 @@ def _parse_utc(value: str) -> datetime.datetime:
     if parsed.tzinfo is None:
         raise ValueError("hosted-time-identity-invalid")
     return parsed.astimezone(datetime.timezone.utc)
+
+
+def _native_prefix_claim_bounds(*, required_reserve: int = 0) -> tuple[datetime.datetime, datetime.datetime, int] | None:
+    """Return the validated one-shot UTC window; absent pairs retain the legacy route."""
+    start_value = os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT")
+    deadline_value = os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_DEADLINE")
+    qualification = os.environ.get("GENEWHIP_QUALIFICATION_STARTED_AT")
+    profile = os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE")
+    if not start_value and not deadline_value:
+        if profile not in (None, ""):
+            raise ValueError("native-prefix-diagnostic-claim-clock-invalid")
+        return None
+    if (profile not in (None, "", NATIVE_PREFIX_QUEUE_PROFILE)
+            or not start_value or not deadline_value or qualification != start_value):
+        raise ValueError("native-prefix-diagnostic-claim-clock-invalid")
+    start, deadline = _parse_utc(start_value), _parse_utc(deadline_value)
+    duration = 5400 if profile == NATIVE_PREFIX_QUEUE_PROFILE else 2700
+    if deadline != start + datetime.timedelta(seconds=duration):
+        raise ValueError("native-prefix-diagnostic-claim-clock-invalid")
+    remaining = int((deadline - datetime.datetime.now(datetime.timezone.utc)).total_seconds())
+    if remaining < required_reserve:
+        raise ValueError("native-prefix-diagnostic-claim-window-unavailable")
+    return start, deadline, remaining
+
+
+def _parse_gh_included_response(raw: str) -> tuple[dict[str, Any], dict[str, str]]:
+    """Parse one bounded `gh api --include` response, retaining only headers and JSON."""
+    if not isinstance(raw, str) or len(raw.encode("utf-8")) > 2 * 1024 * 1024:
+        raise ValueError("native-prefix-job-clock-response-invalid")
+    marker = "\r\n\r\n"
+    split = raw.find(marker)
+    separator = marker
+    if split < 0:
+        marker = "\n\n"
+        split = raw.find(marker)
+        separator = marker
+    if split < 0:
+        raise ValueError("native-prefix-job-clock-response-invalid")
+    header_text, body = raw[:split], raw[split + len(separator):]
+    lines = header_text.splitlines()
+    if not lines or not re.fullmatch(r"HTTP/[^ ]+ 200(?: .*)?", lines[0].strip()):
+        raise ValueError("native-prefix-job-clock-http-status-invalid")
+    headers: dict[str, str] = {}
+    for line in lines[1:]:
+        if ":" not in line:
+            raise ValueError("native-prefix-job-clock-response-invalid")
+        key, value = line.split(":", 1)
+        key = key.strip().lower()
+        if not key or key in headers:
+            raise ValueError("native-prefix-job-clock-response-invalid")
+        headers[key] = value.strip()
+    try:
+        value = json.loads(body)
+    except json.JSONDecodeError:
+        raise ValueError("native-prefix-job-clock-response-invalid") from None
+    if not isinstance(value, dict):
+        raise ValueError("native-prefix-job-clock-response-invalid")
+    return value, headers
+
+
+def _native_prefix_queue_provider_observation(*, repository: str, run_id: str,
+        run_attempt: int, source_sha: str, branch: str, nonce: str,
+        phase: str = "runtime", allow_unstarted: bool = False) -> tuple[
+            dict[str, Any], str, int, int, int, str, str]:
+    """Fetch the actual runtime job through authenticated, no-cache GitHub API access."""
+    if (not isinstance(repository, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository)
+            or not isinstance(run_id, str) or not run_id.isdigit()
+            or type(run_attempt) is not int or run_attempt < 1
+            or not re.fullmatch(r"[0-9a-f]{40}", source_sha)
+            or not re.fullmatch(r"v0\.2-source-[0-9a-f]{12}", branch)
+            or not re.fullmatch(r"[0-9a-f]{32}", nonce)):
+        raise ValueError("native-prefix-job-clock-identity-invalid")
+    endpoint = (f"repos/{repository}/actions/runs/{run_id}/attempts/{run_attempt}/jobs?per_page=100")
+    local_request_started_at = datetime.datetime.now(datetime.timezone.utc)
+    request_start = time.monotonic_ns()
+    result = _external(["gh", "api", "--include", "-H", "Cache-Control: no-cache",
+        "-H", "Pragma: no-cache", endpoint], timeout=20, phase=phase,
+        stdout_limit_bytes=2 * 1024 * 1024)
+    response_end = time.monotonic_ns()
+    local_response_at = datetime.datetime.now(datetime.timezone.utc)
+    if result.returncode != 0:
+        raise ValueError("native-prefix-job-clock-provider-request-failed")
+    payload, headers = _parse_gh_included_response(result.stdout)
+    if "date" not in headers or headers.get("age", "0") not in ("0", ""):
+        raise ValueError("native-prefix-job-clock-provider-time-invalid")
+    if "hit" in headers.get("x-cache", "").lower():
+        raise ValueError("native-prefix-job-clock-provider-response-cached")
+    try:
+        provider_date = email.utils.parsedate_to_datetime(headers["date"])
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError("native-prefix-job-clock-provider-time-invalid") from None
+    if provider_date.tzinfo is None:
+        raise ValueError("native-prefix-job-clock-provider-time-invalid")
+    provider_date = provider_date.astimezone(datetime.timezone.utc)
+    local_elapsed_ns = int((local_response_at - local_request_started_at).total_seconds() * 1_000_000_000)
+    if (abs((local_response_at - provider_date).total_seconds()) > 60
+            or local_elapsed_ns < 0 or abs(local_elapsed_ns - (response_end - request_start)) > 2_000_000_000):
+        raise ValueError("native-prefix-job-clock-provider-date-stale")
+    jobs = payload.get("jobs")
+    if not isinstance(jobs, list) or payload.get("total_count") != len(jobs):
+        raise ValueError("native-prefix-job-clock-job-list-invalid")
+    matches = [job for job in jobs if isinstance(job, dict) and job.get("name") == "v02-runtime"]
+    if len(matches) != 1:
+        raise ValueError("native-prefix-job-clock-runtime-job-ambiguous")
+    job = matches[0]
+    unstarted = job.get("started_at") in (None, "") and job.get("status") == "queued"
+    if unstarted and allow_unstarted:
+        job_started = None
+    else:
+        try:
+            job_started = _parse_utc(job.get("started_at"))
+        except ValueError:
+            raise ValueError("native-prefix-job-clock-start-missing") from None
+    expected_run = int(run_id)
+    allowed_statuses = ("in_progress", "queued", "completed") if allow_unstarted else ("in_progress",)
+    if (job.get("run_id") != expected_run or job.get("run_attempt") != run_attempt
+            or job.get("head_sha") != source_sha or job.get("head_branch") != branch
+            or job.get("status") not in allowed_statuses
+            or type(job.get("id")) is not int or job["id"] <= 0
+            or (job_started is not None and
+                (provider_date + datetime.timedelta(seconds=1) < job_started))):
+        raise ValueError("native-prefix-job-clock-job-identity-invalid")
+    return (job, provider_date.isoformat(), request_start, response_end,
+        response_end - request_start, local_request_started_at.isoformat(), local_response_at.isoformat())
+
+
+def _native_prefix_job_clock_receipt_path() -> pathlib.Path:
+    supplied = os.environ.get("GENEWHIP_NATIVE_JOB_CLOCK_RECEIPT")
+    if not isinstance(supplied, str) or not supplied:
+        raise ValueError("native-prefix-job-clock-receipt-missing")
+    path = pathlib.Path(supplied)
+    if not path.is_absolute() or path.is_symlink() or not path.is_file():
+        raise ValueError("native-prefix-job-clock-receipt-invalid")
+    info = path.lstat()
+    if info.st_nlink != 1 or info.st_uid != os.getuid() or info.st_size > 65536:
+        raise ValueError("native-prefix-job-clock-receipt-invalid")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        raise ValueError("native-prefix-job-clock-receipt-invalid") from None
+    return path
+
+
+def _load_native_prefix_job_clock(*, require_live: bool,
+        live_window: str = "setup") -> tuple[dict[str, Any], dict[str, int], pathlib.Path]:
+    path = _native_prefix_job_clock_receipt_path()
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+        run_attempt = int(os.environ.get("GITHUB_RUN_ATTEMPT", ""))
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
+        raise ValueError("native-prefix-job-clock-receipt-invalid") from None
+    validator = _load_single_native_validator()
+    try:
+        projection = validator.validate_job_clock_receipt(value,
+            claim_sha256=os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_CLAIM_SHA256", ""),
+            claim_nonce=os.environ.get("GENEWHIP_QUALIFICATION_NONCE", ""),
+            source_sha=os.environ.get("GITHUB_SHA", ""), run_id=os.environ.get("GITHUB_RUN_ID", ""),
+            run_attempt=run_attempt, repository=os.environ.get("GITHUB_REPOSITORY", ""),
+            branch=os.environ.get("GITHUB_REF_NAME", ""), require_live=require_live,
+            live_monotonic_ns=time.monotonic_ns() if require_live else None,
+            live_window=live_window)
+    except ValueError:
+        raise ValueError("native-prefix-job-clock-receipt-invalid") from None
+    return value, projection, path
+
+
+def publish_native_prefix_job_clock_receipt() -> pathlib.Path:
+    """Reopen the pre-checkout clock proof and publish a private build-local copy."""
+    if os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE") != NATIVE_PREFIX_QUEUE_PROFILE:
+        raise ValueError("native-prefix-job-clock-profile-required")
+    source, projection, source_path = _load_native_prefix_job_clock(require_live=True)
+    if time.monotonic_ns() >= projection["setup_deadline_monotonic_ns"]:
+        raise ValueError("native-prefix-job-clock-setup-cutoff-reached")
+    runner_temp = pathlib.Path(os.environ.get("RUNNER_TEMP", "")).resolve(strict=True)
+    if source_path.resolve(strict=True).parent != runner_temp:
+        raise ValueError("native-prefix-job-clock-source-path-invalid")
+    build_root = ROOT / "build/v02"
+    for parent in (ROOT / "build", build_root):
+        if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
+            raise ValueError("native-prefix-job-clock-output-root-invalid")
+        parent.mkdir(exist_ok=True)
+    destination = build_root / "native-prefix-job-clock.json"
+    if destination.exists() or destination.is_symlink():
+        raise ValueError("native-prefix-job-clock-output-collision")
+    raw = source_path.read_bytes()
+    if len(raw) > 65536:
+        raise ValueError("native-prefix-job-clock-receipt-invalid")
+    descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "wb") as stream:
+        stream.write(raw)
+        stream.flush()
+        os.fsync(stream.fileno())
+    if time.monotonic_ns() >= projection["setup_deadline_monotonic_ns"]:
+        raise ValueError("native-prefix-job-clock-setup-cutoff-reached")
+    env_path = os.environ.get("GITHUB_ENV")
+    if not isinstance(env_path, str) or not pathlib.Path(env_path).is_file():
+        raise ValueError("native-prefix-job-clock-environment-file-missing")
+    with open(env_path, "a", encoding="utf-8") as stream:
+        stream.write("GENEWHIP_NATIVE_JOB_CLOCK_RECEIPT=" + str(destination) + "\n")
+        stream.write("GENEWHIP_NATIVE_JOB_HARD_DEADLINE_MONOTONIC_NS="
+            + str(projection["job_deadline_monotonic_ns"])
+            + "\n")
+    if time.monotonic_ns() >= projection["setup_deadline_monotonic_ns"]:
+        raise ValueError("native-prefix-job-clock-setup-cutoff-reached")
+    return destination
+
+
+def _prepare_native_setup_roots(paths: tuple[pathlib.Path, ...]) -> tuple[pathlib.Path, ...]:
+    prepared: list[pathlib.Path] = []
+    root = ROOT.resolve(strict=True)
+    for path in paths:
+        try:
+            relative = path.relative_to(root)
+        except ValueError:
+            raise ValueError("native-prefix-setup-root-invalid") from None
+        current = root
+        for component in relative.parts:
+            if component in ("", ".", ".."):
+                raise ValueError("native-prefix-setup-root-invalid")
+            current = current / component
+            try:
+                info = current.lstat()
+            except FileNotFoundError:
+                try:
+                    current.mkdir(mode=0o700)
+                    info = current.lstat()
+                except OSError:
+                    raise ValueError("native-prefix-setup-root-invalid") from None
+            except OSError:
+                raise ValueError("native-prefix-setup-root-invalid") from None
+            if (not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode)
+                    or info.st_uid != os.getuid()):
+                raise ValueError("native-prefix-setup-root-invalid")
+        prepared.append(path)
+    return tuple(prepared)
+
+
+_BOUNDED_SETUP_STEPS = frozenset({
+    "dependencies", "configure", "build", "ci-desktop-dependencies",
+    "ci-desktop-configure", "ci-desktop-build"})
+
+
+def _run_bounded_setup_command(command: list[str], *, step: str,
+        owned_roots: tuple[pathlib.Path, ...], timeout: int,
+        phase: str) -> subprocess.CompletedProcess[str]:
+    """Run a fixed project setup command with bounded outputs and build-only link accounting."""
+    if (step not in _BOUNDED_SETUP_STEPS or phase not in {"preparation", "runtime"}
+            or type(timeout) is not int or timeout <= 0
+            or not isinstance(command, list) or not command
+            or any(type(value) is not str or not value or "\x00" in value for value in command)):
+        raise ValueError("bounded-setup-command-invalid")
+    roots = _prepare_native_setup_roots(owned_roots)
+    scope = json.loads((ROOT / "evidence/v02-execution.json").read_text(encoding="utf-8"))
+    limits = scope.get("per_child_limits")
+    max_wall = limits.get("wall_seconds") if isinstance(limits, dict) else None
+    file_size_limit = limits.get("max_binary_file_bytes") if isinstance(limits, dict) else None
+    if (type(max_wall) is not int or max_wall <= 0
+            or type(file_size_limit) is not int or file_size_limit <= 0):
+        raise ValueError("bounded-setup-limits-invalid")
+    bounded_timeout = min(timeout, max_wall)
+    result = _external(command, timeout=bounded_timeout, phase=phase,
+        owned_roots=roots, file_size_limit_bytes=file_size_limit,
+        allow_build_file_links=True, check=False)
+    if result.returncode != 0:
+        returncode = result.returncode if type(result.returncode) is int and -255 <= result.returncode <= 255 else None
+        if step.startswith("ci-desktop-"):
+            print("GENEWHIP_CI_SETUP_FAILURE:" + json.dumps({
+                "schema": "genewhip.ci-setup-failure.v1",
+                "step": step, "reason": "child-exit-nonzero",
+                "returncode": returncode, "file_size_limit_bytes": file_size_limit,
+            }, sort_keys=True, separators=(",", ":")))
+            raise ValueError("ci-desktop-setup-command-failed")
+        print("GENEWHIP_NATIVE_SETUP_FAILURE:" + json.dumps({
+            "schema": "genewhip.native-prefix-setup-failure.v1",
+            "step": step, "reason": "child-exit-nonzero",
+            "returncode": returncode, "file_size_limit_bytes": file_size_limit,
+        }, sort_keys=True, separators=(",", ":")))
+        raise ValueError("native-prefix-setup-command-failed")
+    return result
+
+
+def _run_bounded_phase7_cmake(command: list[str], *, timeout: int,
+        phase: str) -> subprocess.CompletedProcess[str]:
+    """Run one configure/build child under the prospective scope and build-tree limits."""
+    if (not isinstance(command, list) or not command or command[0] != "cmake"
+            or phase not in {"preparation", "runtime", "package"}
+            or type(timeout) is not int or timeout <= 0):
+        raise ValueError("phase7-bounded-cmake-command-invalid")
+    if len(command) >= 2 and command[1] == "--build":
+        if len(command) < 3:
+            raise ValueError("phase7-bounded-cmake-build-root-missing")
+        build = pathlib.Path(command[2])
+    elif len(command) >= 2 and command[1] == "-S":
+        try:
+            build = pathlib.Path(command[command.index("-B") + 1])
+        except (ValueError, IndexError):
+            raise ValueError("phase7-bounded-cmake-build-root-missing") from None
+    else:
+        raise ValueError("phase7-bounded-cmake-operation-invalid")
+    if not build.is_absolute():
+        build = ROOT / build
+    build = pathlib.Path(os.path.abspath(build))
+    try:
+        relative = build.relative_to(ROOT)
+    except ValueError:
+        raise ValueError("phase7-bounded-cmake-build-root-invalid") from None
+    if not relative.parts or relative.parts[0] != "build":
+        raise ValueError("phase7-bounded-cmake-build-root-invalid")
+    scope = json.loads((ROOT / PHASE7_WINDOW_SCOPE_PATH).read_text(encoding="utf-8"))
+    limits = scope.get("per_child_limits")
+    max_wall = limits.get("wall_seconds") if isinstance(limits, dict) else None
+    file_size_limit = limits.get("max_binary_file_bytes") if isinstance(limits, dict) else None
+    if (type(max_wall) is not int or max_wall <= 0 or timeout > max_wall
+            or type(file_size_limit) is not int or file_size_limit <= 0):
+        raise ValueError("phase7-bounded-cmake-limits-invalid")
+    owned_roots = _prepare_native_setup_roots((build,))
+    return _external(command, timeout=timeout, phase=phase, check=False,
+        owned_roots=owned_roots, file_size_limit_bytes=file_size_limit,
+        allow_build_file_links=True)
+
+
+def ci_desktop_setup_step(step: str) -> subprocess.CompletedProcess[str]:
+    """Use the monitored setup boundary for desktop dependency, configure, and build steps."""
+    if step not in {"dependencies", "configure", "build"}:
+        raise ValueError("ci-desktop-setup-step-invalid")
+    build = ROOT / "build/desktop"
+    commands = {
+        "dependencies": ["bash", "scripts/ci/prepare_evidence_dependencies.sh"],
+        "configure": ["cmake", "-S", ".", "-B", str(build), "-DCMAKE_BUILD_TYPE=Release",
+            "-DGENEWHIP_BUILD_DESKTOP=ON"],
+        "build": ["cmake", "--build", str(build), "--parallel", "2"],
+    }
+    owned_paths = ((ROOT / "build/v02", ROOT / "build/tool-cache", ROOT / "build/audio-refs")
+        if step == "dependencies" else (build,))
+    owned_roots = _prepare_native_setup_roots(owned_paths)
+    return _run_bounded_setup_command(commands[step],
+        step="ci-desktop-" + step, owned_roots=owned_roots, timeout=600, phase="preparation")
+
+
+def native_prefix_setup_step(step: str) -> None:
+    """Run one fixed setup operation under the receipt's immutable setup cutoff."""
+    if step not in {"dependencies", "configure", "build"}:
+        raise ValueError("native-prefix-setup-step-invalid")
+    if os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE") != NATIVE_PREFIX_QUEUE_PROFILE:
+        raise ValueError("native-prefix-setup-profile-required")
+    _, projection, _ = _load_native_prefix_job_clock(require_live=True)
+    remaining = (projection["setup_deadline_monotonic_ns"] - time.monotonic_ns()) / 1_000_000_000
+    whole_seconds = int(remaining)
+    if remaining <= 0 or whole_seconds <= 0:
+        raise ValueError("native-prefix-setup-window-unavailable")
+    build = ROOT / "build/v02/runtime-build"
+    commands = {
+        "dependencies": ["bash", "scripts/ci/prepare_evidence_dependencies.sh"],
+        "configure": ["cmake", "-S", ".", "-B", str(build), "-G", "Ninja",
+            "-DCMAKE_BUILD_TYPE=Debug", "-DBUILD_TESTING=ON", "-DGENEWHIP_BUILD_TOOLS=ON",
+            "-DGENEWHIP_BUILD_DESKTOP=ON", "-DGENEWHIP_TEST_HOOKS=ON"],
+        "build": ["cmake", "--build", str(build), "--parallel", "2"]}
+    setup_roots = ((ROOT / "build/v02", ROOT / "build/tool-cache", ROOT / "build/audio-refs")
+        if step == "dependencies" else (ROOT / "build/v02",))
+    owned_roots = _prepare_native_setup_roots(setup_roots)
+    _run_bounded_setup_command(commands[step], step=step,
+        owned_roots=owned_roots, timeout=whole_seconds, phase="runtime")
+    if time.monotonic_ns() >= projection["setup_deadline_monotonic_ns"]:
+        raise ValueError("native-prefix-setup-deadline-exhausted")
 
 
 def _validate_hosted_run(run: dict[str, Any], repository: str,
@@ -391,6 +1210,16 @@ def _validate_workflow_clock(started_at: str, run_created_at: str,
         raise ValueError("qualification-dispatch-base-invalid")
     if start > current or created < start or created > current:
         raise ValueError("qualification-dispatch-clock-invalid")
+    scope_pin = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", "")
+    if scope_pin not in ("", PHASE7_WINDOW_SCOPE_SHA256):
+        raise ValueError("qualification-scope-pin-invalid")
+    if scope_pin == PHASE7_WINDOW_SCOPE_SHA256:
+        window = _load_phase7_window_module()
+        window.validate_public_clock(ROOT,
+            scope_path=os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH", ""),
+            scope_sha256=PHASE7_WINDOW_SCOPE_SHA256, started_at=started_at,
+            phase=phase, now=current, workflow_created_at=run_created_at)
+        return started_at
     scope = json.loads((ROOT / "evidence/v02-execution.json").read_text(encoding="utf-8"))
     _require_hosted_budget(started_at, current.isoformat(), scope, phase=phase)
     return started_at
@@ -433,6 +1262,16 @@ def _check_environment_clock(scope: dict[str, Any], phase: str | None = None) ->
 def _require_hosted_budget(started_at: str, now: str,
                            scope: dict[str, Any], *, phase: str | None = None) -> float:
     """Keep one shared deadline and the declared final-close time reserved."""
+    scope_pin = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", "")
+    if scope_pin not in ("", PHASE7_WINDOW_SCOPE_SHA256):
+        raise ValueError("qualification-scope-pin-invalid")
+    if scope_pin == PHASE7_WINDOW_SCOPE_SHA256:
+        window = _load_phase7_window_module()
+        result = window.validate_public_clock(ROOT,
+            scope_path=os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH", ""),
+            scope_sha256=PHASE7_WINDOW_SCOPE_SHA256, started_at=started_at,
+            phase=phase or "package", now=now)
+        return result["remaining_seconds"]
     batch = scope.get("qualification_batch") if isinstance(scope, dict) else None
     if not isinstance(batch, dict):
         raise ValueError("qualification-common-cutoff-invalid")
@@ -455,6 +1294,50 @@ def _require_hosted_budget(started_at: str, now: str,
     if remaining <= close and phase != "close":
         raise ValueError("qualification-final-close-reserve-exhausted")
     return remaining
+
+
+def _load_phase7_window_module():
+    spec = importlib.util.spec_from_file_location("gw_v02_phase7_window",
+        ROOT / "scripts/release/v02_window.py")
+    if spec is None or spec.loader is None:
+        raise ValueError("phase7-window-validator-unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def phase7_window_remaining_seconds(phase: str, *,
+        now: datetime.datetime | str | None = None,
+        root: pathlib.Path = ROOT) -> float:
+    """Return the remaining immutable local four-hour phase window."""
+    window = _load_phase7_window_module().load_window(root)
+    return _load_phase7_window_module().check_window(window, phase=phase,
+        now=now)["remaining_seconds"]
+
+
+def phase7_execution_scope_path(*, root: pathlib.Path = ROOT,
+        explicit: pathlib.Path | None = None) -> pathlib.Path:
+    """Resolve only the selected exact public scope, preserving legacy by default."""
+    root = pathlib.Path(root).resolve(strict=True)
+    selected_sha = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", "")
+    selected_path = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH", "")
+    legacy = root / "evidence/v02-execution.json"
+    if selected_sha not in ("", PHASE7_WINDOW_SCOPE_SHA256):
+        raise ValueError("qualification-scope-pin-invalid")
+    if selected_sha == PHASE7_WINDOW_SCOPE_SHA256:
+        path = root / PHASE7_WINDOW_SCOPE_PATH
+        if selected_path != PHASE7_WINDOW_SCOPE_PATH.as_posix():
+            raise ValueError("qualification-scope-path-invalid")
+        _load_phase7_window_module().load_public_scope(root,
+            scope_path=PHASE7_WINDOW_SCOPE_PATH.as_posix(),
+            scope_sha256=PHASE7_WINDOW_SCOPE_SHA256)
+    else:
+        path = legacy
+    if explicit is not None:
+        chosen = explicit if explicit.is_absolute() else root / explicit
+        if pathlib.Path(os.path.abspath(chosen)) != pathlib.Path(os.path.abspath(path)):
+            raise ValueError("qualification-scope-profile-conflict")
+    return path
 
 
 def _campaign_projection(path: pathlib.Path, scope_path: pathlib.Path,
@@ -1735,6 +2618,10 @@ def _reject_output_collisions(args: argparse.Namespace) -> None:
             "journal", "continuation"),
         "hosted": ("preflight", "publication_copy", "scope", "campaign", "journal",
             "continuation")}
+    if args.mode == "native-prefix-diagnostic-hosted":
+        mode_inputs[args.mode] = ("scope", "journal", "preflight", "publication_copy",
+            "diagnostic_readiness", "single_native_admission", "single_native_authority",
+            "batch_admission", "batch_authorization")
     names = list(mode_inputs.get(args.mode, ()))
     # Prepare-only intentionally writes the generated packet at --out; the
     # parser's default --preflight path is not read in this mode.
@@ -3143,25 +4030,51 @@ def publish_sanitized_source(packet_path: pathlib.Path, publication_copy: pathli
                              batch_authorization_sha256: str | None = None,
                              batch_admission: pathlib.Path | None = None,
                              batch_admission_sha256: str | None = None,
-                             batch_output_path: pathlib.Path | None = None) -> dict[str, Any]:
+                             batch_output_path: pathlib.Path | None = None,
+                             single_native_admission: pathlib.Path | None = None,
+                             single_native_admission_sha256: str | None = None,
+                             single_native_authority: pathlib.Path | None = None,
+                             single_native_authority_sha256: str | None = None) -> dict[str, Any]:
     """Push only the reviewed sanitized candidate, merge through required protection."""
     scope_path = scope_path or ROOT / "evidence/v02-execution.json"
-    if batch_authorization is None:
+    single_fields = (single_native_admission, single_native_admission_sha256,
+                     single_native_authority, single_native_authority_sha256)
+    single_requested = any(value is not None for value in single_fields)
+    if not single_requested and batch_authorization is None:
         _reject_legacy_batch_paths(packet_path, publication_copy, journal_path,
             batch_output_path or (journal_path.parent / "source-delivery.json"))
-    batch = _fresh_batch_guard(batch_authorization=batch_authorization,
-        batch_authorization_sha256=batch_authorization_sha256,
-        batch_admission=batch_admission, batch_admission_sha256=batch_admission_sha256,
-        stage="public-effects", scope_path=scope_path, journal_path=journal_path,
-        publication_copy=publication_copy, preflight_path=packet_path,
-        output_path=batch_output_path or (journal_path.parent / "source-delivery.json"))
-    diagnostic_only = (batch is not None
-        and batch["admission"]["disposition"] == "bounded-diagnostic-followup")
+    if single_requested:
+        if any(value is None for value in single_fields):
+            raise ValueError("single-native-authority-and-admission-required")
+        if any(value is not None for value in (batch_authorization, batch_authorization_sha256,
+                batch_admission, batch_admission_sha256, campaign_path, campaign_sha256)):
+            raise ValueError("single-native-route-conflicts-with-legacy-authority")
+        _single_native_scope(scope_path)
+        delivery_path = batch_output_path or (journal_path.parent / "source-delivery.json")
+        _single_native_paths(packet_path, publication_copy,
+            single_native_admission,
+            outputs=(journal_path, delivery_path), admission_path=single_native_admission,
+            authority_path=single_native_authority,
+            authority_sha256=single_native_authority_sha256)
+        batch = _single_native_guard(admission_path=single_native_admission,
+            stage="public-effects", authority_path=single_native_authority,
+            authority_sha256=single_native_authority_sha256,
+            admission_sha256=single_native_admission_sha256)
+    else:
+        batch = _fresh_batch_guard(batch_authorization=batch_authorization,
+            batch_authorization_sha256=batch_authorization_sha256,
+            batch_admission=batch_admission, batch_admission_sha256=batch_admission_sha256,
+            stage="public-effects", scope_path=scope_path, journal_path=journal_path,
+            publication_copy=publication_copy, preflight_path=packet_path,
+            output_path=batch_output_path or (journal_path.parent / "source-delivery.json"))
+    diagnostic_only = (single_requested or (batch is not None
+        and batch["admission"].get("disposition") == "bounded-diagnostic-followup"))
     if batch_authorization is not None:
         os.environ["GENEWHIP_FRESH_BATCH_STAGE"] = "publication"
-    _require_campaign_for_journal(journal_path, scope_path or ROOT / "evidence/v02-execution.json",
-        campaign_path, campaign_sha256, phase="runtime", recovery_selection=recovery_selection,
-        continuation_path=continuation_path, continuation_purpose=continuation_purpose)
+    if not single_requested and not (batch is not None and batch.get("phase7_window") is True):
+        _require_campaign_for_journal(journal_path, scope_path or ROOT / "evidence/v02-execution.json",
+            campaign_path, campaign_sha256, phase="runtime", recovery_selection=recovery_selection,
+            continuation_path=continuation_path, continuation_purpose=continuation_purpose)
     packet = _valid_packet_for_delivery(packet_path, publication_copy)
     journal_path = journal_path.resolve()
     previous = None
@@ -3325,11 +4238,11 @@ def publish_sanitized_source(packet_path: pathlib.Path, publication_copy: pathli
             and item.get("status") == "COMPLETED"
             and item.get("conclusion") in {"FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED"}]
         if failed_checks:
-            if batch_authorization is not None:
+            if batch_authorization is not None and not single_requested:
                 _write_fresh_batch_failure(stage="preview-ci", reason="pull-request-required-ci-failed")
             raise ValueError("required-public-pull-request-check-failed")
         if len(required) == 1 and required[0].get("conclusion") == "SUCCESS":
-            if batch_authorization is not None:
+            if batch_authorization is not None and not single_requested:
                 try:
                     _validate_preview_rollup(checks, error="fresh-batch-pr-preview-roster-not-success")
                 except ValueError:
@@ -3340,8 +4253,9 @@ def publish_sanitized_source(packet_path: pathlib.Path, publication_copy: pathli
     if diagnostic_only:
         # This source was admitted only to collect missing CI evidence. A green
         # preview does not permit this controller or any re-entry to merge it.
-        _write_fresh_batch_failure(stage="preview-ci",
-            reason="diagnostic-ci-complete-assessment-required")
+        if not single_requested:
+            _write_fresh_batch_failure(stage="preview-ci",
+                reason="diagnostic-ci-complete-assessment-required")
         journal.update({"diagnostic_only": True, "diagnostic_ci_status": "passed",
             "assessment_required": True, "pull_request": pr_number,
             "pull_request_url": current.get("url"), "merge_attempted": False})
@@ -3694,9 +4608,43 @@ def _inspect_preparation_policy(root: pathlib.Path, destination: pathlib.Path,
 
 def prepare_public_snapshot(publication_copy: pathlib.Path, scope: pathlib.Path,
                             out: pathlib.Path, authorization: pathlib.Path | None = None,
-                            *, root: pathlib.Path = ROOT) -> dict[str, Any]:
+                            *, single_native_admission: pathlib.Path | None = None,
+                            single_native_admission_sha256: str | None = None,
+                            single_native_authority: pathlib.Path | None = None,
+                            single_native_authority_sha256: str | None = None,
+                            root: pathlib.Path = ROOT) -> dict[str, Any]:
     """Build a local sanitized checkout rooted at the currently observed public main."""
     root = root.resolve(strict=True)
+    new_roots = ((root / SINGLE_NATIVE_POLICY_ROOT).resolve(strict=False),
+        (root / ITERATION_POLICY_ROOT).resolve(strict=False))
+    retired_roots = tuple((root / relative).resolve(strict=False)
+        for relative in RETIRED_SINGLE_NATIVE_POLICY_ROOTS)
+    routed = (publication_copy, out, authorization, single_native_admission, single_native_authority)
+    uses_single = any(value is not None and any(
+        (value if value.is_absolute() else root / value).resolve(strict=False) == new_root
+        or new_root in (value if value.is_absolute() else root / value).resolve(strict=False).parents
+        for new_root in new_roots) for value in routed)
+    uses_retired = any(value is not None and any(
+        (value if value.is_absolute() else root / value).resolve(strict=False) == retired_root
+        or retired_root in (value if value.is_absolute() else root / value).resolve(strict=False).parents
+        for retired_root in retired_roots) for value in routed)
+    if uses_retired:
+        raise ValueError("single-native-retired-authority")
+    supplied_single = any(value is not None for value in (single_native_admission,
+        single_native_admission_sha256, single_native_authority, single_native_authority_sha256))
+    if uses_single or supplied_single:
+        if (not uses_single or any(value is None for value in (single_native_admission,
+                single_native_admission_sha256, single_native_authority, single_native_authority_sha256))):
+            raise ValueError("single-native-authorization-required")
+        if root != ROOT.resolve(strict=True):
+            raise ValueError("single-native-root-invalid")
+        _single_native_scope(scope)
+        _single_native_paths(single_native_admission, outputs=(publication_copy, out),
+            admission_path=single_native_admission, authority_path=single_native_authority,
+            authority_sha256=single_native_authority_sha256)
+        _single_native_guard(admission_path=single_native_admission, stage="source-preparation",
+            authority_path=single_native_authority, authority_sha256=single_native_authority_sha256,
+            admission_sha256=single_native_admission_sha256)
     scope = scope.resolve(strict=True)
     scope_value = json.loads(scope.read_text(encoding="utf-8"))
     if scope_value.get("schema") != "genewhip-v02-execution-v1":
@@ -3879,11 +4827,12 @@ def prepare_public_snapshot(publication_copy: pathlib.Path, scope: pathlib.Path,
     return packet
 
 
-def _workflow_runs(repository: str, source_sha: str, *, branch: str = "main") -> list[dict[str, Any]]:
+def _workflow_runs(repository: str, source_sha: str, *, branch: str = "main",
+                   phase: str | None = None) -> list[dict[str, Any]]:
     owner, name = repository.split("/", 1)
     branch_query = urllib.parse.quote(branch, safe="")
     response = _external(["gh", "api", f"repos/{owner}/{name}/actions/workflows/ci.yml/runs?branch={branch_query}&per_page=100"],
-                         timeout=45)
+                         timeout=45, phase=phase)
     try:
         value = json.loads(response.stdout)
     except json.JSONDecodeError:
@@ -3892,6 +4841,15 @@ def _workflow_runs(repository: str, source_sha: str, *, branch: str = "main") ->
     if not isinstance(runs, list):
         raise ValueError("github-workflow-run-list-invalid")
     return [row for row in runs if isinstance(row, dict) and row.get("head_sha") == source_sha]
+
+
+def _native_prefix_settled_workflow_runs(repository: str, source_sha: str, branch: str,
+        projection: dict[str, Any]) -> list[dict[str, Any]]:
+    """Observe provider status through H after U, then reject late responses."""
+    deadline_ns = _advance_native_prefix_settlement_if_due(projection)
+    runs = _workflow_runs(repository, source_sha, branch=branch)
+    _require_native_prefix_before_settlement_deadline(deadline_ns)
+    return runs
 
 
 def _wait_for_fresh_batch_push_ci(repository: str, source_sha: str, started_at: str,
@@ -3984,9 +4942,444 @@ def _wait_for_fresh_batch_push_ci(repository: str, source_sha: str, started_at: 
         time.sleep(min(30, max(1, remaining - scope["qualification_batch"]["close_wall_seconds"])))
 
 
+def _phase7_window_external_json(batch: dict[str, Any], endpoint: str,
+                                label: str, *, phase: str = "runtime") -> tuple[bytes, Any]:
+    """Read one bounded GitHub response and retain the exact captured bytes."""
+    if not re.fullmatch(r"[a-z0-9-]+\.json", label):
+        raise ValueError("phase7-merge-push-evidence-label-invalid")
+    attempt = pathlib.Path(batch.get("attempt_root", ""))
+    if not attempt.is_absolute():
+        attempt = ROOT / attempt
+    expected = _fresh_batch_attempt_root()
+    if attempt.resolve(strict=True) != expected:
+        raise ValueError("phase7-merge-push-attempt-root-invalid")
+    scratch = attempt / "coordinator-external-attempts"
+    result = _external(["gh", "api", endpoint], timeout=45, phase=phase,
+        scratch_limit_bytes=2 * 1024 * 1024, stdout_limit_bytes=1024 * 1024,
+        fresh_batch_scratch=scratch)
+    raw = result.stdout.encode("utf-8")
+    try:
+        value = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise ValueError("phase7-merge-push-provider-response-invalid") from None
+    return raw, value
+
+
+def _phase7_window_store_merge_push_evidence(batch: dict[str, Any], directory: pathlib.Path,
+        label: str, raw: bytes, record: dict[str, Any], journal_path: pathlib.Path,
+        journal: dict[str, Any], *, provider_response: bool = True,
+        directory_name: str = "merge-preview-settlement",
+        journal_field: str = "merge_push_settlement") -> dict[str, Any]:
+    """Store one response/action receipt once and bind it into the journal."""
+    attempt = pathlib.Path(batch.get("attempt_root", ""))
+    if not attempt.is_absolute():
+        attempt = ROOT / attempt
+    if attempt.resolve(strict=True) != _fresh_batch_attempt_root():
+        raise ValueError("phase7-merge-push-attempt-root-invalid")
+    if (directory_name not in {"merge-preview-settlement", "qualification-cutoff-settlement"}
+            or directory.resolve(strict=True) != (attempt / directory_name).resolve(strict=True)):
+        raise ValueError("phase7-merge-push-evidence-directory-invalid")
+    retained_bytes = sum(reference.get("bytes", 0)
+        for key in ("provider_refs", "controller_action_refs")
+        for reference in record.get(key, []))
+    if retained_bytes + len(raw) > PHASE7_MERGE_PUSH_EVIDENCE_LIMIT_BYTES:
+        raise ValueError("phase7-merge-push-evidence-budget-exhausted")
+    target = directory / label
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(target, flags, 0o600)
+    except OSError:
+        raise ValueError("phase7-merge-push-evidence-collision") from None
+    try:
+        with os.fdopen(fd, "wb", closefd=True) as stream:
+            stream.write(raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except BaseException:
+        raise
+    ref = {"path": target.relative_to(ROOT).as_posix(),
+        "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
+    key = "provider_refs" if provider_response else "controller_action_refs"
+    record.setdefault(key, []).append({"name": label, **ref})
+    journal[journal_field] = record
+    _write_json(journal_path, journal)
+    return ref
+
+
+def _phase7_window_push_run_identity(run: Any, repository: str, source_sha: str,
+        *, minimum_created_at: datetime.datetime, expected_id: str | None = None,
+        expected_attempt: int | None = None,
+        expected_created_at: str | None = None) -> dict[str, Any]:
+    """Validate one exact main push run independently of its final conclusion."""
+    if not isinstance(run, dict):
+        raise ValueError("phase7-merge-push-run-record-invalid")
+    run_id, attempt = run.get("id"), run.get("run_attempt")
+    repo_record = run.get("repository")
+    created_at = run.get("created_at")
+    if (type(run_id) is not int or run_id <= 0
+            or type(attempt) is not int or attempt < 1
+            or (expected_id is not None and str(run_id) != expected_id)
+            or (expected_attempt is not None and attempt != expected_attempt)
+            or (expected_created_at is not None and created_at != expected_created_at)
+            or not isinstance(repo_record, dict) or repo_record.get("full_name") != repository
+            or not isinstance(run.get("path"), str)
+            or run["path"].split("@", 1)[0] != ".github/workflows/ci.yml"
+            or run.get("event") != "push" or run.get("head_branch") != "main"
+            or run.get("head_sha") != source_sha or not isinstance(created_at, str)):
+        raise ValueError("phase7-merge-push-run-identity-mismatch")
+    created = _parse_utc(created_at)
+    if created < minimum_created_at:
+        raise ValueError("phase7-merge-push-run-predates-merge")
+    status = run.get("status")
+    if status not in {"queued", "in_progress", "requested", "waiting", "pending", "completed"}:
+        raise ValueError("phase7-merge-push-run-status-invalid")
+    return {"run_id": str(run_id), "run_attempt": attempt,
+        "created_at": created_at, "status": status,
+        "conclusion": run.get("conclusion"), "event": "push",
+        "head_branch": "main", "head_sha": source_sha,
+        "path": run["path"].split("@", 1)[0], "repository": repository}
+
+
+def _phase7_window_push_jobs(value: Any, *, run_id: int, run_attempt: int,
+        state: str) -> list[dict[str, Any]]:
+    """Validate the complete provider snapshot for one exact workflow attempt."""
+    if (not isinstance(value, dict) or not isinstance(value.get("jobs"), list)
+            or type(value.get("total_count")) is not int
+            or value["total_count"] != len(value["jobs"]) or len(value["jobs"]) >= 100):
+        raise ValueError("phase7-merge-push-jobs-incomplete")
+    if state not in {"active", "cancelled", "successful"}:
+        raise ValueError("phase7-merge-push-jobs-state-invalid")
+    known_names = {"safety", "gameplay", "desktop", "package", "performance",
+        "product-smoke", "phase7-fast", "required-ci", "attestation", "v02-runtime",
+        "extended", "v02-benchmark-control", "v02-benchmark-recursion94",
+        "v02-benchmark-tank-battle", "v02-package", "v02-release-qualification"}
+    normalized = []
+    names: set[str] = set()
+    ids: set[int] = set()
+    for job in value["jobs"]:
+        if (not isinstance(job, dict) or not isinstance(job.get("name"), str)
+                or job["name"] not in known_names or job["name"] in names
+                or type(job.get("id")) is not int or job["id"] <= 0 or job["id"] in ids
+                or type(job.get("run_id")) is not int or job["run_id"] != run_id
+                or type(job.get("run_attempt")) is not int or job["run_attempt"] != run_attempt
+                or not isinstance(job.get("status"), str)):
+            raise ValueError("phase7-merge-push-job-record-invalid")
+        names.add(job["name"])
+        ids.add(job["id"])
+        status = job["status"].upper()
+        conclusion = job.get("conclusion")
+        if conclusion is not None and not isinstance(conclusion, str):
+            raise ValueError("phase7-merge-push-job-record-invalid")
+        normalized.append({"name": job["name"], "status": status,
+            "conclusion": conclusion.upper() if isinstance(conclusion, str) else None})
+    if state == "successful":
+        if any(row["conclusion"] is None for row in normalized):
+            raise ValueError("phase7-merge-push-job-record-invalid")
+        _validate_preview_rollup(normalized,
+            error="phase7-merge-push-success-roster-invalid", event="push")
+        return normalized
+    if state == "active":
+        for row in normalized:
+            if row["status"] in {"QUEUED", "IN_PROGRESS"}:
+                if row["conclusion"] is not None:
+                    raise ValueError("phase7-merge-push-active-job-conclusion-invalid")
+            elif row["status"] == "COMPLETED":
+                if row["conclusion"] not in {"SUCCESS", "SKIPPED"}:
+                    raise ValueError("phase7-merge-push-active-job-failure-present")
+            else:
+                raise ValueError("phase7-merge-push-active-job-status-invalid")
+        return normalized
+    if any(row["status"] != "COMPLETED"
+            or row["conclusion"] not in {"SUCCESS", "SKIPPED", "CANCELLED"}
+            for row in normalized):
+        raise ValueError("phase7-merge-push-terminal-roster-unsettled")
+    return normalized
+
+
+def _settle_phase7_window_merge_push_ci(repository: str, source_sha: str,
+        candidate_sha: str, pull_request: str, started_at: str,
+        scope: dict[str, Any], batch: dict[str, Any],
+        journal_path: pathlib.Path, journal: dict[str, Any]) -> dict[str, Any]:
+    """Settle duplicate push CI for the new window; only dispatch CI qualifies."""
+    if (batch.get("phase7_window") is not True
+            or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository)
+            or not re.fullmatch(r"[0-9a-f]{40}", source_sha)
+            or not re.fullmatch(r"[0-9a-f]{40}", candidate_sha)
+            or not re.fullmatch(r"[0-9]{1,10}", str(pull_request))):
+        raise ValueError("phase7-merge-push-window-admission-required")
+    start = _parse_utc(started_at)
+    attempt = pathlib.Path(batch.get("attempt_root", ""))
+    if not attempt.is_absolute():
+        attempt = ROOT / attempt
+    if attempt.resolve(strict=True) != _fresh_batch_attempt_root():
+        raise ValueError("phase7-merge-push-attempt-root-invalid")
+    directory = attempt / "merge-preview-settlement"
+    try:
+        directory.mkdir(mode=0o700)
+    except OSError:
+        raise ValueError("phase7-merge-push-settlement-already-started") from None
+    record: dict[str, Any] = {"schema": "genewhip.phase7-merge-preview-settlement.v1",
+        "repository": repository, "source_sha": source_sha, "started_at": started_at,
+        "candidate_sha": candidate_sha, "pull_request": str(pull_request),
+        "qualification_credit": False, "provider_refs": [], "disposition": "pending"}
+    journal["merge_push_settlement"] = record
+    _write_json(journal_path, journal)
+    owner, name = repository.split("/", 1)
+
+    def provider_json(endpoint: str, label: str) -> tuple[bytes, Any]:
+        try:
+            return _phase7_window_external_json(batch, endpoint, label)
+        except Exception as error:
+            record.update({"disposition": "provider-observation-unknown-stop",
+                "provider_error": str(error)})
+            _write_json(journal_path, journal)
+            raise
+
+    pull_raw, pull_value = provider_json(
+        f"repos/{owner}/{name}/pulls/{pull_request}", "merge-pull-request.json")
+    _phase7_window_store_merge_push_evidence(batch, directory, "merge-pull-request.json",
+        pull_raw, record, journal_path, journal)
+    head_record = pull_value.get("head") if isinstance(pull_value, dict) else None
+    base_record = pull_value.get("base") if isinstance(pull_value, dict) else None
+    merged_at = pull_value.get("merged_at") if isinstance(pull_value, dict) else None
+    head_repo = head_record.get("repo") if isinstance(head_record, dict) else None
+    base_repo = base_record.get("repo") if isinstance(base_record, dict) else None
+    if (not isinstance(pull_value, dict) or str(pull_value.get("number")) != str(pull_request)
+            or pull_value.get("state") != "closed" or pull_value.get("merged") is not True
+            or not isinstance(head_record, dict) or head_record.get("sha") != candidate_sha
+            or not isinstance(base_record, dict) or base_record.get("ref") != "main"
+            or not isinstance(head_repo, dict) or head_repo.get("full_name") != repository
+            or not isinstance(base_repo, dict) or base_repo.get("full_name") != repository
+            or pull_value.get("merge_commit_sha") != source_sha
+            or not isinstance(merged_at, str)):
+        record.update({"disposition": "merge-identity-invalid-stop"})
+        _write_json(journal_path, journal)
+        raise ValueError("phase7-merge-push-merge-receipt-invalid")
+    try:
+        merged = _parse_utc(merged_at)
+    except ValueError:
+        record.update({"disposition": "merge-timestamp-invalid-stop"})
+        _write_json(journal_path, journal)
+        raise
+    minimum_created = max(start, merged)
+    record.update({"merged_at": merged.isoformat(),
+        "minimum_run_created_at": minimum_created.isoformat()})
+    _write_json(journal_path, journal)
+
+    def checked_run_identity(run: Any, **kwargs: Any) -> dict[str, Any]:
+        try:
+            return _phase7_window_push_run_identity(run, repository, source_sha, **kwargs)
+        except ValueError as error:
+            record.update({"disposition": "run-identity-invalid-stop",
+                "identity_error": str(error)})
+            _write_json(journal_path, journal)
+            raise
+
+    # Preserve the provider's full run-list response rather than only the rows
+    # accepted by the current-source filter.
+    endpoint = (f"repos/{owner}/{name}/actions/workflows/ci.yml/runs"
+        f"?branch=main&event=push&head_sha={source_sha}&per_page=100")
+    discovery_deadline = time.monotonic() + 300
+    selected: dict[str, Any] | None = None
+    discovery_number = 0
+    while selected is None:
+        remaining = _require_hosted_budget(started_at,
+            datetime.datetime.now(datetime.timezone.utc).isoformat(), scope, phase="runtime")
+        discovery_number += 1
+        raw, value = provider_json(endpoint, "workflow-runs.json")
+        discovery_label = f"workflow-runs-{discovery_number:03d}.json"
+        _phase7_window_store_merge_push_evidence(batch, directory, discovery_label,
+            raw, record, journal_path, journal)
+        rows = value.get("workflow_runs") if isinstance(value, dict) else None
+        if (not isinstance(rows, list) or len(rows) >= 100
+                or type(value.get("total_count")) is not int
+                or value["total_count"] != len(rows)):
+            record.update({"disposition": "provider-list-invalid", "stop_reason": "run-list-invalid"})
+            _write_json(journal_path, journal)
+            raise ValueError("phase7-merge-push-run-list-invalid")
+        candidates = []
+        for row in rows:
+            if (isinstance(row, dict) and row.get("head_sha") == source_sha
+                    and row.get("event") == "push" and row.get("head_branch") == "main"
+                    and isinstance(row.get("path"), str)
+                    and row["path"].split("@", 1)[0] == ".github/workflows/ci.yml"):
+                try:
+                    created = _parse_utc(row.get("created_at"))
+                except ValueError:
+                    record.update({"disposition": "run-identity-invalid-stop",
+                        "identity_error": "hosted-time-identity-invalid"})
+                    _write_json(journal_path, journal)
+                    raise ValueError("phase7-merge-push-run-created-at-invalid") from None
+                if created < minimum_created:
+                    continue
+                identity = checked_run_identity(row, minimum_created_at=minimum_created)
+                candidates.append((row, identity))
+        if len(candidates) > 1:
+            record.update({"disposition": "ambiguous-run-stop", "candidate_run_ids": [
+                item[1]["run_id"] for item in candidates]})
+            _write_json(journal_path, journal)
+            raise ValueError("phase7-merge-push-run-ambiguous")
+        if candidates:
+            selected, identity = candidates[0]
+            record["run"] = identity
+            break
+        if time.monotonic() >= discovery_deadline:
+            record.update({"disposition": "run-not-found-stop"})
+            _write_json(journal_path, journal)
+            raise ValueError("phase7-merge-push-run-not-found")
+        time.sleep(min(5, max(1, remaining - scope["qualification_batch"]["close_wall_seconds"])))
+
+    run_id = record["run"]["run_id"]
+    run_attempt = record["run"]["run_attempt"]
+    run_endpoint = f"repos/{owner}/{name}/actions/runs/{run_id}"
+    raw, current = provider_json(run_endpoint, "selected-run.json")
+    _phase7_window_store_merge_push_evidence(batch, directory, "selected-run.json",
+        raw, record, journal_path, journal)
+    current_identity = checked_run_identity(current, minimum_created_at=minimum_created,
+        expected_id=run_id, expected_attempt=run_attempt,
+        expected_created_at=record["run"]["created_at"])
+    disposition = None
+    cancelled_by_controller = False
+    if current_identity["status"] == "completed":
+        if current_identity["conclusion"] == "success":
+            disposition = "already-successful-not-qualification-credit"
+        else:
+            jobs_endpoint = f"{run_endpoint}/attempts/{run_attempt}/jobs?per_page=100"
+            raw, jobs_value = provider_json(jobs_endpoint, "terminal-jobs.json")
+            _phase7_window_store_merge_push_evidence(batch, directory, "terminal-jobs.json",
+                raw, record, journal_path, journal)
+            record.update({"disposition": "completed-unsuccessfully-stop",
+                "push_run_conclusion": current_identity["conclusion"]})
+            _write_json(journal_path, journal)
+            raise ValueError("phase7-merge-push-completed-unsuccessfully")
+    else:
+        # A previously failing job must not be hidden by cancellation of its
+        # still-running workflow. Inspect the exact current attempt first.
+        jobs_endpoint = f"{run_endpoint}/attempts/{run_attempt}/jobs?per_page=100"
+        raw, active_jobs = provider_json(jobs_endpoint, "active-jobs.json")
+        _phase7_window_store_merge_push_evidence(batch, directory, "active-jobs.json",
+            raw, record, journal_path, journal)
+        jobs = active_jobs.get("jobs") if isinstance(active_jobs, dict) else None
+        try:
+            _phase7_window_push_jobs(active_jobs, run_id=int(run_id),
+                run_attempt=run_attempt, state="active")
+        except ValueError:
+            record.update({"disposition": "active-run-failure-stop"})
+            _write_json(journal_path, journal)
+            raise ValueError("phase7-merge-push-active-run-has-failure")
+        raw, before_cancel = provider_json(run_endpoint, "pre-cancel-run.json")
+        _phase7_window_store_merge_push_evidence(batch, directory, "pre-cancel-run.json",
+            raw, record, journal_path, journal)
+        before_cancel_identity = checked_run_identity(before_cancel,
+            minimum_created_at=minimum_created, expected_id=run_id,
+            expected_attempt=run_attempt,
+            expected_created_at=record["run"]["created_at"])
+        if before_cancel_identity["status"] == "completed":
+            current_identity = before_cancel_identity
+            if current_identity["conclusion"] == "success":
+                disposition = "already-successful-not-qualification-credit"
+            else:
+                raw, jobs_value = provider_json(jobs_endpoint, "terminal-jobs.json")
+                _phase7_window_store_merge_push_evidence(batch, directory, "terminal-jobs.json",
+                    raw, record, journal_path, journal)
+                record.update({"disposition": "completed-unsuccessfully-stop",
+                    "push_run_conclusion": current_identity["conclusion"]})
+                _write_json(journal_path, journal)
+                raise ValueError("phase7-merge-push-completed-unsuccessfully")
+        else:
+            try:
+                cancel = _external(["gh", "run", "cancel", run_id, "--repo", repository],
+                    timeout=60, check=False, phase="runtime",
+                    fresh_batch_scratch=attempt / "coordinator-external-attempts")
+            except Exception:
+                record.update({"disposition": "cancel-command-unknown-stop"})
+                _write_json(journal_path, journal)
+                raise
+            cancel_record = {"argv": ["gh", "run", "cancel", run_id, "--repo", repository],
+                "returncode": cancel.returncode}
+            cancel_raw = (json.dumps(cancel_record, sort_keys=True, separators=(",", ":")) + "\n").encode()
+            _phase7_window_store_merge_push_evidence(batch, directory, "cancel-command.json",
+                cancel_raw, record, journal_path, journal, provider_response=False)
+            record["cancel_requested"] = cancel.returncode == 0
+            _write_json(journal_path, journal)
+            deadline = time.monotonic() + 300
+            poll_number = 0
+            settled_run = None
+            while True:
+                _require_hosted_budget(started_at,
+                    datetime.datetime.now(datetime.timezone.utc).isoformat(), scope, phase="runtime")
+                poll_number += 1
+                label = f"post-cancel-run-{poll_number:03d}.json"
+                raw, settled_run = provider_json(run_endpoint, label)
+                _phase7_window_store_merge_push_evidence(batch, directory, label,
+                    raw, record, journal_path, journal)
+                settled_identity = checked_run_identity(settled_run,
+                    minimum_created_at=minimum_created, expected_id=run_id,
+                    expected_attempt=run_attempt,
+                    expected_created_at=record["run"]["created_at"])
+                if settled_identity["status"] == "completed":
+                    current_identity = settled_identity
+                    break
+                if time.monotonic() >= deadline:
+                    record.update({"disposition": "cancel-settlement-unknown-stop"})
+                    _write_json(journal_path, journal)
+                    raise ValueError("phase7-merge-push-cancel-settlement-timeout")
+                time.sleep(5)
+            if current_identity["conclusion"] == "cancelled" and cancel.returncode == 0:
+                disposition = "superseded-not-qualification-credit"
+                cancelled_by_controller = True
+            elif current_identity["conclusion"] == "success":
+                disposition = "already-successful-not-qualification-credit"
+            else:
+                disposition = "cancel-result-failed-stop"
+
+    jobs_endpoint = f"{run_endpoint}/attempts/{run_attempt}/jobs?per_page=100"
+    raw, jobs_value = provider_json(jobs_endpoint, "terminal-jobs.json")
+    _phase7_window_store_merge_push_evidence(batch, directory, "terminal-jobs.json",
+        raw, record, journal_path, journal)
+    if disposition == "superseded-not-qualification-credit":
+        try:
+            normalized_jobs = _phase7_window_push_jobs(jobs_value, run_id=int(run_id),
+                run_attempt=run_attempt, state="cancelled")
+        except ValueError:
+            record.update({"disposition": "cancelled-but-terminal-roster-invalid-stop"})
+            _write_json(journal_path, journal)
+            raise
+    elif disposition == "already-successful-not-qualification-credit":
+        try:
+            normalized_jobs = _phase7_window_push_jobs(jobs_value, run_id=int(run_id),
+                run_attempt=run_attempt, state="successful")
+        except ValueError:
+            record.update({"disposition": "successful-run-roster-invalid-stop"})
+            _write_json(journal_path, journal)
+            raise
+        if current_identity["conclusion"] != "success":
+            record.update({"disposition": "run-conclusion-mismatch-stop"})
+            _write_json(journal_path, journal)
+            raise ValueError("phase7-merge-push-completed-unsuccessfully")
+    else:
+        jobs = jobs_value.get("jobs") if isinstance(jobs_value, dict) else None
+        normalized_jobs = [{"name": job.get("name"),
+            "status": str(job.get("status", "")).upper(),
+            "conclusion": str(job.get("conclusion", "")).upper()}
+            for job in jobs if isinstance(job, dict)] if isinstance(jobs, list) else []
+        record.update({"disposition": disposition,
+            "push_run_conclusion": current_identity["conclusion"],
+            "terminal_job_count": len(normalized_jobs)})
+        _write_json(journal_path, journal)
+        raise ValueError("phase7-merge-push-cancel-result-not-accepted")
+    record.update({"disposition": disposition, "push_run_status": current_identity["status"],
+        "push_run_conclusion": current_identity["conclusion"],
+        "cancelled_by_controller": cancelled_by_controller,
+        "terminal_job_count": len(normalized_jobs), "qualification_credit": False})
+    _write_json(journal_path, journal)
+    return record
+
+
 def _dispatch_qualification_run(repository: str, source_sha: str, base_sha: str,
                                 journal_path: pathlib.Path, journal: dict[str, Any],
-                                scope: dict[str, Any]) -> str:
+                                scope: dict[str, Any],
+                                batch: dict[str, Any] | None = None) -> str:
     """Dispatch exact main qualification while carrying the existing journal cutoff."""
     started_at = journal.get("started_at")
     _require_hosted_budget(started_at,
@@ -3998,22 +5391,39 @@ def _dispatch_qualification_run(repository: str, source_sha: str, base_sha: str,
         journal["qualification_dispatch_requested"] = True
         journal["qualification_started_at"] = started_at
         _write_json(journal_path, journal)
-        _external(["gh", "workflow", "run", ".github/workflows/ci.yml", "--repo", repository,
-            "--ref", "main", "--field", "qualification_started_at=" + started_at,
-            "--field", "qualification_base_sha=" + base_sha,
-            "--field", "qualification_nonce=" + nonce], timeout=120, phase="runtime")
-        journal["qualification_dispatch_submitted"] = True
-        _write_json(journal_path, journal)
     elif (not re.fullmatch(r"[0-9a-f]{32}", nonce)
           or journal.get("qualification_started_at") != started_at):
         raise ValueError("hosted-delivery-journal-dispatch-identity-invalid")
     elif journal.get("qualification_dispatch_submitted") is not True:
-        _external(["gh", "workflow", "run", ".github/workflows/ci.yml", "--repo", repository,
-            "--ref", "main", "--field", "qualification_started_at=" + started_at,
-            "--field", "qualification_base_sha=" + base_sha,
-            "--field", "qualification_nonce=" + nonce], timeout=120, phase="runtime")
-        journal["qualification_dispatch_submitted"] = True
-        _write_json(journal_path, journal)
+        pass
+    else:
+        return nonce
+
+    command = ["gh", "workflow", "run", ".github/workflows/ci.yml", "--repo", repository,
+        "--ref", "main", "--field", "qualification_started_at=" + started_at,
+        "--field", "qualification_base_sha=" + base_sha,
+        "--field", "qualification_nonce=" + nonce]
+    claim_module = None
+    if batch is not None and batch.get("phase7_window") is True:
+        module = importlib.util.spec_from_file_location("gw_v02_window_dispatch",
+            ROOT / "scripts/release/v02_batch.py")
+        if module is None or module.loader is None:
+            raise ValueError("phase7-window-validator-unavailable")
+        claim_module = importlib.util.module_from_spec(module)
+        module.loader.exec_module(claim_module)
+        claim_module.create_phase7_window_dispatch_claim(ROOT, batch, nonce)
+        command.extend(["--field", "qualification_scope_sha256=" + PHASE7_WINDOW_SCOPE_SHA256])
+        try:
+            # Reopen the exact anchor after exclusive creation and immediately before
+            # entering the external dispatch boundary. The claim remains spent on any error.
+            claim_module.verify_phase7_window_dispatch_claim(ROOT, batch)
+            _external(command, timeout=120, phase="runtime")
+        finally:
+            claim_module.close_phase7_window_dispatch_claim(batch)
+    else:
+        _external(command, timeout=120, phase="runtime")
+    journal["qualification_dispatch_submitted"] = True
+    _write_json(journal_path, journal)
     return nonce
 
 
@@ -4056,20 +5466,287 @@ def _wait_for_exact_qualification_run(repository: str, source_sha: str, base_sha
         time.sleep(min(30, max(1, remaining - scope["qualification_batch"]["close_wall_seconds"])))
 
 
+def _phase7_selected_qualification_identity(run: Any, repository: str, source_sha: str,
+        nonce: str, *, expected_id: str, expected_attempt: int,
+        expected_created_at: str) -> dict[str, Any]:
+    if not isinstance(run, dict):
+        raise ValueError("phase7-qualification-run-record-invalid")
+    repo_record = run.get("repository")
+    if (type(run.get("id")) is not int or str(run["id"]) != expected_id
+            or type(run.get("run_attempt")) is not int
+            or run["run_attempt"] != expected_attempt
+            or run.get("head_sha") != source_sha or run.get("head_branch") != "main"
+            or run.get("event") != "workflow_dispatch"
+            or not isinstance(run.get("path"), str)
+            or run["path"].split("@", 1)[0] != ".github/workflows/ci.yml"
+            or run.get("display_title") != "Plan10 qualification " + nonce
+            or not isinstance(repo_record, dict) or repo_record.get("full_name") != repository
+            or run.get("created_at") != expected_created_at
+            or run.get("status") not in {"queued", "in_progress", "requested", "waiting", "pending", "completed"}
+            or (run.get("status") == "completed" and run.get("conclusion") not in {
+                "success", "failure", "cancelled", "timed_out", "action_required"})):
+        raise ValueError("phase7-qualification-run-identity-changed")
+    _parse_utc(expected_created_at)
+    return {"run_id": expected_id, "run_attempt": expected_attempt,
+        "created_at": expected_created_at, "status": run["status"],
+        "conclusion": run.get("conclusion")}
+
+
+def _phase7_runtime_bundle_ready(batch: dict[str, Any], repository: str,
+        source_sha: str, run_id: str, run_attempt: int,
+        runtime_cutoff: datetime.datetime, journal_path: pathlib.Path,
+        journal: dict[str, Any], *, phase: str) -> bool:
+    owner, name = repository.split("/", 1)
+    endpoint = f"repos/{owner}/{name}/actions/runs/{run_id}/attempts/{run_attempt}/jobs?per_page=100"
+    directory = _fresh_batch_attempt_root() / "qualification-cutoff-settlement"
+    if not directory.exists():
+        directory.mkdir(mode=0o700)
+    elif directory.is_symlink() or not directory.is_dir():
+        raise ValueError("phase7-qualification-cutoff-evidence-directory-invalid")
+    record = journal.get("qualification_cutoff_settlement")
+    if not isinstance(record, dict):
+        record = {"schema": "genewhip.phase7-qualification-cutoff-settlement.v1",
+            "repository": repository, "source_sha": source_sha, "run_id": run_id,
+            "reason": "runtime-cutoff-evaluation", "qualification_credit": False,
+            "provider_refs": [], "controller_action_refs": [], "runtime_attempts": {}}
+        journal["qualification_cutoff_settlement"] = record
+        _write_json(journal_path, journal)
+    if (record.get("schema") != "genewhip.phase7-qualification-cutoff-settlement.v1"
+            or record.get("repository") != repository or record.get("source_sha") != source_sha
+            or record.get("run_id") != run_id):
+        raise ValueError("phase7-qualification-cutoff-record-conflict")
+    attempt_key = str(run_attempt)
+    attempt_record = record.setdefault("runtime_attempts", {}).get(attempt_key, {})
+    if not isinstance(attempt_record, dict):
+        raise ValueError("phase7-qualification-cutoff-attempt-record-invalid")
+    label = f"runtime-bundle-jobs-attempt-{run_attempt:03d}.json"
+    raw, value = _phase7_window_external_json(batch, endpoint,
+        label, phase=phase)
+    _phase7_window_store_merge_push_evidence(batch, directory, label,
+        raw, record, journal_path, journal, directory_name="qualification-cutoff-settlement",
+        journal_field="qualification_cutoff_settlement")
+    rows = value.get("jobs") if isinstance(value, dict) else None
+    if (not isinstance(rows, list) or type(value.get("total_count")) is not int
+            or value["total_count"] != len(rows) or len(rows) >= 100):
+        attempt_record.update({"runtime_bundle_status": "provider-roster-invalid"})
+        record["runtime_attempts"][attempt_key] = attempt_record
+        record.update({"run_attempt": run_attempt, **attempt_record})
+        _write_json(journal_path, journal)
+        return False
+    required = {"v02-runtime", "v02-benchmark-control", "v02-benchmark-recursion94",
+        "v02-benchmark-tank-battle"}
+    by_name: dict[str, dict[str, Any]] = {}
+    job_ids: set[int] = set()
+    for job in rows:
+        if (not isinstance(job, dict) or not isinstance(job.get("name"), str)
+                or job["name"] in by_name or type(job.get("id")) is not int
+                or job["id"] <= 0 or job["id"] in job_ids
+                or type(job.get("run_id")) is not int or job["run_id"] != int(run_id)
+                or type(job.get("run_attempt")) is not int or job["run_attempt"] != run_attempt
+                or job.get("head_sha") != source_sha or job.get("head_branch") != "main"):
+            attempt_record.update({"runtime_bundle_status": "job-identity-invalid"})
+            record["runtime_attempts"][attempt_key] = attempt_record
+            record.update({"run_attempt": run_attempt, **attempt_record})
+            _write_json(journal_path, journal)
+            return False
+        by_name[job["name"]] = job
+        job_ids.add(job["id"])
+    completion_times = {}
+    for name in required:
+        job = by_name.get(name)
+        if (job is None or job.get("status") != "completed"
+                or job.get("conclusion") != "success"):
+            attempt_record.update({"runtime_bundle_status": "runtime-jobs-not-successful",
+                "runtime_jobs_observed": sorted(name for name in required if name in by_name)})
+            record["runtime_attempts"][attempt_key] = attempt_record
+            record.update({"run_attempt": run_attempt, **attempt_record})
+            _write_json(journal_path, journal)
+            return False
+        completed_at = job.get("completed_at")
+        try:
+            completed = _parse_utc(completed_at)
+        except ValueError:
+            attempt_record.update({"runtime_bundle_status": "runtime-job-completion-time-invalid"})
+            record["runtime_attempts"][attempt_key] = attempt_record
+            record.update({"run_attempt": run_attempt, **attempt_record})
+            _write_json(journal_path, journal)
+            return False
+        completion_times[name] = completed.isoformat()
+        if completed > runtime_cutoff:
+            attempt_record.update({"runtime_bundle_status": "runtime-job-completed-after-cutoff",
+                "runtime_job_completed_at": completion_times})
+            record["runtime_attempts"][attempt_key] = attempt_record
+            record.update({"run_attempt": run_attempt, **attempt_record})
+            _write_json(journal_path, journal)
+            return False
+    attempt_record.update({"runtime_bundle_status": "success-by-runtime-cutoff",
+        "runtime_job_completed_at": completion_times,
+        "runtime_bundle_job_ids": {name: by_name[name]["id"] for name in sorted(required)}})
+    record["runtime_attempts"][attempt_key] = attempt_record
+    record.update({"run_attempt": run_attempt, **attempt_record})
+    _write_json(journal_path, journal)
+    return True
+
+
+def _phase7_cancel_and_settle_qualification_run(repository: str, source_sha: str,
+        selected_identity: dict[str, Any], nonce: str, batch: dict[str, Any],
+        started_at: str, scope: dict[str, Any], journal_path: pathlib.Path,
+        journal: dict[str, Any], reason: str) -> None:
+    record = journal.get("qualification_cutoff_settlement")
+    directory = _fresh_batch_attempt_root() / "qualification-cutoff-settlement"
+    if not isinstance(record, dict):
+        if directory.exists():
+            raise ValueError("phase7-qualification-cutoff-evidence-conflict")
+        directory.mkdir(mode=0o700)
+        record = {"schema": "genewhip.phase7-qualification-cutoff-settlement.v1",
+            "repository": repository, "source_sha": source_sha,
+            "run_id": selected_identity["run_id"],
+            "run_attempt": selected_identity["run_attempt"],
+            "created_at": selected_identity["created_at"], "nonce": nonce,
+            "reason": reason, "qualification_credit": False,
+            "provider_refs": [], "controller_action_refs": []}
+        journal["qualification_cutoff_settlement"] = record
+        _write_json(journal_path, journal)
+    elif not directory.is_dir() or directory.is_symlink():
+        raise ValueError("phase7-qualification-cutoff-evidence-directory-invalid")
+    if (record.get("schema") != "genewhip.phase7-qualification-cutoff-settlement.v1"
+            or record.get("repository") != repository or record.get("source_sha") != source_sha
+            or record.get("run_id") != selected_identity["run_id"]):
+        raise ValueError("phase7-qualification-cutoff-record-conflict")
+    record["reason"] = reason
+    record["run_attempt"] = selected_identity["run_attempt"]
+    record["created_at"] = selected_identity["created_at"]
+    record["nonce"] = nonce
+    _write_json(journal_path, journal)
+    owner, name = repository.split("/", 1)
+    endpoint = f"repos/{owner}/{name}/actions/runs/{selected_identity['run_id']}"
+
+    def save(label: str, raw: bytes, *, action: bool = False) -> None:
+        _phase7_window_store_merge_push_evidence(batch, directory, label, raw, record,
+            journal_path, journal, provider_response=not action,
+            directory_name="qualification-cutoff-settlement",
+            journal_field="qualification_cutoff_settlement")
+
+    raw, run = _phase7_window_external_json(batch, endpoint, "cutoff-selected-run.json", phase="close")
+    save("cutoff-selected-run.json", raw)
+    identity = _phase7_selected_qualification_identity(run, repository, source_sha, nonce,
+        expected_id=selected_identity["run_id"],
+        expected_attempt=selected_identity["run_attempt"],
+        expected_created_at=selected_identity["created_at"])
+    if identity["status"] != "completed":
+        try:
+            cancel = _external(["gh", "run", "cancel", identity["run_id"], "--repo", repository],
+                timeout=60, check=False, phase="close",
+                fresh_batch_scratch=_fresh_batch_attempt_root() / "coordinator-external-attempts")
+        except Exception:
+            record.update({"disposition": "cancel-command-unknown-stop"})
+            _write_json(journal_path, journal)
+            raise
+        action = {"argv": ["gh", "run", "cancel", identity["run_id"], "--repo", repository],
+            "returncode": cancel.returncode}
+        save("cancel-command.json",
+            (json.dumps(action, sort_keys=True, separators=(",", ":")) + "\n").encode(), action=True)
+        record["cancel_requested"] = cancel.returncode == 0
+    else:
+        cancel = None
+    deadline = time.monotonic() + 300
+    poll = 0
+    final_identity = identity
+    while final_identity["status"] != "completed":
+        _require_hosted_budget(started_at,
+            datetime.datetime.now(datetime.timezone.utc).isoformat(), scope, phase="close")
+        poll += 1
+        label = f"cutoff-run-{poll:03d}.json"
+        raw, current = _phase7_window_external_json(batch, endpoint, label, phase="close")
+        save(label, raw)
+        final_identity = _phase7_selected_qualification_identity(current, repository, source_sha,
+            nonce, expected_id=selected_identity["run_id"],
+            expected_attempt=selected_identity["run_attempt"],
+            expected_created_at=selected_identity["created_at"])
+        if final_identity["status"] != "completed" and time.monotonic() >= deadline:
+            record.update({"disposition": "provider-settlement-timeout-stop"})
+            _write_json(journal_path, journal)
+            raise ValueError("phase7-qualification-cutoff-settlement-timeout")
+        if final_identity["status"] != "completed":
+            time.sleep(5)
+    jobs_endpoint = f"{endpoint}/attempts/{selected_identity['run_attempt']}/jobs?per_page=100"
+    raw, jobs = _phase7_window_external_json(batch, jobs_endpoint,
+        "cutoff-terminal-jobs.json", phase="close")
+    save("cutoff-terminal-jobs.json", raw)
+    try:
+        terminal_jobs = _phase7_window_push_jobs(jobs, run_id=int(selected_identity["run_id"]),
+            run_attempt=selected_identity["run_attempt"], state="cancelled")
+    except ValueError:
+        record.update({"disposition": "provider-terminal-jobs-invalid-stop",
+            "run_conclusion": final_identity["conclusion"]})
+        _write_json(journal_path, journal)
+        raise
+    record.update({"disposition": "cutoff-run-settled-not-qualified",
+        "run_status": final_identity["status"], "run_conclusion": final_identity["conclusion"],
+        "terminal_job_count": len(terminal_jobs),
+        "cancel_confirmed": bool(cancel is not None and cancel.returncode == 0)})
+    _write_json(journal_path, journal)
+    raise ValueError("phase7-full-qualification-cutoff-settled")
+
+
 def _wait_for_selected_run_completion(repository: str, source_sha: str,
                                       selected: dict[str, Any], started_at: str,
                                       scope: dict[str, Any], *, nonce: str,
-                                      base_sha: str) -> dict[str, Any]:
-    """Wait within the selected run creation cutoff; reruns keep that same clock."""
+                                      base_sha: str, batch: dict[str, Any] | None = None,
+                                      journal_path: pathlib.Path | None = None,
+                                      journal: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Wait across runtime/package partitions; a late exact run is cancelled and settled."""
     initial = _validate_hosted_run(selected, repository, source_sha, allow_active=True,
         expected_event="workflow_dispatch", expected_nonce=nonce)
-    _validate_workflow_clock(started_at, initial["created_at"], nonce, base_sha)
     selected_id = initial["run_id"]
     current_attempt = int(initial["run_attempt"])
+    window_active = (batch is not None and batch.get("phase7_window") is True
+        and os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256") == PHASE7_WINDOW_SCOPE_SHA256)
+    if not window_active:
+        _validate_workflow_clock(started_at, initial["created_at"], nonce, base_sha)
+        while True:
+            _require_hosted_budget(started_at,
+                datetime.datetime.now(datetime.timezone.utc).isoformat(), scope, phase="runtime")
+            matching = [row for row in _workflow_runs(repository, source_sha)
+                        if str(row.get("id")) == selected_id]
+            if len(matching) != 1:
+                raise ValueError("selected-hosted-run-disappeared-or-duplicated")
+            run = matching[0]
+            identity = _validate_hosted_run(run, repository, source_sha, allow_active=True,
+                expected_event="workflow_dispatch", expected_nonce=nonce)
+            if identity["created_at"] != initial["created_at"]:
+                raise ValueError("selected-hosted-run-creation-clock-changed")
+            _validate_workflow_clock(started_at, identity["created_at"], nonce, base_sha)
+            attempt = int(identity["run_attempt"])
+            if attempt < current_attempt:
+                raise ValueError("selected-hosted-run-attempt-regressed")
+            current_attempt = attempt
+            if run.get("status") == "completed":
+                if run.get("conclusion") != "success":
+                    raise ValueError("exact-source-hosted-qualification-failed")
+                return run
+            remaining = _require_hosted_budget(started_at,
+                datetime.datetime.now(datetime.timezone.utc).isoformat(), scope, phase="runtime")
+            time.sleep(min(30, max(1, remaining - scope["qualification_batch"]["close_wall_seconds"])))
+
+    if journal_path is None or journal is None:
+        raise ValueError("phase7-qualification-cutoff-journal-context-required")
+    window = _load_phase7_window_module()
+    runtime_cutoff = _parse_utc(window.RUNTIME_CUTOFF)
+    package_cutoff = _parse_utc(window.PACKAGE_CUTOFF)
+    runtime_bundle_attempt = None
+    selected_identity = {"run_id": selected_id, "run_attempt": current_attempt,
+        "created_at": initial["created_at"]}
     while True:
-        _require_hosted_budget(started_at,
-            datetime.datetime.now(datetime.timezone.utc).isoformat(), scope, phase="runtime")
-        matching = [row for row in _workflow_runs(repository, source_sha)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        if now < runtime_cutoff:
+            phase = "runtime"
+        elif now < package_cutoff:
+            phase = "package"
+        else:
+            phase = "close"
+        _require_hosted_budget(started_at, now.isoformat(), scope, phase=phase)
+        matching = [row for row in _workflow_runs(repository, source_sha, phase=phase)
                     if str(row.get("id")) == selected_id]
         if len(matching) != 1:
             raise ValueError("selected-hosted-run-disappeared-or-duplicated")
@@ -4078,17 +5755,59 @@ def _wait_for_selected_run_completion(repository: str, source_sha: str,
             expected_event="workflow_dispatch", expected_nonce=nonce)
         if identity["created_at"] != initial["created_at"]:
             raise ValueError("selected-hosted-run-creation-clock-changed")
-        _validate_workflow_clock(started_at, identity["created_at"], nonce, base_sha)
+        _validate_workflow_clock(started_at, identity["created_at"], nonce, base_sha,
+            phase=phase)
         attempt = int(identity["run_attempt"])
         if attempt < current_attempt:
             raise ValueError("selected-hosted-run-attempt-regressed")
         current_attempt = attempt
+        selected_identity["run_attempt"] = current_attempt
+
+        runtime_ready = None
+        completed_success = (run.get("status") == "completed"
+            and run.get("conclusion") == "success")
+        if ((now >= runtime_cutoff or completed_success)
+                and runtime_bundle_attempt != current_attempt):
+            bundle_phase = "runtime" if now < runtime_cutoff else (
+                "package" if now < package_cutoff else "close")
+            runtime_ready = _phase7_runtime_bundle_ready(batch, repository, source_sha,
+                selected_id, current_attempt, runtime_cutoff, journal_path, journal,
+                phase=bundle_phase)
+            runtime_bundle_attempt = current_attempt
+        elif now >= runtime_cutoff or completed_success:
+            record = journal.get("qualification_cutoff_settlement", {})
+            attempt_record = record.get("runtime_attempts", {}).get(str(current_attempt), {})
+            runtime_ready = attempt_record.get("runtime_bundle_status") == "success-by-runtime-cutoff"
+
         if run.get("status") == "completed":
             if run.get("conclusion") != "success":
                 raise ValueError("exact-source-hosted-qualification-failed")
+            if not runtime_ready:
+                record = journal.get("qualification_cutoff_settlement", {})
+                record.update({"disposition": "runtime-partition-missed-stop",
+                    "completed_run_conclusion": run.get("conclusion")})
+                _write_json(journal_path, journal)
+                raise ValueError("phase7-runtime-bundle-missed-cutoff")
+            try:
+                completed_at = _parse_utc(run.get("updated_at"))
+            except ValueError:
+                raise ValueError("phase7-full-run-completion-time-invalid") from None
+            if completed_at > package_cutoff:
+                record = journal.get("qualification_cutoff_settlement", {})
+                record.update({"disposition": "package-partition-missed-stop",
+                    "run_completed_at": completed_at.isoformat()})
+                _write_json(journal_path, journal)
+                raise ValueError("phase7-package-run-completed-after-cutoff")
             return run
-        remaining = _require_hosted_budget(started_at,
-            datetime.datetime.now(datetime.timezone.utc).isoformat(), scope, phase="runtime")
+        if now >= runtime_cutoff and not runtime_ready:
+            _phase7_cancel_and_settle_qualification_run(repository, source_sha,
+                selected_identity, nonce, batch, started_at, scope, journal_path,
+                journal, "runtime-partition-missed")
+        if now >= package_cutoff:
+            _phase7_cancel_and_settle_qualification_run(repository, source_sha,
+                selected_identity, nonce, batch, started_at, scope, journal_path,
+                journal, "package-partition-missed")
+        remaining = _require_hosted_budget(started_at, now.isoformat(), scope, phase=phase)
         time.sleep(min(30, max(1, remaining - scope["qualification_batch"]["close_wall_seconds"])))
 
 
@@ -4125,7 +5844,8 @@ def _clone_hosted_source(repository: str, source_sha: str, hosted_root: pathlib.
 
 
 def _verify_attestation(subject: pathlib.Path, repository: str, source_sha: str,
-                        run_id: str, run_attempt: int, expected_sha256: str) -> dict[str, Any]:
+                        run_id: str, run_attempt: int, expected_sha256: str, *,
+                        expected_event: str = "push") -> dict[str, Any]:
     """Delegate signer, issuer and exact invocation checks to the publisher verifier."""
     import importlib.util
     spec = importlib.util.spec_from_file_location("gw_v02_promotion_attestation",
@@ -4138,7 +5858,7 @@ def _verify_attestation(subject: pathlib.Path, repository: str, source_sha: str,
     try:
         verified = promote.verify_attestation(subject, repository, source_sha,
             str(run_id), int(run_attempt), expected_sha256=expected_sha256,
-            runner=lambda command: _external(command, timeout=60, phase="package"))
+            expected_event=expected_event, runner=lambda command: _external(command, timeout=60, phase="package"))
     except (promote.PromotionError, OSError, ValueError, TypeError) as error:
         raise ValueError("hosted-attestation-rejected:" + str(error)) from None
     return {"status": "verified", "subject": subject.name, "sha256": expected_sha256,
@@ -4189,10 +5909,39 @@ def run_hosted_qualification(packet_path: pathlib.Path, publication_copy: pathli
         raise ValueError("public-main-moved-before-hosted-qualification")
     if batch is not None:
         os.environ["GENEWHIP_FRESH_BATCH_STAGE"] = "preview-ci"
-        _wait_for_fresh_batch_push_ci(repository, source_sha, batch["started_at"], scope)
+        if batch.get("phase7_window") is True:
+            _settle_phase7_window_merge_push_ci(repository, source_sha,
+                source_receipt["candidate_sha"], source_receipt["pull_request"],
+                batch["started_at"], scope, batch, journal_path, existing)
+        else:
+            _wait_for_fresh_batch_push_ci(repository, source_sha, batch["started_at"], scope)
         os.environ["GENEWHIP_FRESH_BATCH_STAGE"] = "qualification"
+        if batch.get("phase7_window") is True:
+            batch = _fresh_batch_guard(batch_authorization=batch_authorization,
+                batch_authorization_sha256=batch_authorization_sha256,
+                batch_admission=batch_admission, batch_admission_sha256=batch_admission_sha256,
+                stage="public-effects", scope_path=scope_path, journal_path=journal_path,
+                publication_copy=publication_copy, preflight_path=packet_path,
+                output_path=out)
+            settlement = existing.get("merge_push_settlement")
+            if not isinstance(settlement, dict):
+                raise ValueError("phase7-merge-push-settlement-missing-before-dispatch")
+            owner, name = repository.split("/", 1)
+            main_raw, main_value = _phase7_window_external_json(batch,
+                f"repos/{owner}/{name}/git/ref/heads/main", "main-ref-before-dispatch.json")
+            _phase7_window_store_merge_push_evidence(batch,
+                _fresh_batch_attempt_root() / "merge-preview-settlement",
+                "main-ref-before-dispatch.json", main_raw, settlement, journal_path, existing)
+            main_sha = main_value.get("object", {}).get("sha") if isinstance(main_value, dict) else None
+            if main_sha != source_sha:
+                settlement.update({"disposition": "main-moved-before-dispatch-stop",
+                    "observed_main_sha": main_sha})
+                _write_json(journal_path, existing)
+                raise ValueError("public-main-moved-before-full-qualification-dispatch")
+            settlement["main_sha_before_dispatch"] = main_sha
+            _write_json(journal_path, existing)
     nonce = _dispatch_qualification_run(repository, source_sha,
-        source_receipt["public_base_sha"], journal_path, existing, scope)
+        source_receipt["public_base_sha"], journal_path, existing, scope, batch=batch)
     base_sha = source_receipt["public_base_sha"]
     run = _wait_for_exact_qualification_run(repository, source_sha, base_sha,
         started_at, nonce, scope)
@@ -4206,7 +5955,8 @@ def run_hosted_qualification(packet_path: pathlib.Path, publication_copy: pathli
     os.environ["GENEWHIP_QUALIFICATION_NONCE"] = nonce
     try:
         run = _wait_for_selected_run_completion(repository, source_sha, run, started_at, scope,
-            nonce=nonce, base_sha=base_sha)
+            nonce=nonce, base_sha=base_sha, batch=batch,
+            journal_path=journal_path, journal=existing)
     except ValueError as error:
         if batch is not None and str(error) == "exact-source-hosted-qualification-failed":
             _write_fresh_batch_failure(stage="qualification", reason="exact-hosted-qualification-failed")
@@ -4214,8 +5964,11 @@ def run_hosted_qualification(packet_path: pathlib.Path, publication_copy: pathli
     run_identity = _validate_hosted_run(run, repository, source_sha,
         expected_event="workflow_dispatch", expected_nonce=nonce)
     run_id, run_attempt = run_identity["run_id"], run_identity["run_attempt"]
+    post_run_phase = ("package" if batch is not None and batch.get("phase7_window") is True
+        else "runtime")
     if _require_hosted_budget(started_at,
-            datetime.datetime.now(datetime.timezone.utc).isoformat(), scope, phase="runtime") <= 0:
+            datetime.datetime.now(datetime.timezone.utc).isoformat(), scope,
+            phase=post_run_phase) <= 0:
         raise ValueError("qualification-common-cutoff-exhausted")
     os.environ["GENEWHIP_QUALIFICATION_PHASE"] = "package"
     if batch is not None:
@@ -4307,7 +6060,7 @@ def run_hosted_qualification(packet_path: pathlib.Path, publication_copy: pathli
                                        or assets[subject.name].get("size") != subject.stat().st_size):
             raise ValueError("hosted-release-inventory-member-mismatch")
         attestation_results.append(_verify_attestation(subject, repository, source_sha,
-            run_id, int(run_attempt), digest))
+            run_id, int(run_attempt), digest, expected_event=run_identity["event"]))
 
 
     close_out = hosted_root / "build/v02/hosted-close.json"
@@ -4318,7 +6071,7 @@ def run_hosted_qualification(packet_path: pathlib.Path, publication_copy: pathli
         owned_roots=(hosted_root,))
     close_evidence = hosted_root / "build/v02/qualification-dimensions.json"
     close_closure = hosted_root / "build/v02/qualification-evidence-closure.json"
-    close_scope = hosted_root / "evidence/v02-execution.json"
+    close_scope = phase7_execution_scope_path(root=hosted_root)
     close_expected = {"source_sha": source_sha, "head_sha": source_sha,
         "base_sha": base_sha, "run_id": run_id, "run_attempt": run_attempt}
     close_receipt = json.loads(close_out.read_text(encoding="utf-8"))
@@ -4396,7 +6149,7 @@ def _step(name: str, argv: list[str], output: str, files: list[str]) -> dict[str
 def qualification_plan(build: pathlib.Path, scope: pathlib.Path) -> dict[str, Any]:
     """Resolve executable runtime, safety, chunk, measurement and package commands without starts."""
     build = build.resolve(strict=True)
-    scope = scope.resolve(strict=True)
+    scope = phase7_execution_scope_path(explicit=scope).resolve(strict=True)
     if not (build / "CMakeCache.txt").is_file():
         raise ValueError("qualification-build-identity-missing")
     scope_data = json.loads(scope.read_text(encoding="utf-8"))
@@ -4436,13 +6189,17 @@ def qualification_plan(build: pathlib.Path, scope: pathlib.Path) -> dict[str, An
         _step("privacy", ["bash", "scripts/ci/public-hygiene.sh", "--self-test"],
             "build/v02/qualification/privacy.json", ["scripts/ci/public-hygiene.sh"]),
     ])
+    batch = scope_data["qualification_batch"]
     return {"schema": "genewhip.v02-qualification-plan.v1", "status": "plan-only",
         "identity": ident, "build": str(build), "build_sha256": _sha(build / "CMakeCache.txt"),
         "scope": str(scope), "scope_sha256": _sha(scope), "dimensions": list(DIMENSIONS),
         "host_native_required": True, "launch_count": 0, "commands": commands,
-        "limits": {"batch_seconds": 86400, "runtime_seconds": 64800,
-            "benchmark_jobs": 3, "benchmark_job_seconds": 14400,
-            "package_seconds": 14400, "close_reserve_seconds": 7200},
+        "limits": {"batch_seconds": batch["wall_seconds"],
+            "runtime_seconds": batch["runtime_wall_seconds"],
+            "benchmark_jobs": 3,
+            "benchmark_job_seconds": batch["benchmark_sub_batch_seconds"],
+            "package_seconds": batch["package_wall_seconds"],
+            "close_reserve_seconds": batch["close_wall_seconds"]},
         "proof_order": ["runtime", "public-projection", "package-and-docs", "inventory", "attestation", "external-download-adoption", "final-conjunction"],
         "publisher_packet_schema": "genewhip.v02-publisher-packet.v1",
         "final_credit_source": "authenticated-downloaded-byte-adoption-only"}
@@ -5034,6 +6791,10 @@ def _coordinator_failure_diagnostic(attempt: Any, rejection: str) -> str:
         "group-signal-permission-denied", "group-signal-visible", "group-status-unavailable",
         "cleanup-unclassified", "not-observed"}
     queries = row.get("cleanup_observation_attempts")
+    scratch_rows = row.get("scratch_tree_diagnostics")
+    scratch_row = next((item for item in scratch_rows
+        if isinstance(item, dict) and item.get("kind") != "path-disappeared-during-scan"), {}) \
+        if isinstance(scratch_rows, list) else {}
     diagnostic = {
         "rejection": enum(rejection, {"launch-error", "receipt-shape", "cleanup-unconfirmed",
                                        "bound-violation", "nonzero-exit"}),
@@ -5056,6 +6817,13 @@ def _coordinator_failure_diagnostic(attempt: Any, rejection: str) -> str:
         "observer_error": enum(row.get("observer_error_category"), {
             "permission", "not-found", "interrupted", "timeout", "io", "none"}),
         "cleanup_phase": enum(row.get("cleanup_signal_phase"), {"sigterm", "sigkill", "status-probe", "none"}),
+        "scratch_kind": enum(scratch_row.get("kind"), {"scratch-root-invalid", "symlink-directory",
+            "symlink-file", "unsafe-file-symlink", "non-regular-file", "hardlink-file",
+            "foreign-owner-file", "scan-oserror"}),
+        "scratch_reason": enum(scratch_row.get("reason"), {"target-invalid", "link-identity-changed",
+            "link-text-invalid", "target-outside-root", "target-components-invalid",
+            "target-parent-invalid", "target-not-regular", "target-owner-invalid",
+            "target-identity-changed", "target-symlink-rejected"}),
     }
     text = "GENEWHIP_COORDINATOR_FAILURE:" + json.dumps(diagnostic, sort_keys=True, separators=(",", ":"))
     return text if len(text.encode("utf-8")) <= 1024 else "GENEWHIP_COORDINATOR_FAILURE:diagnostic-unavailable"
@@ -5075,7 +6843,8 @@ def _bounded_command(command: list[str], *, limits: dict[str, Any], scratch: pat
                      cwd: pathlib.Path = ROOT, check: bool = True,
                      scratch_roots: tuple[pathlib.Path, ...] | None = None,
                      ownership_callback=None,
-                     file_size_limit_bytes: int | None = None) -> dict[str, Any]:
+                     file_size_limit_bytes: int | None = None,
+                     allow_build_file_links: bool = False) -> dict[str, Any]:
     """Run one coordinator child through the existing monitored PGID launcher and journal it first."""
     if file_size_limit_bytes is not None:
         binary_cap = limits.get("max_binary_file_bytes") if isinstance(limits, dict) else None
@@ -5108,6 +6877,8 @@ def _bounded_command(command: list[str], *, limits: dict[str, Any], scratch: pat
             boundary_options = {}
             if file_size_limit_bytes is not None:
                 boundary_options["file_size_limit_bytes"] = file_size_limit_bytes
+            if allow_build_file_links:
+                boundary_options["allow_build_file_links"] = True
             result = boundary._run_client(pathlib.Path(command[0]), command, receipt,
                 report=output, timeout=min(timeout, limits["wall_seconds"]), cwd=cwd, env=env,
                 retained_streams=streams, limits=limits, scratch_roots=monitored_roots,
@@ -5151,15 +6922,17 @@ def _bounded_command(command: list[str], *, limits: dict[str, Any], scratch: pat
 
 
 NATIVE_DIAGNOSTIC_CASE = "recursion94-withhold-first-plate"
+NATIVE_PREFIX_DIAGNOSTIC_CASE = "recursion94-native-prefix"
 
 
 def _validate_native_diagnostic_run(run: Any, repository: str, source: str,
-        branch: str, nonce: str, requested_at: str) -> None:
+        branch: str, nonce: str, requested_at: str,
+        *, title_prefix: str = "Plan10 native diagnostic ") -> None:
     if (not isinstance(run, dict) or run.get("event") != "workflow_dispatch"
             or run.get("head_sha") != source or run.get("head_branch") != branch
             or not isinstance(run.get("path"), str)
             or run["path"].split("@", 1)[0] != ".github/workflows/ci.yml"
-            or run.get("display_title") != "Plan10 native diagnostic " + nonce
+            or run.get("display_title") != title_prefix + nonce
             or not isinstance(run.get("repository"), dict)
             or run["repository"].get("full_name") != repository
             or type(run.get("run_attempt")) is not int or run["run_attempt"] != 1
@@ -5255,7 +7028,8 @@ def run_native_diagnostic_hosted(packet_path: pathlib.Path, publication_copy: pa
             _write_json(dispatch_path, execution)
             if selected_id is not None:
                 owned_run = _gh_json(repository, "actions/runs/" + str(selected_id), phase="runtime")
-                _validate_native_diagnostic_run(owned_run, repository, source, branch, nonce, execution["requested_at"])
+                _validate_native_diagnostic_run(owned_run, repository, source, branch, nonce,
+                    execution["requested_at"])
                 if owned_run["status"] != "completed":
                     _external(["gh", "run", "cancel", str(selected_id), "--repo", repository], timeout=60, phase="runtime")
             raise ValueError("native-diagnostic-deadline-exhausted-no-retry")
@@ -5266,7 +7040,8 @@ def run_native_diagnostic_hosted(packet_path: pathlib.Path, publication_copy: pa
             raise ValueError("native-diagnostic-run-ambiguous")
         if matching:
             run = matching[0]
-            _validate_native_diagnostic_run(run, repository, source, branch, nonce, execution["requested_at"])
+            _validate_native_diagnostic_run(run, repository, source, branch, nonce,
+                execution["requested_at"])
             if selected_id is not None and run["id"] != selected_id:
                 raise ValueError("native-diagnostic-selected-run-changed")
             selected_id = run["id"]
@@ -5320,6 +7095,700 @@ def run_native_diagnostic_hosted(packet_path: pathlib.Path, publication_copy: pa
     execution["status"] = "completed-assessment-required"
     _write_json(dispatch_path, execution)
     _write_json(out, result)
+    return result
+
+
+def run_native_prefix_diagnostic_hosted(packet_path: pathlib.Path, publication_copy: pathlib.Path,
+        scope_path: pathlib.Path, out: pathlib.Path, journal_path: pathlib.Path,
+        *, batch_authorization: pathlib.Path, batch_authorization_sha256: str,
+        batch_admission: pathlib.Path, batch_admission_sha256: str,
+        prefix_readiness: pathlib.Path, prefix_readiness_sha256: str,
+        single_native_admission: pathlib.Path | None = None,
+        single_native_admission_sha256: str | None = None,
+        single_native_authority: pathlib.Path | None = None,
+        single_native_authority_sha256: str | None = None) -> dict[str, Any]:
+    """Run the one-shot hosted controller and clean up only its validated run on error."""
+    claim_context: dict[str, Any] = {}
+    try:
+        return _run_native_prefix_diagnostic_hosted_dispatch(packet_path, publication_copy,
+            scope_path, out, journal_path, batch_authorization=batch_authorization,
+            batch_authorization_sha256=batch_authorization_sha256,
+            batch_admission=batch_admission, batch_admission_sha256=batch_admission_sha256,
+            prefix_readiness=prefix_readiness, prefix_readiness_sha256=prefix_readiness_sha256,
+            single_native_admission=single_native_admission,
+            single_native_admission_sha256=single_native_admission_sha256,
+            single_native_authority=single_native_authority,
+            single_native_authority_sha256=single_native_authority_sha256,
+            _claim_context=claim_context)
+    except BaseException:
+        if (single_native_authority is not None and claim_context.get("claimed") is True
+                and claim_context.get("dispatch_attempted") is True):
+            attempt = pathlib.Path(claim_context["attempt_root"])
+            dispatch_path = attempt / "native-prefix-diagnostic/dispatch.json"
+            if dispatch_path.is_file() and not dispatch_path.is_symlink():
+                try:
+                    info = dispatch_path.lstat()
+                    if info.st_nlink != 1 or info.st_uid != os.getuid() or info.st_size > 65536:
+                        raise ValueError("dispatch-record-unsafe")
+                    execution = json.loads(dispatch_path.read_text(encoding="utf-8"))
+                    if not claim_context.get("nonce") or execution.get("nonce") != claim_context["nonce"]:
+                        raise ValueError("dispatch-record-not-owned-by-this-call")
+                    run_id = execution.get("run_id")
+                    cleanup_deadline_ns = claim_context.get("cleanup_deadline_monotonic_ns")
+                    if type(cleanup_deadline_ns) is not int:
+                        cleanup_deadline_ns = claim_context.get("controller_deadline_monotonic_ns")
+                    now_mono = time.monotonic_ns()
+                    cleanup_remaining = max(0, (cleanup_deadline_ns - now_mono) / 1_000_000_000) \
+                        if type(cleanup_deadline_ns) is int else 0
+                    cleanup_deadline = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+                        seconds=cleanup_remaining)
+                    now = datetime.datetime.now(datetime.timezone.utc)
+                    os.environ["GENEWHIP_NATIVE_DIAGNOSTIC_CONTROLLER_STOP"] = cleanup_deadline.isoformat()
+                    os.environ["GENEWHIP_NATIVE_CONTROLLER_CLEANUP_MODE"] = "1"
+                    if not claim_context.get("job_started_at"):
+                        fallback_u = claim_context.get("fallback_collector_cutoff_monotonic_ns")
+                        fallback_j = claim_context.get("fallback_job_deadline_monotonic_ns")
+                        if type(fallback_u) is int and type(fallback_j) is int:
+                            os.environ["GENEWHIP_NATIVE_JOB_COLLECTOR_DEADLINE_MONOTONIC_NS"] = str(fallback_u)
+                            os.environ["GENEWHIP_NATIVE_JOB_HARD_DEADLINE_MONOTONIC_NS"] = str(fallback_j)
+                    if not (isinstance(run_id, int) and run_id > 0) and execution.get("nonce"):
+                        possible = [row for row in _workflow_runs(execution["repository"], execution["source_sha"],
+                            branch=execution["branch"]) if row.get("event") == "workflow_dispatch"
+                            and row.get("display_title") == "Plan10 native prefix diagnostic " + execution["nonce"]]
+                        if os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE") == NATIVE_PREFIX_QUEUE_PROFILE:
+                            _require_native_prefix_before_settlement_deadline(cleanup_deadline_ns)
+                        if len(possible) == 1:
+                            _validate_native_diagnostic_run(possible[0], execution["repository"],
+                                execution["source_sha"], execution["branch"], execution["nonce"],
+                                execution["requested_at"], title_prefix="Plan10 native prefix diagnostic ")
+                            run_id = possible[0]["id"]
+                            execution["run_id"] = run_id
+                    if isinstance(run_id, int) and run_id > 0 and execution.get("nonce"):
+                        repository, source, branch = (execution["repository"], execution["source_sha"],
+                                                      execution["branch"])
+                        observed = _gh_json(repository, "actions/runs/" + str(run_id), phase="runtime")
+                        if os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE") == NATIVE_PREFIX_QUEUE_PROFILE:
+                            _require_native_prefix_before_settlement_deadline(cleanup_deadline_ns)
+                        _validate_native_diagnostic_run(observed, repository, source, branch,
+                            execution["nonce"], execution["requested_at"],
+                            title_prefix="Plan10 native prefix diagnostic ")
+                        if observed.get("status") == "completed":
+                            execution["remote_cleanup_status"] = "confirmed"
+                        elif type(cleanup_deadline_ns) is int and time.monotonic_ns() < cleanup_deadline_ns:
+                            _external(["gh", "run", "cancel", str(run_id), "--repo", repository],
+                                timeout=min(30, max(1, int((cleanup_deadline_ns - time.monotonic_ns()) / 1_000_000_000))),
+                                phase="runtime")
+                            if os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE") == NATIVE_PREFIX_QUEUE_PROFILE:
+                                _require_native_prefix_before_settlement_deadline(cleanup_deadline_ns)
+                            while time.monotonic_ns() < cleanup_deadline_ns:
+                                observed = _gh_json(repository, "actions/runs/" + str(run_id), phase="runtime")
+                                if os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE") == NATIVE_PREFIX_QUEUE_PROFILE:
+                                    _require_native_prefix_before_settlement_deadline(cleanup_deadline_ns)
+                                _validate_native_diagnostic_run(observed, repository, source, branch,
+                                    execution["nonce"], execution["requested_at"],
+                                    title_prefix="Plan10 native prefix diagnostic ")
+                                if observed.get("status") == "completed":
+                                    execution["remote_cleanup_status"] = "confirmed"
+                                    break
+                                time.sleep(min(5, max(0.1,
+                                    (cleanup_deadline_ns - time.monotonic_ns()) / 1_000_000_000)))
+                    execution["status"] = "failed-assessment-required"
+                    execution["qualification_accepted"] = False
+                    execution.setdefault("remote_cleanup_status", "unknown")
+                    _write_json(dispatch_path, execution)
+                except BaseException:
+                    try:
+                        execution = json.loads(dispatch_path.read_text(encoding="utf-8"))
+                        execution["status"] = "failed-assessment-required"
+                        execution["qualification_accepted"] = False
+                        execution["remote_cleanup_status"] = "unknown"
+                        _write_json(dispatch_path, execution)
+                    except BaseException:
+                        pass
+        raise
+
+
+def _run_native_prefix_diagnostic_hosted_dispatch(packet_path: pathlib.Path, publication_copy: pathlib.Path,
+        scope_path: pathlib.Path, out: pathlib.Path, journal_path: pathlib.Path,
+        *, batch_authorization: pathlib.Path, batch_authorization_sha256: str | None,
+        batch_admission: pathlib.Path | None, batch_admission_sha256: str | None,
+        prefix_readiness: pathlib.Path, prefix_readiness_sha256: str,
+        single_native_admission: pathlib.Path | None = None,
+        single_native_admission_sha256: str | None = None,
+        single_native_authority: pathlib.Path | None = None,
+        single_native_authority_sha256: str | None = None,
+        _claim_context: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Own anchored-claim descriptor lifetime for public and direct callers."""
+    claim_context = _claim_context if _claim_context is not None else {}
+    try:
+        return _run_native_prefix_diagnostic_hosted_dispatch_inner(packet_path, publication_copy,
+            scope_path, out, journal_path, batch_authorization=batch_authorization,
+            batch_authorization_sha256=batch_authorization_sha256,
+            batch_admission=batch_admission, batch_admission_sha256=batch_admission_sha256,
+            prefix_readiness=prefix_readiness, prefix_readiness_sha256=prefix_readiness_sha256,
+            single_native_admission=single_native_admission,
+            single_native_admission_sha256=single_native_admission_sha256,
+            single_native_authority=single_native_authority,
+            single_native_authority_sha256=single_native_authority_sha256,
+            _claim_context=claim_context)
+    finally:
+        anchor = claim_context.pop("claim_anchor", None)
+        close_anchor = claim_context.pop("claim_anchor_close", None)
+        if anchor is not None:
+            if not callable(close_anchor):
+                raise ValueError("native-prefix-diagnostic-claim-anchor-owner-invalid")
+            close_anchor(anchor)
+
+
+def _run_native_prefix_diagnostic_hosted_dispatch_inner(packet_path: pathlib.Path, publication_copy: pathlib.Path,
+        scope_path: pathlib.Path, out: pathlib.Path, journal_path: pathlib.Path,
+        *, batch_authorization: pathlib.Path, batch_authorization_sha256: str,
+        batch_admission: pathlib.Path, batch_admission_sha256: str,
+        prefix_readiness: pathlib.Path, prefix_readiness_sha256: str,
+        single_native_admission: pathlib.Path | None = None,
+        single_native_admission_sha256: str | None = None,
+        single_native_authority: pathlib.Path | None = None,
+        single_native_authority_sha256: str | None = None,
+        _claim_context: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Dispatch the admitted two-case prefix diagnostic and stop for assessment."""
+    single_fields = (single_native_admission, single_native_admission_sha256,
+                     single_native_authority, single_native_authority_sha256)
+    single_requested = any(value is not None for value in single_fields)
+    if single_requested:
+        if any(value is None for value in single_fields):
+            raise ValueError("single-native-authority-and-admission-required")
+        if any(value is not None for value in (batch_authorization, batch_authorization_sha256,
+                batch_admission, batch_admission_sha256)):
+            raise ValueError("single-native-route-conflicts-with-legacy-authority")
+        _single_native_scope(scope_path)
+        _single_native_paths(packet_path, publication_copy, journal_path,
+            prefix_readiness, single_native_admission or batch_admission,
+            outputs=(out,), admission_path=single_native_admission or batch_admission,
+            authority_path=single_native_authority,
+            authority_sha256=single_native_authority_sha256)
+        batch = _single_native_guard(admission_path=single_native_admission or batch_admission,
+            stage="native-prefix-diagnostic", authority_path=single_native_authority,
+            authority_sha256=single_native_authority_sha256,
+            admission_sha256=single_native_admission_sha256,
+            readiness_path=prefix_readiness, readiness_sha256=prefix_readiness_sha256)
+    else:
+        batch = _fresh_batch_guard(batch_authorization=batch_authorization,
+            batch_authorization_sha256=batch_authorization_sha256,
+            batch_admission=batch_admission, batch_admission_sha256=batch_admission_sha256,
+            stage="native-prefix-diagnostic", scope_path=scope_path, journal_path=journal_path,
+            publication_copy=publication_copy, preflight_path=packet_path, output_path=out,
+            diagnostic_readiness_path=prefix_readiness,
+            diagnostic_readiness_sha256=prefix_readiness_sha256)
+    if batch is None:
+        raise ValueError("native-prefix-diagnostic-readiness-required")
+    ready = batch.get("native_prefix_readiness")
+    if ready is None and single_native_authority is not None:
+        ready = batch["admission"].get("native_prefix_readiness")
+    if not isinstance(ready, dict):
+        raise ValueError("native-prefix-diagnostic-readiness-required")
+    if single_requested:
+        validator = batch["validator_module"]
+        try:
+            validator._validated_claim_path(ROOT, validator.CLAIM_REL)
+            validator._validated_claim_path(ROOT, validator.LOCAL_CLAIM_REL)
+        except ValueError:
+            raise ValueError("native-prefix-diagnostic-global-claim-parent-invalid") from None
+        iteration_ctx = batch.get("iteration_context")
+        selected_claim = (iteration_ctx["claim_rel"] if iteration_ctx is not None
+            else validator.CLAIM_REL)
+        execution_root = batch["batch_root"] / "native-prefix-diagnostic"
+        conflicts = [selected_claim, validator.LOCAL_CLAIM_REL]
+        if iteration_ctx is None:
+            conflicts.extend((validator.CLAIM_REL,
+                validator.PREVIOUS_ATTEMPT_REL / "native-prefix-diagnostic",
+                SINGLE_NATIVE_POLICY_ROOT / "attempt-0001/native-prefix-diagnostic"))
+        if (any(validator._lineage_entry_present(ROOT, relative) for relative in conflicts)
+                or validator._lineage_entry_present(ROOT, execution_root.relative_to(ROOT))):
+            raise ValueError("native-prefix-diagnostic-one-shot-already-claimed")
+    candidate = batch["admission"]["candidate"]
+    source, base = candidate["public_head"], candidate["public_base"]
+    repository = (batch["authorization"]["repository"] if "authorization" in batch
+                  else batch["authority"]["repository"])
+    scope = json.loads(scope_path.read_text(encoding="utf-8"))
+    started_at = batch["admission"]["started_at"]
+    branch = "v0.2-source-" + source[:12]
+    journal = json.loads(journal_path.read_text(encoding="utf-8"))
+    pr_number = journal["pull_request"]
+    pr = _gh_json(repository, f"pulls/{pr_number}", phase="runtime")
+    ref = _gh_json(repository, "git/ref/heads/" + branch, phase="runtime")
+    if (pr.get("state") != "open" or pr.get("merged") is not False
+            or pr.get("head", {}).get("sha") != source
+            or pr.get("head", {}).get("ref") != branch
+            or pr.get("head", {}).get("repo", {}).get("full_name") != repository
+            or pr.get("base", {}).get("sha") != base or pr.get("base", {}).get("ref") != "main"
+            or ref.get("object", {}).get("sha") != source):
+        raise ValueError("native-prefix-diagnostic-reviewed-branch-moved")
+    if single_requested:
+        validator = batch["validator_module"]
+        preview = validator.validate_preview_assessment(ROOT,
+            ready["diagnostic_assessment"], attempt=batch["preparation_root"], candidate=candidate,
+            admission_path=single_native_admission,
+            admission_sha256=single_native_admission_sha256)
+        preview = preview["workflow_run"]
+    else:
+        assessment_path = ROOT / ready["diagnostic_assessment"]["path"]
+        assessed = json.loads(assessment_path.read_text(encoding="utf-8"))
+        preview = assessed["github"]["workflow_run"]
+    current = _gh_json(repository, "actions/runs/" + str(preview["id"]), phase="runtime")
+    if (current.get("event") != "pull_request" or current.get("head_sha") != source
+            or current.get("status") != "completed" or current.get("conclusion") != "success"
+            or current.get("run_attempt") != preview["run_attempt"]
+            or (single_requested and (not isinstance(current.get("path"), str)
+                or current["path"].split("@", 1)[0] != ".github/workflows/ci.yml"
+                or current.get("head_branch") != branch))):
+        raise ValueError("native-prefix-diagnostic-preview-changed")
+    if single_requested:
+        jobs = _gh_json(repository, f"actions/runs/{preview['id']}/jobs?filter=latest&per_page=100",
+                        phase="runtime")
+        rows = jobs.get("jobs")
+        expected_success = {"safety", "gameplay", "desktop", "package", "performance",
+            "product-smoke", "phase7-fast", "required-ci"}
+        expected_skip = {"v02-runtime", "extended", "attestation", "v02-benchmark-control",
+            "v02-benchmark-recursion94", "v02-benchmark-tank-battle", "v02-package",
+            "v02-release-qualification"}
+        if (jobs.get("total_count") != 16 or not isinstance(rows, list) or len(rows) != 16
+                or {row.get("name") for row in rows if isinstance(row, dict)} != expected_success | expected_skip
+                or any(not isinstance(row, dict) or row.get("status") != "completed"
+                    or row.get("conclusion") != ("success" if row.get("name") in expected_success else "skipped")
+                    for row in rows)):
+            raise ValueError("native-prefix-diagnostic-preview-roster-invalid")
+    existing_runs = _workflow_runs(repository, source, branch=branch)
+    if (batch.get("iteration_context") is None
+            and any(row.get("event") == "workflow_dispatch" for row in existing_runs)):
+        raise ValueError("native-prefix-diagnostic-source-already-dispatched")
+    if batch.get("iteration_context") is not None:
+        previous_batch = batch
+        batch = _single_native_guard(admission_path=single_native_admission,
+            stage="native-prefix-diagnostic", authority_path=single_native_authority,
+            authority_sha256=single_native_authority_sha256,
+            admission_sha256=single_native_admission_sha256,
+            readiness_path=prefix_readiness, readiness_sha256=prefix_readiness_sha256)
+        _assert_same_current_iteration_admission(batch, previous_batch)
+        validator = batch["validator_module"]
+        candidate = batch["admission"]["candidate"]
+        source, base = candidate["public_head"], candidate["public_base"]
+        started_at = batch["admission"]["started_at"]
+        branch = "v0.2-source-" + source[:12]
+    now = datetime.datetime.now(datetime.timezone.utc)
+    if single_native_authority is None:
+        _require_hosted_budget(started_at, now.isoformat(), scope, phase="runtime")
+        if ((_parse_utc(started_at) + datetime.timedelta(seconds=scope["qualification_batch"]["runtime_wall_seconds"]))
+                - now).total_seconds() < 2700:
+            raise ValueError("native-prefix-diagnostic-job-window-unavailable")
+    execution_root = batch["batch_root"] / "native-prefix-diagnostic"
+    if single_native_authority is not None:
+        validator = batch["validator_module"]
+        try:
+            validator._validated_claim_path(ROOT, validator.CLAIM_REL)
+            validator._validated_claim_path(ROOT, validator.LOCAL_CLAIM_REL)
+        except ValueError:
+            raise ValueError("native-prefix-diagnostic-global-claim-parent-invalid") from None
+        iteration_ctx = batch.get("iteration_context")
+        claim_relative = (iteration_ctx["claim_rel"] if iteration_ctx is not None
+            else validator.CLAIM_REL)
+        late_conflicts = [claim_relative, validator.LOCAL_CLAIM_REL]
+        if iteration_ctx is None:
+            late_conflicts.extend((validator.CLAIM_REL,
+                validator.PREVIOUS_ATTEMPT_REL / "native-prefix-diagnostic",
+                SINGLE_NATIVE_POLICY_ROOT / "attempt-0001/native-prefix-diagnostic"))
+        if any(validator._lineage_entry_present(ROOT, path) for path in late_conflicts):
+            raise ValueError("native-prefix-diagnostic-one-shot-already-claimed")
+    if validator._lineage_entry_present(ROOT,
+            execution_root.relative_to(ROOT)) if single_native_authority is not None else (
+                execution_root.exists() or execution_root.is_symlink()):
+        raise ValueError("native-prefix-diagnostic-one-shot-already-claimed")
+    if single_native_authority is not None:
+        validator = batch["validator_module"]
+        attempt_root = batch["attempt_root"]
+    else:
+        execution_root.mkdir(mode=0o700)
+    if single_native_authority is not None:
+        # The authority-scoped O_EXCL file is the single claim across attempts.
+        # Pin its existing parent chain before creating the leaf by dir_fd.
+        validator = batch["validator_module"]
+        nonce = uuid.uuid4().hex
+        claim_relative = (batch["iteration_context"]["claim_rel"]
+            if batch.get("iteration_context") is not None else validator.CLAIM_REL)
+        try:
+            claim_anchor = validator._open_claim_anchor(ROOT, claim_relative)
+        except FileExistsError:
+            raise ValueError("native-prefix-diagnostic-one-shot-already-claimed") from None
+        except ValueError:
+            raise ValueError("native-prefix-diagnostic-global-claim-parent-invalid") from None
+
+        if _claim_context is not None:
+            _claim_context["claim_anchor"] = claim_anchor
+            _claim_context["claim_anchor_close"] = validator._close_claim_anchor
+        claim_monotonic = None
+        claim_monotonic_ns = None
+        now = None
+        started_at = None
+        diagnostic_deadline = None
+        global_claim = None
+
+        def build_claim_bytes() -> bytes:
+            nonlocal claim_monotonic, claim_monotonic_ns, now, started_at
+            nonlocal diagnostic_deadline, global_claim
+            claim_monotonic = time.monotonic()
+            claim_monotonic_ns = time.monotonic_ns()
+            now = datetime.datetime.now(datetime.timezone.utc)
+            fallback = _native_prefix_unknown_start_fallback(claim_monotonic_ns)
+            if _claim_context is not None:
+                _claim_context.update({"claimed": True, "nonce": nonce,
+                    "attempt_root": str(attempt_root),
+                    "controller_deadline_monotonic_ns": claim_monotonic_ns + 5400 * 1_000_000_000,
+                    "controller_cleanup_deadline_monotonic_ns": claim_monotonic_ns + 5100 * 1_000_000_000,
+                    "fallback_collector_cutoff_monotonic_ns": fallback["collector_deadline_monotonic_ns"],
+                    "fallback_job_deadline_monotonic_ns": fallback["job_deadline_monotonic_ns"],
+                    "workload_cutoff_monotonic_ns": fallback["collector_deadline_monotonic_ns"],
+                    "cleanup_deadline_monotonic_ns": fallback["job_deadline_monotonic_ns"]})
+            started_at = now.isoformat()
+            diagnostic_deadline = (now + datetime.timedelta(seconds=5400)).isoformat()
+            global_claim = validator.claim_payload(attempt_root=attempt_root.relative_to(ROOT).as_posix(),
+                source_sha=source, base_sha=base, branch=branch, nonce=nonce,
+                started_at=started_at, deadline=diagnostic_deadline,
+                readiness_sha256=prefix_readiness_sha256,
+                authority_sha256=(validator.ITERATION_AUTH_SHA256 if iteration_ctx is not None
+                    else validator.AUTH_SHA256),
+                preparation_revision=(batch["preparation_root"].relative_to(ROOT).as_posix()
+                    if iteration_ctx is not None else None))
+            return (json.dumps(global_claim, sort_keys=True, indent=2) + "\n").encode("utf-8")
+
+        try:
+            claim_bytes, claim_sha256 = validator._create_claim_at_anchor(claim_anchor, build_claim_bytes)
+        except FileExistsError:
+            raise ValueError("native-prefix-diagnostic-one-shot-already-claimed") from None
+        except ValueError:
+            raise ValueError("native-prefix-diagnostic-global-claim-binding-invalid") from None
+        # Start both clocks immediately after successful exclusive creation.
+        os.environ["GENEWHIP_SINGLE_NATIVE_CLAIMED"] = "1"
+        os.environ["GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE"] = NATIVE_PREFIX_QUEUE_PROFILE
+        for name in ("GENEWHIP_NATIVE_JOB_CLOCK_RECEIPT",
+                "GENEWHIP_NATIVE_JOB_SETUP_DEADLINE_MONOTONIC_NS",
+                "GENEWHIP_NATIVE_JOB_COLLECTOR_CUTOFF_MONOTONIC_NS",
+                "GENEWHIP_NATIVE_JOB_COLLECTOR_DEADLINE_MONOTONIC_NS",
+                "GENEWHIP_NATIVE_JOB_HARD_DEADLINE_MONOTONIC_NS"):
+            os.environ.pop(name, None)
+        os.environ["GENEWHIP_NATIVE_CONTROLLER_CLEANUP_MODE"] = "0"
+        os.environ["GENEWHIP_NATIVE_CONTROLLER_WORK_CUTOFF_MONOTONIC_NS"] = str(
+            claim_monotonic_ns + 5100 * 1_000_000_000)
+        os.environ["GENEWHIP_NATIVE_CONTROLLER_HARD_DEADLINE_MONOTONIC_NS"] = str(
+            claim_monotonic_ns + 5400 * 1_000_000_000)
+        os.environ["GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT"] = started_at
+        os.environ["GENEWHIP_NATIVE_DIAGNOSTIC_DEADLINE"] = diagnostic_deadline
+        os.environ["GENEWHIP_NATIVE_DIAGNOSTIC_CONTROLLER_STOP"] = (
+            now + datetime.timedelta(seconds=5100)).isoformat()
+        os.environ["GENEWHIP_QUALIFICATION_STARTED_AT"] = started_at
+    else:
+        claim_monotonic = None
+        diagnostic_deadline = None
+    if single_native_authority is not None:
+        if validator._lineage_entry_present(ROOT, execution_root.relative_to(ROOT)):
+            raise ValueError("native-prefix-diagnostic-one-shot-already-claimed")
+        execution_root.mkdir(mode=0o700)
+    dispatch_path = execution_root / "dispatch.json"
+    if single_native_authority is None:
+        nonce = uuid.uuid4().hex
+    execution = {"schema": "genewhip.phase7-native-prefix-diagnostic-dispatch.v1",
+        "source_sha": source, "base_sha": base, "branch": branch, "repository": repository, "nonce": nonce,
+        "requested_at": now.replace(microsecond=0).isoformat(), "started_at": started_at,
+        "readiness_sha256": prefix_readiness_sha256, "qualification_accepted": False,
+        "status": "dispatch-requested", "dispatches": 1}
+    iteration_dispatch = (single_native_authority is not None
+        and batch.get("iteration_context") is not None)
+    if iteration_dispatch:
+        execution["dispatch_boundary"] = "guard-pending"
+    if diagnostic_deadline is not None:
+        execution.update({"native_diagnostic_started_at": started_at,
+            "native_diagnostic_deadline": diagnostic_deadline,
+            "qualification_started_at": started_at,
+            "clock_profile": NATIVE_PREFIX_QUEUE_PROFILE})
+    _write_json(dispatch_path, execution)
+    controller_started = claim_monotonic if diagnostic_deadline is not None else time.monotonic()
+    overall_deadline = controller_started + (5100 if diagnostic_deadline is not None else 2640)
+    cleanup_deadline = controller_started + (5400 if diagnostic_deadline is not None else 2640)
+    queue_projection = None
+    queue_clock_valid = False
+    try:
+        if single_native_authority is not None:
+            if iteration_dispatch:
+                previous_batch = batch
+                batch = _single_native_guard(admission_path=single_native_admission,
+                    stage="native-prefix-diagnostic", authority_path=single_native_authority,
+                    authority_sha256=single_native_authority_sha256,
+                    admission_sha256=single_native_admission_sha256,
+                    readiness_path=prefix_readiness,
+                    readiness_sha256=prefix_readiness_sha256, allow_claim=True)
+                _assert_same_current_iteration_admission(batch, previous_batch)
+                validator = batch["validator_module"]
+                attempt_root = batch["attempt_root"]
+                os.environ["GENEWHIP_SINGLE_NATIVE_CLAIMED"] = "1"
+            validator._verify_claim_at_anchor(claim_anchor, expected_bytes=claim_bytes)
+            if iteration_dispatch:
+                execution["dispatch_boundary"] = "entered"
+                _write_json(dispatch_path, execution)
+            if _claim_context is not None:
+                _claim_context["dispatch_attempted"] = True
+        _external(["gh", "workflow", "run", ".github/workflows/ci.yml", "--repo", repository,
+            "--ref", branch, "--field", "qualification_started_at=" + started_at,
+            *( ["--field", "native_diagnostic_started_at=" + started_at,
+                "--field", "native_diagnostic_deadline=" + diagnostic_deadline,
+                "--field", "native_diagnostic_clock_profile=" + NATIVE_PREFIX_QUEUE_PROFILE,
+                "--field", "native_diagnostic_claim_sha256=" + claim_sha256]
+                if diagnostic_deadline is not None else [] ),
+            "--field", "qualification_base_sha=" + base,
+            "--field", "qualification_nonce=" + nonce,
+            "--field", "native_diagnostic_case=" + NATIVE_PREFIX_DIAGNOSTIC_CASE,
+            "--field", "diagnostic_source_sha=" + source], timeout=60, phase="runtime")
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+        execution["status"] = "dispatch-unconfirmed"
+        if iteration_dispatch and execution.get("dispatch_boundary") == "guard-pending":
+            reason = str(error)
+            if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,127}", reason):
+                reason = "pre-dispatch-error-unclassified"
+            execution.update({"dispatch_boundary": "not-entered",
+                "pre_dispatch_error": {"exception_type": type(error).__name__,
+                    "reason": reason}})
+            _write_json(dispatch_path, execution)
+            raise ValueError("native-prefix-diagnostic-pre-dispatch-guard-rejected-no-retry") from None
+        _write_json(dispatch_path, execution)
+        raise ValueError("native-prefix-diagnostic-dispatch-unconfirmed-no-retry") from None
+    execution["status"] = "dispatch-submitted"
+    _write_json(dispatch_path, execution)
+    discovery_deadline = time.monotonic() + 300
+    selected_id = None
+    while True:
+        _require_hosted_budget(started_at, datetime.datetime.now(datetime.timezone.utc).isoformat(), scope, phase="runtime")
+        if single_native_authority is not None and queue_projection is not None:
+            settlement_deadline_ns = _advance_native_prefix_settlement_if_due(queue_projection)
+            overall_deadline = settlement_deadline_ns / 1_000_000_000
+            cleanup_deadline = settlement_deadline_ns / 1_000_000_000
+        if time.monotonic() >= overall_deadline:
+            execution["status"] = "deadline-exhausted-assessment-required"
+            execution["remote_cleanup_status"] = "unknown"
+            _write_json(dispatch_path, execution)
+            if selected_id is not None:
+                try:
+                    os.environ["GENEWHIP_NATIVE_CONTROLLER_CLEANUP_MODE"] = "1"
+                    cleanup_remaining = cleanup_deadline - time.monotonic()
+                    if cleanup_remaining <= 0:
+                        raise ValueError("native-prefix-diagnostic-cleanup-window-exhausted")
+                    os.environ["GENEWHIP_NATIVE_DIAGNOSTIC_CONTROLLER_STOP"] = (
+                        datetime.datetime.now(datetime.timezone.utc)
+                        + datetime.timedelta(seconds=cleanup_remaining)).isoformat()
+                    _external(["gh", "run", "cancel", str(selected_id), "--repo", repository],
+                        timeout=min(60, max(1, int(cleanup_remaining) - 5)), phase="runtime")
+                    while time.monotonic() < cleanup_deadline:
+                        observed = _gh_json(repository, "actions/runs/" + str(selected_id), phase="runtime")
+                        _validate_native_diagnostic_run(observed, repository, source, branch, nonce,
+                            execution["requested_at"], title_prefix="Plan10 native prefix diagnostic ")
+                        if observed.get("status") == "completed":
+                            execution["remote_cleanup_status"] = "confirmed"
+                            break
+                        remaining_cleanup = cleanup_deadline - time.monotonic() - 35
+                        if remaining_cleanup <= 0:
+                            break
+                        time.sleep(min(5, remaining_cleanup))
+                except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+                    execution["remote_cleanup_status"] = "unknown"
+                _write_json(dispatch_path, execution)
+            raise ValueError("native-prefix-diagnostic-deadline-exhausted-no-retry")
+        workflow_runs = (_native_prefix_settled_workflow_runs(repository, source, branch, queue_projection)
+            if single_native_authority is not None and queue_projection is not None
+            else _workflow_runs(repository, source, branch=branch))
+        matching = [row for row in workflow_runs
+            if row.get("event") == "workflow_dispatch"
+            and row.get("display_title") == "Plan10 native prefix diagnostic " + nonce]
+        if len(matching) > 1:
+            raise ValueError("native-prefix-diagnostic-run-ambiguous")
+        if matching:
+            run = matching[0]
+            _validate_native_diagnostic_run(run, repository, source, branch, nonce,
+                execution["requested_at"], title_prefix="Plan10 native prefix diagnostic ")
+            if selected_id is not None and run["id"] != selected_id:
+                raise ValueError("native-prefix-diagnostic-selected-run-changed")
+            selected_id = run["id"]
+            execution.update({"run_id": selected_id, "status": run["status"]})
+            _write_json(dispatch_path, execution)
+            if single_native_authority is not None and run.get("status") != "completed":
+                observed_job, server_date, request_start, response_end, rtt, local_request, local_response = \
+                    _native_prefix_queue_provider_observation(repository=repository,
+                        run_id=str(selected_id), run_attempt=1, source_sha=source, branch=branch,
+                        nonce=nonce, phase="runtime", allow_unstarted=True)
+                if queue_projection is not None:
+                    _require_native_prefix_before_settlement_deadline(min(
+                        queue_projection["controller_deadline_monotonic_ns"],
+                        queue_projection["job_deadline_monotonic_ns"]))
+                if observed_job.get("started_at"):
+                    observed_projection = batch["validator_module"].queue_clock_projection(
+                        claim_started_at=started_at, claim_deadline=diagnostic_deadline,
+                        job_started_at=observed_job["started_at"], server_date=server_date,
+                        round_trip_ns=rtt, response_received_monotonic_ns=response_end,
+                        local_request_started_at=local_request, local_response_at=local_response)
+                    projection, settlement_deadline_ns = _accept_native_prefix_job_projection(
+                        observed_projection, queue_projection, previous_valid=queue_clock_valid,
+                        claim_monotonic_ns=claim_monotonic_ns, job_id=observed_job["id"],
+                        job_started_at=observed_job["started_at"], claim_context=_claim_context)
+                    _require_native_prefix_before_settlement_deadline(min(
+                        projection["controller_deadline_monotonic_ns"],
+                        projection["job_deadline_monotonic_ns"]))
+                    queue_projection = projection
+                    queue_clock_valid = True
+                    # U ends collection; provider settlement may continue to
+                    # H=min(C,J) under the controller's one-way cleanup mode.
+                    settlement_deadline_ns = min(projection["controller_deadline_monotonic_ns"],
+                        projection["job_deadline_monotonic_ns"])
+                    overall_deadline = settlement_deadline_ns / 1_000_000_000
+                    cleanup_deadline = settlement_deadline_ns / 1_000_000_000
+                else:
+                    fallback = _native_prefix_unknown_start_fallback(claim_monotonic_ns)
+                    queue_projection = fallback
+                    overall_deadline = fallback["collector_deadline_monotonic_ns"] / 1_000_000_000
+                    cleanup_deadline = fallback["job_deadline_monotonic_ns"] / 1_000_000_000
+                    os.environ["GENEWHIP_NATIVE_JOB_COLLECTOR_DEADLINE_MONOTONIC_NS"] = str(
+                        fallback["collector_deadline_monotonic_ns"])
+                    os.environ["GENEWHIP_NATIVE_JOB_HARD_DEADLINE_MONOTONIC_NS"] = str(
+                        fallback["job_deadline_monotonic_ns"])
+            if run["status"] == "completed":
+                if single_native_authority is not None and not queue_clock_valid:
+                    observed_job, server_date, request_start, response_end, rtt, local_request, local_response = \
+                        _native_prefix_queue_provider_observation(repository=repository,
+                            run_id=str(selected_id), run_attempt=1, source_sha=source,
+                            branch=branch, nonce=nonce, phase="runtime", allow_unstarted=True)
+                    if not observed_job.get("started_at"):
+                        raise ValueError("native-prefix-job-clock-start-missing")
+                    observed_projection = batch["validator_module"].queue_clock_projection(
+                        claim_started_at=started_at, claim_deadline=diagnostic_deadline,
+                        job_started_at=observed_job["started_at"], server_date=server_date,
+                        round_trip_ns=rtt, response_received_monotonic_ns=response_end,
+                        local_request_started_at=local_request, local_response_at=local_response)
+                    projection, settlement_deadline_ns = _accept_native_prefix_job_projection(
+                        observed_projection, queue_projection, previous_valid=queue_clock_valid,
+                        claim_monotonic_ns=claim_monotonic_ns, job_id=observed_job["id"],
+                        job_started_at=observed_job["started_at"], claim_context=_claim_context)
+                    _require_native_prefix_before_settlement_deadline(min(
+                        projection["controller_deadline_monotonic_ns"],
+                        projection["job_deadline_monotonic_ns"]))
+                    queue_projection = projection
+                    queue_clock_valid = True
+                    overall_deadline = settlement_deadline_ns / 1_000_000_000
+                    cleanup_deadline = settlement_deadline_ns / 1_000_000_000
+                break
+        elif selected_id is not None:
+            raise ValueError("native-prefix-diagnostic-selected-run-disappeared")
+        elif time.monotonic() >= discovery_deadline:
+            raise ValueError("native-prefix-diagnostic-run-not-found-no-retry")
+        if diagnostic_deadline is not None:
+            time.sleep(min(30, max(0.1, overall_deadline - time.monotonic())))
+        else:
+            time.sleep(30)
+    if single_native_authority is not None:
+        # A provider-confirmed terminal run may settle its bounded artifact under
+        # the remaining hard job/controller deadline.
+        os.environ["GENEWHIP_NATIVE_CONTROLLER_CLEANUP_MODE"] = "1"
+        if queue_projection is None:
+            raise ValueError("native-prefix-job-clock-start-missing")
+        settlement_deadline_ns = _advance_native_prefix_settlement_if_due(queue_projection)
+    jobs = _gh_json(repository, f"actions/runs/{selected_id}/jobs?filter=latest&per_page=100", phase="runtime")
+    if single_native_authority is not None:
+        _require_native_prefix_before_settlement_deadline(settlement_deadline_ns)
+    rows = jobs.get("jobs")
+    expected = {"safety", "gameplay", "desktop", "package", "performance", "product-smoke", "phase7-fast",
+        "v02-runtime", "extended", "attestation", "required-ci", "v02-benchmark-control",
+        "v02-benchmark-recursion94", "v02-benchmark-tank-battle", "v02-package", "v02-release-qualification"}
+    if (jobs.get("total_count") != 16 or not isinstance(rows, list) or len(rows) != 16
+            or not all(isinstance(row, dict) for row in rows)
+            or {row.get("name") for row in rows} != expected
+            or any(row.get("status") != "completed" or row.get("conclusion") !=
+                (run["conclusion"] if row.get("name") == "v02-runtime" else "skipped") for row in rows)):
+        raise ValueError("native-prefix-diagnostic-workload-roster-invalid")
+    if single_native_authority is not None:
+        _require_native_prefix_before_settlement_deadline(settlement_deadline_ns)
+    _write_json(execution_root / "workflow_run.json", run)
+    _write_json(execution_root / "jobs.json", jobs)
+    downloaded = execution_root / "download"
+    _download_run_artifact(repository, str(selected_id), "1", "native-prefix-diagnostic", downloaded, phase="runtime")
+    if single_native_authority is not None:
+        _require_native_prefix_before_settlement_deadline(settlement_deadline_ns)
+    files = list(downloaded.iterdir())
+    report_path = downloaded / "native-prefix-diagnostic.json"
+    job_clock_path = downloaded / "native-prefix-job-clock.json"
+    expected_files = [report_path, job_clock_path] if single_native_authority is not None else [report_path]
+    if (sorted(files) != sorted(expected_files)
+            or report_path.is_symlink() or not report_path.is_file()
+            or report_path.stat().st_size > 65536 or report_path.stat().st_nlink != 1
+            or report_path.stat().st_uid != os.getuid()
+            or (single_native_authority is not None and (job_clock_path.is_symlink()
+                or not job_clock_path.is_file() or job_clock_path.stat().st_size > 65536
+                or job_clock_path.stat().st_nlink != 1 or job_clock_path.stat().st_uid != os.getuid()))):
+        raise ValueError("native-prefix-diagnostic-downloaded-report-invalid")
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    job_clock = json.loads(job_clock_path.read_text(encoding="utf-8")) if single_native_authority is not None else None
+    expected_clock = None
+    if single_native_authority is not None:
+        validator = batch["validator_module"]
+        job_projection = validator.validate_job_clock_receipt(job_clock,
+            claim_sha256=claim_sha256, claim_nonce=nonce, source_sha=source,
+            run_id=str(selected_id), run_attempt=1, repository=repository, branch=branch)
+        expected_clock = {"receipt_sha256": _sha(job_clock_path),
+            "collector_deadline_monotonic_ns": job_projection["collector_deadline_monotonic_ns"]}
+    identity = report.get("identity")
+    expected_report_schema = ("genewhip-phase7-native-prefix-diagnostic-v2"
+        if single_native_authority is not None else "genewhip-phase7-native-prefix-diagnostic-v1")
+    if (report.get("schema") != expected_report_schema
+            or report.get("qualification_accepted") is not False or report.get("diagnostic_only") is not True
+            or not isinstance(identity, dict) or identity.get("source_sha") != source
+            or identity.get("head_sha") != source or identity.get("base_sha") != base
+            or identity.get("run_id") != str(selected_id) or identity.get("run_attempt") != "1"
+            or report.get("fixture") != "recursion94"
+            or report.get("case_order") != ["full-route", "withhold-first-plate"]
+            or report.get("status") not in ("pass", "fail")
+            or (report["status"] == "pass") != (run["conclusion"] == "success")):
+        raise ValueError("native-prefix-diagnostic-downloaded-identity-invalid")
+    expected_identity = {"source_sha": source, "head_sha": source, "base_sha": base,
+        "run_id": str(selected_id), "run_attempt": "1"}
+    if _load_runtime_module().validate_native_prefix_diagnostic_public(report, expected_identity,
+            expected_clock=expected_clock) is not True:
+        raise ValueError("native-prefix-diagnostic-downloaded-report-invalid")
+    runtime_jobs = [row for row in rows if isinstance(row, dict) and row.get("name") == "v02-runtime"]
+    if len(runtime_jobs) != 1:
+        raise ValueError("native-prefix-diagnostic-runtime-job-ambiguous")
+    runtime_job = runtime_jobs[0]
+    if single_native_authority is not None:
+        validator = batch["validator_module"]
+        if (runtime_job.get("id") != job_clock.get("job_id")
+                or runtime_job.get("run_id") != int(selected_id)
+                or runtime_job.get("run_attempt") != 1
+                or runtime_job.get("status") != "completed"
+                or runtime_job.get("head_sha") != source or runtime_job.get("head_branch") != branch
+                or runtime_job.get("started_at") != job_clock.get("job_started_at")):
+            raise ValueError("native-prefix-job-clock-provider-join-invalid")
+        _require_native_prefix_before_settlement_deadline(settlement_deadline_ns)
+        if batch.get("iteration_context") is not None:
+            if not validator._native_prefix_process_cleanup_is_confirmed(report):
+                raise ValueError("native-prefix-diagnostic-process-cleanup-unconfirmed")
+            execution["remote_cleanup_status"] = "confirmed"
+    result = {"schema": "genewhip.phase7-native-prefix-diagnostic-result.v1",
+        "status": report["status"], "qualification_accepted": False, "assessment_required": True,
+        "run_id": str(selected_id), "source_sha": source, "run_attempt": "1",
+        "report_sha256": _sha(report_path), "report_path": str(report_path.relative_to(ROOT)),
+        "branch": branch}
+    if single_native_authority is not None:
+        result.update({"job_clock_receipt_sha256": _sha(job_clock_path),
+            "job_clock_receipt_path": str(job_clock_path.relative_to(ROOT))})
+        execution["job_clock_receipt_sha256"] = result["job_clock_receipt_sha256"]
+    execution["status"] = "completed-assessment-required"
+    if single_native_authority is not None:
+        _require_native_prefix_before_settlement_deadline(settlement_deadline_ns)
+    _write_json(dispatch_path, execution)
+    _write_json(out, result)
+    if single_native_authority is not None and batch.get("iteration_context") is not None:
+        validator.write_terminal_assessment(ROOT, attempt_root)
     return result
 
 
@@ -5421,6 +7890,76 @@ def run_native_diagnostic(build: pathlib.Path, scope: pathlib.Path, out: pathlib
         identity=identity, outer_rejection=rejection)
     if len(json.dumps(result, ensure_ascii=True).encode("utf-8")) > 65536:
         raise ValueError("native-diagnostic-public-report-byte-limit")
+    _write_json(out, result)
+    return result
+
+
+def run_native_prefix_diagnostic(build: pathlib.Path, scope: pathlib.Path,
+        out: pathlib.Path) -> dict[str, Any]:
+    """Run the fixed prefix collector once and retain its actual outer receipt."""
+    if (os.environ.get("GITHUB_EVENT_NAME") != "workflow_dispatch"
+            or os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_CASE") != NATIVE_PREFIX_DIAGNOSTIC_CASE
+            or not re.fullmatch(r"[0-9a-f]{40}", os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_SOURCE_SHA", ""))
+            or os.environ.get("GITHUB_SHA") != os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_SOURCE_SHA")):
+        raise ValueError("native-prefix-diagnostic-explicit-hosted-selector-required")
+    if (scope.resolve(strict=True) != ROOT / "evidence/v02-execution.json"
+            or _sha(scope) != "05eb7f5fa91d759fbef8fb86bbc9db402dc41812261235bcf5085a0e2aa9b1a5"):
+        raise ValueError("native-prefix-diagnostic-approved-scope-required")
+    scope_data = json.loads(scope.read_text(encoding="utf-8"))
+    started_at = os.environ.get("GENEWHIP_QUALIFICATION_STARTED_AT")
+    if not isinstance(started_at, str):
+        raise ValueError("native-prefix-diagnostic-carried-clock-required")
+    now = datetime.datetime.now(datetime.timezone.utc)
+    _require_hosted_budget(started_at, now.isoformat(), scope_data, phase="runtime")
+    limits = dict(scope_data["per_child_limits"])
+    aggregate = 1800
+    elapsed = (now - _parse_utc(started_at)).total_seconds()
+    remaining = scope_data["qualification_batch"]["runtime_wall_seconds"] - elapsed
+    claim = _native_prefix_claim_bounds(required_reserve=aggregate + limits["cleanup_grace_seconds"])
+    if claim is None:
+        available = remaining
+    else:
+        available = min(remaining, claim[2] - limits["cleanup_grace_seconds"])
+    if available < aggregate:
+        raise ValueError("native-prefix-diagnostic-aggregate-window-unavailable")
+    if out.exists() or out.is_symlink():
+        raise ValueError("native-prefix-diagnostic-output-collision")
+    private_root = out.parent / (out.stem + "-private")
+    if private_root.exists() or private_root.is_symlink():
+        raise ValueError("native-prefix-diagnostic-private-output-collision")
+    private_root.mkdir(parents=True)
+    input_root = ROOT / "build/v02/runtime/input-contract"
+    if input_root.exists() or input_root.is_symlink():
+        raise ValueError("native-prefix-diagnostic-input-scratch-collision")
+    input_root.mkdir(parents=True, mode=0o700)
+    private_out = private_root / "collector.json"
+    scratch = private_root / "outer"
+    limits["wall_seconds"] = min(aggregate, int(available))
+    attempt = None
+    rejection = None
+    try:
+        attempt = _bounded_command([sys.executable, "-I", str(ROOT / "scripts/evidence/v02_run.py"),
+            "--mode", "native-prefix-diagnostic", "--build", str(build), "--scope", str(scope),
+            "--out", str(private_out)], limits=limits, scratch=scratch, timeout=limits["wall_seconds"],
+            label="native-prefix-diagnostic", check=False, scratch_roots=(private_root, input_root))
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+        rejection = "outer-boundary-rejected"
+        attempt = _read_native_private_record(scratch / "native-prefix-diagnostic.attempt.json")
+    handoff_path = private_out.with_name(private_out.stem + "-handoff.json")
+    handoff_status, handoff = _read_native_private_handoff(handoff_path)
+    runtime = _load_runtime_module()
+    expected_clock = None
+    clock_profile = os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_CLOCK_PROFILE")
+    if clock_profile == NATIVE_PREFIX_QUEUE_PROFILE:
+        _, projection, receipt_path = _load_native_prefix_job_clock(require_live=False)
+        expected_clock = {"receipt_sha256": _sha(receipt_path),
+            "collector_deadline_monotonic_ns": projection["collector_deadline_monotonic_ns"]}
+    elif clock_profile not in (None, ""):
+        raise ValueError("native-prefix-job-clock-profile-invalid")
+    result = runtime.complete_native_prefix_diagnostic_handoff(handoff, attempt, handoff_status,
+        identity=_identity(), outer_rejection=rejection, expected_clock=expected_clock)
+    if len(json.dumps(result, ensure_ascii=True).encode("utf-8")) > 65536:
+        raise ValueError("native-prefix-diagnostic-public-report-byte-limit")
     _write_json(out, result)
     return result
 
@@ -5564,7 +8103,8 @@ def run_package(public_evidence: pathlib.Path, out: pathlib.Path) -> dict[str, A
     matrix_module.verify_public_closure(public_evidence, ROOT / "evidence/v02-roster.json", runtime_identity)
     observations = json.loads((public_evidence / "observations.json").read_text(encoding="utf-8"))
     matrix_module.validate_qualification_matrix(observations)
-    scope=json.loads((ROOT/"evidence/v02-execution.json").read_text(encoding="utf-8"))
+    scope_path = phase7_execution_scope_path()
+    scope=json.loads(scope_path.read_text(encoding="utf-8"))
     limits=scope["per_child_limits"]
     batch_start_value = os.environ.get("GENEWHIP_QUALIFICATION_STARTED_AT")
     try:
@@ -5585,7 +8125,6 @@ def run_package(public_evidence: pathlib.Path, out: pathlib.Path) -> dict[str, A
     benchmark_documents = {}
     benchmark_root = ROOT / "build/v02/collected"
     benchmark_module = _load_benchmark_module()
-    scope_path = ROOT / "evidence/v02-execution.json"
     for workload in ("control", "recursion94", "tank-battle"):
         report_path = benchmark_root / ("benchmark-" + workload) / ("benchmark-" + workload + ".json")
         report = json.loads(report_path.read_text(encoding="utf-8"))
@@ -5838,10 +8377,13 @@ def _semantic_mutant_receipt_error(expected: dict[str, Any]) -> str | None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", required=True, choices=("plan", "runtime", "native-diagnostic", "native-diagnostic-hosted", "package", "validate", "semantic-mutants", "semantic-mutants-worker", "stage-public", "retry-source", "successor-source", "failed-hosted-successor-source", "hosted", "close"))
+    parser.add_argument("--mode", required=True, choices=("plan", "runtime", "native-diagnostic", "native-diagnostic-hosted", "native-prefix-diagnostic", "native-prefix-diagnostic-hosted", "package", "validate", "semantic-mutants", "semantic-mutants-worker", "stage-public", "retry-source", "successor-source", "failed-hosted-successor-source", "hosted", "close", "bounded-command"))
     parser.add_argument("--build", type=pathlib.Path, default=ROOT / "build/phase6")
     parser.add_argument("--scope", type=pathlib.Path, default=ROOT / "evidence/v02-execution.json")
-    parser.add_argument("--out", type=pathlib.Path, required=True)
+    parser.add_argument("--out", type=pathlib.Path)
+    parser.add_argument("--command-phase", choices=("preparation", "runtime", "package"))
+    parser.add_argument("--command-timeout", type=int)
+    parser.add_argument("--command", nargs=argparse.REMAINDER)
     parser.add_argument("--evidence", type=pathlib.Path)
     parser.add_argument("--public-evidence", type=pathlib.Path)
     parser.add_argument("--prepare-only", action="store_true",
@@ -5874,6 +8416,12 @@ def main(argv: list[str] | None = None) -> int:
                         help="review-bound source-preparation or public-effects admission record")
     parser.add_argument("--batch-admission-sha256",
                         help="expected digest of the fresh-batch admission record")
+    parser.add_argument("--single-native-authority", type=pathlib.Path,
+                        help="privacy-safe exact authority contract for the one-shot route")
+    parser.add_argument("--single-native-authority-sha256")
+    parser.add_argument("--single-native-admission", type=pathlib.Path,
+                        help="review-bound source/public admission for the one-shot route")
+    parser.add_argument("--single-native-admission-sha256")
     parser.add_argument("--diagnostic-readiness", type=pathlib.Path)
     parser.add_argument("--diagnostic-readiness-sha256")
     parser.add_argument("--contracts-only", action="store_true")
@@ -5885,7 +8433,34 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     batch_failure_stage: str | None = None
     try:
-        native_hosted = args.mode == "native-diagnostic-hosted"
+        if args.mode == "bounded-command":
+            command = args.command
+            if (args.out is not None or args.command_phase not in {"preparation", "runtime", "package"}
+                    or type(args.command_timeout) is not int or args.command_timeout <= 0
+                    or args.command_timeout > 600
+                    or not isinstance(command, list) or not command or command[0] != "cmake"
+                    or os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256")
+                        != PHASE7_WINDOW_SCOPE_SHA256
+                    or os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH")
+                        != PHASE7_WINDOW_SCOPE_PATH.as_posix()
+                    or os.environ.get("GENEWHIP_QUALIFICATION_PHASE") != args.command_phase):
+                raise ValueError("phase7-bounded-build-command-admission-invalid")
+            scope_path = ROOT / PHASE7_WINDOW_SCOPE_PATH
+            window = _load_phase7_window_module()
+            scope = window.load_public_scope(ROOT,
+                scope_path=PHASE7_WINDOW_SCOPE_PATH.as_posix(),
+                scope_sha256=PHASE7_WINDOW_SCOPE_SHA256)
+            child_wall = scope.get("per_child_limits", {}).get("wall_seconds")
+            if type(child_wall) is not int or child_wall <= 0 or args.command_timeout > child_wall:
+                raise ValueError("phase7-bounded-build-child-limit-invalid")
+            result = _run_bounded_phase7_cmake(command, timeout=args.command_timeout,
+                phase=args.command_phase)
+            sys.stdout.write(result.stdout)
+            sys.stderr.write(result.stderr)
+            return int(result.returncode)
+        if args.out is None:
+            parser.error("--out is required outside bounded-command mode")
+        native_hosted = args.mode in ("native-diagnostic-hosted", "native-prefix-diagnostic-hosted")
         if native_hosted and (args.diagnostic_readiness is None or args.diagnostic_readiness_sha256 is None):
             raise ValueError("native-diagnostic-readiness-required")
         if not native_hosted and (args.diagnostic_readiness is not None or args.diagnostic_readiness_sha256 is not None):
@@ -5895,8 +8470,73 @@ def main(argv: list[str] | None = None) -> int:
         batch_fields = (args.batch_authorization, args.batch_authorization_sha256,
                         args.batch_admission, args.batch_admission_sha256)
         batch_requested = any(item is not None for item in batch_fields)
+        single_fields = (args.single_native_authority, args.single_native_authority_sha256,
+                         args.single_native_admission, args.single_native_admission_sha256)
+        single_requested = any(item is not None for item in single_fields)
+        if single_requested:
+            if (any(item is None for item in single_fields) or batch_requested
+                    or args.campaign is not None or args.continuation is not None
+                    or args.recovery_selection != "15"
+                    or args.mode not in ("stage-public", "native-prefix-diagnostic-hosted")):
+                raise ValueError("single-native-route-conflicts-with-legacy-recovery")
+            path_module = _load_single_native_validator()
+            if args.single_native_authority_sha256 == path_module.ITERATION_AUTH_SHA256:
+                iteration_ctx = path_module.iteration_context(ROOT,
+                    args.single_native_authority, args.single_native_admission)
+                attempt_root = iteration_ctx["attempt_root"]
+            else:
+                attempt_root = path_module.canonical_root(ROOT, path_module.ROOT_REL)
+            if args.prepare_only:
+                route_paths = [args.single_native_admission,
+                    ]
+                route_outputs = [args.publication_copy, args.out]
+            else:
+                route_paths = [args.preflight, args.publication_copy, args.diagnostic_readiness,
+                    args.single_native_admission]
+                route_outputs = ([args.out, args.journal] if args.mode == "stage-public" else [args.out])
+                if args.mode == "native-prefix-diagnostic-hosted":
+                    route_paths.extend([args.journal])
+            path_module.validate_route_paths(ROOT, route_paths, outputs=route_outputs,
+                attempt_root=attempt_root)
+            _single_native_guard(admission_path=args.single_native_admission,
+                stage=("source-preparation" if args.prepare_only else
+                       "native-prefix-diagnostic" if args.mode == "native-prefix-diagnostic-hosted" else
+                       "public-effects"), authority_path=args.single_native_authority,
+                authority_sha256=args.single_native_authority_sha256,
+                admission_sha256=args.single_native_admission_sha256,
+                readiness_path=args.diagnostic_readiness,
+                readiness_sha256=args.diagnostic_readiness_sha256)
+        protected_roots = ((ROOT / SINGLE_NATIVE_POLICY_ROOT).resolve(strict=False),
+            (ROOT / ITERATION_POLICY_ROOT).resolve(strict=False), *tuple(
+            (ROOT / relative).resolve(strict=False) for relative in RETIRED_SINGLE_NATIVE_POLICY_ROOTS))
+        routed_paths = (args.journal, args.preflight, args.publication_copy, args.out,
+                        args.diagnostic_readiness, args.authorization,
+                        args.single_native_admission, args.single_native_authority)
+        uses_new_root = any(value is not None and any(
+            (value if value.is_absolute() else ROOT / value).resolve(strict=False) == protected_root
+            or protected_root in (value if value.is_absolute() else ROOT / value).resolve(strict=False).parents
+            for protected_root in protected_roots) for value in routed_paths)
+        if uses_new_root and not single_requested:
+            raise ValueError("single-native-authorization-required")
+        window_root = (ROOT / PHASE7_WINDOW_ATTEMPT_NAMESPACE).resolve(strict=False)
+        uses_window_root = any(value is not None and (
+            (value if value.is_absolute() else ROOT / value).resolve(strict=False) == window_root
+            or window_root in (value if value.is_absolute() else ROOT / value).resolve(strict=False).parents)
+            for value in routed_paths)
+        window_authorized = (batch_requested
+            and args.batch_authorization is not None
+            and (args.batch_authorization if args.batch_authorization.is_absolute()
+                 else ROOT / args.batch_authorization).resolve(strict=False)
+                == ROOT / PHASE7_WINDOW_AUTH_PATH
+            and args.batch_authorization_sha256 == PHASE7_WINDOW_AUTH_SHA256
+            and args.scope.resolve(strict=False) == ROOT / PHASE7_WINDOW_SCOPE_PATH)
+        if uses_window_root and not window_authorized:
+            raise ValueError("phase7-window-authorization-required")
+        if single_requested and (args.single_native_authority_sha256 not in (
+                path_module.AUTH_SHA256, path_module.ITERATION_AUTH_SHA256)):
+            raise ValueError("single-native-authority-pin-invalid")
         if batch_requested:
-            if (args.mode not in ("stage-public", "hosted", "native-diagnostic-hosted")
+            if (args.mode not in ("stage-public", "hosted", "native-diagnostic-hosted", "native-prefix-diagnostic-hosted")
                     or args.campaign is not None or args.campaign_sha256 is not None
                     or args.continuation is not None or args.recovery_selection != "15"):
                 raise ValueError("fresh-batch-route-conflicts-with-legacy-recovery")
@@ -5904,7 +8544,7 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("stage-public-publication-copy-required")
             if any(item is None for item in batch_fields):
                 raise ValueError("fresh-batch-authorization-and-admission-required")
-            if args.mode != "native-diagnostic-hosted":
+            if args.mode not in ("native-diagnostic-hosted", "native-prefix-diagnostic-hosted"):
                 _fresh_batch_guard(batch_authorization=args.batch_authorization,
                     batch_authorization_sha256=args.batch_authorization_sha256,
                     batch_admission=args.batch_admission,
@@ -5915,7 +8555,7 @@ def main(argv: list[str] | None = None) -> int:
                     preflight_path=args.out if args.prepare_only else args.preflight,
                     output_path=args.out)
                 batch_failure_stage = ("preparation" if args.prepare_only else
-                                       "qualification" if args.mode == "hosted" else "publication")
+                    "qualification" if args.mode == "hosted" else "publication")
         else:
             protected_roots = tuple((ROOT / relative).resolve(strict=False)
                                     for relative in LEGACY_BATCH_ROOTS)
@@ -6056,9 +8696,28 @@ def main(argv: list[str] | None = None) -> int:
                 diagnostic_readiness_sha256=args.diagnostic_readiness_sha256)
             print("native-diagnostic-hosted: " + value["status"] + "; assessment_required=true; qualification_accepted=false")
             return 0 if value["status"] == "pass" else 1
+        elif args.mode == "native-prefix-diagnostic-hosted":
+            if not batch_requested and not single_requested:
+                raise ValueError("native-prefix-diagnostic-batch-admission-required")
+            value = run_native_prefix_diagnostic_hosted(args.preflight, args.publication_copy,
+                args.scope, args.out, args.journal, batch_authorization=args.batch_authorization,
+                batch_authorization_sha256=args.batch_authorization_sha256,
+                batch_admission=args.batch_admission, batch_admission_sha256=args.batch_admission_sha256,
+                prefix_readiness=args.diagnostic_readiness,
+                prefix_readiness_sha256=args.diagnostic_readiness_sha256,
+                single_native_admission=args.single_native_admission,
+                single_native_admission_sha256=args.single_native_admission_sha256,
+                single_native_authority=args.single_native_authority,
+                single_native_authority_sha256=args.single_native_authority_sha256)
+            print("native-prefix-diagnostic-hosted: " + value["status"] + "; assessment_required=true; qualification_accepted=false")
+            return 0 if value["status"] == "pass" else 1
         elif args.mode == "native-diagnostic":
             value = run_native_diagnostic(args.build, args.scope, args.out)
             print("native-diagnostic: " + value["status"] + "; qualification_accepted=false")
+            return 0 if value["status"] == "pass" else 1
+        elif args.mode == "native-prefix-diagnostic":
+            value = run_native_prefix_diagnostic(args.build, args.scope, args.out)
+            print("native-prefix-diagnostic: " + value["status"] + "; qualification_accepted=false")
             return 0 if value["status"] == "pass" else 1
         elif args.mode == "hosted":
             if args.publication_copy is None:
@@ -6091,7 +8750,11 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("stage-public-publication-copy-required")
             if args.prepare_only:
                 value = prepare_public_snapshot(args.publication_copy, args.scope, args.out,
-                                               args.authorization)
+                    args.authorization,
+                    single_native_admission=args.single_native_admission,
+                    single_native_admission_sha256=args.single_native_admission_sha256,
+                    single_native_authority=args.single_native_authority,
+                    single_native_authority_sha256=args.single_native_authority_sha256)
                 print("public-source-preparation: " + value["status"] +
                       "; files=" + str(len(value["source_manifest"])) +
                       "; public_head=" + value["public_identity"]["head_sha"] +
@@ -6110,7 +8773,11 @@ def main(argv: list[str] | None = None) -> int:
                     batch_authorization_sha256=args.batch_authorization_sha256,
                     batch_admission=args.batch_admission,
                     batch_admission_sha256=args.batch_admission_sha256,
-                    batch_output_path=args.out)
+                    batch_output_path=args.out,
+                    single_native_admission=args.single_native_admission,
+                    single_native_admission_sha256=args.single_native_admission_sha256,
+                    single_native_authority=args.single_native_authority,
+                    single_native_authority_sha256=args.single_native_authority_sha256)
                 _write_json(args.out, {"schema": "genewhip.v02-public-source-delivery.v1",
                     "status": "merged", **value})
                 if value.get("status") == "diagnostic-ci-complete":
@@ -6158,6 +8825,27 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError,
             subprocess.SubprocessError, RuntimeError) as exc:
+        if (os.environ.get("GENEWHIP_SINGLE_NATIVE_ADMITTED") == "1"
+                and os.environ.get("GENEWHIP_SINGLE_NATIVE_CLAIMED") == "1"):
+            try:
+                module = _load_single_native_validator()
+                attempt_root = pathlib.Path(os.environ.get("GENEWHIP_SINGLE_NATIVE_ROOT",
+                    str(ROOT / module.ROOT_REL)))
+                preparation_root = pathlib.Path(os.environ.get("GENEWHIP_SINGLE_NATIVE_PREPARATION_ROOT",
+                    str(attempt_root)))
+                authority_sha = os.environ.get("GENEWHIP_SINGLE_NATIVE_AUTHORITY_SHA256",
+                    module.AUTH_SHA256)
+                failure_root = (attempt_root if os.environ.get("GENEWHIP_SINGLE_NATIVE_CLAIMED") == "1"
+                    else preparation_root)
+                failure_path = failure_root / "failure.json"
+                if not module._lineage_entry_present(ROOT, failure_path.relative_to(ROOT)):
+                    module.write_failure(ROOT,
+                        stage=os.environ.get("GENEWHIP_SINGLE_NATIVE_STAGE", "unknown"),
+                        reason="single-native-route-failed", attempt_root=attempt_root,
+                        preparation_revision=(None if failure_root == attempt_root else preparation_root),
+                        authority_sha256=authority_sha)
+            except (OSError, ValueError, RuntimeError):
+                pass
         if batch_failure_stage is not None:
             sentinel = _fresh_batch_attempt_root() / "failure.json"
             if not sentinel.exists() and not sentinel.is_symlink():
