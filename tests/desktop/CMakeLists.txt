@@ -7,6 +7,14 @@ add_test(NAME default_configure_offline COMMAND ${Python3_EXECUTABLE} -I ${CMAKE
   offline-configure ${PROJECT_SOURCE_DIR})
 set_tests_properties(default_configure_offline PROPERTIES TIMEOUT 120)
 
+# Offline production capture branches: fake SDL/file leaves, no device or ROM.
+add_executable(renderer_capture_contract renderer_capture_contract.c)
+target_include_directories(renderer_capture_contract PRIVATE ${PROJECT_SOURCE_DIR}/tools/desktop)
+set_target_properties(renderer_capture_contract PROPERTIES
+  C_STANDARD 17 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
+add_test(NAME renderer_capture_contract COMMAND renderer_capture_contract)
+set_tests_properties(renderer_capture_contract PROPERTIES TIMEOUT 15)
+
 # Runner tests need the SDL option; the dummy video driver keeps them display-free.
 if(GENEWHIP_BUILD_DESKTOP)
   add_test(NAME phase4_game_desktop COMMAND ${Python3_EXECUTABLE} -I
