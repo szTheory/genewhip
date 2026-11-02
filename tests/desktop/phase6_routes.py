@@ -513,6 +513,9 @@ def _retained_host_case(build: pathlib.Path, desktop: pathlib.Path, route: dict,
         "renderer": {key: host.get(key) for key in ("renderer", "video_driver", "renderer_capture_field",
             "renderer_capture_fnv1a64", "renderer_readback_activity")},
         "capability": host.get("capability"),
+        "renderer_capture_substage": host.get("renderer_capture_substage")
+            if type(host.get("renderer_capture_substage")) is int and
+                0 <= host["renderer_capture_substage"] <= 10 else None,
         "audio": {key: host.get(key) for key in ("audio_driver", "audio_device_id", "audio_device_name",
             "pcm_frames", "audio_submitted_frames", "audio_device_consumed_frames", "audio_device_activity")},
         "raw_outputs": {"native": phase6_game.artifact(native_path) if native_path.is_file() else None,
