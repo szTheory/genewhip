@@ -4,6 +4,7 @@ import copy
 import hashlib
 import io
 import json
+import os
 import pathlib
 import sys
 import tarfile
@@ -37,6 +38,78 @@ def statement():
 
 
 class PromotionContract(unittest.TestCase):
+    def test_explicit_main_dispatch_keeps_its_authenticated_event(self):
+        repo = {"id": 1, "full_name": EXPECTED["repository"]}
+        event = {"workflow_run": {"id": 12345, "run_attempt": 2,
+            "name": "Plan10 qualification " + "a" * 32,
+            "display_title": "Plan10 qualification " + "a" * 32,
+            "event": "workflow_dispatch",
+            "head_branch": "main", "head_sha": EXPECTED["sha"],
+            "status": "completed", "conclusion": "success",
+            "repository": repo, "head_repository": repo}}
+        self.assertEqual(verify_run_event(event, EXPECTED["repository"], EXPECTED["sha"],
+            "12345", 2)[1], ["provenance-event-mismatch"])
+        self.assertEqual(verify_run_event(event, EXPECTED["repository"], EXPECTED["sha"],
+            "12345", 2, expected_event="workflow_dispatch")[1], [])
+        for field, value, reason in (("event", "pull_request", "provenance-event-mismatch"),
+                ("head_branch", "topic", "provenance-ref-mismatch"),
+                ("head_sha", "b" * 40, "provenance-sha-mismatch"),
+                ("head_repository", {"id": 2}, "provenance-fork-source"),
+                ("name", "Plan10 native prefix diagnostic " + "a" * 32,
+                 "provenance-workflow-mismatch"),
+                ("display_title", "different", "provenance-workflow-mismatch")):
+            with self.subTest(field=field):
+                changed = copy.deepcopy(event)
+                changed["workflow_run"][field] = value
+                self.assertEqual(verify_run_event(changed, EXPECTED["repository"],
+                    EXPECTED["sha"], "12345", 2, expected_event="workflow_dispatch")[1], [reason])
+
+    def test_attestation_event_label_is_bound_to_authenticated_source_context(self):
+        invocation = "https://github.com/example/genewhip/actions/runs/12345/attempts/2"
+        output = {"verificationResult": {"statement": {"predicate": {
+            "runDetails": {"metadata": {"invocationId": invocation}}}}}}
+        result = type("Verification", (), {"returncode": 0, "stdout": json.dumps(output)})()
+        proof = promote.verify_attestation(pathlib.Path("fixture.tar.gz"),
+            EXPECTED["repository"], EXPECTED["sha"], "12345", 2,
+            runner=lambda argv: result, expected_event="workflow_dispatch")
+        self.assertEqual(proof["event"], "workflow_dispatch")
+        self.assertEqual(proof["run_id"], "12345")
+        with self.assertRaises(promote.PromotionError):
+            promote.verify_attestation(pathlib.Path("fixture.tar.gz"),
+                EXPECTED["repository"], EXPECTED["sha"], "12345", 2,
+                runner=lambda argv: result, expected_event="pull_request")
+
+    def test_publication_and_adoption_share_fixed_window_cutoffs(self):
+        env = {"GENEWHIP_PHASE7_WINDOW_ACTIVE": "1",
+            "GENEWHIP_QUALIFICATION_SCOPE_SHA256": "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4",
+            "GENEWHIP_QUALIFICATION_SCOPE_PATH": "evidence/v02-phase7-full-execution-scope.json",
+            "GENEWHIP_QUALIFICATION_STARTED_AT": "2026-11-02T16:56:30+00:00"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(promote.execution_window_timeout(60, phase="package",
+                now="2026-11-02T20:41:20+00:00"), 10)
+            self.assertEqual(promote.execution_window_timeout(900, phase="close",
+                now="2026-11-02T20:56:20+00:00"), 10)
+            with self.assertRaises(promote.PromotionError):
+                promote.execution_window_timeout(60, phase="package",
+                    now="2026-11-02T20:41:30+00:00")
+            with mock.patch.dict(os.environ, {"GENEWHIP_QUALIFICATION_STARTED_AT":
+                    "2026-11-02T17:56:30+00:00"}):
+                with self.assertRaises(promote.PromotionError):
+                    promote.execution_window_timeout(60, phase="package",
+                        now="2026-11-02T18:00:00+00:00")
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(promote.execution_window_timeout(60), 60)
+
+    def test_expired_window_stops_api_request_before_network(self):
+        api = promote.GitHub("fixture-token", "example/genewhip")
+        with mock.patch.object(promote, "execution_window_timeout",
+                side_effect=promote.PromotionError("phase7-publication-window-invalid-or-expired")) as budget, \
+                mock.patch.object(promote.urllib.request, "urlopen") as transport:
+            with self.assertRaises(promote.PromotionError):
+                api.post("/repos/example/genewhip/releases", {"draft": True})
+        budget.assert_called_once_with(30, phase="package")
+        transport.assert_not_called()
+
     def test_release_inventory_includes_checksum_file_in_desired_assets(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = pathlib.Path(temporary)

@@ -106,9 +106,11 @@ def validate_main_run(run: Any, expected_sha: str) -> list[str]:
     return []
 
 
-def validate_v02_qualification_run(run: Any, expected_sha: str) -> list[str]:
+def validate_v02_qualification_run(run: Any, expected_sha: str, *,
+                                   expected_event: str = "push") -> list[str]:
     """Require the exact successful qualification close and its trusted source run."""
-    if not isinstance(run, dict) or run.get("event") != "push":
+    if (expected_event not in {"push", "workflow_dispatch"}
+            or not isinstance(run, dict) or run.get("event") != expected_event):
         return ["v02-qualification-event-invalid"]
     if run.get("headSha") != expected_sha:
         return ["v02-qualification-source-mismatch"]
@@ -152,7 +154,8 @@ def validate_v02_publisher_packet(packet: Any, repository: str | None = None) ->
             or type(qualification.get("run_attempt")) is not int or qualification["run_attempt"] < 1
             or qualification.get("source_sha") != packet["source_sha"]
             or qualification.get("workflow_path") != ".github/workflows/ci.yml"
-            or qualification.get("ref") != "refs/heads/main" or qualification.get("event") != "push"):
+            or qualification.get("ref") != "refs/heads/main"
+            or qualification.get("event") not in {"push", "workflow_dispatch"}):
         return ["v02-publisher-packet-qualification-identity-invalid"]
     if (not str(publisher.get("run_id", "")).isdigit()
             or type(publisher.get("run_attempt")) is not int or publisher["run_attempt"] < 1
@@ -199,16 +202,20 @@ def validate_v02_authenticated_packet(packet: Any, repository: str,
         return problems
     qualification = packet["qualification"]
     publisher = packet["publisher"]
-    problems = validate_v02_qualification_run(qualification_run, packet["source_sha"])
+    problems = validate_v02_qualification_run(qualification_run, packet["source_sha"],
+                                              expected_event=qualification["event"])
     if problems:
         return problems
     if (str(qualification_run.get("databaseId")) != str(qualification["run_id"])
             or qualification_run.get("attempt") != qualification["run_attempt"]):
         return ["v02-qualification-run-attempt-mismatch"]
     problems = validate_workflow_identity(qualification_identity, qualification["workflow_path"],
-                                          packet["source_sha"], "push")
+                                          packet["source_sha"], qualification["event"])
     if problems:
         return problems
+    if (qualification["event"] == "workflow_dispatch"
+            and qualification_identity.get("head_branch") != "main"):
+        return ["v02-qualification-branch-invalid"]
     if str(qualification_identity.get("id")) != str(qualification["run_id"]) \
             or qualification_identity.get("run_attempt") != qualification["run_attempt"]:
         return ["v02-qualification-workflow-attempt-mismatch"]
@@ -405,9 +412,11 @@ def _safe_path(value: pathlib.Path) -> pathlib.Path:
 def _gh(args: list[str], timeout: int = 60) -> str:
     try:
         result = subprocess.run(["gh", *args], cwd=ROOT, text=True, capture_output=True,
-                                timeout=timeout, check=False)
+                                timeout=promote.execution_window_timeout(timeout), check=False)
     except (OSError, subprocess.TimeoutExpired):
         raise DeliveryError("github-cli-unavailable-or-timeout") from None
+    except promote.PromotionError as error:
+        raise DeliveryError(str(error)) from None
     if result.returncode:
         raise DeliveryError("github-command-failed-" + args[0])
     return result.stdout
@@ -417,9 +426,12 @@ def _gh_api_json(endpoint: str, timeout: int = 60) -> Any:
     """Preserve read-only API status classes needed for effective-policy checks."""
     try:
         result = subprocess.run(["gh", "api", endpoint], cwd=ROOT, text=True,
-                                capture_output=True, timeout=timeout, check=False)
+                                capture_output=True,
+                                timeout=promote.execution_window_timeout(timeout), check=False)
     except (OSError, subprocess.TimeoutExpired):
         raise repository_preflight.ServiceError("transport_error") from None
+    except promote.PromotionError as error:
+        raise DeliveryError(str(error)) from None
     if result.returncode:
         match = re.search(r"\(HTTP ([0-9]{3})\)", result.stderr)
         status = int(match.group(1)) if match else None
@@ -513,7 +525,8 @@ def verify_v02_subject_attestations(directory: pathlib.Path, packet: dict[str, A
     for name in subject_names:
         try:
             promote.verify_attestation(directory / name, packet["repository"], packet["source_sha"],
-                                       str(qualification["run_id"]), qualification["run_attempt"])
+                                       str(qualification["run_id"]), qualification["run_attempt"],
+                                       expected_event=qualification["event"])
         except promote.PromotionError as error:
             raise DeliveryError(str(error)) from None
 
@@ -837,6 +850,21 @@ def make_v02_adoption_failure(packet: dict[str, Any], reason: str, *, published:
             "requirement_outcomes": {name: "not-qualified" for name in V02_REQUIREMENTS}}
 
 
+def _run_v02_download_docs(command: list[str], directory: pathlib.Path):
+    """Let the existing PGID owner cancel nested adoption work in the fixed window."""
+    if promote.execution_window_active():
+        from scripts.release.v02_qualification import _external, _load_phase7_window_module
+        scope = _load_phase7_window_module().load_public_scope(ROOT)
+        timeout = promote.execution_window_timeout(900, phase="close") - scope[
+            "per_child_limits"]["cleanup_grace_seconds"]
+        if timeout <= 0:
+            raise DeliveryError("download-adoption-cleanup-reserve-exhausted")
+        return _external(command, cwd=ROOT, check=False, phase="close",
+            timeout=timeout, owned_roots=(directory,))
+    return subprocess.run(command, cwd=ROOT, text=True, capture_output=True,
+                          timeout=14400, check=False)
+
+
 def verify_v02_download(args: argparse.Namespace) -> dict[str, Any]:
     packet = args.packet
     facts = getattr(args, "authenticated_facts", None)
@@ -874,17 +902,16 @@ def verify_v02_download(args: argparse.Namespace) -> dict[str, Any]:
         docs_path = _safe_path(docs_receipt_path)
         if directory == docs_path or directory in docs_path.parents:
             raise DeliveryError("downloaded-adoption-receipt-inside-immutable-subjects")
-        result = subprocess.run(
+        result = _run_v02_download_docs(
             [sys.executable, str(ROOT / "tests/package/docs_commands.py"),
              "--public-download", "--publisher-packet", str(pathlib.Path(args.evidence)),
              "--local-artifacts", str(directory), "--version", "0.2.0", "--offline",
-             "--out", str(docs_path)], cwd=ROOT, text=True, capture_output=True,
-            timeout=14400, check=False)
+             "--out", str(docs_path)], directory)
         if result.returncode:
             raise DeliveryError("downloaded-package-adoption-smoke-failed")
         try:
-            docs_receipt = json.loads(result.stdout.strip().splitlines()[-1])
-        except (json.JSONDecodeError, IndexError):
+            docs_receipt = _read_json(docs_path)
+        except (OSError, json.JSONDecodeError):
             raise DeliveryError("downloaded-package-adoption-receipt-invalid") from None
         adoption = make_v02_adoption_receipt(packet, release_info, docs_receipt)
         adoption["docs_receipt"] = str(docs_path.relative_to(ROOT))
@@ -892,7 +919,7 @@ def verify_v02_download(args: argparse.Namespace) -> dict[str, Any]:
         return adoption
     except (DeliveryError, OSError, ValueError, TypeError, KeyError,
             subprocess.SubprocessError, promote.PromotionError) as error:
-        reason = str(error) if isinstance(error, DeliveryError) else type(error).__name__
+        reason = str(error) if isinstance(error, (DeliveryError, promote.PromotionError)) else type(error).__name__
         if authenticated and validate_v02_publisher_packet(packet, args.repository) == []:
             _write_json(args.evidence_out,
                         make_v02_adoption_failure(packet, reason, published=published))

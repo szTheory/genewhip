@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import importlib.util
 import json
 import os
 import pathlib
 import re
+import secrets
 import sys
+import stat
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -16,11 +19,160 @@ FIXTURE = ROOT / "fixtures/independent-game"
 DEFAULT_LOCK = FIXTURE / "toolchain.lock"
 SHA = re.compile(r"^[0-9a-f]{64}$")
 CURRENT_KEYRING_SHA = "8013de59880f7a59f53b6bd207f4d2a408d67b84a82fa9cba1dbbf443428e2db"
+CURRENT_RECEIPT_V1 = "genewhip-current-host-toolchain-v1"
+CURRENT_RECEIPT_V2 = "genewhip-current-host-toolchain-v2"
+CURRENT_RECEIPT_V1_BASIS = "fresh source build; separate from immutable historical toolchain.lock"
+CURRENT_RECEIPT_V2_BASIS = (
+    "fresh source build from verified upstream with recorded local configure-probe patch; "
+    "separate from immutable historical toolchain.lock"
+)
+CONFIGURE_PROBE_PATCH_EXPECTED = {
+    "schema": "genewhip-binutils-source-patch-v1",
+    "id": "binutils-2.47-configure-parent-relative-probe",
+    "archive_sha256": "3068128c75cda9f898ccb4211d360246e8e195ffcc9dfb655b23ae23a54800e8",
+    "original_source_tree_sha256": "7b2b4f3a271745bacec91336a38689218dbbe7a01371dbfdfb11e0e933e47a09",
+    "patched_source_tree_sha256": "49aebd642f4f7cb498ea4d3c5edc7ad908707ef6a01ad6c67207cbf48c57d304",
+    "recipe_sha256": "d9ff3aebe6ebd16024771cfefcd2446cdf84a49315b292a319d203396e6a1072",
+    "helper_sha256": "29b1de3c5a0f09548e69aeeb03fdd7d29b9825a749a389d517152b2efe81e0b2",
+    "manifest_sha256": "7e38e69d3614546fef1e4ce8c39d413e05b80a0b01ca604b906349c7d90621d1",
+}
 
 
 def reject(condition: bool, reason: str) -> None:
     if condition:
         raise ValueError(reason)
+
+
+def write_current_receipt(target: pathlib.Path, payload: dict) -> bytes:
+    """Durably replace a current-host receipt without following a temp symlink."""
+    if not isinstance(payload, dict):
+        raise ValueError("current-host receipt payload must be an object")
+    target = pathlib.Path(target)
+    if not target.name or target.name in (".", ".."):
+        raise ValueError("current-host receipt path must name a file")
+    parent = target.parent.resolve(strict=True)
+    expected_parent = os.stat(parent, follow_symlinks=False)
+    if not stat.S_ISDIR(expected_parent.st_mode) or expected_parent.st_uid != os.getuid():
+        raise ValueError("current-host receipt directory is not an owned real directory")
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    directory_fd = os.open(parent, directory_flags)
+    temporary_name: str | None = None
+    temporary_identity: tuple[int, int] | None = None
+    descriptor = -1
+    try:
+        directory_info = os.fstat(directory_fd)
+        if not stat.S_ISDIR(directory_info.st_mode) or directory_info.st_uid != os.getuid():
+            raise ValueError("current-host receipt directory is not an owned real directory")
+        if (expected_parent.st_dev, expected_parent.st_ino) != (directory_info.st_dev, directory_info.st_ino):
+            raise ValueError("current-host receipt directory changed while opening")
+
+        def require_current_directory() -> None:
+            try:
+                current = os.stat(parent, follow_symlinks=False)
+            except OSError as exc:
+                raise ValueError("current-host receipt directory changed during write") from exc
+            if (not stat.S_ISDIR(current.st_mode)
+                    or (current.st_dev, current.st_ino) != (directory_info.st_dev, directory_info.st_ino)):
+                raise ValueError("current-host receipt directory changed during write")
+
+        require_current_directory()
+        try:
+            existing = os.stat(target.name, dir_fd=directory_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        else:
+            if stat.S_ISLNK(existing.st_mode) or not stat.S_ISREG(existing.st_mode):
+                raise ValueError("current-host receipt target is not a regular file")
+
+        temporary_flags = (os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                           | getattr(os, "O_NOFOLLOW", 0))
+        for _ in range(64):
+            temporary_name = "." + target.name + "." + secrets.token_hex(16) + ".tmp"
+            try:
+                descriptor = os.open(temporary_name, temporary_flags, 0o600,
+                                     dir_fd=directory_fd)
+                break
+            except FileExistsError:
+                temporary_name = None
+        if descriptor < 0 or temporary_name is None:
+            raise FileExistsError("unable to allocate unique current-host receipt temporary file")
+        opened = os.fstat(descriptor)
+        temporary_identity = (opened.st_dev, opened.st_ino)
+        if (not stat.S_ISREG(opened.st_mode) or opened.st_uid != os.getuid()
+                or opened.st_nlink != 1):
+            raise ValueError("current-host receipt temporary file is not an owned regular file")
+        require_current_directory()
+
+        # Keep the historical v2 receipt serialization byte-for-byte stable.
+        serialized = (json.dumps(payload, indent=2) + "\n").encode("utf-8")
+        stream = os.fdopen(descriptor, "wb")
+        descriptor = -1
+        with stream:
+            written = stream.write(serialized)
+            if written != len(serialized):
+                raise OSError("short write while recording current-host receipt")
+            stream.flush()
+            os.fsync(stream.fileno())
+
+        staged = os.stat(temporary_name, dir_fd=directory_fd, follow_symlinks=False)
+        if (not stat.S_ISREG(staged.st_mode) or staged.st_uid != os.getuid()
+                or staged.st_nlink != 1 or temporary_identity != (staged.st_dev, staged.st_ino)):
+            raise ValueError("current-host receipt temporary file changed before replacement")
+        require_current_directory()
+        os.replace(temporary_name, target.name,
+                   src_dir_fd=directory_fd, dst_dir_fd=directory_fd)
+        temporary_name = None
+        os.fsync(directory_fd)
+        require_current_directory()
+        return serialized
+    finally:
+        try:
+            if descriptor >= 0:
+                os.close(descriptor)
+            if temporary_name is not None and temporary_identity is not None:
+                try:
+                    staged = os.stat(temporary_name, dir_fd=directory_fd, follow_symlinks=False)
+                except FileNotFoundError:
+                    pass
+                else:
+                    if (stat.S_ISREG(staged.st_mode) and staged.st_uid == os.getuid()
+                            and temporary_identity == (staged.st_dev, staged.st_ino)):
+                        os.unlink(temporary_name, dir_fd=directory_fd)
+        finally:
+            os.close(directory_fd)
+
+
+def validate_current_source_patch(patch: object) -> None:
+    reject(not isinstance(patch, dict), "current-host source patch must be an object")
+    expected_fields = set(CONFIGURE_PROBE_PATCH_EXPECTED) | {"files"}
+    reject(set(patch) != expected_fields,
+           "current-host source patch fields differ from the exact allowlist")
+    for key, expected in CONFIGURE_PROBE_PATCH_EXPECTED.items():
+        reject(patch.get(key) != expected,
+               "current-host source patch identity differs from the pinned transformation")
+    files = patch.get("files")
+    reject(not isinstance(files, list) or len(files) != 14,
+           "current-host source patch file inventory shape mismatch")
+    expected_file_fields = {"path", "original_sha256", "patched_sha256", "replacement_count"}
+    prior_path = ""
+    for item in files:
+        reject(not isinstance(item, dict) or set(item) != expected_file_fields,
+               "current-host source patch file entry shape mismatch")
+        reject(not isinstance(item.get("path"), str) or not item["path"]
+               or item["path"] <= prior_path or ".." in pathlib.PurePosixPath(item["path"]).parts,
+               "current-host source patch file paths are not canonical and sorted")
+        original_sha256 = item.get("original_sha256")
+        patched_sha256 = item.get("patched_sha256")
+        reject(type(original_sha256) is not str or not SHA.fullmatch(original_sha256)
+               or type(patched_sha256) is not str or not SHA.fullmatch(patched_sha256)
+               or type(item.get("replacement_count")) is not int
+               or item["replacement_count"] not in (2, 3),
+               "current-host source patch file hash/count is malformed")
+        prior_path = item["path"]
+    unhashed = {key: value for key, value in patch.items() if key != "manifest_sha256"}
+    reject(hashlib.sha256(json.dumps(unhashed, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+           != CONFIGURE_PROBE_PATCH_EXPECTED["manifest_sha256"],
+           "current-host source patch manifest digest mismatch")
 
 
 def validate_assembler(a: dict, target: str) -> None:
@@ -94,14 +246,45 @@ def validate_lock(doc: dict) -> None:
 
 def validate_current_receipt(doc: dict, target: str, assembler_path: pathlib.Path) -> None:
     reject(not isinstance(doc, dict), "current-host receipt must be an object")
-    reject(doc.get("schema") != "genewhip-current-host-toolchain-v1", "current-host receipt schema mismatch")
-    reject(doc.get("receipt_basis") != "fresh source build; separate from immutable historical toolchain.lock", "receipt is not identified as separate current-host evidence")
+    schema = doc.get("schema")
+    reject(schema not in (CURRENT_RECEIPT_V1, CURRENT_RECEIPT_V2),
+           "current-host receipt schema mismatch")
+    if schema == CURRENT_RECEIPT_V1:
+        expected_basis = CURRENT_RECEIPT_V1_BASIS
+    else:
+        expected_basis = CURRENT_RECEIPT_V2_BASIS
+    reject(doc.get("receipt_basis") != expected_basis,
+           "receipt is not identified as the exact current-host evidence variant")
+    if schema == CURRENT_RECEIPT_V1:
+        reserved_patch_fields = {"source_patch", "source_patch_manifest_sha256",
+                                 "configure_probe_patch", "configure_probe_patch_manifest_sha256"}
+        reject(any(key in reserved_patch_fields for key in doc),
+               "legacy current-host receipt must not claim a local source patch")
+    else:
+        reject(set(doc) != {"schema", "receipt_basis", "historical_lock_sha256", "target", "record"},
+               "current-host v2 receipt fields differ from the exact schema")
     lock_sha = hashlib.sha256(DEFAULT_LOCK.read_bytes()).hexdigest()
     reject(doc.get("historical_lock_sha256") != lock_sha, "receipt is bound to a different historical toolchain.lock")
     reject(doc.get("target") != target, "current-host receipt target mismatch")
     reject("/Users/" in json.dumps(doc) or "/home/" in json.dumps(doc), "current-host receipt contains a personal absolute path")
     record = doc.get("record", {})
     reject(not isinstance(record, dict), "current-host record must be an object")
+    source_patch = record.get("source_patch")
+    if schema == CURRENT_RECEIPT_V1:
+        source_revision = record.get("source_revision", "")
+        disposition = record.get("disposition", "")
+        inputs = record.get("inputs", [])
+        claimed_text = [source_revision, disposition]
+        if isinstance(inputs, list):
+            claimed_text.extend(inputs)
+        reject(any(key in reserved_patch_fields for key in record)
+               or disposition == "verified upstream source; recorded local configure-probe patch applied; no Homebrew Binutils bottle used"
+               or any(isinstance(value, str) and ("applied exact local source patch " in value
+                   or value.startswith("recorded local source patch ")
+                   or value.startswith("patched source tree SHA-256 ")) for value in claimed_text),
+               "legacy current-host receipt must not claim a local source patch")
+    else:
+        validate_current_source_patch(source_patch)
     reject(record.get("version") != "2.47", "current-host assembler version mismatch")
     reject(record.get("source_url") != "https://ftp.gnu.org/gnu/binutils/binutils-2.47.tar.bz2", "current-host source URL mismatch")
     reject(record.get("source_archive_sha256") != "3068128c75cda9f898ccb4211d360246e8e195ffcc9dfb655b23ae23a54800e8", "current-host archive digest mismatch")
@@ -116,10 +299,27 @@ def validate_current_receipt(doc: dict, target: str, assembler_path: pathlib.Pat
     reject(sig.get("release_announcement") != "https://sourceware.org/pipermail/binutils/2026-July/150520.html", "current-host release announcement mismatch")
     source_revision = record.get("source_revision", "")
     reject(not isinstance(source_revision, str), "current-host source revision must be a string")
-    tree = re.search(r"extracted source tree SHA-256 ([0-9a-f]{64})$", source_revision)
-    reject(not tree, "current-host source tree digest missing")
-    locked_tree = re.search(r"extracted source tree SHA-256 ([0-9a-f]{64})$", load_and_validate(DEFAULT_LOCK)["assembler"].get("source_revision", ""))
-    reject(not locked_tree or tree.group(1) != locked_tree.group(1), "current-host extracted source tree differs from historical evidence")
+    locked_tree = re.search(r"extracted source tree SHA-256 ([0-9a-f]{64})$",
+                            load_and_validate(DEFAULT_LOCK)["assembler"].get("source_revision", ""))
+    if schema == CURRENT_RECEIPT_V1:
+        tree = re.search(r"extracted source tree SHA-256 ([0-9a-f]{64})$", source_revision)
+        reject(not tree, "current-host source tree digest missing")
+        reject(not locked_tree or tree.group(1) != locked_tree.group(1),
+               "current-host extracted source tree differs from historical evidence")
+    else:
+        expected_revision = (
+            "binutils-2.47 official release archive; verified upstream source tree SHA-256 "
+            + source_patch["original_source_tree_sha256"] + "; applied exact local source patch "
+            + source_patch["id"] + "; patched source tree SHA-256 "
+            + source_patch["patched_source_tree_sha256"]
+        )
+        reject(not locked_tree or source_patch["original_source_tree_sha256"] != locked_tree.group(1),
+               "current-host patch is not bound to the historical upstream source tree")
+        reject(source_revision != expected_revision,
+               "current-host source revision does not truthfully identify the recorded patch")
+        reject(record.get("disposition") !=
+               "verified upstream source; recorded local configure-probe patch applied; no Homebrew Binutils bottle used",
+               "current-host patched-source disposition mismatch")
     host = record.get("host", {})
     reject(not isinstance(host, dict), "current-host host identity must be an object")
     for key in ("os", "os_build", "architecture", "xcode", "sdk_version", "sdk_build", "compiler", "make"):
@@ -186,11 +386,17 @@ def current_receipt_log_identity(doc: dict, receipt_bytes: bytes) -> dict:
     install_tools = next(item for item in record["build_dependencies"]
                          if item["name"] in ("GNU Coreutils install tools",
                                               "Apple system directory/install utilities"))
-    tree = re.search(r"extracted source tree SHA-256 ([0-9a-f]{64})$",
-                     record["source_revision"])
-    if tree is None:
-        raise ValueError("current-host source tree identity unavailable")
-    return {
+    if doc.get("schema") == CURRENT_RECEIPT_V2:
+        source_patch = record["source_patch"]
+        original_tree_sha = source_patch["original_source_tree_sha256"]
+        configured_tree_sha = source_patch["patched_source_tree_sha256"]
+    else:
+        tree = re.search(r"extracted source tree SHA-256 ([0-9a-f]{64})$",
+                         record["source_revision"])
+        if tree is None:
+            raise ValueError("current-host source tree identity unavailable")
+        original_tree_sha = configured_tree_sha = tree.group(1)
+    identity = {
         "schema": doc["schema"],
         "target": doc["target"],
         "receipt_sha256": hashlib.sha256(receipt_bytes).hexdigest(),
@@ -198,7 +404,7 @@ def current_receipt_log_identity(doc: dict, receipt_bytes: bytes) -> dict:
         "binutils": {
             "version": record["version"],
             "source_archive_sha256": record["source_archive_sha256"],
-            "source_tree_sha256": tree.group(1),
+            "source_tree_sha256": configured_tree_sha,
             "signature_sha256": signature["sha256"],
             "keyring_sha256": signature["keyring_sha256"],
             "signing_fingerprint": signature["signing_fingerprint"],
@@ -226,24 +432,93 @@ def current_receipt_log_identity(doc: dict, receipt_bytes: bytes) -> dict:
             "file_type": record["executable"]["file_type"],
         },
     }
+    if doc.get("schema") == CURRENT_RECEIPT_V2:
+        identity["binutils"]["original_source_tree_sha256"] = original_tree_sha
+        identity["binutils"]["source_patch"] = {
+            "id": source_patch["id"],
+            "manifest_sha256": source_patch["manifest_sha256"],
+            "recipe_sha256": source_patch["recipe_sha256"],
+            "helper_sha256": source_patch["helper_sha256"],
+            "patched_source_tree_sha256": configured_tree_sha,
+        }
+    return identity
 
 
 def self_test_current_receipt(lock: dict) -> int:
-    record = copy.deepcopy(lock["assembler"])
-    record["signature"]["keyring_sha256"] = CURRENT_KEYRING_SHA
     target = "m68k-elf"
-    payload = {"schema": "genewhip-current-host-toolchain-v1",
-               "receipt_basis": "fresh source build; separate from immutable historical toolchain.lock",
-               "historical_lock_sha256": hashlib.sha256(DEFAULT_LOCK.read_bytes()).hexdigest(),
-               "target": target, "record": record}
+    lock_sha = hashlib.sha256(DEFAULT_LOCK.read_bytes()).hexdigest()
+    legacy_record = copy.deepcopy(lock["assembler"])
+    legacy_record["signature"]["keyring_sha256"] = CURRENT_KEYRING_SHA
+    legacy_payload = {"schema": CURRENT_RECEIPT_V1, "receipt_basis": CURRENT_RECEIPT_V1_BASIS,
+                      "historical_lock_sha256": lock_sha, "target": target,
+                      "record": legacy_record}
+
+    helper_path = FIXTURE / "toolchain/configure_probe.py"
+    helper_spec = importlib.util.spec_from_file_location("genewhip_configure_probe", helper_path)
+    if helper_spec is None or helper_spec.loader is None:
+        raise ValueError("configure-probe helper unavailable for v2 receipt contract")
+    helper = importlib.util.module_from_spec(helper_spec)
+    helper_spec.loader.exec_module(helper)
+    patch = helper.expected_patch_manifest()
+    patched_record = copy.deepcopy(legacy_record)
+    patched_record["source_patch"] = patch
+    patched_record["source_revision"] = (
+        "binutils-2.47 official release archive; verified upstream source tree SHA-256 "
+        + patch["original_source_tree_sha256"] + "; applied exact local source patch "
+        + patch["id"] + "; patched source tree SHA-256 " + patch["patched_source_tree_sha256"]
+    )
+    patched_record["inputs"] = [
+        "official GNU Binutils 2.47 archive SHA-256 " + patch["archive_sha256"],
+        "verified upstream source tree SHA-256 " + patch["original_source_tree_sha256"],
+        "recorded local source patch " + patch["id"] + "; manifest SHA-256 " + patch["manifest_sha256"],
+        "patched source tree SHA-256 " + patch["patched_source_tree_sha256"],
+    ]
+    patched_record["disposition"] = (
+        "verified upstream source; recorded local configure-probe patch applied; "
+        "no Homebrew Binutils bottle used"
+    )
+    patched_payload = {"schema": CURRENT_RECEIPT_V2, "receipt_basis": CURRENT_RECEIPT_V2_BASIS,
+                       "historical_lock_sha256": lock_sha, "target": target,
+                       "record": patched_record}
     accepted = 0
     with tempfile.TemporaryDirectory(prefix="genewhip-current-receipt-") as tmp:
         binary = pathlib.Path(tmp) / "m68k-elf-as"
         binary.write_bytes(b"current-host assembler fixture")
         binary.chmod(0o755)
-        payload["record"]["executable"]["sha256"] = hashlib.sha256(binary.read_bytes()).hexdigest()
-        validate_current_receipt(payload, target, binary)
-        mutations = [
+        binary_sha = hashlib.sha256(binary.read_bytes()).hexdigest()
+        legacy_payload["record"]["executable"]["sha256"] = binary_sha
+        patched_payload["record"]["executable"]["sha256"] = binary_sha
+        validate_current_receipt(legacy_payload, target, binary)
+        validate_current_receipt(patched_payload, target, binary)
+        legacy_dispatch_text = copy.deepcopy(legacy_payload)
+        legacy_dispatch_text["dispatch"] = "legacy receipt note"
+        legacy_dispatch_text["record"]["disposition"] += "; dispatch metadata retained"
+        validate_current_receipt(legacy_dispatch_text, target, binary)
+        identity_bytes = json.dumps(patched_payload, sort_keys=True, separators=(",", ":")).encode()
+        identity = current_receipt_log_identity(patched_payload, identity_bytes)
+        if (identity["binutils"]["source_tree_sha256"] != patch["patched_source_tree_sha256"]
+                or identity["binutils"]["original_source_tree_sha256"] != patch["original_source_tree_sha256"]
+                or identity["binutils"]["source_patch"]["manifest_sha256"] != patch["manifest_sha256"]
+                or "/Users/" in json.dumps(identity) or "/home/" in json.dumps(identity)):
+            print("FAIL: v2 receipt log identity lost finite patch provenance", file=sys.stderr)
+            return 1
+        print("PASS: accepted unchanged legacy v1 and exact recorded-patch v2 receipts")
+
+        def must_reject(label: str, payload: dict) -> bool:
+            nonlocal accepted
+            try:
+                validate_current_receipt(payload, target, binary)
+            except ValueError:
+                accepted += 1
+                print(f"PASS: rejected current-host receipt mutation {label}")
+                return True
+            except (TypeError, KeyError) as exc:
+                print(f"FAIL: malformed receipt raised an unclassified {type(exc).__name__}: {label}", file=sys.stderr)
+                return False
+            print(f"FAIL: current-host receipt mutation passed: {label}", file=sys.stderr)
+            return False
+
+        legacy_mutations = [
             ("historical lock binding", lambda d: d.__setitem__("historical_lock_sha256", "0" * 64)),
             ("signed archive identity", lambda d: d["record"].__setitem__("source_archive_sha256", "0" * 64)),
             ("signature signer", lambda d: d["record"]["signature"].__setitem__("signing_fingerprint", "0" * 40)),
@@ -257,21 +532,59 @@ def self_test_current_receipt(lock: dict) -> int:
             ("gpgv identity", lambda d: next(x for x in d["record"]["build_dependencies"] if x["name"] == "GNU Binutils release verifier gpgv").__setitem__("sha256", "invalid")),
             ("malformed receipt record", lambda d: d.__setitem__("record", [])),
             ("malformed dependency inventory", lambda d: d["record"].__setitem__("build_dependencies", {})),
+            ("legacy top-level patch claim", lambda d: d.__setitem__("source_patch", patch)),
+            ("legacy record patch claim", lambda d: d["record"].__setitem__("source_patch", patch)),
+            ("unknown receipt variant", lambda d: d.__setitem__("schema", "genewhip-current-host-toolchain-v99")),
+            ("malformed receipt variant type", lambda d: d.__setitem__("schema", [])),
         ]
-        for label, mutate in mutations:
-            altered = copy.deepcopy(payload)
+        for label, mutate in legacy_mutations:
+            altered = copy.deepcopy(legacy_payload)
             mutate(altered)
-            try:
-                validate_current_receipt(altered, target, binary)
-            except ValueError:
-                accepted += 1
-                print(f"PASS: rejected current-host receipt mutation {label}")
-            else:
-                print(f"FAIL: current-host receipt mutation passed: {label}", file=sys.stderr)
+            if not must_reject(label, altered):
+                return 1
+
+        v2_mutations = [
+            ("unknown v2 field", lambda d: d.__setitem__("unreviewed", True)),
+            ("missing source patch", lambda d: d["record"].pop("source_patch")),
+            ("patch extra field", lambda d: d["record"]["source_patch"].__setitem__("unreviewed", True)),
+            ("patch list type", lambda d: d["record"].__setitem__("source_patch", [])),
+            ("patch map type", lambda d: d["record"].__setitem__("source_patch", {})),
+            ("patch bool type", lambda d: d["record"].__setitem__("source_patch", True)),
+            ("patch null type", lambda d: d["record"].__setitem__("source_patch", None)),
+            ("patch string type", lambda d: d["record"].__setitem__("source_patch", "unknown")),
+            ("patch archive identity", lambda d: d["record"]["source_patch"].__setitem__("archive_sha256", "0" * 64)),
+            ("patch original tree", lambda d: d["record"]["source_patch"].__setitem__("original_source_tree_sha256", "0" * 64)),
+            ("patch transformed tree", lambda d: d["record"]["source_patch"].__setitem__("patched_source_tree_sha256", "0" * 64)),
+            ("patch recipe hash", lambda d: d["record"]["source_patch"].__setitem__("recipe_sha256", "0" * 64)),
+            ("patch helper hash", lambda d: d["record"]["source_patch"].__setitem__("helper_sha256", "0" * 64)),
+            ("patch manifest hash", lambda d: d["record"]["source_patch"].__setitem__("manifest_sha256", "0" * 64)),
+            ("patch missing file", lambda d: d["record"]["source_patch"]["files"].pop()),
+            ("patch extra file field", lambda d: d["record"]["source_patch"]["files"][0].__setitem__("unreviewed", True)),
+            ("patch file order", lambda d: d["record"]["source_patch"]["files"].reverse()),
+            ("patch file path", lambda d: d["record"]["source_patch"]["files"][0].__setitem__("path", "../configure")),
+            ("patch original file hash", lambda d: d["record"]["source_patch"]["files"][0].__setitem__("original_sha256", "0" * 64)),
+            ("patch output file hash", lambda d: d["record"]["source_patch"]["files"][0].__setitem__("patched_sha256", "0" * 64)),
+            ("array original file hash", lambda d: d["record"]["source_patch"]["files"][0].__setitem__("original_sha256", [])),
+            ("map original file hash", lambda d: d["record"]["source_patch"]["files"][0].__setitem__("original_sha256", {})),
+            ("boolean original file hash", lambda d: d["record"]["source_patch"]["files"][0].__setitem__("original_sha256", True)),
+            ("null original file hash", lambda d: d["record"]["source_patch"]["files"][0].__setitem__("original_sha256", None)),
+            ("array patched file hash", lambda d: d["record"]["source_patch"]["files"][0].__setitem__("patched_sha256", [])),
+            ("map patched file hash", lambda d: d["record"]["source_patch"]["files"][0].__setitem__("patched_sha256", {})),
+            ("boolean patched file hash", lambda d: d["record"]["source_patch"]["files"][0].__setitem__("patched_sha256", True)),
+            ("null patched file hash", lambda d: d["record"]["source_patch"]["files"][0].__setitem__("patched_sha256", None)),
+            ("patch replacement count", lambda d: d["record"]["source_patch"]["files"][0].__setitem__("replacement_count", 9)),
+            ("patch replacement bool count", lambda d: d["record"]["source_patch"]["files"][0].__setitem__("replacement_count", True)),
+            ("patched source revision", lambda d: d["record"].__setitem__("source_revision", "unpatched upstream")),
+            ("unknown v2 schema", lambda d: d.__setitem__("schema", "genewhip-current-host-toolchain-v3")),
+        ]
+        for label, mutate in v2_mutations:
+            altered = copy.deepcopy(patched_payload)
+            mutate(altered)
+            if not must_reject(label, altered):
                 return 1
         binary.chmod(0o401)
         try:
-            validate_current_receipt(payload, target, binary)
+            validate_current_receipt(legacy_payload, target, binary)
         except ValueError:
             accepted += 1
             print("PASS: rejected current-host assembler executable permission-class mutation")
@@ -281,7 +594,7 @@ def self_test_current_receipt(lock: dict) -> int:
         binary.chmod(0o755)
         binary.write_bytes(b"mutated assembler bytes")
         try:
-            validate_current_receipt(payload, target, binary)
+            validate_current_receipt(patched_payload, target, binary)
         except ValueError:
             accepted += 1
         else:
