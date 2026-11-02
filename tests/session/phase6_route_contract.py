@@ -579,6 +579,460 @@ class ScratchTreeContract(unittest.TestCase):
             self.assertEqual(diagnostics, [{"kind": "symlink-file", "path": "link",
                                            "link_count": 1, "owned": True}])
 
+    def test_opt_in_accepts_bounded_in_root_file_link_chains(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gw-scratch-internal-link-") as directory:
+            root = pathlib.Path(directory).resolve()
+            target = root / "libsframe.la"
+            target.write_text("static library metadata")
+            libs = root / ".libs"
+            libs.mkdir()
+            versioned = libs / "libsframe.la.1"
+            versioned.symlink_to("../libsframe.la")
+            link = libs / "libsframe.la"
+            link.symlink_to("libsframe.la.1")
+            diagnostics: list[dict[str, object]] = []
+            self.assertIsNone(_safe_tree_bytes(root, diagnostics),
+                "default scratch policy must continue rejecting every symlink")
+            self.assertEqual(_safe_tree_bytes(root, diagnostics,
+                allow_build_file_links=True), target.stat().st_size
+                + link.lstat().st_size + versioned.lstat().st_size)
+
+            bfd_doc = root / "build/bfd/doc"
+            target = root / "build/binutils-2.47/bfd/doc/archures.texi"
+            bfd_doc.mkdir(parents=True)
+            target.parent.mkdir(parents=True)
+            target.write_text("absolute GNU BFD link target")
+            link = bfd_doc / "archures.texi"
+            link.symlink_to(str(root / "build/bfd/doc/../../binutils-2.47/bfd/doc/archures.texi"))
+            self.assertIsNotNone(_safe_tree_bytes(root, allow_build_file_links=True),
+                "absolute targets with interior .. must remain within the root and resolve safely")
+
+    def test_opt_in_rejects_escape_dangling_cycles_and_symlinked_parents(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gw-scratch-link-reject-") as directory:
+            base = pathlib.Path(directory).resolve()
+            outside = base / "outside"
+            outside.write_text("outside")
+            cases = (
+                ("absolute-outside", lambda root: (root / "link").symlink_to(outside)),
+                ("outside", lambda root: (root / "link").symlink_to("../outside")),
+                ("missing-parent-escape", lambda root: (root / "link").symlink_to("missing/../../outside")),
+                ("dot-component-escape", lambda root: (root / "link").symlink_to("./../outside")),
+                ("non-directory-parent", lambda root: (
+                    (root / "not-directory").write_text("file"),
+                    (root / "link").symlink_to("not-directory/../target"))),
+                ("trailing-dot-file-target", lambda root: (root / "link").symlink_to("target/.") ),
+                ("symlink-hidden-by-parent-traversal", lambda root: (
+                    (root / "jump").symlink_to(outside, target_is_directory=True),
+                    (root / "link").symlink_to("jump/../target"))),
+            )
+            for name, create in cases:
+                with self.subTest(name=name), tempfile.TemporaryDirectory(dir=base) as temporary:
+                    root = pathlib.Path(temporary).resolve()
+                    (root / "target").write_text("target")
+                    create(root)
+                    diagnostics: list[dict[str, object]] = []
+                    self.assertIsNone(_safe_tree_bytes(root, diagnostics,
+                        allow_build_file_links=True))
+                    self.assertEqual(diagnostics[0]["kind"], "unsafe-file-symlink")
+                    if name == "trailing-dot-file-target":
+                        self.assertEqual(diagnostics[0]["reason"], "target-not-regular")
+                    if name == "non-directory-parent":
+                        self.assertEqual(diagnostics[0]["reason"], "target-parent-invalid")
+            with tempfile.TemporaryDirectory(dir=base) as temporary:
+                root = pathlib.Path(temporary).resolve()
+                (root / "target").write_text("target")
+                (root / "chain").symlink_to("target")
+                (root / "link").symlink_to("chain")
+                (root / "cycle-a").symlink_to("cycle-b")
+                (root / "cycle-b").symlink_to("cycle-a")
+                diagnostics: list[dict[str, object]] = []
+                measured = _safe_tree_bytes(root, diagnostics, allow_build_file_links=True)
+                self.assertIsNone(measured, "a separate cycle must still fail closed")
+                self.assertEqual(diagnostics[0]["kind"], "unsafe-file-symlink")
+                self.assertEqual(diagnostics[0]["reason"], "target-symlink-rejected")
+            with tempfile.TemporaryDirectory(dir=base) as temporary:
+                root = pathlib.Path(temporary).resolve()
+                (root / "real-dir").mkdir()
+                (root / "dir-link").symlink_to("real-dir", target_is_directory=True)
+                self.assertIsNone(_safe_tree_bytes(root, allow_build_file_links=True))
+
+    def test_build_link_mode_bounds_chain_hops_and_rechecks_nested_links(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gw-scratch-link-chain-bound-") as directory:
+            root = pathlib.Path(directory).resolve()
+            (root / "target").write_text("target")
+            (root / "chain-000").symlink_to("chain-001")
+            for index in range(1, 129):
+                (root / f"chain-{index:03d}").symlink_to(
+                    f"chain-{index + 1:03d}" if index < 128 else "target")
+            diagnostics: list[dict[str, object]] = []
+            self.assertIsNone(_safe_tree_bytes(root, diagnostics, allow_build_file_links=True))
+            self.assertEqual(diagnostics[0]["kind"], "unsafe-file-symlink")
+            self.assertEqual(diagnostics[0]["reason"], "target-components-invalid")
+
+        with tempfile.TemporaryDirectory(prefix="gw-scratch-link-nested-replacement-") as directory:
+            root = pathlib.Path(directory).resolve()
+            target = root / "target"
+            target.write_text("target")
+            first = root / "a-link"
+            second = root / "b-chain"
+            replacement = root / "replacement-chain"
+            first.symlink_to("b-chain")
+            second.symlink_to("target")
+            replacement.symlink_to("target")
+            original_stat = os.stat
+            replaced = False
+
+            def replace_nested_before_target_identity(path, *, dir_fd=None, follow_symlinks=True):
+                nonlocal replaced
+                if (path == "target" and dir_fd is not None and not follow_symlinks
+                        and not replaced):
+                    os.replace(replacement, second)
+                    replaced = True
+                return original_stat(path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
+
+            diagnostics: list[dict[str, object]] = []
+            with mock.patch.object(os, "stat", side_effect=replace_nested_before_target_identity):
+                self.assertIsNone(_safe_tree_bytes(root, diagnostics, allow_build_file_links=True))
+            self.assertTrue(replaced)
+            self.assertEqual(diagnostics[0]["kind"], "unsafe-file-symlink")
+            self.assertEqual(diagnostics[0]["reason"], "link-identity-changed")
+
+    def test_build_link_mode_allows_missing_nested_link_race_and_rejects_foreign_owners(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gw-scratch-nested-link-disappears-") as directory:
+            root = pathlib.Path(directory).resolve()
+            target = root / "target"
+            target.write_text("owned output")
+            inner = root / "inner"
+            inner.mkdir()
+            nested = inner / "chain"
+            nested.symlink_to("../target")
+            entry = root / "entry"
+            entry.symlink_to("inner/chain")
+            target_size = target.stat().st_size
+            entry_size = entry.lstat().st_size
+            original_readlink = os.readlink
+            removed = False
+            following_entry = False
+            removed_while_following_entry = False
+
+            def remove_nested_before_readlink(path, *, dir_fd=None):
+                nonlocal removed, following_entry, removed_while_following_entry
+                if path == "entry" and dir_fd is not None:
+                    following_entry = True
+                if path == "chain" and dir_fd is not None and following_entry and not removed:
+                    nested.unlink()
+                    removed = True
+                    removed_while_following_entry = True
+                return original_readlink(path, dir_fd=dir_fd)
+
+            diagnostics: list[dict[str, object]] = []
+            with mock.patch.object(os, "readlink", side_effect=remove_nested_before_readlink):
+                measured = _safe_tree_bytes(root, diagnostics, allow_build_file_links=True)
+            self.assertTrue(removed)
+            self.assertTrue(removed_while_following_entry,
+                "the inner link must disappear while resolving the root-level entry")
+            self.assertEqual(measured, target_size + entry_size)
+            self.assertFalse(any(item.get("kind") == "unsafe-file-symlink" for item in diagnostics))
+            self.assertIsNone(_safe_tree_bytes(root), "default guest mode must still reject dangling links")
+
+        for foreign_path in ("chain", "target"):
+            with self.subTest(foreign_path=foreign_path), \
+                    tempfile.TemporaryDirectory(prefix="gw-scratch-foreign-link-owner-") as directory:
+                root = pathlib.Path(directory).resolve()
+                target = root / "target"
+                target.write_text("owned output")
+                inner = root / "inner"
+                inner.mkdir()
+                nested = inner / "chain"
+                nested.symlink_to("../target")
+                (root / "entry").symlink_to("inner/chain")
+                original_stat = os.stat
+                entry_seen = False
+                foreign_seen_while_resolving_entry = False
+
+                def mark_foreign_owner(path, *, dir_fd=None, follow_symlinks=True):
+                    nonlocal entry_seen, foreign_seen_while_resolving_entry
+                    info = original_stat(path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
+                    if path == "entry" and dir_fd is not None and not follow_symlinks:
+                        entry_seen = True
+                    if (path == foreign_path and dir_fd is not None and not follow_symlinks
+                            and entry_seen):
+                        foreign_seen_while_resolving_entry = True
+                        values = list(info)
+                        values[4] = os.getuid() + 1
+                        return os.stat_result(values)
+                    return info
+
+                diagnostics: list[dict[str, object]] = []
+                with mock.patch.object(os, "stat", side_effect=mark_foreign_owner):
+                    self.assertIsNone(_safe_tree_bytes(root, diagnostics, allow_build_file_links=True))
+                self.assertTrue(foreign_seen_while_resolving_entry,
+                    "ownership mutation must occur while following the outer entry")
+                self.assertEqual(diagnostics[0]["kind"], "unsafe-file-symlink")
+                self.assertNotIn(str(root), json.dumps(diagnostics))
+
+    def test_build_link_mode_accepts_dot_components_and_hardlinked_symlink_targets(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gw-scratch-build-link-targets-") as directory:
+            root = pathlib.Path(directory).resolve()
+            target = root / "target"
+            target.write_text("static build metadata")
+            hardlink = root / "hardlink"
+            os.link(target, hardlink)
+            dot_link = root / "dot-link"
+            dot_link.symlink_to("./target")
+            hardlink_target_link = root / "hardlink-target-link"
+            hardlink_target_link.symlink_to("./hardlink")
+            contained_dot_link = root / "contained-dot-link"
+            subdirectory = root / "subdirectory"
+            subdirectory.mkdir()
+            contained_dot_link.symlink_to("./subdirectory/../target")
+            diagnostics: list[dict[str, object]] = []
+            self.assertIsNone(_safe_tree_bytes(root, diagnostics),
+                "default guest policy must continue rejecting all symlinks and hardlinks")
+            diagnostics.clear()
+            measured = _safe_tree_bytes(root, diagnostics, allow_build_file_links=True)
+            expected = (2 * target.stat().st_size + dot_link.lstat().st_size
+                + hardlink_target_link.lstat().st_size + contained_dot_link.lstat().st_size)
+            self.assertEqual(measured, expected)
+            self.assertEqual(diagnostics, [])
+
+    def test_build_link_mode_allows_benign_target_link_count_change(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gw-scratch-link-count-race-") as directory:
+            root = pathlib.Path(directory).resolve()
+            link = root / "a-link"
+            target = root / "z-target"
+            target.write_text("owned setup output")
+            link.symlink_to("z-target")
+            link_size = link.lstat().st_size
+            target_size = target.stat().st_size
+            original_stat = os.stat
+            added = False
+
+            def add_hardlink_before_final_stat(path, *, dir_fd=None, follow_symlinks=True):
+                nonlocal added
+                if (path == "z-target" and dir_fd is not None and not follow_symlinks
+                        and not added):
+                    os.link(target, root / "late-hardlink")
+                    added = True
+                return original_stat(path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
+
+            diagnostics: list[dict[str, object]] = []
+            with mock.patch.object(os, "stat", side_effect=add_hardlink_before_final_stat):
+                measured = _safe_tree_bytes(root, diagnostics, allow_build_file_links=True)
+            self.assertTrue(added)
+            self.assertEqual(measured, link_size + target_size)
+            self.assertFalse(any(item.get("kind") == "unsafe-file-symlink" for item in diagnostics))
+
+    def test_build_link_mode_rejects_link_and_target_replacement_races(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gw-scratch-link-replacement-") as directory:
+            base = pathlib.Path(directory).resolve()
+            for name in ("link", "target"):
+                with self.subTest(replaced=name), tempfile.TemporaryDirectory(dir=base) as temporary:
+                    root = pathlib.Path(temporary).resolve()
+                    link = root / "a-link"
+                    target = root / "target"
+                    target.write_text("original target")
+                    link.symlink_to("target")
+                    diagnostics: list[dict[str, object]] = []
+                    if name == "link":
+                        replacement = root / "replacement-link"
+                        replacement.symlink_to("target")
+                        original_stat = os.stat
+
+                        def replace_link_before_helper_stat(path, *, dir_fd=None, follow_symlinks=True):
+                            if path == "a-link" and dir_fd is not None and not follow_symlinks:
+                                os.replace(replacement, link)
+                            return original_stat(path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
+
+                        patch_target, callback = os, replace_link_before_helper_stat
+                    else:
+                        replacement = root / "replacement-target"
+                        replacement.write_text("replacement target")
+                        original_stat = os.stat
+                        target_observations = 0
+
+                        def replace_target_before_final_stat(path, *, dir_fd=None, follow_symlinks=True):
+                            nonlocal target_observations
+                            if path == "target" and dir_fd is not None and not follow_symlinks:
+                                target_observations += 1
+                            if (path == "target" and dir_fd is not None and not follow_symlinks
+                                    and target_observations == 2):
+                                os.replace(replacement, target)
+                            return original_stat(path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
+
+                        patch_target, callback = os, replace_target_before_final_stat
+                    with mock.patch.object(patch_target, "stat", side_effect=callback):
+                        self.assertIsNone(_safe_tree_bytes(root, diagnostics,
+                            allow_build_file_links=True))
+                    self.assertEqual(diagnostics[0]["kind"], "unsafe-file-symlink")
+
+    def test_opt_in_counts_transiently_missing_internal_target_but_default_rejects(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gw-scratch-link-disappears-") as directory:
+            root = pathlib.Path(directory).resolve()
+            link = root / "a-link"
+            target = root / "z-target"
+            link.symlink_to("z-target")
+            target.write_text("target bytes")
+            target_size = target.stat().st_size
+            link_size = link.lstat().st_size
+            original_open = os.open
+            removed = False
+
+            def disappear_before_open(path, flags, mode=0o777, *, dir_fd=None):
+                nonlocal removed
+                if (not removed and path == "z-target" and dir_fd is not None
+                        and flags & getattr(os, "O_NOFOLLOW", 0)
+                        and not flags & getattr(os, "O_DIRECTORY", 0)):
+                    target.unlink()
+                    removed = True
+                return original_open(path, flags, mode, dir_fd=dir_fd)
+
+            diagnostics: list[dict[str, object]] = []
+            with mock.patch.object(os, "open", side_effect=disappear_before_open) as patched_open:
+                supported = set(os.supports_dir_fd)
+                with mock.patch.object(os, "supports_dir_fd", supported | {patched_open}):
+                    measured = _safe_tree_bytes(root, diagnostics, allow_build_file_links=True)
+            self.assertTrue(removed, "test must remove the target at the real no-follow open boundary")
+            self.assertEqual(measured, link_size)
+            self.assertGreater(target_size, 0)
+            self.assertFalse(any(item.get("kind") == "unsafe-file-symlink" for item in diagnostics))
+            self.assertTrue(any(item.get("kind") == "path-disappeared-during-scan" for item in diagnostics))
+            diagnostics.clear()
+            self.assertIsNone(_safe_tree_bytes(root, diagnostics),
+                "default scratch policy must reject a dangling symlink")
+            self.assertEqual(diagnostics[0]["kind"], "symlink-file")
+
+    def test_opt_in_skips_link_removed_after_initial_scan_metadata(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gw-scratch-link-removed-") as directory:
+            root = pathlib.Path(directory).resolve()
+            link = root / "a-link"
+            target = root / "z-target"
+            link.symlink_to("z-target")
+            target.write_text("target bytes")
+            original_stat = os.stat
+            removed = False
+
+            def remove_before_helper_stat(path, *, dir_fd=None, follow_symlinks=True):
+                nonlocal removed
+                if path == "a-link" and dir_fd is not None and not follow_symlinks:
+                    link.unlink()
+                    removed = True
+                return original_stat(path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
+
+            diagnostics: list[dict[str, object]] = []
+            with mock.patch.object(os, "stat", side_effect=remove_before_helper_stat):
+                measured = _safe_tree_bytes(root, diagnostics, allow_build_file_links=True)
+            self.assertTrue(removed)
+            self.assertEqual(measured, target.stat().st_size)
+            self.assertTrue(any(item.get("kind") == "path-disappeared-during-scan" for item in diagnostics))
+            self.assertFalse(any(item.get("kind") == "unsafe-file-symlink" for item in diagnostics))
+
+    def test_opt_in_counts_link_metadata_when_open_target_disappears_before_final_stat(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gw-scratch-link-unlinked-after-open-") as directory:
+            root = pathlib.Path(directory).resolve()
+            link = root / "a-link"
+            target = root / "z-target"
+            link.symlink_to("z-target")
+            target.write_text("target bytes")
+            link_size = link.lstat().st_size
+            original_stat = os.stat
+            removed = False
+
+            def remove_before_final_stat(path, *, dir_fd=None, follow_symlinks=True):
+                nonlocal removed
+                if path == "z-target" and dir_fd is not None and not follow_symlinks:
+                    target.unlink()
+                    removed = True
+                return original_stat(path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
+
+            diagnostics: list[dict[str, object]] = []
+            with mock.patch.object(os, "stat", side_effect=remove_before_final_stat):
+                measured = _safe_tree_bytes(root, diagnostics, allow_build_file_links=True)
+            self.assertTrue(removed, "target must disappear after open/fstat and before the final name check")
+            self.assertEqual(measured, link_size)
+            self.assertFalse(any(item.get("kind") == "unsafe-file-symlink" for item in diagnostics))
+
+    def test_opt_in_counts_link_metadata_when_target_unlinked_before_fstat(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gw-scratch-link-unlinked-before-fstat-") as directory:
+            root = pathlib.Path(directory).resolve()
+            link = root / "a-link"
+            target = root / "z-target"
+            link.symlink_to("z-target")
+            target.write_text("target bytes")
+            link_size = link.lstat().st_size
+            original_fstat = os.fstat
+            removed = False
+
+            def remove_before_target_fstat(fd):
+                nonlocal removed
+                info = original_fstat(fd)
+                if stat.S_ISREG(info.st_mode) and not removed:
+                    target.unlink()
+                    removed = True
+                return original_fstat(fd)
+
+            diagnostics: list[dict[str, object]] = []
+            with mock.patch.object(os, "fstat", side_effect=remove_before_target_fstat):
+                measured = _safe_tree_bytes(root, diagnostics, allow_build_file_links=True)
+            self.assertTrue(removed)
+            self.assertEqual(measured, link_size)
+            self.assertFalse(any(item.get("kind") == "unsafe-file-symlink" for item in diagnostics))
+
+    def test_opt_in_deduplicates_nested_roots_without_reordering_disjoint_roots(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gw-scratch-roots-") as directory:
+            root = pathlib.Path(directory).resolve()
+            outer = root / "build"; outer.mkdir()
+            nested = outer / "v02"; nested.mkdir()
+            separate = root / "tool-cache"; separate.mkdir()
+            self.assertEqual(_deduplicate_safe_scratch_roots((separate, nested, outer)),
+                (separate.resolve(), outer.resolve()))
+
+    def test_opt_in_rejects_symlinked_root_ancestor_without_resolving_it(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gw-scratch-root-ancestor-") as directory:
+            root = pathlib.Path(directory).resolve()
+            actual = root / "actual"; actual.mkdir()
+            child = actual / "child"; child.mkdir()
+            alias = root / "alias"; alias.symlink_to(actual, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "phase7-scratch-root-invalid"):
+                _deduplicate_safe_scratch_roots((alias / "child",))
+
+    def test_bounded_client_keeps_default_strict_and_applies_internal_link_opt_in(self) -> None:
+        require_host_process_context()
+        with tempfile.TemporaryDirectory(prefix="gw-scratch-link-boundary-") as directory:
+            root = pathlib.Path(directory).resolve()
+            scratch = root / "scratch"
+            scratch.mkdir()
+            diagnostics: list[dict[str, object]] = []
+            runs: list[dict[str, object]] = []
+            limits = {"wall_seconds": 5, "cleanup_grace_seconds": 2,
+                      "max_rss_bytes": 4 * 1024**3, "max_stdout_stderr_bytes": 1024,
+                      "max_json_bytes": 1024, "max_binary_file_bytes": 1024,
+                      "max_capture_bytes": 1024, "max_scratch_bytes": 1024 * 1024,
+                      "max_retained_bytes": 1024, "max_fields": 10, "max_calls": 10}
+            code = ("import pathlib,time; r=pathlib.Path('scratch'); "+
+                "(r/'libsframe.la').write_text('static'); (r/'.libs').mkdir(); "+
+                "(r/'.libs/libsframe.la.1').symlink_to('../libsframe.la'); "+
+                "(r/'.libs/libsframe.la').symlink_to('libsframe.la.1'); time.sleep(.5)")
+            strict = _run_client(pathlib.Path(sys.executable), [sys.executable, "-c", code], runs,
+                report=root / "strict-report.json", timeout=5, cwd=root, limits=limits,
+                scratch_roots=(scratch,), scratch_diagnostics=diagnostics)
+            self.assertNotEqual(strict.returncode, 0)
+            self.assertEqual(runs[-1]["bound_violation_reason"], "phase7-scratch-tree-unsafe")
+            self.assertEqual(runs[-1]["process_group_cleanup"], "confirmed")
+
+            import shutil
+            shutil.rmtree(scratch)
+            scratch.mkdir()
+            diagnostics.clear()
+            opt_in_runs: list[dict[str, object]] = []
+            opted = _run_client(pathlib.Path(sys.executable), [sys.executable, "-c", code], opt_in_runs,
+                report=root / "opted-report.json", timeout=5, cwd=root, limits=limits,
+                scratch_roots=(scratch,), scratch_diagnostics=diagnostics,
+                allow_build_file_links=True)
+            self.assertEqual(opted.returncode, 0)
+            self.assertFalse(opt_in_runs[-1].get("bound_violation"))
+            self.assertEqual(diagnostics, [])
+
     def test_file_disappearing_after_enumeration_is_recorded_and_skipped(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gw-scratch-disappeared-") as directory:
             root = pathlib.Path(directory)
@@ -640,6 +1094,19 @@ class ScratchTreeContract(unittest.TestCase):
             diagnostics: list[dict[str, object]] = []
             self.assertIsNone(_safe_tree_bytes(root, diagnostics))
             self.assertEqual(diagnostics[0]["kind"], "hardlink-file")
+
+    def test_build_link_mode_counts_each_owned_hardlink_path_without_relaxing_default(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gw-scratch-build-hardlink-") as directory:
+            root = pathlib.Path(directory).resolve()
+            original = root / "conftestdata_t"
+            original.write_bytes(b"bounded-build-probe")
+            alias = root / "conftestdata_t.alias"
+            os.link(original, alias)
+            self.assertIsNone(_safe_tree_bytes(root),
+                "untrusted guest/default scratch accounting continues rejecting hardlinks")
+            size = original.stat().st_size
+            self.assertEqual(_safe_tree_bytes(root, allow_build_file_links=True), 2 * size,
+                "count every owned hardlink pathname in full, conservatively overcounting shared bytes")
 
     def test_special_file_stays_rejected(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gw-scratch-special-") as directory:
@@ -739,6 +1206,7 @@ def _run_client(client: pathlib.Path, command: list[str], runs: list[dict[str, o
                 limits: dict[str, object] | None = None,
                 scratch_roots: tuple[pathlib.Path, ...] = (),
                 scratch_diagnostics: list[dict[str, object]] | None = None,
+                allow_build_file_links: bool = False,
                 process_receipt_stream=None, ownership_callback=None,
                 file_size_limit_bytes: int | None = None) -> subprocess.CompletedProcess[str]:
     """Keep SIGTERM deferred until the launched child's ownership is explicit."""
@@ -780,7 +1248,9 @@ def _run_client(client: pathlib.Path, command: list[str], runs: list[dict[str, o
             cwd=cwd, env=env, retained_streams=retained_streams,
             monitored_files=monitored_files, monitored_directories=monitored_directories,
             limits=limits, scratch_roots=scratch_roots,
-            scratch_diagnostics=scratch_diagnostics, _cancellation=cancellation,
+            scratch_diagnostics=scratch_diagnostics,
+            allow_build_file_links=allow_build_file_links,
+            _cancellation=cancellation,
             _ownership_callback=record_ownership, **owned_options)
     except BaseException as error:
         error.process_receipts = runs
@@ -805,6 +1275,7 @@ def _run_client_owned(client: pathlib.Path, command: list[str], runs: list[dict[
                 limits: dict[str, object] | None = None,
                 scratch_roots: tuple[pathlib.Path, ...] = (),
                 scratch_diagnostics: list[dict[str, object]] | None = None,
+                allow_build_file_links: bool = False,
                 _cancellation: dict[str, bool] | None = None,
                 _ownership_callback=None,
                 file_size_limit_bytes: int | None = None) -> subprocess.CompletedProcess[str]:
@@ -812,6 +1283,8 @@ def _run_client_owned(client: pathlib.Path, command: list[str], runs: list[dict[
     # callers opt into these per-child limits without changing old receipts.
     if type(timeout) not in (int, float) or not math.isfinite(timeout) or timeout <= 0:
         raise ValueError("child-timeout-invalid")
+    if type(allow_build_file_links) is not bool:
+        raise ValueError("phase7-scratch-symlink-policy-invalid")
     if limits is not None:
         required = {"wall_seconds", "cleanup_grace_seconds", "max_rss_bytes",
                     "max_stdout_stderr_bytes", "max_json_bytes", "max_binary_file_bytes",
@@ -820,7 +1293,11 @@ def _run_client_owned(client: pathlib.Path, command: list[str], runs: list[dict[
         if (set(limits) != required or any(type(value) not in (int, float) or
                 not math.isfinite(value) or value <= 0 for value in limits.values())):
             raise ValueError("phase7-child-limits-invalid")
-        if not scratch_roots or any(path.is_symlink() or not path.is_dir() for path in scratch_roots):
+        if not scratch_roots:
+            raise ValueError("phase7-scratch-root-invalid")
+        if allow_build_file_links:
+            scratch_roots = _deduplicate_safe_scratch_roots(scratch_roots)
+        elif any(path.is_symlink() or not path.is_dir() for path in scratch_roots):
             raise ValueError("phase7-scratch-root-invalid")
         if scratch_diagnostics is None:
             scratch_diagnostics = []
@@ -992,7 +1469,8 @@ def _run_client_owned(client: pathlib.Path, command: list[str], runs: list[dict[
                             return
                     scratch_bytes = 0
                     for scratch_root in scratch_roots:
-                        measured = _safe_tree_bytes(scratch_root, scratch_diagnostics)
+                        measured = _safe_tree_bytes(scratch_root, scratch_diagnostics,
+                            allow_build_file_links=allow_build_file_links)
                         if measured is None:
                             if scratch_diagnostics:
                                 process_entry["scratch_tree_diagnostics"] = scratch_diagnostics[:8]
@@ -1190,14 +1668,327 @@ def _record_scratch_diagnostic(diagnostics: list[dict[str, object]] | None,
                                entry: dict[str, object]) -> None:
     # These bounded relative-path facts are private execution diagnostics, not
     # public proof fields. Keep the array small even if a child repeatedly fails.
-    if diagnostics is not None and len(diagnostics) < 8:
+    if diagnostics is None:
+        return
+    if len(diagnostics) < 8:
         diagnostics.append(entry)
+    elif entry.get("kind") == "unsafe-file-symlink":
+        for index in range(len(diagnostics) - 1, -1, -1):
+            if diagnostics[index].get("kind") != "unsafe-file-symlink":
+                diagnostics[index] = entry
+                break
+
+
+def _same_path_identity(left: os.stat_result, right: os.stat_result) -> bool:
+    return (left.st_dev, left.st_ino, left.st_mode, left.st_uid, left.st_nlink) == (
+        right.st_dev, right.st_ino, right.st_mode, right.st_uid, right.st_nlink)
+
+
+def _same_regular_file_identity(left: os.stat_result, right: os.stat_result) -> bool:
+    """Compare object identity without treating a legitimate hardlink-count change as replacement."""
+    return (left.st_dev, left.st_ino, stat.S_IFMT(left.st_mode), left.st_uid) == (
+        right.st_dev, right.st_ino, stat.S_IFMT(right.st_mode), right.st_uid)
+
+
+def _file_symlink_still_matches(parent_fd: int, name: str, expected: os.stat_result,
+                                expected_text: str) -> bool:
+    try:
+        current = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        text = os.readlink(name, dir_fd=parent_fd)
+    except OSError:
+        return False
+    return (stat.S_ISLNK(current.st_mode) and _same_path_identity(current, expected)
+        and text == expected_text and current.st_size == len(os.fsencode(text)))
+
+
+def _open_canonical_directory_nofollow(path: pathlib.Path) -> int:
+    nofollow = getattr(os, "O_NOFOLLOW", None)
+    directory = getattr(os, "O_DIRECTORY", None)
+    if nofollow is None or directory is None or os.open not in os.supports_dir_fd:
+        raise OSError(errno.ENOTSUP, "no-follow directory traversal unavailable")
+    path = pathlib.Path(os.path.abspath(path))
+    if not path.is_absolute():
+        raise OSError(errno.EINVAL, "directory path must be absolute")
+    fd = os.open(os.sep, os.O_RDONLY | directory | nofollow)
+    try:
+        for component in path.parts[1:]:
+            if component in ("", ".", "..") or len(os.fsencode(component)) > 255:
+                raise OSError(errno.EINVAL, "invalid directory path component")
+            child = os.open(component, os.O_RDONLY | directory | nofollow, dir_fd=fd)
+            info = os.fstat(child)
+            if not stat.S_ISDIR(info.st_mode):
+                os.close(child)
+                raise OSError(errno.ENOTDIR, "directory component changed")
+            os.close(fd)
+            fd = child
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def _open_internal_file_symlink_target(root_fd: int, root: pathlib.Path,
+        link_path: pathlib.Path, expected_link: os.stat_result) -> str | None:
+    """Resolve bounded file-link chains through no-follow directory descriptors."""
+    nofollow = getattr(os, "O_NOFOLLOW", None)
+    directory = getattr(os, "O_DIRECTORY", None)
+    if nofollow is None or directory is None or os.open not in os.supports_dir_fd:
+        return "target-invalid"
+    stack: list[int] = []
+    observed_links: list[tuple[int, str, os.stat_result, str]] = []
+    target_fd = None
+    try:
+        stack.append(os.dup(root_fd))
+        parent_parts = link_path.parent.relative_to(root).parts
+        if len(parent_parts) > 128:
+            return "target-components-invalid"
+        for part in parent_parts:
+            if part in ("", ".", "..") or len(os.fsencode(part)) > 255:
+                return "target-parent-invalid"
+            child = os.open(part, os.O_RDONLY | directory | nofollow, dir_fd=stack[-1])
+            info = os.fstat(child)
+            if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+                os.close(child)
+                return "target-parent-invalid"
+            stack.append(child)
+        name = link_path.name
+        initial_link = os.stat(name, dir_fd=stack[-1], follow_symlinks=False)
+        initial_text = os.readlink(name, dir_fd=stack[-1])
+        if (not stat.S_ISLNK(initial_link.st_mode) or not _same_path_identity(initial_link, expected_link)):
+            return "link-identity-changed"
+        if (not initial_text or len(os.fsencode(initial_text)) > 4096
+                or "\x00" in initial_text or initial_link.st_size != len(os.fsencode(initial_text))
+                or initial_link.st_uid != os.getuid() or initial_link.st_nlink != 1):
+            return "link-text-invalid"
+        observed_links.append((os.dup(stack[-1]), name, initial_link, initial_text))
+        seen_links = {(initial_link.st_dev, initial_link.st_ino)}
+        component_count = len(parent_parts)
+        text_bytes = 0
+        pending: list[str] = []
+
+        def unchanged_links() -> bool:
+            return all(_file_symlink_still_matches(parent_fd, link_name, link_info, link_text)
+                for parent_fd, link_name, link_info, link_text in observed_links)
+
+        def target_parts(text: str) -> tuple[list[str] | None, bool]:
+            nonlocal component_count, text_bytes
+            encoded = os.fsencode(text)
+            text_bytes += len(encoded)
+            if text_bytes > 4096:
+                return None, False
+            if os.path.isabs(text):
+                root_text = os.fspath(root).rstrip(os.sep) or os.sep
+                if root_text == os.sep:
+                    suffix = text.lstrip(os.sep)
+                elif text == root_text:
+                    suffix = ""
+                elif text.startswith(root_text + os.sep):
+                    suffix = text[len(root_text) + 1:]
+                else:
+                    return None, False
+                return suffix.split(os.sep) if suffix else [], True
+            return text.split(os.sep), False
+
+        def checked_components(parts: list[str]) -> bool:
+            nonlocal component_count
+            component_count += len(parts)
+            return (component_count <= 128 and all(part != "" for part in parts)
+                and all(len(os.fsencode(part)) <= 255 for part in parts))
+
+        def contained_from(parts: list[str], absolute: bool) -> bool:
+            depth = 0 if absolute else len(stack) - 1
+            for part in parts:
+                if part == "..":
+                    if depth == 0:
+                        return False
+                    depth -= 1
+                elif part not in ("", "."):
+                    depth += 1
+            return True
+
+        initial_parts, absolute = target_parts(initial_text)
+        if initial_parts is None:
+            return "target-outside-root" if text_bytes <= 4096 else "target-components-invalid"
+        if not checked_components(initial_parts):
+            return "target-components-invalid"
+        if not contained_from(initial_parts, absolute):
+            return "target-outside-root"
+        if absolute:
+            for fd in stack:
+                os.close(fd)
+            stack = [os.dup(root_fd)]
+        pending = initial_parts
+
+        while pending:
+            part = pending.pop(0)
+            if part == ".":
+                if not pending:
+                    return "target-not-regular"
+                continue
+            if part == "..":
+                if len(stack) == 1:
+                    return "target-outside-root"
+                os.close(stack.pop())
+                if not pending:
+                    return "target-not-regular"
+                continue
+
+            try:
+                info = os.stat(part, dir_fd=stack[-1], follow_symlinks=False)
+            except FileNotFoundError:
+                return None if unchanged_links() else "link-identity-changed"
+
+            if stat.S_ISLNK(info.st_mode):
+                if pending:
+                    return "target-parent-invalid"
+                try:
+                    link_text = os.readlink(part, dir_fd=stack[-1])
+                except FileNotFoundError:
+                    return None if unchanged_links() else "link-identity-changed"
+                if (info.st_uid != os.getuid() or info.st_nlink != 1 or not link_text
+                        or len(os.fsencode(link_text)) != info.st_size or "\x00" in link_text):
+                    return "link-text-invalid"
+                identity = (info.st_dev, info.st_ino)
+                if identity in seen_links:
+                    return "target-symlink-rejected"
+                seen_links.add(identity)
+                nested_parts, nested_absolute = target_parts(link_text)
+                if nested_parts is None:
+                    return "target-components-invalid" if text_bytes > 4096 else "target-outside-root"
+                if not checked_components(nested_parts):
+                    return "target-components-invalid"
+                if not contained_from(nested_parts, nested_absolute):
+                    return "target-outside-root"
+                observed_links.append((os.dup(stack[-1]), part, info, link_text))
+                if nested_absolute:
+                    for fd in stack:
+                        os.close(fd)
+                    stack = [os.dup(root_fd)]
+                pending = nested_parts
+                if not pending:
+                    return "target-not-regular"
+                continue
+
+            if stat.S_ISDIR(info.st_mode):
+                if not pending:
+                    return "target-not-regular"
+                try:
+                    child = os.open(part, os.O_RDONLY | directory | nofollow, dir_fd=stack[-1])
+                except FileNotFoundError:
+                    return None if unchanged_links() else "link-identity-changed"
+                child_info = os.fstat(child)
+                if (not stat.S_ISDIR(child_info.st_mode) or child_info.st_uid != os.getuid()
+                        or not _same_regular_file_identity(info, child_info)):
+                    os.close(child)
+                    return "target-parent-invalid"
+                stack.append(child)
+                continue
+
+            if not stat.S_ISREG(info.st_mode):
+                return "target-not-regular"
+            if info.st_uid != os.getuid():
+                return "target-owner-invalid"
+            if pending:
+                return "target-not-regular" if all(part == "." for part in pending) \
+                    else "target-parent-invalid"
+            try:
+                target_fd = os.open(part, os.O_RDONLY | nofollow | getattr(os, "O_NONBLOCK", 0),
+                    dir_fd=stack[-1])
+            except FileNotFoundError:
+                return None if unchanged_links() else "link-identity-changed"
+            target_info = os.fstat(target_fd)
+            if not stat.S_ISREG(target_info.st_mode) or target_info.st_uid != os.getuid():
+                return "target-owner-invalid" if target_info.st_uid != os.getuid() else "target-not-regular"
+            if not _same_regular_file_identity(info, target_info):
+                return "target-identity-changed"
+            try:
+                final_target = os.stat(part, dir_fd=stack[-1], follow_symlinks=False)
+            except FileNotFoundError:
+                return None if unchanged_links() else "link-identity-changed"
+            if not stat.S_ISREG(final_target.st_mode) or final_target.st_uid != os.getuid():
+                return "target-owner-invalid" if final_target.st_uid != os.getuid() else "target-not-regular"
+            if not _same_regular_file_identity(final_target, target_info):
+                return "target-identity-changed"
+            return None if unchanged_links() else "link-identity-changed"
+
+        return "target-not-regular"
+    except OSError as error:
+        if error.errno == errno.ELOOP:
+            return "target-symlink-rejected"
+        if error.errno == errno.ENOTDIR:
+            return "target-parent-invalid"
+        return "target-invalid"
+    except (ValueError, TypeError):
+        return "target-invalid"
+    finally:
+        for parent_fd, _, _, _ in observed_links:
+            try:
+                os.close(parent_fd)
+            except OSError:
+                pass
+        if target_fd is not None:
+            try:
+                os.close(target_fd)
+            except OSError:
+                pass
+        for fd in stack:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+
+def _deduplicate_safe_scratch_roots(roots: tuple[pathlib.Path, ...]) -> tuple[pathlib.Path, ...]:
+    candidates: list[pathlib.Path] = []
+    for raw in roots:
+        raw_path = pathlib.Path(os.path.abspath(raw))
+        try:
+            raw_info = raw_path.lstat()
+            if stat.S_ISLNK(raw_info.st_mode) or not stat.S_ISDIR(raw_info.st_mode):
+                raise ValueError("phase7-scratch-root-invalid")
+            path = raw_path
+            parts = path.parts
+            current = pathlib.Path(parts[0])
+            for part in parts[1:]:
+                current = current / part
+                info = current.lstat()
+                if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+                    raise ValueError("phase7-scratch-root-invalid")
+            info = path.lstat()
+        except OSError as error:
+            raise ValueError("phase7-scratch-root-invalid") from error
+        if (info.st_uid != os.getuid() or (info.st_dev, info.st_ino) !=
+                (raw_info.st_dev, raw_info.st_ino)):
+            raise ValueError("phase7-scratch-root-invalid")
+        if path not in candidates:
+            candidates.append(path)
+    normalized = [path for path in candidates
+        if not any(path != other and other in path.parents for other in candidates)]
+    if not normalized:
+        raise ValueError("phase7-scratch-root-invalid")
+    return tuple(normalized)
 
 
 def _safe_tree_bytes(root: pathlib.Path,
-                     diagnostics: list[dict[str, object]] | None = None) -> int | None:
+                     diagnostics: list[dict[str, object]] | None = None, *,
+                     allow_build_file_links: bool = False) -> int | None:
+    """Count scratch paths; explicit trusted-build mode counts owned hardlinks per pathname."""
     total = 0
+    root_fd = None
     try:
+        root = pathlib.Path(os.path.abspath(root))
+        if allow_build_file_links:
+            root_info = root.lstat()
+            if (not stat.S_ISDIR(root_info.st_mode) or root_info.st_uid != os.getuid()):
+                _record_scratch_diagnostic(diagnostics, {"kind": "scratch-root-invalid", "path": "."})
+                return None
+            root_fd = _open_canonical_directory_nofollow(root)
+            opened_root = os.fstat(root_fd)
+            if (not stat.S_ISDIR(opened_root.st_mode)
+                    or (opened_root.st_dev, opened_root.st_ino, opened_root.st_mode, opened_root.st_uid)
+                    != (root_info.st_dev, root_info.st_ino, root_info.st_mode, root_info.st_uid)):
+                _record_scratch_diagnostic(diagnostics, {"kind": "scratch-root-invalid", "path": "."})
+                return None
         for current, directories, files in os.walk(root, followlinks=False):
             current_path = pathlib.Path(current)
             if current_path.is_symlink():
@@ -1225,7 +2016,28 @@ def _safe_tree_bytes(root: pathlib.Path,
                         "errno": error.errno, "error_type": type(error).__name__})
                     return None
                 regular_file = stat.S_ISREG(info.st_mode)
-                if not regular_file or info.st_nlink != 1 or info.st_uid != os.getuid():
+                if stat.S_ISLNK(info.st_mode) and allow_build_file_links:
+                    failure_reason = ("target-invalid" if root_fd is None or info.st_nlink != 1
+                        or info.st_uid != os.getuid() else
+                        _open_internal_file_symlink_target(root_fd, root, path, info))
+                    if failure_reason is not None:
+                        try:
+                            path.lstat()
+                        except FileNotFoundError as error:
+                            _record_scratch_diagnostic(diagnostics, {
+                                "kind": "path-disappeared-during-scan",
+                                "path": _scratch_relative_path(root, path), "errno": error.errno})
+                            continue
+                        except OSError:
+                            pass
+                        _record_scratch_diagnostic(diagnostics, {
+                            "kind": "unsafe-file-symlink", "path": _scratch_relative_path(root, path),
+                            "reason": failure_reason})
+                        return None
+                    total += info.st_size
+                    continue
+                if (not regular_file or info.st_uid != os.getuid()
+                        or (info.st_nlink != 1 and not allow_build_file_links)):
                     if stat.S_ISLNK(info.st_mode):
                         kind = "symlink-file"
                     elif not regular_file:
@@ -1244,6 +2056,12 @@ def _safe_tree_bytes(root: pathlib.Path,
             "kind": "scan-oserror", "path": _scratch_relative_path(root, getattr(error, "filename", root)),
             "errno": error.errno, "error_type": type(error).__name__})
         return None
+    finally:
+        if root_fd is not None:
+            try:
+                os.close(root_fd)
+            except OSError:
+                pass
     return total
 
 
