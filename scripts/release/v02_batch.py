@@ -2714,16 +2714,792 @@ def phase7_window_authorized_initial_predecessor(root: Path,
     return expected
 
 
+def phase7_window_authorized_attempt2_predecessor(root: Path,
+        window: dict[str, Any], predecessor: Any) -> dict[str, Any]:
+    """Reopen the spent attempt-1 failure before admitting attempt 2.
+
+    This consumes only the concrete same-window terminal bundle. It does not
+    turn the failed qualification into credit or make its claim reusable.
+    """
+    label = "phase7-window-authorized-attempt2-predecessor-invalid"
+    root = Path(os.path.abspath(root)).resolve(strict=True)
+    profile_id, profile = _phase7_window_profile(window)
+    if profile_id != "authorized-run":
+        raise ValueError(label)
+    window_module = _phase7_window_module()
+    current = window_module.load_authorized_window(root,
+        authority_path=profile["authority_path"],
+        authority_sha256=profile["authority_sha256"],
+        scope_path=profile["scope_path"], scope_sha256=profile["scope_sha256"])
+    if current != window:
+        raise ValueError(label)
+    remaining = window_module.check_window(current, phase="runtime")["remaining_seconds"]
+    git_deadline = time.monotonic() + max(0.0, float(remaining) - 45.0)
+    if git_deadline <= time.monotonic():
+        raise ValueError(label)
+
+    attempt_namespace = _safe_relative(current["authority"].get("attempt_namespace"), label)
+    prior_root = attempt_namespace / "attempt-0001"
+    bundle_path = prior_root / "operator/closed-full-failure-bundle.json"
+    expected_terminal_path = bundle_path.as_posix()
+    if (not isinstance(predecessor, dict) or set(predecessor) != {
+            "attempt_index", "attempt_root", "terminal", "status",
+            "qualification_accepted", "local_cleanup"}
+            or predecessor.get("attempt_index") != 1
+            or predecessor.get("attempt_root") != prior_root.as_posix()
+            or predecessor.get("status") != "settled-full-qualification-failure"
+            or predecessor.get("qualification_accepted") is not False
+            or predecessor.get("local_cleanup") != "settled"
+            or not isinstance(predecessor.get("terminal"), dict)
+            or set(predecessor["terminal"]) != {"path", "sha256"}
+            or predecessor["terminal"].get("path") != expected_terminal_path
+            or not re.fullmatch(r"[0-9a-f]{64}", str(predecessor["terminal"].get("sha256", "")))):
+        raise ValueError(label)
+    bundle, bundle_raw = _phase7_window_read_json_reference(root,
+        predecessor["terminal"], label=label, cap=4 * 1024 * 1024)
+    if (bundle.get("schema") != "genewhip.phase7-settled-attempt-bundle.v1"
+            or set(bundle) != {"schema", "attempt_index", "attempt_root", "records",
+                "external_attempts", "process_receipts", "qualification_credit",
+                "release_credit", "not_retry_admission"}
+            or bundle.get("attempt_index") != 1
+            or bundle.get("attempt_root") != prior_root.as_posix()
+            or bundle.get("qualification_credit") is not False
+            or bundle.get("release_credit") is not False
+            or bundle.get("not_retry_admission") is not True):
+        raise ValueError(label)
+
+    record_names = {"authority", "candidate_payload", "claim", "failure",
+        "hosted_argv", "hosted_controller", "hosted_exit", "hosted_started",
+        "journal", "policy", "preparation", "prepare_argv", "prepare_controller",
+        "prepare_exit", "prepare_started", "public_admission", "scope",
+        "source_admission", "source_payload", "terminal_jobs",
+        "terminal_observation", "terminal_run", "window_close"}
+    records = bundle.get("records")
+    if not isinstance(records, dict) or set(records) != record_names:
+        raise ValueError(label)
+    authority_path = _safe_relative(Path(profile["authority_path"]).as_posix(), label)
+    scope_path = _safe_relative(Path(profile["scope_path"]).as_posix(), label)
+    settlement = prior_root / "operator/qualification-settlement"
+    fixed_paths = {
+        "authority": authority_path,
+        "scope": scope_path,
+        "source_admission": prior_root / "source-admission.json",
+        "public_admission": prior_root / "public-admission.json",
+        "source_payload": prior_root / "source-review-payload.json",
+        "candidate_payload": prior_root / "candidate-review-payload.json",
+        "claim": prior_root / "dispatch-claim.json",
+        "failure": prior_root / "failure.json",
+        "journal": prior_root / "hosted-delivery-journal.json",
+        "preparation": prior_root / "candidate/preparation.json",
+        "policy": Path("PLACEHOLDER"),
+        "prepare_argv": prior_root / "operator/prepare-argv-v3.json",
+        "prepare_controller": prior_root / "operator/prepare-argv-v3-controller.json",
+        "prepare_started": prior_root / "operator/prepare-argv-v3-started.json",
+        "prepare_exit": prior_root / "operator/prepare-argv-v3-exit.json",
+        "hosted_argv": prior_root / "operator/hosted-argv.json",
+        "hosted_controller": prior_root / "operator/hosted-argv-controller.json",
+        "hosted_started": prior_root / "operator/hosted-argv-started.json",
+        "hosted_exit": prior_root / "operator/hosted-argv-exit.json",
+        "terminal_run": settlement / "initial-run.json",
+        "terminal_jobs": settlement / "terminal-jobs.json",
+        "terminal_observation": settlement / "terminal-observation.json",
+        "window_close": Path(current["authority_path"]).parent / "operator/window-close-observation.json",
+    }
+
+    def read_record(name: str, expected: Path | None = None, *, cap: int = MAX_ADMISSION_BYTES):
+        reference = records.get(name)
+        if not isinstance(reference, dict) or set(reference) != {"path", "sha256"}:
+            raise ValueError(label)
+        relative = _safe_relative(reference.get("path"), label)
+        if expected is not None and relative != expected:
+            raise ValueError(label)
+        if name not in {"authority", "scope", "window_close"} \
+                and relative.parts[:len(prior_root.parts)] != prior_root.parts:
+            raise ValueError(label)
+        value, raw = _phase7_window_read_json_reference(root, reference,
+            label=label, cap=cap)
+        return value, raw, reference
+
+    # The candidate policy path is itself admission-bound, but remains inside
+    # this attempt's candidate directory.
+    public_admission, public_raw, _ = read_record("public_admission", fixed_paths["public_admission"])
+    candidate = public_admission.get("candidate") if isinstance(public_admission, dict) else None
+    if not isinstance(candidate, dict):
+        raise ValueError(label)
+    policy_path = _safe_relative(candidate.get("repository_policy_path"), label)
+    if policy_path.parent.parent != prior_root / "candidate":
+        raise ValueError(label)
+    fixed_paths["policy"] = policy_path
+
+    loaded = {}
+    for name, expected_path in fixed_paths.items():
+        loaded[name] = read_record(name, expected_path,
+            cap=MAX_CANDIDATE_BYTES if name in {"preparation", "policy"}
+            else MAX_CONNECTOR_CAPTURE_BYTES if name in {"terminal_run", "terminal_jobs"}
+            else MAX_ADMISSION_BYTES)
+    authority = loaded["authority"][0]
+    scope = loaded["scope"][0]
+    source = loaded["source_admission"][0]
+    source_raw = loaded["source_admission"][1]
+    public_admission, public_raw = loaded["public_admission"][:2]
+    source_payload = loaded["source_payload"][0]
+    candidate_payload = loaded["candidate_payload"][0]
+    preparation, preparation_raw = loaded["preparation"][:2]
+    policy, policy_raw = loaded["policy"][:2]
+    claim = loaded["claim"][0]
+    failure = loaded["failure"][0]
+    journal = loaded["journal"][0]
+    source_head = source.get("source_head") if isinstance(source, dict) else None
+    scope_sha = profile["scope_sha256"]
+    authority_sha = profile["authority_sha256"]
+    if (not isinstance(source_head, str) or re.fullmatch(r"[0-9a-f]{40}", source_head) is None
+            or authority.get("schema") != "genewhip.phase7-execution-window.v1"
+            or scope != current.get("scope")
+            or source.get("attempt_index") != 1
+            or source.get("attempt_root") != prior_root.as_posix()
+            or source.get("batch_root") != prior_root.as_posix()
+            or source.get("authorization_path") != authority_path.as_posix()
+            or source.get("authorization_sha256") != authority_sha
+            or source.get("scope_path") != scope_path.as_posix()
+            or source.get("scope_sha256") != scope_sha
+            or source.get("schema") != SCHEMA
+            or source.get("status") != "source-preparation"
+            or public_admission.get("attempt_index") != 1
+            or public_admission.get("attempt_root") != prior_root.as_posix()
+            or public_admission.get("batch_root") != prior_root.as_posix()
+            or public_admission.get("authorization_path") != authority_path.as_posix()
+            or public_admission.get("authorization_sha256") != authority_sha
+            or public_admission.get("scope_path") != scope_path.as_posix()
+            or public_admission.get("scope_sha256") != scope_sha
+            or public_admission.get("schema") != SCHEMA
+            or public_admission.get("status") != "public-effects"):
+        raise ValueError(label)
+
+    common = ("schema", "authorization_path", "authorization_sha256", "scope_path",
+        "scope_sha256", "batch_root", "attempt_index", "attempt_root", "predecessor",
+        "disposition", "started_at", "source_head", "source_pins",
+        "source_payload_sha256", "source_reviews")
+    if (any(source.get(key) != public_admission.get(key) for key in common)
+            or not isinstance(source.get("source_pins"), dict)
+            or not isinstance(source.get("source_reviews"), dict)
+            or set(source["source_reviews"]) != set(SOURCE_ROLES)):
+        raise ValueError(label)
+    initial_predecessor = phase7_window_authorized_initial_predecessor(root, current)
+    if source.get("predecessor") != initial_predecessor:
+        raise ValueError(label)
+    expected_source_payload = phase7_window_source_admission_payload(
+        attempt_root=prior_root.as_posix(), attempt_index=1,
+        predecessor=initial_predecessor, disposition=source["disposition"],
+        source_head=source_head, source_pins=source["source_pins"], window=current)
+    source_payload_sha = _digest(_canonical(expected_source_payload))
+    if (source_payload != expected_source_payload
+            or source.get("source_payload_sha256") != source_payload_sha):
+        raise ValueError(label)
+    for key, role in SOURCE_ROLES.items():
+        _check_review(root, source["source_reviews"].get(key), role=role,
+            payload_sha256=source_payload_sha)
+
+    candidate_keys = {"candidate_payload_sha256", "candidate_reviews", "preparation_path",
+        "preparation_sha256", "public_base", "public_head", "public_tree",
+        "publication_path", "repository_policy_path", "repository_policy_sha256",
+        "source_manifest_sha256"}
+    if (not isinstance(candidate, dict) or set(candidate) != candidate_keys
+            or not isinstance(candidate.get("candidate_reviews"), dict)
+            or set(candidate["candidate_reviews"]) != set(CANDIDATE_ROLES)):
+        raise ValueError(label)
+    expected_candidate_payload = candidate_review_payload(expected_source_payload, candidate)
+    candidate_payload_sha = _digest(_canonical(expected_candidate_payload))
+    if (candidate_payload != expected_candidate_payload
+            or candidate.get("candidate_payload_sha256") != candidate_payload_sha
+            or candidate.get("preparation_path") != (prior_root / "candidate/preparation.json").as_posix()
+            or candidate.get("preparation_sha256") != _digest(preparation_raw)
+            or candidate.get("repository_policy_sha256") != _digest(policy_raw)
+            or candidate.get("source_manifest_sha256") != preparation.get("source_manifest_sha256")
+            or candidate.get("repository_policy_path") != policy_path.as_posix()
+            or candidate.get("publication_path") != (prior_root / "candidate/publication-copy").as_posix()
+            or preparation.get("status") != "prepared"
+            or preparation.get("mutations_performed") != 0
+            or preparation.get("workflow_dispatched") is not False
+            or preparation.get("push_performed") is not False
+            or preparation.get("pull_request_opened") is not False
+            or preparation.get("blockers") != []
+            or preparation.get("source_identity", {}).get("private_git_head") != source_head
+            or policy.get("repository") != "szTheory/genewhip"
+            or policy.get("mutations_performed") != 0
+            or policy.get("repository_observations", {}).get("ready") is not True
+            or policy.get("privacy_scan", {}).get("publication_copy", {}).get("status") != "pass"
+            or policy.get("privacy_scan", {}).get("publication_copy", {}).get("findings") != []):
+        raise ValueError(label)
+    for key, role in CANDIDATE_ROLES.items():
+        _check_review(root, candidate["candidate_reviews"].get(key), role=role,
+            payload_sha256=candidate_payload_sha)
+
+    if (claim.get("schema") != "genewhip.phase7-execution-window-dispatch-claim.v1"
+            or claim.get("attempt_index") != 1
+            or claim.get("attempt_root") != prior_root.as_posix()
+            or claim.get("authorization_sha256") != authority_sha
+            or claim.get("scope_sha256") != scope_sha
+            or claim.get("admission_sha256") != _digest(public_raw)
+            or claim.get("source_payload_sha256") != source_payload_sha
+            or claim.get("started_at") != current.get("started_at")
+            or not re.fullmatch(r"[0-9a-f]{32}", str(claim.get("nonce", "")))
+            or journal.get("schema") != "genewhip.v02-delivery-journal.v1"
+            or journal.get("repository") != "szTheory/genewhip"
+            or journal.get("started_at") != current.get("started_at")
+            or journal.get("qualification_started_at") != current.get("started_at")
+            or journal.get("qualification_dispatch_nonce") != claim.get("nonce")
+            or journal.get("qualification_dispatch_requested") is not True
+            or journal.get("qualification_dispatch_submitted") is not True
+            or journal.get("push_performed") is not True
+            or failure.get("schema") != "genewhip.phase7-execution-window-attempt-failure.v1"
+            or failure.get("attempt_index") != 1
+            or failure.get("attempt_root") != prior_root.as_posix()
+            or failure.get("authorization_sha256") != authority_sha
+            or failure.get("scope_sha256") != scope_sha
+            or failure.get("stage") != "qualification"
+            or failure.get("reason") != "fresh-batch-qualification-failed"):
+        raise ValueError(label)
+
+    run, run_raw, _ = loaded["terminal_run"]
+    jobs_doc, jobs_raw, _ = loaded["terminal_jobs"]
+    observation = loaded["terminal_observation"][0]
+    qualification_id = run.get("id") if isinstance(run, dict) else None
+    nonce = claim.get("nonce")
+    source_sha = journal.get("public_source_sha")
+    public_head, public_base, public_tree = (candidate.get("public_head"),
+        candidate.get("public_base"), candidate.get("public_tree"))
+    if (journal.get("candidate_sha") != public_head
+            or journal.get("source_head") != public_head
+            or journal.get("public_base_sha") != public_base
+            or journal.get("tree_sha") != public_tree
+            or journal.get("merge_strategy") != "squash"
+            or journal.get("merge_parents") != [public_base]
+            or journal.get("branch") != "v0.2-source-" + public_head[:12]
+            or not isinstance(source_sha, str) or re.fullmatch(r"[0-9a-f]{40}", source_sha) is None
+            or observation.get("schema") != "genewhip.phase7-execution-window-full-terminal-observation.v1"
+            or observation.get("status") != "completed"
+            or observation.get("conclusion") != "failure"
+            or observation.get("claim_preserved") is not True
+            or observation.get("cancel_issued_by_this_close") is not False
+            or observation.get("not_retry_admission") is not True
+            or observation.get("qualification_credit") is not False
+            or observation.get("source_sha") != source_sha
+            or observation.get("run_id") != qualification_id
+            or observation.get("run_attempt") != run.get("run_attempt")
+            or observation.get("remote_jobs_terminal") is not True
+            or observation.get("remote_job_count") != len(NATIVE_HOST_RUNTIME_OUTCOMES)
+            or run.get("status") != "completed" or run.get("conclusion") != "failure"
+            or run.get("event") != "workflow_dispatch"
+            or run.get("head_branch") != "main" or run.get("head_sha") != source_sha
+            or run.get("path", "").split("@", 1)[0] != ".github/workflows/ci.yml"
+            or run.get("repository", {}).get("full_name") != "szTheory/genewhip"
+            or run.get("display_title") != "Plan10 qualification " + nonce
+            or run.get("head_commit", {}).get("id") != source_sha
+            or run.get("head_commit", {}).get("tree_id") != public_tree):
+        raise ValueError(label)
+    jobs = jobs_doc.get("jobs") if isinstance(jobs_doc, dict) else None
+    if (not isinstance(jobs, list) or len(jobs) != len(NATIVE_HOST_RUNTIME_OUTCOMES)
+            or jobs_doc.get("total_count") != len(NATIVE_HOST_RUNTIME_OUTCOMES)):
+        raise ValueError(label)
+    observed_jobs = {}
+    for job in jobs:
+        if (not isinstance(job, dict) or type(job.get("id")) is not int
+                or job.get("run_id") != qualification_id
+                or job.get("run_attempt") != run.get("run_attempt")
+                or job.get("head_sha") != source_sha or job.get("head_branch") != "main"
+                or job.get("status") != "completed"
+                or job.get("name") not in NATIVE_HOST_RUNTIME_OUTCOMES
+                or job.get("conclusion") != NATIVE_HOST_RUNTIME_OUTCOMES[job["name"]]
+                or job["name"] in observed_jobs):
+            raise ValueError(label)
+        observed_jobs[job["name"]] = job["conclusion"]
+    if observed_jobs != NATIVE_HOST_RUNTIME_OUTCOMES:
+        raise ValueError(label)
+    obs_refs = observation.get("refs")
+    terminal_dir = prior_root / "operator/qualification-settlement"
+    if (not isinstance(obs_refs, dict) or set(obs_refs) != {"initial-run.json", "terminal-jobs.json"}
+            or obs_refs.get("initial-run.json") != {"bytes": len(run_raw),
+                "path": (terminal_dir / "initial-run.json").as_posix(),
+                "sha256": _digest(run_raw)}
+            or obs_refs.get("terminal-jobs.json") != {"bytes": len(jobs_raw),
+                "path": (terminal_dir / "terminal-jobs.json").as_posix(),
+                "sha256": _digest(jobs_raw)}):
+        raise ValueError(label)
+    claim_time = _utc(claim.get("claimed_at"))
+    run_created = _utc(run.get("created_at"))
+    run_started = _utc(run.get("run_started_at"))
+    run_updated = _utc(run.get("updated_at"))
+    observation_time = _utc(observation.get("observed_at"))
+    if (claim_time < _utc(current["started_at"])
+            or run_created < claim_time or run_started < run_created
+            or run_updated < run_started or observation_time < run_updated):
+        raise ValueError(label)
+
+    # Reopen both archived source provenance and its complete publication roster
+    # against the immutable Git commit; current worktree bytes may have changed.
+    source_pins = source.get("source_pins")
+    tree_timeout = min(30.0, git_deadline - time.monotonic())
+    if tree_timeout <= 0:
+        raise ValueError(label)
+    try:
+        tree_result = subprocess.run(["git", "ls-tree", "-r", "-z", "--name-only", source_head],
+            cwd=root, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, timeout=tree_timeout, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        raise ValueError(label) from None
+    if tree_result.returncode != 0:
+        raise ValueError(label)
+    try:
+        tree_names = [item.decode("utf-8", "strict") for item in tree_result.stdout.split(b"\0") if item]
+    except UnicodeDecodeError:
+        raise ValueError(label) from None
+    qualification_spec = importlib.util.spec_from_file_location(
+        "gw_v02_authorized_attempt2_roster", root / "scripts/release/v02_qualification.py")
+    if qualification_spec is None or qualification_spec.loader is None:
+        raise ValueError(label)
+    qualification_module = importlib.util.module_from_spec(qualification_spec)
+    try:
+        sys.modules["gw_v02_authorized_attempt2_roster"] = qualification_module
+        qualification_spec.loader.exec_module(qualification_module)
+        expected_paths = set(qualification_module._publication_paths_from_names(root, tree_names))
+    except (OSError, ValueError, AttributeError):
+        raise ValueError(label) from None
+    finally:
+        sys.modules.pop("gw_v02_authorized_attempt2_roster", None)
+    if not isinstance(source_pins, dict) or len(source_pins) != len(expected_paths):
+        raise ValueError(label)
+    phase7_window_validate_git_blob_pins(root, source_head, source_pins,
+        expected_paths=expected_paths, deadline_monotonic=git_deadline)
+
+    # The run is on the exact merged candidate. Reopen the recorded PR/main
+    # identity and the canceled duplicate-push roster; it earns no CI credit.
+    preview = journal.get("merge_push_settlement")
+    if (not isinstance(preview, dict)
+            or preview.get("schema") != "genewhip.phase7-merge-preview-settlement.v1"
+            or preview.get("repository") != "szTheory/genewhip"
+            or preview.get("source_sha") != source_sha
+            or preview.get("candidate_sha") != public_head
+            or preview.get("pull_request") != journal.get("pull_request")
+            or preview.get("disposition") != "superseded-not-qualification-credit"
+            or preview.get("qualification_credit") is not False
+            or preview.get("cancel_requested") is not True
+            or preview.get("cancelled_by_controller") is not True
+            or preview.get("push_run_status") != "completed"
+            or preview.get("push_run_conclusion") != "cancelled"
+            or preview.get("terminal_job_count") != 16):
+        raise ValueError(label)
+    provider_refs = preview.get("provider_refs")
+    required_provider_names = ({"merge-pull-request.json", "workflow-runs-001.json",
+        "workflow-runs-002.json", "selected-run.json", "active-jobs.json",
+        "pre-cancel-run.json", "terminal-jobs.json", "main-ref-before-dispatch.json"}
+        | {f"post-cancel-run-{index:03d}.json" for index in range(1, 21)})
+    if not isinstance(provider_refs, list) or len(provider_refs) != len(required_provider_names):
+        raise ValueError(label)
+    provider_values: dict[str, Any] = {}
+    provider_paths: list[str] = []
+    preview_dir = prior_root / "merge-preview-settlement"
+    for reference in provider_refs:
+        if (not isinstance(reference, dict)
+                or set(reference) != {"bytes", "name", "path", "sha256"}
+                or type(reference.get("bytes")) is not int
+                or reference.get("name") in provider_values
+                or not isinstance(reference.get("name"), str)):
+            raise ValueError(label)
+        relative = _safe_relative(reference.get("path"), label)
+        if (relative.parent != preview_dir or relative.name != reference["name"]
+                or relative.name not in required_provider_names):
+            raise ValueError(label)
+        raw = _read_regular(_path(root, relative), cap=MAX_CONNECTOR_CAPTURE_BYTES, label=label)
+        if len(raw) != reference["bytes"] or _digest(raw) != reference.get("sha256"):
+            raise ValueError(label)
+        try:
+            provider_values[reference["name"]] = json.loads(raw)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            raise ValueError(label) from None
+        provider_paths.append(relative.as_posix())
+    if (set(provider_values) != required_provider_names
+            or len(provider_paths) != len(set(provider_paths))):
+        raise ValueError(label)
+    try:
+        preview_directory = _resolve_no_symlink(root, root / preview_dir, label=label)
+        listed_preview = []
+        for entry in preview_directory.iterdir():
+            if entry.is_symlink() or not entry.is_file():
+                raise ValueError(label)
+            listed_preview.append(entry.relative_to(root).as_posix())
+        listed_preview.sort()
+    except OSError:
+        raise ValueError(label) from None
+    if listed_preview != sorted(provider_paths + [(preview_dir / "cancel-command.json").as_posix()]):
+        raise ValueError(label)
+    preview_run_record = preview.get("run")
+    preview_run = provider_values["post-cancel-run-020.json"]
+    preview_jobs = provider_values["terminal-jobs.json"]
+    preview_pr = provider_values["merge-pull-request.json"]
+    main_ref = provider_values["main-ref-before-dispatch.json"]
+    run_id_text = preview_run_record.get("run_id") if isinstance(preview_run_record, dict) else None
+    run_attempt = preview_run_record.get("run_attempt") if isinstance(preview_run_record, dict) else None
+    if (not isinstance(run_id_text, str) or re.fullmatch(r"[0-9]{1,12}", run_id_text) is None):
+        raise ValueError(label)
+    run_id = int(run_id_text)
+    if (not isinstance(preview_run, dict) or not isinstance(preview_jobs, dict)
+            or not isinstance(preview_pr, dict) or not isinstance(main_ref, dict)
+            or type(run_attempt) is not int
+            or preview_run.get("id") != run_id
+            or preview_run.get("run_attempt") != run_attempt
+            or preview_run.get("status") != "completed"
+            or preview_run.get("conclusion") != "cancelled"
+            or preview_run.get("event") != "push"
+            or preview_run.get("head_sha") != source_sha
+            or preview_run.get("head_branch") != "main"
+            or preview_run.get("path", "").split("@", 1)[0] != ".github/workflows/ci.yml"
+            or preview_run.get("repository", {}).get("full_name") != "szTheory/genewhip"
+            or preview_jobs.get("total_count") != 16
+            or not isinstance(preview_jobs.get("jobs"), list)
+            or len(preview_jobs["jobs"]) != 16
+            or preview_pr.get("number") != int(journal.get("pull_request"))
+            or preview_pr.get("state") != "closed" or preview_pr.get("merged") is not True
+            or preview_pr.get("merge_commit_sha") != source_sha
+            or preview_pr.get("head", {}).get("sha") != public_head
+            or preview_pr.get("base", {}).get("sha") != public_base
+            or main_ref.get("ref") != "refs/heads/main"
+            or main_ref.get("object", {}).get("sha") != source_sha
+            or preview.get("source_sha") != source_sha
+            or preview.get("main_sha_before_dispatch") != source_sha):
+        raise ValueError(label)
+    action_refs = preview.get("controller_action_refs")
+    if (not isinstance(action_refs, list) or len(action_refs) != 1
+            or not isinstance(action_refs[0], dict)
+            or set(action_refs[0]) != {"bytes", "name", "path", "sha256"}
+            or action_refs[0].get("name") != "cancel-command.json"
+            or Path(action_refs[0].get("path", "")).parent != preview_dir):
+        raise ValueError(label)
+    cancel_ref = action_refs[0]
+    cancel_raw = _read_regular(_path(root, _safe_relative(cancel_ref["path"], label)),
+        cap=MAX_CONNECTOR_CAPTURE_BYTES, label=label)
+    if len(cancel_raw) != cancel_ref["bytes"] or _digest(cancel_raw) != cancel_ref["sha256"]:
+        raise ValueError(label)
+    cancel_doc = _json_object(cancel_raw, label)
+    if (cancel_doc.get("argv") != ["gh", "run", "cancel", str(run_id), "--repo", "szTheory/genewhip"]
+            or cancel_doc.get("returncode") != 0):
+        raise ValueError(label)
+    q_spec = importlib.util.spec_from_file_location(
+        "gw_v02_authorized_attempt2_preview", root / "scripts/release/v02_qualification.py")
+    if q_spec is None or q_spec.loader is None:
+        raise ValueError(label)
+    q_module = importlib.util.module_from_spec(q_spec)
+    try:
+        sys.modules["gw_v02_authorized_attempt2_preview"] = q_module
+        q_spec.loader.exec_module(q_module)
+        q_module._phase7_window_push_jobs(preview_jobs, run_id=run_id,
+            run_attempt=run_attempt, state="cancelled-aggregate",
+            controller_cancel_confirmed=True, profile_id="authorized-run")
+    except (OSError, ValueError, AttributeError):
+        raise ValueError(label) from None
+    finally:
+        sys.modules.pop("gw_v02_authorized_attempt2_preview", None)
+
+    hosted_argv, hosted_argv_raw, _ = loaded["hosted_argv"]
+    hosted_controller = loaded["hosted_controller"][0]
+    hosted_started = loaded["hosted_started"][0]
+    hosted_exit = loaded["hosted_exit"][0]
+    prepare_argv, prepare_argv_raw, _ = loaded["prepare_argv"]
+    prepare_controller = loaded["prepare_controller"][0]
+    prepare_started = loaded["prepare_started"][0]
+    prepare_exit = loaded["prepare_exit"][0]
+    expected_window_receipt = {
+        "authority_path": authority_path.as_posix(),
+        "authority_sha256": authority_sha,
+        "scope_path": scope_path.as_posix(),
+        "scope_sha256": scope_sha,
+        "started_at": current["started_at"],
+        "runtime_cutoff": current["runtime_cutoff"],
+        "global_cutoff": current["global_cutoff"],
+    }
+    if (not isinstance(hosted_argv, list) or not isinstance(prepare_argv, list)
+            or hosted_started.get("argv_sha256") != _digest(hosted_argv_raw)
+            or hosted_exit.get("argv_sha256") != _digest(hosted_argv_raw)
+            or prepare_started.get("argv_sha256") != _digest(prepare_argv_raw)
+            or prepare_exit.get("argv_sha256") != _digest(prepare_argv_raw)
+            or hosted_started.get("source_head") != source_head
+            or hosted_exit.get("source_head") != source_head
+            or prepare_started.get("source_head") != source_head
+            or prepare_exit.get("source_head") != source_head
+            or hosted_started.get("window") != expected_window_receipt
+            or hosted_exit.get("window") != expected_window_receipt
+            or prepare_started.get("window") != expected_window_receipt
+            or prepare_exit.get("window") != expected_window_receipt
+            or hosted_started.get("pid") != hosted_exit.get("pid")
+            or hosted_controller.get("pid") != hosted_exit.get("controller_pid")
+            or prepare_started.get("pid") != prepare_exit.get("pid")
+            or prepare_controller.get("pid") != prepare_exit.get("controller_pid")
+            or hosted_exit.get("exit_code") != 1 or hosted_exit.get("error") is not None
+            or prepare_exit.get("exit_code") != 0 or prepare_exit.get("error") is not None
+            or hosted_exit.get("cleanup_established_by_recorder") is not False
+            or prepare_exit.get("cleanup_established_by_recorder") is not False
+            or _utc(hosted_exit.get("finished_at")) < _utc(hosted_started.get("started_at"))
+            or _utc(prepare_exit.get("finished_at")) < _utc(prepare_started.get("started_at"))):
+        raise ValueError(label)
+    def argv_options(argv: list[str]) -> dict[str, str]:
+        result = {}
+        index = 0
+        while index < len(argv):
+            token = argv[index]
+            if token == "--prepare-only":
+                result[token] = ""
+                index += 1
+                continue
+            if token.startswith("--"):
+                if token in result or index + 1 >= len(argv):
+                    raise ValueError(label)
+                result[token] = argv[index + 1]
+                index += 2
+            else:
+                index += 1
+        return result
+    hosted_map = argv_options(hosted_argv)
+    prepare_map = argv_options(prepare_argv)
+    def ends_in_project_relative(value: Any, expected: Path) -> bool:
+        if not isinstance(value, str):
+            return False
+        path = Path(value)
+        return (path.is_absolute() and ".." not in path.parts
+            and len(path.parts) >= len(expected.parts)
+            and path.parts[-len(expected.parts):] == expected.parts)
+    def matches_project_path(value: Any, expected: Path) -> bool:
+        return (isinstance(value, str) and Path(value) == expected) or ends_in_project_relative(value, expected)
+    for argv_map, required_mode in ((hosted_map, "hosted"), (prepare_map, "stage-public")):
+        if argv_map.get("--mode") != required_mode:
+            raise ValueError(label)
+    if (not Path(hosted_argv[0]).name.startswith("python3")
+            or hosted_argv[1:3] != ["-B", "-I"]
+            or not ends_in_project_relative(hosted_argv[3], Path("scripts/release/v02_qualification.py"))
+            or not Path(prepare_argv[0]).name.startswith("python3")
+            or prepare_argv[1:3] != ["-B", "-I"]
+            or not ends_in_project_relative(prepare_argv[3], Path("scripts/release/v02_qualification.py"))
+            or set(hosted_map) != {"--mode", "--preflight", "--scope", "--publication-copy",
+                "--journal", "--out", "--batch-authorization", "--batch-authorization-sha256",
+                "--batch-admission", "--batch-admission-sha256"}
+            or set(prepare_map) != {"--mode", "--prepare-only", "--scope", "--publication-copy",
+                "--journal", "--out", "--batch-authorization", "--batch-authorization-sha256",
+                "--batch-admission", "--batch-admission-sha256"}):
+        raise ValueError(label)
+    if (hosted_map.get("--batch-authorization-sha256") != authority_sha
+            or hosted_map.get("--batch-admission-sha256") != _digest(public_raw)
+            or prepare_map.get("--batch-authorization-sha256") != authority_sha
+            or prepare_map.get("--batch-admission-sha256") != _digest(source_raw)
+            or "--prepare-only" not in prepare_map
+            or not matches_project_path(hosted_map.get("--batch-authorization"), authority_path)
+            or not matches_project_path(prepare_map.get("--batch-authorization"), authority_path)
+            or not ends_in_project_relative(hosted_map.get("--scope"), scope_path)
+            or not ends_in_project_relative(prepare_map.get("--scope"), scope_path)
+            or not ends_in_project_relative(hosted_map.get("--batch-admission"), prior_root / "public-admission.json")
+            or not ends_in_project_relative(prepare_map.get("--batch-admission"), prior_root / "source-admission.json")
+            or not ends_in_project_relative(hosted_map.get("--preflight"), prior_root / "candidate/preparation.json")
+            or not ends_in_project_relative(hosted_map.get("--journal"), prior_root / "hosted-delivery-journal.json")
+            or not ends_in_project_relative(prepare_map.get("--out"), prior_root / "candidate/preparation.json")):
+        raise ValueError(label)
+
+    # Every retained local command must be an attributable, cleanup-confirmed
+    # Q child. The only commands outside Q's existing allowlist are the two
+    # exact read-only provider queries whose output is bound to terminal files.
+    external_refs = bundle.get("external_attempts")
+    sidecar_refs = bundle.get("process_receipts")
+    external_dir_rel = prior_root / "coordinator-external-attempts"
+    if (not isinstance(external_refs, list) or not external_refs
+            or not isinstance(sidecar_refs, list) or not sidecar_refs):
+        raise ValueError(label)
+    terminal_run_endpoint = f"repos/szTheory/genewhip/actions/runs/{qualification_id}"
+    terminal_jobs_endpoint = terminal_run_endpoint + f"/attempts/{run['run_attempt']}/jobs?per_page=100"
+    external_names, sidecar_names = [], []
+    child_rows, sidecar_rows, receipts = [], [], []
+    command_by_pid: dict[int, list[list[str]]] = {}
+    owner_counts: dict[int, int] = {}
+    query_commands: set[tuple[str, ...]] = set()
+    query_pid: int | None = None
+    total_bytes = 0
+    for item in external_refs:
+        if not isinstance(item, dict) or set(item) != {"path", "sha256"}:
+            raise ValueError(label)
+        relative = _safe_relative(item.get("path"), label)
+        match = re.fullmatch(r"external-([0-9]+)-[0-9]+\.attempt\.json", relative.name)
+        if relative.parent != external_dir_rel or match is None:
+            raise ValueError(label)
+        pid = int(match.group(1))
+        owner_counts[pid] = owner_counts.get(pid, 0) + 1
+        raw = _read_regular(_path(root, relative), cap=MAX_CONNECTOR_CAPTURE_BYTES, label=label)
+        total_bytes += len(raw)
+        if total_bytes > 256 * 1024 * 1024 or _digest(raw) != item.get("sha256"):
+            raise ValueError(label)
+        receipt = _json_object(raw, label)
+        command = receipt.get("argv")
+        processes = receipt.get("processes")
+        if (receipt.get("schema") != "genewhip.v02-coordinator-child-attempt.v1"
+                or receipt.get("label") != relative.stem.removesuffix(".attempt")
+                or not isinstance(command, list) or not command or not all(isinstance(x, str) for x in command)
+                or receipt.get("launch_error") is not None
+                or receipt.get("process_group_cleanup") != "confirmed"
+                or receipt.get("returncode") != 0
+                or not isinstance(processes, list) or not processes):
+            raise ValueError(label)
+        command_by_pid.setdefault(pid, []).append(command)
+        for process in processes:
+            if (not isinstance(process, dict)
+                    or process.get("status") != "completed"
+                    or process.get("return_code") != 0
+                    or process.get("process_group_cleanup") != "confirmed"
+                    or process.get("bound_violation") is not False):
+                raise ValueError(label)
+            child_rows.append(process)
+        endpoint = command[2] if command[:2] == ["gh", "api"] and len(command) == 3 else None
+        if endpoint in {terminal_run_endpoint, terminal_jobs_endpoint}:
+            stdout = (receipt.get("streams", {}).get("stdout")
+                if isinstance(receipt.get("streams"), dict) else None)
+            expected_value = run if endpoint == terminal_run_endpoint else jobs_doc
+            expected_raw = run_raw if endpoint == terminal_run_endpoint else jobs_raw
+            try:
+                stdout_value = json.loads(stdout.get("text")) if isinstance(stdout, dict) else None
+            except (TypeError, json.JSONDecodeError):
+                raise ValueError(label) from None
+            if (receipt.get("returncode") != 0 or len(processes) != 1
+                    or processes[0].get("return_code") != 0
+                    or not isinstance(stdout, dict) or stdout.get("truncated") is not False
+                    or stdout.get("retained_bytes") != stdout.get("observed_bytes")
+                    or stdout.get("sha256") != _digest(expected_raw)
+                    or stdout_value != expected_value
+                    or query_pid not in (None, pid)):
+                raise ValueError(label)
+            query_pid = pid
+            query_commands.add(tuple(command))
+        else:
+            if not _phase7_window_authorized_prior_command(command,
+                    root=root, attempt_root=prior_root, source_head=source_head,
+                    old_source_ancestor=current["authority"]["source_ancestor"],
+                    candidate=candidate, journal=journal, claim=claim,
+                    old_authority_sha256=authority_sha, old_scope_sha256=scope_sha):
+                raise ValueError(label)
+        external_names.append(relative.as_posix())
+        receipts.append((item["path"], item["sha256"], receipt))
+    prepare_pid = prepare_controller.get("pid")
+    hosted_pid = hosted_controller.get("pid")
+    if (external_names != sorted(set(external_names))
+            or query_commands != {("gh", "api", terminal_run_endpoint),
+                ("gh", "api", terminal_jobs_endpoint)}
+            or query_pid in (None, prepare_pid, hosted_pid)
+            or set(owner_counts) != {prepare_pid, hosted_pid, query_pid}
+            or any(owner_counts[pid] <= 0 for pid in owner_counts)):
+        raise ValueError(label)
+    try:
+        external_dir = _resolve_no_symlink(root, root / external_dir_rel, label=label)
+        listed = []
+        for entry in external_dir.iterdir():
+            if entry.name == "process-receipts":
+                continue
+            if entry.is_symlink() or not entry.is_file():
+                raise ValueError(label)
+            listed.append(entry.relative_to(root).as_posix())
+        listed.sort()
+    except OSError:
+        raise ValueError(label) from None
+    if listed != external_names:
+        raise ValueError(label)
+    for item in sidecar_refs:
+        if not isinstance(item, dict) or set(item) != {"path", "sha256"}:
+            raise ValueError(label)
+        relative = _safe_relative(item.get("path"), label)
+        if (relative.parent != external_dir_rel / "process-receipts"
+                or re.fullmatch(r"[0-9a-f]{32}\.json", relative.name) is None):
+            raise ValueError(label)
+        raw = _read_regular(_path(root, relative), cap=MAX_CONNECTOR_CAPTURE_BYTES, label=label)
+        if _digest(raw) != item.get("sha256"):
+            raise ValueError(label)
+        sidecar = _json_object(raw, label)
+        if not isinstance(sidecar.get("processes"), list) or len(sidecar["processes"]) != 1:
+            raise ValueError(label)
+        sidecar_names.append(relative.as_posix())
+        sidecar_rows.extend(sidecar["processes"])
+    try:
+        sidecar_dir = _resolve_no_symlink(root, root / external_dir_rel / "process-receipts", label=label)
+        listed_sidecars = []
+        for entry in sidecar_dir.iterdir():
+            if entry.is_symlink() or not entry.is_file():
+                raise ValueError(label)
+            listed_sidecars.append(entry.relative_to(root).as_posix())
+        listed_sidecars.sort()
+    except OSError:
+        raise ValueError(label) from None
+    if (sidecar_names != sorted(set(sidecar_names)) or listed_sidecars != sidecar_names
+            or sorted(_canonical(item) for item in sidecar_rows)
+                != sorted(_canonical(item) for item in child_rows)):
+        raise ValueError(label)
+
+    close = loaded["window_close"][0]
+    bundle_path_ref = bundle_path.as_posix()
+    if (close.get("schema") != "genewhip.phase7-execution-window-close-observation.v1"
+            or close.get("source_head") != source_head
+            or close.get("claim_preserved") != {"path": loaded["claim"][2]["path"],
+                "sha256": loaded["claim"][2]["sha256"]}
+            or close.get("qualification_credit") is not False
+            or close.get("release_credit") is True
+            or close.get("not_retry_admission") is not True
+            or close.get("recorded_external_cleanup_confirmed") is not True
+            or close.get("source_pins_git_verified") != len(source_pins)
+            or close.get("controller_exit") != {"path": loaded["hosted_exit"][2]["path"],
+                "sha256": loaded["hosted_exit"][2]["sha256"],
+                "exit_code": 1, "leader_reaped": True,
+                "recorder_does_not_establish_group_cleanup": True}
+            or close.get("provider_terminal") != {"path": loaded["terminal_observation"][2]["path"],
+                "sha256": loaded["terminal_observation"][2]["sha256"]}
+            or close.get("external_receipts") != [
+                {"path": path, "sha256": sha} for path, sha, _ in receipts]
+            or close.get("bound_receipts") != []
+            or close.get("v01_local_baseline_unchanged") is not True
+            or type(close.get("unrelated_inputs_unchanged")) is not int
+            or close.get("unrelated_inputs_unchanged") <= 0
+            or close.get("remote_inner_receipts") != "unavailable; partial runtime reports were not uploaded"):
+        raise ValueError(label)
+    changed_after_exit = close.get("source_pins_worktree_changed_after_exit")
+    runtime_log_ref = close.get("runtime_log")
+    if (not isinstance(changed_after_exit, list)
+            or len(changed_after_exit) != len(set(changed_after_exit))
+            or any(not isinstance(item, str) or item not in source_pins for item in changed_after_exit)
+            or not isinstance(runtime_log_ref, dict)
+            or set(runtime_log_ref) != {"path", "sha256"}):
+        raise ValueError(label)
+    runtime_log_path = _safe_relative(runtime_log_ref.get("path"), label)
+    if runtime_log_path.parts[:len(prior_root.parts)] != prior_root.parts \
+            or "operator" not in runtime_log_path.parts:
+        raise ValueError(label)
+    runtime_log_raw = _read_regular(_path(root, runtime_log_path), cap=32 * 1024 * 1024, label=label)
+    if (_digest(runtime_log_raw) != runtime_log_ref.get("sha256")
+            or _utc(close.get("observed_at")) < _utc(hosted_exit.get("finished_at"))
+            or _utc(close.get("observed_at")) < _utc(observation.get("observed_at"))):
+        raise ValueError(label)
+
+    expected = {"attempt_index": 1, "attempt_root": prior_root.as_posix(),
+        "terminal": dict(predecessor["terminal"]),
+        "status": "settled-full-qualification-failure",
+        "qualification_accepted": False, "local_cleanup": "settled"}
+    return expected
+
+
 def _phase7_window_predecessor(root: Path, admission: dict[str, Any],
                                *, attempt_index: int, window: dict[str, Any]) -> dict[str, Any]:
     """Bind the prior closed attempt; unknown or unclean predecessors stop retries."""
     predecessor = admission.get("predecessor")
     profile_id, _ = _phase7_window_profile(window)
     if profile_id == "authorized-run":
-        expected = phase7_window_authorized_initial_predecessor(root, window)
-        if predecessor != expected or attempt_index != 1:
-            raise ValueError("phase7-window-authorized-predecessor-invalid")
-        return expected
+        if attempt_index == 1:
+            expected = phase7_window_authorized_initial_predecessor(root, window)
+            if predecessor != expected:
+                raise ValueError("phase7-window-authorized-predecessor-invalid")
+            return expected
+        if attempt_index == 2:
+            expected = phase7_window_authorized_attempt2_predecessor(root, window, predecessor)
+            if predecessor != expected:
+                raise ValueError("phase7-window-authorized-attempt2-predecessor-invalid")
+            return expected
+        raise ValueError("phase7-window-authorized-successor-terminal-proof-consumer-required")
     if profile_id == "renewed-two-hour":
         if attempt_index != 1 or predecessor != RENEWED_TWO_HOUR_PREDECESSOR:
             raise ValueError("phase7-window-renewed-predecessor-invalid")
