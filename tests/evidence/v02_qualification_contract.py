@@ -4038,6 +4038,68 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
             fresh_policy.assert_not_called()
             external.assert_not_called()
 
+    def test_pr_status_read_retries_transient_http_error_with_same_read_only_argv(self):
+        from unittest import mock
+        module = load_module(self)
+        argv = ["gh", "pr", "view", "73", "--repo", "owner/repo", "--json",
+            "number,state,headRefOid,baseRefOid,mergeStateStatus,statusCheckRollup,url"]
+        success = subprocess.CompletedProcess(argv, 0, '{"state":"OPEN"}', "")
+        with mock.patch.object(module, "_external", side_effect=[
+                subprocess.CompletedProcess(argv, 1, "", "gh: HTTP 504: Gateway Timeout"),
+                success]) as external, \
+             mock.patch.object(module.time, "sleep") as sleep:
+            actual = module._gh_pull_request_status("owner/repo", "73")
+        self.assertIs(actual, success)
+        self.assertEqual(external.call_args_list, [
+            mock.call(argv, timeout=45, check=False),
+            mock.call(argv, timeout=45, check=False)])
+        sleep.assert_called_once_with(1)
+        self.assertEqual(argv[:3], ["gh", "pr", "view"])
+
+    def test_pr_status_read_stops_after_three_transient_http_errors(self):
+        from unittest import mock
+        module = load_module(self)
+        argv = ["gh", "pr", "view", "73", "--repo", "owner/repo", "--json",
+            "number,state,headRefOid,baseRefOid,mergeStateStatus,statusCheckRollup,url"]
+        failures = [subprocess.CompletedProcess(argv, 1, "", f"gh: HTTP {status}: unavailable")
+            for status in (502, 503, 504)]
+        with mock.patch.object(module, "_external", side_effect=failures) as external, \
+             mock.patch.object(module.time, "sleep") as sleep:
+            with self.assertRaisesRegex(ValueError, "hosted-delivery-command-failed:gh"):
+                module._gh_pull_request_status("owner/repo", "73")
+        self.assertEqual(external.call_count, 3)
+        self.assertEqual(external.call_args_list, [mock.call(argv, timeout=45, check=False)] * 3)
+        self.assertEqual(sleep.call_args_list, [mock.call(1), mock.call(2)])
+
+    def test_pr_status_read_does_not_retry_auth_or_boundary_failures(self):
+        from unittest import mock
+        module = load_module(self)
+        argv = ["gh", "pr", "view", "73", "--repo", "owner/repo", "--json",
+            "number,state,headRefOid,baseRefOid,mergeStateStatus,statusCheckRollup,url"]
+        with mock.patch.object(module, "_external", return_value=
+                subprocess.CompletedProcess(argv, 1, "", "gh: HTTP 403: Forbidden")) as external, \
+             mock.patch.object(module.time, "sleep") as sleep:
+            with self.assertRaisesRegex(ValueError, "hosted-delivery-command-failed:gh"):
+                module._gh_pull_request_status("owner/repo", "73")
+        external.assert_called_once_with(argv, timeout=45, check=False)
+        sleep.assert_not_called()
+
+        with mock.patch.object(module, "_external", return_value=
+                subprocess.CompletedProcess(argv, 1, "", "gh: not logged in (HTTP 401)")) as external, \
+             mock.patch.object(module.time, "sleep") as sleep:
+            with self.assertRaisesRegex(ValueError, "github-authentication-required"):
+                module._gh_pull_request_status("owner/repo", "73")
+        external.assert_called_once_with(argv, timeout=45, check=False)
+        sleep.assert_not_called()
+
+        boundary_error = ValueError("qualification-child-cleanup-unconfirmed")
+        with mock.patch.object(module, "_external", side_effect=boundary_error) as external, \
+             mock.patch.object(module.time, "sleep") as sleep:
+            with self.assertRaisesRegex(ValueError, "cleanup-unconfirmed"):
+                module._gh_pull_request_status("owner/repo", "73")
+        external.assert_called_once_with(argv, timeout=45, check=False)
+        sleep.assert_not_called()
+
     def test_source_retry_journal_resume_reopens_merge_and_retains_original_clock(self):
         from unittest import mock
         module = load_module(self)

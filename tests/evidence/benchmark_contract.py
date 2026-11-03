@@ -190,6 +190,106 @@ class BenchmarkContract(unittest.TestCase):
                                                  (True, "sampled"), (True, "aggregate"))
                           for n in range(1, 6)})
 
+    def test_control_workload_cli_returns_validated_v2_report_and_preserves_identity(self):
+        import json
+
+        source_identity = "f" * 64
+        scope_id = "control-adapter-regression"
+        output = {"video": [(i + 121, (i + 121) * 89568, 256, 224, "a" * 64)
+                            for i in range(600)],
+                  "pcm_frames": 480619, "pcm_sha256": "b" * 64,
+                  "ram_sha256": "c" * 64, "machine_sha256": "d" * 64}
+        modes = []
+        pid = 100
+        for diagnostics, observer in ((False, "sampled"), (False, "aggregate"),
+                                      (True, "sampled"), (True, "aggregate")):
+            runs = []
+            for _ in range(5):
+                runs.append({"process_id": pid, "process_instance": f"child-{pid}",
+                    "elapsed_ns": 50000, "fields": 600, "ticks": 53740800,
+                    "actual_tick_start": 0, "actual_tick_end": 53740800, "stop_reason": 5,
+                    "core_owned_current_bytes": 1000000, "core_owned_peak_bytes": 1100000,
+                    "process_ru_maxrss_bytes": 200000000,
+                    "rss_unit_source": "Darwin getrusage(2) ru_maxrss bytes",
+                    "resource_receipt": {"process_group_cleanup": "confirmed", "bound_violation": False},
+                    "diagnostic_records": 256 if diagnostics else 0, "diagnostic_dropped": 0,
+                    "output_identity": output, "field_ns": [100] * 600 if observer == "sampled" else []})
+                pid += 1
+            modes.append({"diagnostics_enabled": diagnostics, "observer": observer, "runs": runs})
+        build_identity = {key: "host" for key in (
+            "host_system", "host_release", "host_macos_version", "host_machine", "host_model")}
+        build_identity.update({"compiler_sha256": "1" * 64, "build_rules_sha256": "2" * 64,
+            "build_configuration_sha256": "3" * 64, "compiler_version_line": "clang version test",
+            "cmake": {"CMAKE_BUILD_TYPE": "Release"}})
+        control = {"modes": modes, "build_identity": build_identity,
+            "source_revision": "4" * 40}
+        reference = {"workload": "control", "fields_completed": 600, "warmup_fields": 120,
+            "ticks_completed": 53740800, "actual_tick_start": 0, "actual_tick_end": 53740800,
+            "elapsed_ns": 0, "untimed": True, "route_status": 0, "output_identity": output,
+            "process_id": pid, "process_instance": f"child-{pid}",
+            "process_ru_maxrss_bytes": 200000000,
+            "rss_unit_source": "Darwin getrusage(2) ru_maxrss bytes",
+            "resource_receipt": {"process_group_cleanup": "confirmed", "bound_violation": False}}
+        scope = {"scope_id": scope_id, "owned_roots": ["."],
+            "qualification_batch": {"runtime_wall_seconds": 3600,
+                "benchmark_sub_batch_seconds": 3600},
+            "per_child_limits": {"max_capture_bytes": 2 * 1024**3,
+                "max_rss_bytes": 4 * 1024**3},
+            "workload": {"serial_children": True}}
+        limits = scope["per_child_limits"]
+
+        class Journal:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            def complete(self, _report):
+                pass
+
+        original_globals = (benchmark._ACTIVE_BATCH_START, benchmark._ACTIVE_BATCH_LIMIT_SECONDS,
+            benchmark._ACTIVE_QUALIFICATION_START, benchmark._ACTIVE_RUNTIME_LIMIT_SECONDS,
+            benchmark._ACTIVE_JOURNAL)
+        with tempfile.TemporaryDirectory(prefix="gw-control-adapter-", dir=ROOT) as directory:
+            root = Path(directory)
+            scope_path = root / "scope.json"
+            scope_path.write_text("{}\n")
+            out = root / "control.json"
+            try:
+                with mock.patch.object(benchmark, "load_v02_launcher", return_value=SimpleNamespace(
+                        validate_execution_scope=lambda *_args: (scope, limits))), \
+                     mock.patch.object(benchmark.platform, "system", return_value="Darwin"), \
+                     mock.patch.object(benchmark, "source_identity", return_value=source_identity), \
+                     mock.patch.object(benchmark, "qualification_runtime_remaining", return_value=3600), \
+                     mock.patch.object(benchmark, "workflow_base_sha", return_value="5" * 40), \
+                     mock.patch.object(benchmark, "run_protocol", return_value=control), \
+                     mock.patch.object(benchmark, "run_control_reference", return_value=reference), \
+                     mock.patch.object(benchmark, "MeasurementJournal", Journal), \
+                     mock.patch.object(sys, "argv", ["core_benchmark.py", "--build", str(ROOT),
+                         "--workload", "control", "--scope", str(scope_path), "--out", str(out)]):
+                    self.assertEqual(benchmark.main(), 0)
+            finally:
+                (benchmark._ACTIVE_BATCH_START, benchmark._ACTIVE_BATCH_LIMIT_SECONDS,
+                 benchmark._ACTIVE_QUALIFICATION_START, benchmark._ACTIVE_RUNTIME_LIMIT_SECONDS,
+                 benchmark._ACTIVE_JOURNAL) = original_globals
+
+            self.assertTrue(out.is_file())
+            report = json.loads(out.read_text())
+            saved_output = json.loads(json.dumps(output))
+            self.assertEqual(report["schema"], "genewhip.v02-workload-benchmark-v1")
+            self.assertEqual(report["timed_runs"][0]["output_identity"], saved_output)
+            self.assertEqual(benchmark.validate_workload_report(report, "control", source_identity, scope_id), [])
+            self.assertEqual(benchmark.validate_report(report, qualification=True), ["schema"])
+            self.assertTrue(all(row["output_identity"] == saved_output and
+                row["untimed_output_identity"] == saved_output for row in report["timed_runs"]))
+
+            # Reapply the previous adapter behavior to demonstrate the exact
+            # validator pair that this regression prevents.
+            broken = copy.deepcopy(report)
+            for row in broken["timed_runs"]:
+                row["output_identity"] = benchmark.output_identity(row)
+            self.assertEqual(benchmark.validate_workload_report(
+                broken, "control", source_identity, scope_id), [
+                    "workload-report-output-divergence", "workload-run:workload-output-identity"])
+
     def test_v02_measurement_roster_covers_three_workloads_four_modes_and_references(self):
         self.assertTrue(hasattr(benchmark, "measurement_roster"),
                         "production benchmark is missing its exact v02 measurement roster")
