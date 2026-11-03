@@ -173,6 +173,49 @@ def synthetic_qualified_reports(benchmark, identity, source_digest, scope_id, sc
 
 
 class QualificationCoordinatorContract(unittest.TestCase):
+    def test_hosted_artifact_download_uses_scope_binary_cap(self):
+        from unittest import mock
+        module = load_module(self)
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            scope = base / "scope.json"
+            cap = 2 * 1024**3
+            scope.write_text(json.dumps({"per_child_limits": {"max_binary_file_bytes": cap}}))
+            target = base / "artifact"
+            def download(argv, **kwargs):
+                self.assertEqual(argv, ["gh", "run", "download", "123", "--repo", "owner/repo",
+                    "--name", "runtime-123-1", "--dir", str(target)])
+                self.assertEqual(kwargs["file_size_limit_bytes"], cap)
+                self.assertEqual(kwargs["owned_roots"], (target,))
+                self.assertEqual(kwargs["phase"], "package")
+                (target / "archive.bin").write_bytes(b"synthetic archive")
+            with mock.patch.dict(os.environ, {"GENEWHIP_QUALIFICATION_SCOPE_PATH": str(scope)}), \
+                 mock.patch.object(module, "_external", side_effect=download) as external:
+                module._download_run_artifact("owner/repo", "123", "1", "runtime", target,
+                    phase="package")
+                self.assertEqual(external.call_count, 1)
+                with self.assertRaisesRegex(ValueError, "path-collision"):
+                    module._download_run_artifact("owner/repo", "123", "1", "runtime", target)
+                self.assertEqual(external.call_count, 1)
+
+    def test_hosted_artifact_download_rejects_invalid_cap_before_effects(self):
+        from unittest import mock
+        module = load_module(self)
+        for limits in (None, [], {}, {"max_binary_file_bytes": True},
+                       {"max_binary_file_bytes": 0}, {"max_binary_file_bytes": -1},
+                       {"max_binary_file_bytes": "2147483648"}):
+            with self.subTest(limits=limits), tempfile.TemporaryDirectory() as temp:
+                base = Path(temp)
+                scope = base / "scope.json"
+                scope.write_text(json.dumps({"per_child_limits": limits}))
+                target = base / "not-created" / "artifact"
+                with mock.patch.dict(os.environ, {"GENEWHIP_QUALIFICATION_SCOPE_PATH": str(scope)}), \
+                     mock.patch.object(module, "_external") as external:
+                    with self.assertRaisesRegex(ValueError, "hosted-artifact-file-limit-invalid"):
+                        module._download_run_artifact("owner/repo", "123", "1", "runtime", target)
+                    external.assert_not_called()
+                    self.assertFalse(target.parent.exists())
+
     def test_runtime_orchestrator_carries_reviewed_binary_file_ceiling(self):
         from unittest import mock
         module = load_module(self)

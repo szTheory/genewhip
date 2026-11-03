@@ -481,10 +481,19 @@ def _original_control_failure_summary(result, process, streams, nested_path):
             return value if type(value) is str and value in allowed else "unavailable"
         code = row.get("return_code")
         bound = row.get("bound_violation")
+        kinds = {"scratch-root-invalid", "symlink-directory", "scan-oserror",
+            "unsafe-file-symlink", "symlink-file", "non-regular-file",
+            "hardlink-file", "foreign-owner-file", "path-disappeared-during-scan"}
+        diagnostics = row.get("scratch_tree_diagnostics")
+        observed = [item.get("kind") for item in diagnostics[:8]
+            if isinstance(item, dict) and type(item.get("kind")) is str and item["kind"] in kinds
+            ] if isinstance(diagnostics, list) else []
+        failures = [kind for kind in observed if kind != "path-disappeared-during-scan"]
         return {"return": code if type(code) is int and -255 <= code <= 255 else "unavailable",
             "status": enum("status", {"completed", "failed", "timeout", "launch-failed", "interrupted"}),
             "cleanup": enum("process_group_cleanup", {"confirmed", "unconfirmed", "not-launched"}),
             "bound": bound if type(bound) is bool else "unavailable",
+            "scratch_tree_kind": (failures or observed or ["unavailable"])[-1],
             "bound_reason": enum("bound_violation_reason", {
                 "phase7-wall-timeout", "phase7-stdout-stderr-byte-limit",
                 "phase7-rss-observation-unavailable", "phase7-rss-byte-limit",

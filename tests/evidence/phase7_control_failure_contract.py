@@ -78,6 +78,25 @@ class Reporting(unittest.TestCase):
         result = self.call("Exception occurred in preexec_fn." + SECRET)
         self.assertEqual(result["nested"]["status"], "launch-failed")
         self.assertEqual(result["stderr_reason"], "preexec-failure")
+    def test_scratch_failure_kind_is_retained_without_private_entry_details(self):
+        row = {**self.driver, "bound_violation": True,
+            "bound_violation_reason": "phase7-scratch-tree-unsafe",
+            "scratch_tree_diagnostics": [
+                {"kind": "path-disappeared-during-scan", "path": SECRET},
+                {"kind": "hardlink-file", "path": SECRET, "reason": SECRET, "link_count": 0}]}
+        result = self.call(SECRET, row)
+        self.assertEqual(result["driver"]["scratch_tree_kind"], "hardlink-file")
+        self.assertNotIn("link_count", result["driver"])
+    def test_unknown_scratch_kind_cannot_export_private_text(self):
+        row = {**self.driver, "scratch_tree_diagnostics": [{"kind": SECRET, "path": SECRET}]}
+        self.assertEqual(self.call(SECRET, row)["driver"]["scratch_tree_kind"], "unavailable")
+    def test_nested_scratch_kind_stays_distinct_from_outer_driver(self):
+        self.path.write_text(json.dumps({"processes": [{"return_code": -15,
+            "status": "failed", "bound_violation": True,
+            "scratch_tree_diagnostics": [{"kind": "symlink-file", "path": SECRET}]}]}))
+        result = self.call(SECRET)
+        self.assertEqual(result["nested"]["scratch_tree_kind"], "symlink-file")
+        self.assertEqual(result["driver"]["scratch_tree_kind"], "unavailable")
     def test_zero_exit_does_not_hide_nested_unconfirmed_cleanup(self):
         self.path.write_text(json.dumps({"processes": [{"return_code": 0,
             "status": "completed", "bound_violation": False,

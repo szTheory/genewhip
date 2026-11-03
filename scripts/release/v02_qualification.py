@@ -6103,13 +6103,24 @@ def _wait_for_selected_run_completion(repository: str, source_sha: str,
 def _download_run_artifact(repository: str, run_id: str, run_attempt: str,
                            artifact_prefix: str, directory: pathlib.Path, *,
                            phase: str = "preparation") -> None:
+    scope_path = pathlib.Path(os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH",
+        "evidence/v02-execution.json"))
+    if not scope_path.is_absolute():
+        scope_path = ROOT / scope_path
+    scope = json.loads(scope_path.read_text(encoding="utf-8"))
+    child_limits = scope.get("per_child_limits") if isinstance(scope, dict) else None
+    file_cap = (child_limits.get("max_binary_file_bytes")
+                if isinstance(child_limits, dict) else None)
+    if type(file_cap) is not int or file_cap <= 0:
+        raise ValueError("hosted-artifact-file-limit-invalid")
     if directory.exists():
         raise ValueError("hosted-artifact-download-path-collision")
     directory.parent.mkdir(parents=True, exist_ok=True)
     directory.mkdir()
     _external(["gh", "run", "download", run_id, "--repo", repository,
         "--name", f"{artifact_prefix}-{run_id}-{run_attempt}", "--dir", str(directory)],
-        timeout=4 * 60 * 60, phase=phase, owned_roots=(directory,))
+        timeout=4 * 60 * 60, phase=phase, owned_roots=(directory,),
+        file_size_limit_bytes=file_cap)
     if not directory.is_dir() or not any(directory.iterdir()):
         raise ValueError("hosted-artifact-download-empty")
 
