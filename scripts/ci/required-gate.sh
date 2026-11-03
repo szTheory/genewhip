@@ -13,6 +13,9 @@ if [[ "${1:-}" == "--phase7-fast" ]]; then
   fi
   TIMEFORMAT='ci-stage phase7-process-admission %3R seconds'; time python3 -I tests/evidence/phase7_process_admission_contract.py
   TIMEFORMAT='ci-stage phase7-diagnostic %3R seconds'; time python3 -I tests/evidence/phase7_diagnostic_contract.py
+  TIMEFORMAT='ci-stage phase7-control-failure %3R seconds'; time python3 -I tests/evidence/phase7_control_failure_contract.py
+  TIMEFORMAT='ci-stage phase7-control-diagnostic %3R seconds'; time python3 -I tests/evidence/phase7_control_diagnostic_contract.py
+  TIMEFORMAT='ci-stage phase7-settled-attempt %3R seconds'; time python3 -I tests/evidence/phase7_settled_attempt_contract.py
   TIMEFORMAT='ci-stage phase7-fresh-batch %3R seconds'; time python3 -I tests/evidence/phase7_fresh_batch_contract.py
   TIMEFORMAT='ci-stage phase7-two-hour-contract %3R seconds'; time python3 -I tests/evidence/phase7_two_hour_contract.py
   TIMEFORMAT='ci-stage phase7-renewed-window-contract %3R seconds'; time python3 -I tests/evidence/phase7_renewed_window_contract.py
@@ -109,6 +112,9 @@ TIMEFORMAT='ci-stage aggregate-contract %3R seconds'; time python3 tests/evidenc
 TIMEFORMAT='ci-stage promotion-contract %3R seconds'; time python3 tests/evidence/promotion_contract.py
 TIMEFORMAT='ci-stage phase4-report-contract %3R seconds'; time python3 tests/evidence/phase4_report_contract.py
 TIMEFORMAT='ci-stage phase7-diagnostic %3R seconds'; time python3 -I tests/evidence/phase7_diagnostic_contract.py
+TIMEFORMAT='ci-stage phase7-control-failure %3R seconds'; time python3 -I tests/evidence/phase7_control_failure_contract.py
+TIMEFORMAT='ci-stage phase7-control-diagnostic %3R seconds'; time python3 -I tests/evidence/phase7_control_diagnostic_contract.py
+TIMEFORMAT='ci-stage phase7-settled-attempt %3R seconds'; time python3 -I tests/evidence/phase7_settled_attempt_contract.py
 TIMEFORMAT='ci-stage phase7-fresh-batch %3R seconds'; time python3 -I tests/evidence/phase7_fresh_batch_contract.py
 TIMEFORMAT='ci-stage phase7-two-hour-contract %3R seconds'; time python3 -I tests/evidence/phase7_two_hour_contract.py
 TIMEFORMAT='ci-stage phase7-renewed-window-contract %3R seconds'; time python3 -I tests/evidence/phase7_renewed_window_contract.py

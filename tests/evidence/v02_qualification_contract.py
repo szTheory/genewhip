@@ -2562,6 +2562,8 @@ print(json.dumps({'parent_limit':resource.getrlimit(resource.RLIMIT_FSIZE),'stat
             ("workflow_dispatch", "refs/heads/reviewed", "recursion94-native-prefix", {"v02-runtime"}),
             ("workflow_dispatch", "refs/heads/main", "recursion94-withhold-first-plate", {"v02-runtime"}),
             ("workflow_dispatch", "refs/heads/main", "recursion94-native-prefix", {"v02-runtime"}),
+            ("workflow_dispatch", "refs/heads/reviewed", "original-control", {"v02-runtime"}),
+            ("workflow_dispatch", "refs/heads/main", "original-control", {"v02-runtime"}),
             ("workflow_dispatch", "refs/heads/reviewed", "unrecognized", {"v02-runtime"})]
         for event, ref, selector, expected in scenarios:
             selected = set()
@@ -2589,7 +2591,7 @@ print(json.dumps({'parent_limit':resource.getrlimit(resource.RLIMIT_FSIZE),'stat
             command.append(line.strip())
         argv = shlex.split(" ".join(command))
         self.assertEqual(argv[:3], ["python3", "-I", "-c"])
-        for selector in ("", "none", "recursion94-withhold-first-plate", "recursion94-native-prefix", "unrecognized"):
+        for selector in ("", "none", "recursion94-withhold-first-plate", "recursion94-native-prefix", "original-control", "unrecognized"):
             with mock.patch.dict(os.environ, {"GENEWHIP_NATIVE_DIAGNOSTIC_CASE": selector}):
                 if selector == "unrecognized":
                     with self.assertRaisesRegex(AssertionError, "selector-invalid"):
@@ -6138,14 +6140,17 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
         runtime_job = text.split("  v02-runtime:", 1)[1].split("\n  v02-benchmark-control:", 1)[0]
         timeout = next(line.strip().split(": ", 1)[1] for line in runtime_job.splitlines()
                        if line.startswith("    timeout-minutes: "))
-        conditional = re.fullmatch(r"\$\{\{\s*\(inputs\.native_diagnostic_case\s*==\s*'([^']+)'\s*\|\|\s*inputs\.native_diagnostic_case\s*==\s*'([^']+)'\)\s*&&\s*([0-9]+)\s*\|\|\s*([0-9]+)\s*\}\}", timeout)
+        conditional = re.fullmatch(r"\$\{\{\s*\((.*?)\)\s*&&\s*([0-9]+)\s*\|\|\s*([0-9]+)\s*\}\}", timeout)
         self.assertIsNotNone(conditional, "runtime timeout must select fixed diagnostic and ordinary limits")
-        selected_cases = set(conditional.groups()[:2])
-        diagnostic_minutes, ordinary_minutes = map(int, conditional.groups()[2:])
-        self.assertEqual(selected_cases, {"recursion94-withhold-first-plate", "recursion94-native-prefix"})
+        terms = [re.fullmatch(r"\s*inputs\.native_diagnostic_case\s*==\s*'([^']+)'\s*", term)
+                 for term in conditional.group(1).split("||")]
+        self.assertTrue(terms and all(terms), "diagnostic timeout selectors must be explicit equality terms")
+        selected_cases = {term.group(1) for term in terms}
+        diagnostic_minutes, ordinary_minutes = map(int, conditional.groups()[1:])
+        self.assertEqual(selected_cases, {"recursion94-withhold-first-plate", "recursion94-native-prefix", "original-control"})
         self.assertEqual((diagnostic_minutes, ordinary_minutes), (45, 180))
         for selector, expected in (("", 180), ("none", 180),
-                ("recursion94-withhold-first-plate", 45), ("recursion94-native-prefix", 45)):
+                ("recursion94-withhold-first-plate", 45), ("recursion94-native-prefix", 45), ("original-control", 45)):
             with self.subTest(selector=selector):
                 self.assertEqual(diagnostic_minutes if selector in selected_cases else ordinary_minutes, expected)
         for name in ("v02-benchmark-control", "v02-benchmark-recursion94", "v02-benchmark-tank-battle"):
@@ -6240,6 +6245,34 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
         self.assertNotIn("build/v02/runtime/input-contract/**", text)
         self.assertIn("artifacts/qualification-command-attempts/public-hygiene.attempt.json",
             (ROOT / "scripts/release/v02_transfer.py").read_text())
+
+    def test_control_benchmark_overlaps_runtime_but_keeps_serial_workloads_and_package_join(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        jobs = workflow.split("\njobs:\n", 1)[1]
+        lines = jobs.splitlines()
+        headers = [(index, line) for index, line in enumerate(lines)
+            if line.startswith("  ") and not line.startswith("    ") and line.endswith(":")]
+        sections = {line.strip().rstrip(":"): "\n".join(lines[index:
+            (headers[position + 1][0] if position + 1 < len(headers) else len(lines))])
+            for position, (index, line) in enumerate(headers)}
+
+        control = sections["v02-benchmark-control"]
+        self.assertNotRegex(control, r"(?m)^    needs:",
+            "control benchmark must not wait for the independent v02-runtime job")
+        self.assertNotIn("actions/download-artifact@", control)
+        self.assertNotIn("build/v02/runtime-transfer", control)
+        self.assertIn("--workload control", control)
+        self.assertIn("cmake --build build/v02/benchmark --target gw_core_benchmark --parallel 2", control)
+
+        self.assertIn("\n    needs: [v02-benchmark-control]\n", sections["v02-benchmark-recursion94"])
+        self.assertIn("\n    needs: [v02-benchmark-recursion94]\n", sections["v02-benchmark-tank-battle"])
+        self.assertIn("needs: [v02-runtime, v02-benchmark-control, v02-benchmark-recursion94, v02-benchmark-tank-battle]",
+            sections["v02-package"])
+        self.assertIn("needs: [v02-runtime, v02-benchmark-control, v02-benchmark-recursion94, v02-benchmark-tank-battle, v02-package]",
+            sections["v02-release-qualification"])
+        self.assertIn("max-parallel: 1", workflow)
+        self.assertEqual(len(headers), 16,
+            "removing the dependency edge must preserve the exact job roster")
 
     def test_runtime_transfer_download_layout_matches_extracted_artifact_root(self):
         text = (ROOT / ".github/workflows/ci.yml").read_text()

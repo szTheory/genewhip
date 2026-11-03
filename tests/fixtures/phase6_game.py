@@ -472,6 +472,71 @@ def _is_unlaunched_launch_failure(result, receipt):
         receipt.get("bound_violation") is True)
 
 
+def _original_control_failure_summary(result, process, streams, nested_path):
+    """Retain finite failure facts in logs without raw child errors or paths."""
+    def facts(row):
+        row = row if isinstance(row, dict) else {}
+        def enum(key, allowed):
+            value = row.get(key)
+            return value if type(value) is str and value in allowed else "unavailable"
+        code = row.get("return_code")
+        bound = row.get("bound_violation")
+        return {"return": code if type(code) is int and -255 <= code <= 255 else "unavailable",
+            "status": enum("status", {"completed", "failed", "timeout", "launch-failed", "interrupted"}),
+            "cleanup": enum("process_group_cleanup", {"confirmed", "unconfirmed", "not-launched"}),
+            "bound": bound if type(bound) is bool else "unavailable",
+            "bound_reason": enum("bound_violation_reason", {
+                "phase7-wall-timeout", "phase7-stdout-stderr-byte-limit",
+                "phase7-rss-observation-unavailable", "phase7-rss-byte-limit",
+                "phase7-scratch-tree-unsafe", "phase7-scratch-byte-limit",
+                "phase7-json-byte-limit", "phase7-capture-byte-limit",
+                "phase7-retained-byte-limit", "phase7-binary-file-byte-limit"})}
+    summary = {"driver": facts(process), "nested": "unavailable"}
+    code = getattr(result, "returncode", None)
+    summary["driver"]["return"] = code if type(code) is int and -255 <= code <= 255 else "unavailable"
+    try:
+        if (not nested_path.is_symlink() and nested_path.is_file() and
+                nested_path.stat().st_size <= 65536):
+            nested_fd = os.open(nested_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            try:
+                nested_info = os.fstat(nested_fd)
+                if not stat.S_ISREG(nested_info.st_mode) or nested_info.st_size > 65536:
+                    raise ValueError("unsafe diagnostic receipt")
+                with os.fdopen(nested_fd, "rb", closefd=False) as nested_stream:
+                    nested_raw = nested_stream.read(65537)
+            finally:
+                os.close(nested_fd)
+            nested = json.loads(nested_raw) if len(nested_raw) <= 65536 else None
+            rows = nested.get("processes") if isinstance(nested, dict) else None
+            if isinstance(rows, list) and len(rows) <= 64:
+                failed = next((row for row in rows if isinstance(row, dict) and
+                    (row.get("return_code") not in (None, 0) or
+                     row.get("bound_violation") is True or
+                     row.get("status") in ("failed", "timeout", "launch-failed", "interrupted") or
+                     row.get("process_group_cleanup") in ("unconfirmed", "not-launched"))), None)
+                summary["nested"] = facts(failed) if failed is not None else "no-recorded-failure"
+                summary["nested_count"] = len(rows)
+    except (OSError, ValueError, UnicodeError, RecursionError):
+        summary["nested"] = "unreadable"
+    stderr = streams.get("stderr", {}) if isinstance(streams, dict) else {}
+    text = stderr.get("text", "") if isinstance(stderr, dict) else ""
+    text = text if type(text) is str else ""
+    summary["stderr_reason"] = next((label for marker, label in (
+        ("Exception occurred in preexec_fn", "preexec-failure"),
+        ("process-host-admission-required", "process-admission"),
+        ("headless exit", "headless-nonzero"),
+        ("source state mismatch", "source-state"),
+        ("incomplete/unsupported headless result", "headless-incomplete"),
+        ("watchdog/output cap reached", "child-watchdog"),
+        ("retention bound", "stream-retention"),
+        ("denominator", "denominator"),
+        ("causal PSG writes", "psg-oracle"),
+        ("raw rendered geometry", "geometry")) if marker in text), "unclassified")
+    summary["case"] = next((case for case in ("title-no-start", "start-idle", "start-move",
+        "action-sound", "action-no-trigger", "sustained-play") if case + ":" in text), "unavailable")
+    return json.dumps(summary, sort_keys=True, separators=(",", ":"))
+
+
 def shared_launch(client, command, work, report_path, timeout, *, files=(), directories=(), env=None,
                   child_cwd=None, build_scratch_root=None, build_file_size_limit_bytes=None,
                   allow_build_file_links=False, plan_id="06-51"):
@@ -1916,7 +1981,9 @@ def core(build,map_path,candidate_path,output,resume_batch=None):
                 command.extend(["--execution-scope",scope_path,
                     "--process-receipt",str(work/"nested-processes.json")])
             result,process,streams=shared_launch(build/"tools/session/gw_headless",command,work,control_path,min(600,deadline-time.monotonic()-5))
-            if result.returncode or process.get("bound_violation"):raise RuntimeError("original control driver failed")
+            if result.returncode or process.get("bound_violation"):
+                raise RuntimeError("original control driver failed:" +
+                    _original_control_failure_summary(result, process, streams, work/"nested-processes.json"))
             control=json.loads(control_path.read_text());report["controls"].append(artifact(control_path))
             for item in control["results"]:
                 route=next(r for r in routes if r["fixture"]=="genewhip-independent-game-v2" and r["case"]["id"]==item["id"])

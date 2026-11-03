@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       qualification_started_at:
-        description: Immutable UTC start from the delivery journal
+        description: Immutable UTC start from the delivery or diagnostic record
         required: true
         type: string
       qualification_base_sha:
@@ -29,7 +29,7 @@ on:
         required: false
         default: none
         type: choice
-        options: [none, recursion94-withhold-first-plate, recursion94-native-prefix]
+        options: [none, recursion94-withhold-first-plate, recursion94-native-prefix, original-control]
       diagnostic_source_sha:
         description: Exact reviewed source for the fixed native diagnostic
         required: false
@@ -50,7 +50,7 @@ on:
         description: Digest of the immutable exclusive one-shot claim
         required: false
         type: string
-run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic_case == 'recursion94-native-prefix' && format('Plan10 native prefix diagnostic {0}', inputs.qualification_nonce) || github.event_name == 'workflow_dispatch' && inputs.native_diagnostic_case == 'recursion94-withhold-first-plate' && format('Plan10 native diagnostic {0}', inputs.qualification_nonce) || github.event_name == 'workflow_dispatch' && format('Plan10 qualification {0}', inputs.qualification_nonce) || github.workflow }}
+run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic_case == 'original-control' && format('Plan10 original control diagnostic {0}', inputs.qualification_nonce) || github.event_name == 'workflow_dispatch' && inputs.native_diagnostic_case == 'recursion94-native-prefix' && format('Plan10 native prefix diagnostic {0}', inputs.qualification_nonce) || github.event_name == 'workflow_dispatch' && inputs.native_diagnostic_case == 'recursion94-withhold-first-plate' && format('Plan10 native diagnostic {0}', inputs.qualification_nonce) || github.event_name == 'workflow_dispatch' && format('Plan10 qualification {0}', inputs.qualification_nonce) || github.workflow }}
 permissions:
   contents: read
   actions: read
@@ -63,6 +63,7 @@ env:
   GENEWHIP_QUALIFICATION_SCOPE_PATH: ${{ inputs.qualification_scope_sha256 == '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' && 'evidence/v02-phase7-full-execution-scope.json' || inputs.qualification_scope_sha256 == 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' && 'evidence/v02-phase7-two-hour-execution-scope.json' || inputs.qualification_scope_sha256 == 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' && 'evidence/v02-phase7-renewed-two-hour-execution-scope.json' || inputs.qualification_scope_sha256 == 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' && 'evidence/v02-phase7-authorized-execution-scope.json' || 'evidence/v02-execution.json' }}
   GENEWHIP_QUALIFICATION_PHASE: preparation
   GENEWHIP_NATIVE_DIAGNOSTIC_CASE: ${{ inputs.native_diagnostic_case }}
+  GENEWHIP_CONTROL_DIAGNOSTIC_STARTED_AT: ${{ inputs.native_diagnostic_case == 'original-control' && inputs.qualification_started_at || '' }}
   GENEWHIP_NATIVE_DIAGNOSTIC_SOURCE_SHA: ${{ inputs.diagnostic_source_sha }}
   GENEWHIP_NATIVE_DIAGNOSTIC_STARTED_AT: ${{ inputs.native_diagnostic_started_at }}
   GENEWHIP_NATIVE_DIAGNOSTIC_DEADLINE: ${{ inputs.native_diagnostic_deadline }}
@@ -411,7 +412,7 @@ jobs:
   v02-runtime:
     if: github.event_name == 'workflow_dispatch'
     runs-on: macos-26
-    timeout-minutes: ${{ (inputs.native_diagnostic_case == 'recursion94-withhold-first-plate' || inputs.native_diagnostic_case == 'recursion94-native-prefix') && 45 || 180 }}
+    timeout-minutes: ${{ (inputs.native_diagnostic_case == 'recursion94-withhold-first-plate' || inputs.native_diagnostic_case == 'recursion94-native-prefix' || inputs.native_diagnostic_case == 'original-control') && 45 || 180 }}
     permissions:
       actions: read
       contents: read
@@ -633,9 +634,12 @@ jobs:
       - name: Reject unsupported diagnostic selectors before setup
         run: >-
           python3 -I -c 'import os; value=os.environ.get("GENEWHIP_NATIVE_DIAGNOSTIC_CASE", "");
-          assert value in ("", "none", "recursion94-withhold-first-plate", "recursion94-native-prefix"), "native-diagnostic-selector-invalid"'
+          assert value in ("", "none", "recursion94-withhold-first-plate", "recursion94-native-prefix", "original-control"), "native-diagnostic-selector-invalid"'
       - name: Require the reviewed diagnostic source before setup
         if: inputs.native_diagnostic_case == 'recursion94-withhold-first-plate'
+        run: test "$GITHUB_SHA" = "$GENEWHIP_NATIVE_DIAGNOSTIC_SOURCE_SHA"
+      - name: Require the reviewed original-control source before setup
+        if: inputs.native_diagnostic_case == 'original-control'
         run: test "$GITHUB_SHA" = "$GENEWHIP_NATIVE_DIAGNOSTIC_SOURCE_SHA"
       - name: Require the reviewed native prefix source before setup
         if: inputs.native_diagnostic_case == 'recursion94-native-prefix'
@@ -668,11 +672,25 @@ jobs:
         if: inputs.native_diagnostic_clock_profile == 'native-prefix-queue-v1'
         run: python3 -I -c 'import sys;sys.path.insert(0,".");from scripts.release.v02_qualification import native_prefix_setup_step;native_prefix_setup_step("build")'
       - name: Run complete current-source product safety and chunk roster
-        if: inputs.native_diagnostic_case != 'recursion94-withhold-first-plate' && inputs.native_diagnostic_case != 'recursion94-native-prefix'
+        if: inputs.native_diagnostic_case != 'recursion94-withhold-first-plate' && inputs.native_diagnostic_case != 'recursion94-native-prefix' && inputs.native_diagnostic_case != 'original-control'
         run: >-
           python3 -I scripts/release/v02_qualification.py --mode runtime
           --build build/v02/runtime-build --scope "$GENEWHIP_QUALIFICATION_SCOPE_PATH"
           --out build/v02/runtime-observation.json
+      - name: Diagnose original controls twice without qualification
+        if: inputs.native_diagnostic_case == 'original-control'
+        run: >-
+          python3 -I scripts/evidence/phase7_control_diagnostic.py
+          --build build/v02/runtime-build --scope "$GENEWHIP_QUALIFICATION_SCOPE_PATH"
+          --out build/v02/control-diagnostic.json
+      - name: Retain sanitized original-control diagnostic on success or failure
+        if: always() && inputs.native_diagnostic_case == 'original-control'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: original-control-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/v02/control-diagnostic.json
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Diagnose one native case without qualification
         if: inputs.native_diagnostic_case == 'recursion94-withhold-first-plate'
         run: >-
@@ -686,7 +704,7 @@ jobs:
           --build build/v02/runtime-build --scope "$GENEWHIP_QUALIFICATION_SCOPE_PATH"
           --out build/v02/native-prefix-diagnostic.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: inputs.native_diagnostic_case != 'recursion94-withhold-first-plate' && inputs.native_diagnostic_case != 'recursion94-native-prefix'
+        if: inputs.native_diagnostic_case != 'recursion94-withhold-first-plate' && inputs.native_diagnostic_case != 'recursion94-native-prefix' && inputs.native_diagnostic_case != 'original-control'
         with:
           name: v02-runtime-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -723,7 +741,6 @@ jobs:
   v02-benchmark-control:
     # Explicit needs chain below keeps all three workload benchmarks serial (max-parallel: 1).
     if: github.event_name == 'workflow_dispatch' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
-    needs: [v02-runtime]
     runs-on: macos-26
     timeout-minutes: 180
     env:
