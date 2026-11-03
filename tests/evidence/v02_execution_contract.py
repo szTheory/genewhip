@@ -15,6 +15,62 @@ from unittest.mock import patch
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
+def _safety_retention_fixture(root: pathlib.Path, runner, *, versions=None):
+    """Create report-bound build facts using CMake's generated compiler-file shape."""
+    settings = {
+        "native": {"CMAKE_BUILD_TYPE": "Debug", "CMAKE_GENERATOR": "Ninja", "CMAKE_C_FLAGS": "",
+            "CMAKE_EXE_LINKER_FLAGS": "", "BUILD_TESTING": "ON", "GENEWHIP_BUILD_TOOLS": "ON",
+            "GENEWHIP_BUILD_DESKTOP": "ON", "GENEWHIP_TEST_HOOKS": "ON"},
+        "sanitize": {"CMAKE_BUILD_TYPE": "Debug", "CMAKE_GENERATOR": "Ninja",
+            "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+            "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined", "BUILD_TESTING": "ON",
+            "GENEWHIP_BUILD_TOOLS": "ON", "GENEWHIP_BUILD_DESKTOP": "OFF", "GENEWHIP_TEST_HOOKS": "ON"},
+        "hooks-off": {"CMAKE_BUILD_TYPE": "Debug", "CMAKE_GENERATOR": "Ninja", "CMAKE_C_FLAGS": "",
+            "CMAKE_EXE_LINKER_FLAGS": "", "BUILD_TESTING": "ON", "GENEWHIP_BUILD_TOOLS": "ON",
+            "GENEWHIP_BUILD_DESKTOP": "OFF", "GENEWHIP_TEST_HOOKS": "OFF"}}
+    relatives = {"native": "build/v02/runtime-build",
+        "sanitize": "build/v02/runtime/safety/asan-ubsan",
+        "hooks-off": "build/v02/runtime/safety/hooks-off"}
+    cache_types = {"CMAKE_BUILD_TYPE": "STRING", "CMAKE_GENERATOR": "INTERNAL",
+        "CMAKE_C_FLAGS": "STRING", "CMAKE_EXE_LINKER_FLAGS": "STRING",
+        "BUILD_TESTING": "BOOL", "GENEWHIP_BUILD_TOOLS": "BOOL",
+        "GENEWHIP_BUILD_DESKTOP": "BOOL", "GENEWHIP_TEST_HOOKS": "BOOL"}
+    versions = versions or {}
+    rows = []
+    private_path_prefix = "/" + "/".join(("Users", "private-user"))
+    private_compiler_path = private_path_prefix + "/Toolchains/AppleClang/bin/clang"
+    for variant, relative in relatives.items():
+        directory = root / relative
+        directory.mkdir(parents=True)
+        cache = "\n".join(f"{key}:{cache_types[key]}={value}" for key, value in settings[variant].items())
+        cache += "\nCMAKE_C_COMPILER:FILEPATH=" + private_compiler_path
+        cache += "\nCMAKE_CACHEFILE_DIR:INTERNAL=" + private_path_prefix + "/build"
+        cache += "\nCMAKE_HOME_DIRECTORY:INTERNAL=" + private_path_prefix + "/source\n"
+        (directory / "CMakeCache.txt").write_text(cache)
+        compiler_info = directory / "CMakeFiles/4.4.3/CMakeCCompiler.cmake"
+        compiler_info.parent.mkdir(parents=True)
+        compiler_id, compiler_version = versions.get(variant, ("AppleClang", "21.0.0.21000101"))
+        compiler_info.write_text(
+            f'set(CMAKE_C_COMPILER "{private_compiler_path}")\n'
+            'set(CMAKE_C_COMPILER_ARG1 "")\n'
+            f'set(CMAKE_C_COMPILER_ID "{compiler_id}")\n'
+            f'set(CMAKE_C_COMPILER_VERSION "{compiler_version}")\n'
+            'set(CMAKE_C_COMPILER_VERSION_INTERNAL "")\n'
+            'set(CMAKE_C_COMPILER_ID_RUN 1)\n'
+            'set(CMAKE_C_COMPILER_ARCHITECTURE_ID "arm64")\n')
+        (directory / "phase6_safety").write_bytes(b"safety-bin")
+        probe = directory / "probe"
+        probe.write_bytes(b"test-bin")
+        metadata = {"source_path": compiler_info.relative_to(root).as_posix(),
+            "sha256": runner.sha(compiler_info), "size": compiler_info.stat().st_size}
+        rows.append({"variant": variant, "build_directory": relative,
+            "build_identity": {"cache_sha256": runner.sha(directory / "CMakeCache.txt"),
+                "phase6_safety_sha256": runner.sha(directory / "phase6_safety"),
+                "test_executables": {probe.relative_to(root).as_posix(): runner.sha(probe)},
+                "compiler_metadata": metadata}})
+    return rows
+
+
 class SmokeFailureDiagnosticContract(unittest.TestCase):
     def test_smoke_failure_logs_only_safe_fields_after_persisting_current_receipt(self) -> None:
         import importlib.util
@@ -691,31 +747,10 @@ class Phase7ExecutionContract(unittest.TestCase):
             root = pathlib.Path(temporary)
             runner.ROOT = root
             build = root / "build/v02/runtime-build"
-            variants = []
-            for name, relative in (("native", "build/v02/runtime-build"),
-                    ("sanitize", "build/v02/runtime/safety/asan-ubsan"),
-                    ("hooks-off", "build/v02/runtime/safety/hooks-off")):
-                directory = root / relative
-                directory.mkdir(parents=True)
-                settings = {
-                    "native": {"CMAKE_BUILD_TYPE": "Debug", "CMAKE_GENERATOR": "Ninja", "CMAKE_C_FLAGS": "",
-                        "CMAKE_EXE_LINKER_FLAGS": "", "BUILD_TESTING": "ON", "GENEWHIP_BUILD_TOOLS": "ON",
-                        "GENEWHIP_BUILD_DESKTOP": "ON", "GENEWHIP_TEST_HOOKS": "ON"},
-                    "sanitize": {"CMAKE_BUILD_TYPE": "Debug", "CMAKE_GENERATOR": "Ninja",
-                        "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
-                        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined", "BUILD_TESTING": "ON",
-                        "GENEWHIP_BUILD_TOOLS": "ON", "GENEWHIP_BUILD_DESKTOP": "OFF", "GENEWHIP_TEST_HOOKS": "ON"},
-                    "hooks-off": {"CMAKE_BUILD_TYPE": "Debug", "CMAKE_GENERATOR": "Ninja", "CMAKE_C_FLAGS": "",
-                        "CMAKE_EXE_LINKER_FLAGS": "", "BUILD_TESTING": "ON", "GENEWHIP_BUILD_TOOLS": "ON",
-                        "GENEWHIP_BUILD_DESKTOP": "OFF", "GENEWHIP_TEST_HOOKS": "OFF"}}
-                cache = "\n".join(f"{key}:STRING={value}" for key, value in {
-                    **settings[name], "CMAKE_C_COMPILER_ID": "AppleClang", "CMAKE_C_COMPILER_VERSION": "15.0.0"}.items())
-                files = {"CMakeCache.txt": cache.encode(), "phase6_safety": b"safety-bin", "probe": b"test-bin"}
-                for filename, payload in files.items(): (directory / filename).write_bytes(payload)
-                variants.append({"variant": name, "build_directory": relative,
-                    "build_identity": {"cache_sha256": runner.sha(directory / "CMakeCache.txt"),
-                        "phase6_safety_sha256": runner.sha(directory / "phase6_safety"),
-                        "test_executables": {(directory / "probe").relative_to(root).as_posix(): runner.sha(directory / "probe")}}})
+            variants = _safety_retention_fixture(root, runner)
+            cache_text = (build / "CMakeCache.txt").read_text()
+            self.assertNotIn("CMAKE_C_COMPILER_ID", cache_text)
+            self.assertNotIn("CMAKE_C_COMPILER_VERSION", cache_text)
             runtime = root / "build/v02/runtime-observation"
             runtime.mkdir(parents=True)
             report_path = runtime / "safety.json"
@@ -723,13 +758,22 @@ class Phase7ExecutionContract(unittest.TestCase):
             identity = {"schema": "test-only", "run_id": "synthetic"}
             ref = runner.retain_safety_build_evidence(build, runtime, report_path, identity)
             manifest = json.loads((root / ref["path"]).read_text())
-            self.assertEqual(manifest["entry_count"], 9)
+            self.assertEqual(manifest["entry_count"], 12)
             self.assertEqual(manifest["identity"], identity)
             self.assertEqual(json.loads(report_path.read_text())["build_evidence"], ref)
             for item in manifest["entries"]:
                 self.assertEqual(runner.sha(root / item["path"]), item["sha256"])
                 self.assertEqual(runner.sha(root / item["source_path"]), item["source_sha256"])
+            compiler_sources = {row["build_identity"]["compiler_metadata"]["source_path"] for row in variants}
+            self.assertEqual({item["source_path"] for item in manifest["entries"]
+                if item["source_path"] in compiler_sources}, compiler_sources)
             facts = json.loads((root / "build/v02/runtime-observation/safety-build-evidence/hooks-off.json").read_text())
+            self.assertEqual(facts["build_facts"]["CMAKE_C_COMPILER_ID"], "AppleClang")
+            self.assertEqual(facts["build_facts"]["CMAKE_C_COMPILER_VERSION"], "21.0.0.21000101")
+            exported_facts = json.dumps(facts)
+            private_path_prefix = "/" + "/".join(("Users", "private-user"))
+            self.assertNotIn(private_path_prefix, exported_facts)
+            self.assertNotIn('set(CMAKE_C_COMPILER "', exported_facts)
             facts["build_facts"]["GENEWHIP_TEST_HOOKS"] = "ON"
             facts_module_spec = importlib.util.spec_from_file_location("phase7_facts_policy",
                 ROOT / "scripts/evidence/v02_safety_build_facts.py")
@@ -739,6 +783,198 @@ class Phase7ExecutionContract(unittest.TestCase):
             self.assertEqual(facts_module.validate_projection(facts, "hooks-off", expected_sources),
                 "configuration:GENEWHIP_TEST_HOOKS")
 
+    def test_safety_build_identity_rejects_unbound_or_invalid_compiler_metadata(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("phase7_safety_retention_rejections",
+            ROOT / "scripts/evidence/v02_run.py")
+        runner = importlib.util.module_from_spec(spec); spec.loader.exec_module(runner)
+        expected_reasons = {"missing": "phase7-safety-build-compiler-metadata-path-invalid:native",
+            "ambiguous": "compiler-metadata-ambiguous", "malformed": "compiler-metadata-invalid",
+            "digest": "phase7-safety-build-compiler-metadata-changed:native",
+            "compiler-mismatch": "phase7-safety-build-configuration-invalid:hooks-off:compiler-mismatch",
+            "cache-mismatch": "compiler-metadata-cache-mismatch"}
+        for mutation, expected_reason in expected_reasons.items():
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory(
+                    prefix="gw-v02-safety-metadata-", dir=ROOT / "build/v02") as temporary:
+                root = pathlib.Path(temporary)
+                runner.ROOT = root
+                build = root / "build/v02/runtime-build"
+                variants = _safety_retention_fixture(root, runner,
+                    versions={"hooks-off": ("AppleClang", "20.1.0")} if mutation == "compiler-mismatch" else None)
+                native = root / variants[0]["build_directory"]
+                metadata_ref = variants[0]["build_identity"]["compiler_metadata"]
+                metadata_path = root / metadata_ref["source_path"]
+                if mutation == "missing":
+                    metadata_path.unlink()
+                elif mutation == "ambiguous":
+                    duplicate = native / "CMakeFiles/4.4.4/CMakeCCompiler.cmake"
+                    duplicate.parent.mkdir(parents=True)
+                    duplicate.write_bytes(metadata_path.read_bytes())
+                elif mutation == "malformed":
+                    metadata_path.write_text('set(CMAKE_C_COMPILER_ID "AppleClang")\n')
+                    metadata_ref["sha256"] = runner.sha(metadata_path)
+                    metadata_ref["size"] = metadata_path.stat().st_size
+                elif mutation == "digest":
+                    metadata_ref["sha256"] = "0" * 64
+                elif mutation == "cache-mismatch":
+                    cache_path = native / "CMakeCache.txt"
+                    cache_path.write_text(cache_path.read_text() +
+                        "CMAKE_C_COMPILER_ID:STRING=Clang\n"
+                        "CMAKE_C_COMPILER_VERSION:STRING=21.0.0\n")
+                    variants[0]["build_identity"]["cache_sha256"] = runner.sha(cache_path)
+
+                runtime = root / "build/v02/runtime-observation"
+                runtime.mkdir(parents=True)
+                report_path = runtime / "safety.json"
+                report_path.write_text(json.dumps({"variants": variants}))
+                with self.assertRaises(ValueError) as raised:
+                    runner.retain_safety_build_evidence(build, runtime, report_path,
+                        {"schema": "test-only", "run_id": "synthetic"})
+                self.assertIn(expected_reason, str(raised.exception))
+
+    def test_scoped_chunk_report_keeps_reader_refresh_null_without_legacy_refresh(self) -> None:
+        import importlib.util
+        from unittest import mock
+
+        spec = importlib.util.spec_from_file_location("phase7_scoped_chunk_reader_refresh",
+            ROOT / "tests/fixtures/phase6_game.py")
+        fixture = importlib.util.module_from_spec(spec); spec.loader.exec_module(fixture)
+        with tempfile.TemporaryDirectory(prefix="gw-v02-scoped-chunk-") as temporary:
+            root = pathlib.Path(temporary).resolve()
+            fixture.ROOT = root
+            build = root / "build/phase6"
+            executable = build / "tools/session/phase6_chunk_contract"
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b"mocked chunk executable; never launched")
+            source = root / "tests/session/phase6_chunk_contract.c"
+            source.parent.mkdir(parents=True)
+            source.write_text("mocked report identity source\n")
+            runtime = root / "build/v02/runtime"
+            runtime.mkdir(parents=True)
+            candidate_path = root / "candidate.json"
+            candidate = {"candidate": "scoped-chunk"}
+            candidate_path.write_text(json.dumps(candidate))
+            mapping_path = root / "delivery-map.json"
+            mapping_path.write_text("{}\n")
+            core_path = runtime / "core-report.json"
+            input_rows = [{"machine_tick": 112, "port": 0, "effective": 1}]
+            title_names = ("recursion94", "tank-battle")
+            source_runs = []
+            child_inputs = {}
+            original_sources = fixture.compiler.SOURCES
+            replacement_sources = dict(original_sources)
+            for title in title_names:
+                title_dir = root / "fixtures"
+                title_dir.mkdir(exist_ok=True)
+                rom = title_dir / ("fixture-" + title + ".bin")
+                rom.write_bytes(b"fixture rom bytes")
+                old = replacement_sources[title]
+                replacement_sources[title] = (*old[:3], rom.relative_to(root).as_posix())
+                native = {"status": 0, "fields": 1, "active_ticks": 100,
+                    "final_tick": 128, "audio_frames": 1, "inputs": input_rows}
+                native_path = runtime / (title + "-native.json")
+                native_path.write_text(json.dumps(native))
+                media_path = runtime / (title + "-media.bin")
+                media_path.write_bytes((title + " selected frame").encode())
+                pcm_path = runtime / (title + "-pcm.bin")
+                pcm_path.write_bytes((title + " full pcm").encode())
+                source_runs.append({"fixture": title, "case": "full-route", "repetition": 1,
+                    "native_report": fixture.artifact(native_path), "image": fixture.artifact(media_path),
+                    "pcm": fixture.artifact(pcm_path), "field_sequence": [1]})
+                child_inputs[rom.name] = {"native": native, "media": media_path, "pcm": pcm_path,
+                    "field_sequence": [1]}
+            fixture.compiler.SOURCES = replacement_sources
+            core = {"candidate_sha256": fixture.canonical_sha(candidate), "runs": source_runs}
+            core_path.write_text(json.dumps(core))
+            scope = {"schema": "genewhip-v02-execution-v1", "scope_id": "phase7-serial-child-workloads",
+                "qualification_batch": {"runtime_wall_seconds": 600}, "_core_report_path": str(core_path)}
+
+            def fnv(path):
+                value = 14695981039346656037
+                for byte in path.read_bytes():
+                    value = ((value ^ byte) * 1099511628211) & ((1 << 64) - 1)
+                return f"{value:016x}"
+
+            command_calls = []
+            def fake_command(command, timeout):
+                command_calls.append(command)
+                if "--show-only=json-v1" in command:
+                    stdout = json.dumps({"tests": [{"name": "phase6_chunk_contract",
+                        "command": [str(executable)]}]})
+                else:
+                    stdout = "100% tests passed\n"
+                return subprocess.CompletedProcess(command, 0, stdout, "")
+
+            def fake_shared_launch(_client, command, _work, report_path, _timeout, **_kwargs):
+                context = child_inputs[pathlib.Path(command[2]).name]
+                native = context["native"]
+                title = pathlib.Path(command[2]).name.removesuffix(".bin").removeprefix("fixture-")
+                fields = native["fields"]
+                document = {"schema": "genewhip-phase6-title-chunk-v1", "status": "pass",
+                    "fields": fields, "events": len(native["inputs"]), "variable_calls": 1,
+                    "pcm_frames": native["audio_frames"], "pcm_fnv1a64": fnv(context["pcm"]),
+                    "media_sequence": context["field_sequence"], "media_fnv1a64": fnv(context["media"]),
+                    "boundary_ram_fnv1a64": "a" * 16, "boundary_diagnostic_fnv1a64": "b" * 16,
+                    "pair_comparison": "pass",
+                    "common_boundary_comparisons": {key: fields for key in ("ram", "cpu_state", "video", "pcm")},
+                    "input_order_events_compared": len(native["inputs"]),
+                    "terminal_tick_target": native["final_tick"], "terminal_boundary_comparison": "pass",
+                    "baseline_mode": "one-instruction-stop308" if title == "recursion94" else "coarse-4096-stop308",
+                    "instruction_events_dropped": 0, "baseline_calls": 1, "trace_segments": 1,
+                    "compared_instruction_events": 1, "terminal_tick_actual": native["final_tick"]}
+                report_path.write_text(json.dumps(document))
+                stdout = report_path.read_text()
+                process = {"process_group_cleanup": "confirmed", "status": "completed",
+                    "return_code": 0, "pid": 1, "pgid": 1, "bound_violation": False, "wall_seconds": 0.01}
+                return subprocess.CompletedProcess(command, 0, stdout, ""), process, {"stdout": {"text": stdout}}
+
+            output = runtime / "chunk-report.json"
+            now = fixture.datetime.datetime.now(fixture.datetime.timezone.utc)
+            fixture.set_execution_scope({**scope,
+                "qualification_started_at": now.isoformat(),
+                "qualification_deadline": (now + fixture.datetime.timedelta(minutes=10)).isoformat()})
+            try:
+                with mock.patch.object(fixture, "_command", side_effect=fake_command), \
+                     mock.patch.object(fixture, "shared_launch", side_effect=fake_shared_launch), \
+                     mock.patch.object(fixture.compiler, "validate_delivery_map", return_value={}), \
+                     mock.patch.object(fixture.compiler, "validate_product_report"), \
+                     mock.patch.object(fixture, "refresh_reader_bound_proofs") as legacy_refresh:
+                    fixture.chunk(build, candidate_path, mapping_path, output)
+                report = json.loads(output.read_text())
+                self.assertEqual(report["reader_refresh"], None)
+                self.assertEqual({row["fixture"] for row in report["routes"]}, set(title_names))
+                self.assertTrue(all(row["status"] == "pass" for row in report["routes"]))
+                self.assertEqual(len(command_calls), 2)
+                legacy_refresh.assert_not_called()
+            finally:
+                fixture.set_execution_scope(None)
+                fixture.compiler.SOURCES = original_sources
+
+    def test_completed_chunk_reference_requires_two_distinct_passing_titles(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("phase7_completed_chunk_reference",
+            ROOT / "scripts/evidence/v02_run.py")
+        runner = importlib.util.module_from_spec(spec); spec.loader.exec_module(runner)
+        valid = {"schema": "genewhip-phase6-chunk-v1", "status": "pass", "routes": [
+            {"fixture": "recursion94", "status": "pass"},
+            {"fixture": "tank-battle", "status": "pass"}]}
+        with tempfile.TemporaryDirectory(prefix="gw-v02-chunk-reference-", dir=ROOT / "build/v02") as temporary:
+            path = pathlib.Path(temporary) / "chunk.json"
+            path.write_text(json.dumps(valid))
+            self.assertEqual(runner.completed_chunk_reference(path),
+                {"path": path.relative_to(ROOT).as_posix(), "sha256": runner.sha(path)})
+            mutants = {
+                "pending": {**valid, "status": "pending"},
+                "missing": {**valid, "routes": valid["routes"][:1]},
+                "duplicate": {**valid, "routes": [valid["routes"][0], valid["routes"][0]]},
+                "nonpassing": {**valid, "routes": [valid["routes"][0],
+                    {"fixture": "tank-battle", "status": "unknown"}]}}
+            for name, report in mutants.items():
+                with self.subTest(name=name):
+                    path.write_text(json.dumps(report))
+                    with self.assertRaisesRegex(ValueError, "phase7-chunk-roster-incomplete"):
+                        runner.completed_chunk_reference(path)
+
     def test_full_dispatch_routes_exact_collectors_with_one_safe_synthetic_child(self) -> None:
         import importlib.util
         spec = importlib.util.spec_from_file_location("phase7_dispatch_isolation", ROOT / "scripts/evidence/v02_run.py")
@@ -746,14 +982,23 @@ class Phase7ExecutionContract(unittest.TestCase):
         original_module = runner._module
         original_retain_safety = runner.retain_safety_build_evidence
         modules = {}
-        routed = {"core": 0, "input": [], "host": [], "safety": 0, "chunk": 0}
+        routed = {"core": 0, "input": [], "host": [], "safety": 0, "chunk": 0, "preflight": []}
         def load(path, name):
             key = str(path)
             if key in modules:
                 return modules[key]
             value = original_module(path, name)
             modules[key] = value
-            if pathlib.Path(key).name == "phase6_game.py":
+            if pathlib.Path(key) == runner.FACTS_POLICY_PATH:
+                facts = {**value.FIXED_SETTINGS["native"],
+                    "CMAKE_C_COMPILER_ID": "AppleClang",
+                    "CMAKE_C_COMPILER_VERSION": "21.0.0.21000101"}
+                def project_dispatch_preflight(cache_path):
+                    routed["preflight"].append(pathlib.Path(cache_path))
+                    return dict(facts), {"path": pathlib.Path(cache_path).parent /
+                        "CMakeFiles/4.4.3/CMakeCCompiler.cmake", "sha256": "a" * 64, "size": 1}
+                value.project_cache_inputs = project_dispatch_preflight
+            elif pathlib.Path(key).name == "phase6_game.py":
                 def fake_candidate(build, mapping, output):
                     candidate = {"candidate": "synthetic"}
                     output.parent.mkdir(parents=True, exist_ok=True)
@@ -774,7 +1019,12 @@ class Phase7ExecutionContract(unittest.TestCase):
                 value.core = fake_core
                 value.media = lambda build, candidate, output, core=None: output.write_text(json.dumps({"result":"pass"})) or 0
                 value.safety = lambda build, candidate, output: (routed.__setitem__("safety", routed["safety"] + 1), output.write_text("{}"))
-                value.chunk = lambda build, candidate, mapping, output: (routed.__setitem__("chunk", routed["chunk"] + 1), output.write_text("{}"))
+                def fake_chunk(build, candidate, mapping, output):
+                    routed["chunk"] += 1
+                    output.write_text(json.dumps({"schema": "genewhip-phase6-chunk-v1", "status": "pass",
+                        "routes": [{"fixture": title, "status": "pass"}
+                            for title in ("recursion94", "tank-battle")]}))
+                value.chunk = fake_chunk
             elif pathlib.Path(key).name == "phase6_routes.py" and key.endswith("tests/desktop/phase6_routes.py"):
                 value.compiler.validate_host_report = lambda report, candidate: None
                 def fake_input(build, mapping, output, candidate, backend):
@@ -806,6 +1056,7 @@ class Phase7ExecutionContract(unittest.TestCase):
                 self.assertEqual(sorted(routed["input"]), ["native", "software"])
                 self.assertEqual(sorted(routed["host"]), ["native", "software"])
                 self.assertEqual((routed["safety"], routed["chunk"]), (1, 1))
+                self.assertEqual(routed["preflight"], [ROOT / "build/phase6/CMakeCache.txt"])
                 self.assertEqual(routed["child_receipt"]["status"], "completed")
                 self.assertEqual(routed["child_receipt"]["process_group_cleanup"], "confirmed")
                 self.assertEqual(result["isolation_preflight"]["production_child_starts"], 0)

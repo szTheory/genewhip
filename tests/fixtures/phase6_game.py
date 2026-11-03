@@ -886,6 +886,26 @@ def safety(build, candidate_path, output):
     freeze_build_provenance(candidate,base)
     rows=[];native_parser_report_path=None
     runtime_root=ROOT/"build/v02/runtime/safety" if _EXECUTION_SCOPE is not None else ROOT/"build"
+    safety_facts_policy=(load_module("gw_v02_safety_build_facts_preflight",
+        ROOT/"scripts/evidence/v02_safety_build_facts.py") if _EXECUTION_SCOPE is not None else None)
+
+    def scoped_compiler_metadata(directory, variant):
+        facts, compiler_input=safety_facts_policy.project_cache_inputs(directory/"CMakeCache.txt")
+        problem=safety_facts_policy.validate_configuration(variant,facts)
+        if problem:
+            raise RuntimeError(f"phase7-safety-build-configuration-invalid:{variant}:{problem}")
+        compiler_path=compiler_input["path"]
+        try:
+            relative=compiler_path.resolve(strict=True).relative_to(ROOT.resolve(strict=True)).as_posix()
+            build_relative=directory.resolve(strict=True).relative_to(ROOT.resolve(strict=True)).as_posix()
+        except (OSError,ValueError) as error:
+            raise RuntimeError(f"phase7-safety-build-compiler-metadata-path-invalid:{variant}") from error
+        if (not relative.startswith(build_relative+"/") or compiler_path.is_symlink() or
+                compiler_input["size"] <= 0 or
+                compiler_input["size"] > safety_facts_policy.MAX_COMPILER_METADATA_BYTES):
+            raise RuntimeError(f"phase7-safety-build-compiler-metadata-path-invalid:{variant}")
+        return {"source_path":relative,"sha256":compiler_input["sha256"],"size":compiler_input["size"]}
+
     for variant,directory,cache_args in (
         ("native",base,[]),
         ("sanitize",runtime_root/("asan-ubsan" if _EXECUTION_SCOPE is not None else "phase6-sanitize"),["-DCMAKE_BUILD_TYPE=Debug",
@@ -907,6 +927,8 @@ def safety(build, candidate_path, output):
             result=_command(configure,120)
             commands.append(configure)
             if result.returncode:raise RuntimeError(f"{variant}-configure:{result.stderr[-3000:]}")
+        compiler_metadata=(scoped_compiler_metadata(directory,variant)
+            if _EXECUTION_SCOPE is not None else None)
         targets=["gw_bounded_fuzz","phase6_safety","load_contract","time_contract","reset_contract",
             "bus_boundary_contract","gameplay_bus_contract","movem_contract","phase6_repairs_contract",
             "session_contract","input_log_contract","phase6_chunk_contract","gw_headless"]
@@ -980,6 +1002,12 @@ def safety(build, candidate_path, output):
             path=pathlib.Path(by_name[name]["command"][0])
             if path.is_relative_to(directory) and path.is_file():
                 test_binaries[str(path.relative_to(ROOT))]=sha(path)
+        build_identity={"cache_sha256":sha(directory/"CMakeCache.txt"),
+            "phase6_safety_sha256":sha(directory/"phase6_safety"),
+            "test_executables":test_binaries,"hooks_off":variant=="hooks-off",
+            "sanitizers":variant=="sanitize"}
+        if compiler_metadata is not None:
+            build_identity["compiler_metadata"]=compiler_metadata
         rows.append({"variant":variant,"build_directory":str(directory.resolve().relative_to(ROOT)),
             "selected_tests":selected,"denominator":len(results),
             "pass":sum(r["exit_code"]==0 for r in results),"fail":0,"unknown":0,"skipped":0,
@@ -995,9 +1023,7 @@ def safety(build, candidate_path, output):
                 "rejected_loads":fuzz_summary["rejected_loads"]},
             "fuzz":{"summary":fuzz_summary,"command":[str(fuzz_bin.relative_to(ROOT))]},"api_contract":artifact(report_path),
             "ctest_json_sha256":hashlib.sha256(listing.stdout.encode()).hexdigest(),
-            "build_identity":{"cache_sha256":sha(directory/"CMakeCache.txt"),"phase6_safety_sha256":sha(directory/"phase6_safety"),
-                "test_executables":test_binaries,
-                "hooks_off":variant=="hooks-off","sanitizers":variant=="sanitize"}})
+            "build_identity":build_identity})
     report={"schema":"genewhip-phase6-safety-v1","candidate_sha256":canonical_sha(candidate),
         "source_provenance":{path:sha(ROOT/path) for path in SAFETY_SOURCE_PATHS},
         "variants":rows,"registered_tests":list(SAFETY_TESTS),
@@ -1230,6 +1256,7 @@ def chunk(build,candidate_path,delivery_map_path,output):
     """Compare actual full-title public API execution at every common field boundary."""
     build=build.resolve(strict=True);candidate=json.loads(candidate_path.read_text())
     mapping=json.loads(delivery_map_path.read_text());compiler.validate_delivery_map(mapping)
+    reader_refresh=None
     if _EXECUTION_SCOPE is not None:
         core_report_path=_EXECUTION_SCOPE.get("_core_report_path")
         if not isinstance(core_report_path,str):raise RuntimeError("phase7-chunk-current-core-path-missing")
