@@ -847,6 +847,29 @@ def _external(argv: list[str], *, cwd: pathlib.Path = ROOT, timeout: int = 120,
     return result
 
 
+def _gh_pull_request_status(repository: str, pull_request: str) -> subprocess.CompletedProcess[str]:
+    """Read PR status, retrying only a small set of transient GitHub API errors."""
+    argv = ["gh", "pr", "view", pull_request, "--repo", repository,
+        "--json", "number,state,headRefOid,baseRefOid,mergeStateStatus,statusCheckRollup,url"]
+    for attempt in range(3):
+        # check=False lets this fixed read-only route inspect the CLI's HTTP
+        # status after the monitored runner has recorded and confirmed cleanup.
+        # Boundary/cleanup failures still raise from _external and escape here.
+        result = _external(argv, timeout=45, check=False)
+        if result.returncode == 0:
+            return result
+        stderr = result.stderr if isinstance(result.stderr, str) else ""
+        transient = re.search(r"\bHTTP\s+(502|503|504)\b", stderr, re.IGNORECASE)
+        if transient is None or attempt == 2:
+            combined = (result.stdout + "\n" + result.stderr).lower()
+            if any(term in combined for term in (
+                    "not logged in", "not authenticated", "unauthorized", "401")):
+                raise ValueError("github-authentication-required")
+            raise ValueError("hosted-delivery-command-failed:gh")
+        time.sleep(attempt + 1)
+    raise AssertionError("unreachable-gh-pr-status-retry-state")
+
+
 def _advance_native_prefix_settlement_if_due(projection: dict[str, Any]) -> int:
     """At collector cutoff U, allow provider settlement only through H=min(C,J)."""
     if (not isinstance(projection, dict)
@@ -4461,8 +4484,7 @@ def publish_sanitized_source(packet_path: pathlib.Path, publication_copy: pathli
         _require_hosted_budget(started_at, datetime.datetime.now(datetime.timezone.utc).isoformat(),
                                json.loads((ROOT / "evidence/v02-execution.json").read_text()),
                                phase="runtime" if batch_authorization is not None else None)
-        pr_data = _external(["gh", "pr", "view", pr_number, "--repo", repository,
-            "--json", "number,state,headRefOid,baseRefOid,mergeStateStatus,statusCheckRollup,url"], timeout=45)
+        pr_data = _gh_pull_request_status(repository, pr_number)
         try:
             current = json.loads(pr_data.stdout)
         except json.JSONDecodeError:
