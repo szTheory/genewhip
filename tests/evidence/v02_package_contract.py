@@ -18,6 +18,7 @@ from unittest.mock import patch
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 TASK_INPUTS = (
     "packaging/v02-members.json", "CMakeLists.txt", "scripts/package_sdk.py", "scripts/package_archive.py",
+    "scripts/evidence/v02_scope.py", "tools/evidence/core_benchmark.py",
     "tests/package/smoke.py", "tests/evidence/v02_package_contract.py",
     "scripts/package_desktop.py", "tests/package/desktop_smoke.py",
     "README.md", "packaging/README.md", "packaging/desktop/README.md",
@@ -220,6 +221,185 @@ class V02PackageContract(unittest.TestCase):
         self.assertIn("share/genewhip/tank-battle.bin", paths)
         self.assertIn("share/genewhip/recursion94.bin", paths)
 
+    def test_performance_evidence_uses_selected_scope_and_rejects_scope_mutants(self):
+        sdk_spec = importlib.util.spec_from_file_location(
+            "gw_package_scope_selection", ROOT / "scripts/package_sdk.py")
+        sdk = importlib.util.module_from_spec(sdk_spec)
+        sdk_spec.loader.exec_module(sdk)
+        benchmark = sdk._load_benchmark_module()
+        fixture_spec = importlib.util.spec_from_file_location(
+            "gw_package_scope_report_fixtures", ROOT / "tests/evidence/v02_qualification_contract.py")
+        fixtures = importlib.util.module_from_spec(fixture_spec)
+        fixture_spec.loader.exec_module(fixtures)
+
+        legacy_relative = pathlib.Path("evidence/v02-execution.json")
+        authorized_relative = pathlib.Path("evidence/v02-phase7-authorized-execution-scope.json")
+        legacy_bytes = (ROOT / legacy_relative).read_bytes()
+        authorized_bytes = (ROOT / authorized_relative).read_bytes()
+        legacy_sha = hashlib.sha256(legacy_bytes).hexdigest()
+        authorized_sha = hashlib.sha256(authorized_bytes).hexdigest()
+        identity = {"source_sha": "a" * 40, "head_sha": "a" * 40,
+                    "base_sha": "c" * 40, "run_id": "123456", "run_attempt": "2"}
+        source_identity_sha = benchmark.source_identity()
+
+        with tempfile.TemporaryDirectory(prefix="gw-package-scope-contract-") as directory:
+            root = pathlib.Path(directory)
+            legacy_path, authorized_path = root / legacy_relative, root / authorized_relative
+            legacy_path.parent.mkdir(parents=True, exist_ok=True)
+            authorized_path.parent.mkdir(parents=True, exist_ok=True)
+            legacy_path.write_bytes(legacy_bytes)
+            authorized_path.write_bytes(authorized_bytes)
+            report_root = root / "build/v02/collected"
+            report_root.mkdir(parents=True)
+            performance_path = root / "build/v02/public/performance.json"
+            performance_path.parent.mkdir(parents=True)
+
+            def write_projection(scope_path, scope_sha):
+                scope = json.loads(scope_path.read_text())
+                reports = fixtures.synthetic_qualified_reports(benchmark, identity,
+                    source_identity_sha, scope["scope_id"], scope_sha)
+                raw_digests = {}
+                for workload, report in reports.items():
+                    report_path = report_root / ("benchmark-" + workload) / ("benchmark-" + workload + ".json")
+                    report_path.parent.mkdir(parents=True, exist_ok=True)
+                    report_path.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n")
+                    raw_digests[workload] = hashlib.sha256(report_path.read_bytes()).hexdigest()
+                projection = benchmark.build_public_performance_projection(reports, raw_digests,
+                    identity=identity, source_identity_sha256=source_identity_sha,
+                    scope_id=scope["scope_id"], scope_sha256=scope_sha)
+                performance_path.write_text(json.dumps(projection, sort_keys=True, indent=2) + "\n")
+                return projection
+
+            scope_env = {
+                "GITHUB_SHA": identity["head_sha"],
+                "GITHUB_BASE_SHA": identity["base_sha"],
+                "GITHUB_RUN_ID": identity["run_id"],
+                "GITHUB_RUN_ATTEMPT": identity["run_attempt"],
+            }
+            with patch.object(sdk, "ROOT", root), patch.object(sdk, "_load_benchmark_module",
+                    return_value=benchmark):
+                for relative, scope_sha, scope_bytes in (
+                        (authorized_relative, authorized_sha, authorized_bytes),
+                        (legacy_relative, legacy_sha, legacy_bytes)):
+                    selected_path = relative.as_posix() if relative == authorized_relative else ""
+                    selector = {**scope_env,
+                        "GENEWHIP_QUALIFICATION_SCOPE_PATH": selected_path,
+                        "GENEWHIP_QUALIFICATION_SCOPE_SHA256": scope_sha if selected_path else ""}
+                    with self.subTest(profile=relative.name), patch.dict(os.environ, selector):
+                        scope_path = root / relative
+                        projection = write_projection(scope_path, scope_sha)
+                        self.assertEqual(projection["scope_sha256"], hashlib.sha256(scope_bytes).hexdigest())
+                        digest = sdk._validate_performance_evidence(performance_path, identity["source_sha"])
+                        self.assertEqual(digest, hashlib.sha256(performance_path.read_bytes()).hexdigest())
+
+                with patch.dict(os.environ, {**scope_env,
+                        "GENEWHIP_QUALIFICATION_SCOPE_PATH": authorized_relative.as_posix(),
+                        "GENEWHIP_QUALIFICATION_SCOPE_SHA256": authorized_sha}):
+                    write_projection(authorized_path, authorized_sha)
+                    scope_module = sdk._load_scope_module()
+                    original_read_scope = scope_module.read_scope
+
+                    def read_then_replace(*args, **kwargs):
+                        selected_path, selected_bytes = original_read_scope(*args, **kwargs)
+                        selected_path.write_bytes(selected_bytes + b" ")
+                        return selected_path, selected_bytes
+
+                    with patch.object(sdk, "_load_scope_module", return_value=scope_module), \
+                            patch.object(scope_module, "read_scope", side_effect=read_then_replace):
+                        digest = sdk._validate_performance_evidence(performance_path, identity["source_sha"])
+                    self.assertEqual(digest, hashlib.sha256(performance_path.read_bytes()).hexdigest())
+                    self.assertNotEqual(hashlib.sha256(authorized_path.read_bytes()).hexdigest(), authorized_sha)
+                    authorized_path.write_bytes(authorized_bytes)
+
+                with patch.dict(os.environ, {**scope_env,
+                        "GENEWHIP_QUALIFICATION_SCOPE_PATH": authorized_relative.as_posix(),
+                        "GENEWHIP_QUALIFICATION_SCOPE_SHA256": "0" * 64}):
+                    write_projection(authorized_path, authorized_sha)
+                    with self.assertRaisesRegex(ValueError,
+                            "package-performance-scope-profile-invalid"):
+                        sdk._validate_performance_evidence(performance_path, identity["source_sha"])
+
+                with patch.dict(os.environ, {**scope_env,
+                        "GENEWHIP_QUALIFICATION_SCOPE_PATH": legacy_relative.as_posix(),
+                        "GENEWHIP_QUALIFICATION_SCOPE_SHA256": authorized_sha}):
+                    with self.assertRaisesRegex(ValueError,
+                            "package-performance-scope-profile-invalid"):
+                        sdk._validate_performance_evidence(performance_path, identity["source_sha"])
+
+                authorized_path.write_bytes(authorized_bytes + b" ")
+                with patch.dict(os.environ, {**scope_env,
+                        "GENEWHIP_QUALIFICATION_SCOPE_PATH": authorized_relative.as_posix(),
+                        "GENEWHIP_QUALIFICATION_SCOPE_SHA256": authorized_sha}):
+                    with self.assertRaisesRegex(ValueError,
+                            "package-performance-scope-profile-invalid"):
+                        sdk._validate_performance_evidence(performance_path, identity["source_sha"])
+
+                authorized_path.write_bytes(authorized_bytes)
+                with patch.dict(os.environ, {**scope_env,
+                        "GENEWHIP_QUALIFICATION_SCOPE_PATH": authorized_relative.as_posix(),
+                        "GENEWHIP_QUALIFICATION_SCOPE_SHA256": authorized_sha}):
+                    projection = write_projection(authorized_path, authorized_sha)
+                    projection["scope_sha256"] = "f" * 64
+                    performance_path.write_text(json.dumps(projection, sort_keys=True, indent=2) + "\n")
+                    with self.assertRaisesRegex(ValueError,
+                            "public-performance-policy-rejected:.*public-performance-envelope"):
+                        sdk._validate_performance_evidence(performance_path, identity["source_sha"])
+
+    def test_staged_local_package_validation_keeps_authorized_scope_and_current_validator(self):
+        authorized_relative = pathlib.Path("evidence/v02-phase7-authorized-execution-scope.json")
+        authorized_sha = hashlib.sha256((ROOT / authorized_relative).read_bytes()).hexdigest()
+        selectors = {"GENEWHIP_QUALIFICATION_SCOPE_PATH": authorized_relative.as_posix(),
+            "GENEWHIP_QUALIFICATION_SCOPE_SHA256": authorized_sha}
+        with patch.dict(os.environ, selectors):
+            child_env = package_child_environment()
+        self.assertEqual({name: child_env[name] for name in selectors}, selectors)
+
+        fixture_spec = importlib.util.spec_from_file_location(
+            "gw_staged_package_report_fixtures", ROOT / "tests/evidence/v02_qualification_contract.py")
+        fixtures = importlib.util.module_from_spec(fixture_spec)
+        fixture_spec.loader.exec_module(fixtures)
+        revision = "d" * 40
+        identity = {"source_sha": revision, "head_sha": revision, "base_sha": revision,
+                    "run_id": "local", "run_attempt": "1"}
+
+        with tempfile.TemporaryDirectory(prefix="gw-v02-staged-scope-contract-") as directory:
+            source, unused_revision = stage_source_snapshot(pathlib.Path(directory) / "source", commit=False)
+            self.assertIsNone(unused_revision)
+            for relative in ("scripts/evidence/v02_scope.py", "tools/evidence/core_benchmark.py"):
+                self.assertEqual((source / relative).read_bytes(), (ROOT / relative).read_bytes())
+
+            sdk_spec = importlib.util.spec_from_file_location(
+                "gw_staged_scope_package_sdk", source / "scripts/package_sdk.py")
+            staged_sdk = importlib.util.module_from_spec(sdk_spec)
+            sdk_spec.loader.exec_module(staged_sdk)
+            staged_scope_module = staged_sdk._load_scope_module()
+            self.assertEqual(pathlib.Path(staged_scope_module.__file__).resolve(),
+                (source / "scripts/evidence/v02_scope.py").resolve())
+            benchmark = staged_sdk._load_benchmark_module()
+            self.assertEqual(benchmark.ROOT.resolve(), source.resolve())
+            scope_path = source / authorized_relative
+            scope = json.loads(scope_path.read_text())
+            source_identity_sha = benchmark.source_identity()
+            reports = fixtures.synthetic_qualified_reports(benchmark, identity,
+                source_identity_sha, scope["scope_id"], authorized_sha)
+            raw_digests = {}
+            report_root = source / "build/v02/collected"
+            for workload, report in reports.items():
+                report_path = report_root / ("benchmark-" + workload) / ("benchmark-" + workload + ".json")
+                report_path.parent.mkdir(parents=True, exist_ok=True)
+                report_path.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n")
+                raw_digests[workload] = hashlib.sha256(report_path.read_bytes()).hexdigest()
+            projection = benchmark.build_public_performance_projection(reports, raw_digests,
+                identity=identity, source_identity_sha256=source_identity_sha,
+                scope_id=scope["scope_id"], scope_sha256=authorized_sha)
+            performance_path = source / "build/v02/public/performance.json"
+            performance_path.parent.mkdir(parents=True, exist_ok=True)
+            performance_path.write_text(json.dumps(projection, sort_keys=True, indent=2) + "\n")
+
+            with patch.dict(os.environ, child_env, clear=True):
+                digest = staged_sdk._validate_performance_evidence(performance_path, revision)
+            self.assertEqual(digest, hashlib.sha256(performance_path.read_bytes()).hexdigest())
+
 
     def test_reviewed_roster_closes_every_member_to_a_notice_and_right(self):
         spec = importlib.util.spec_from_file_location("gw_package_sdk_contract", ROOT / "scripts/package_sdk.py")
@@ -263,7 +443,7 @@ class V02PackageContract(unittest.TestCase):
                 cwd=second, text=True), "")
 
 
-def stage_source_snapshot(destination):
+def stage_source_snapshot(destination, *, commit=True):
     """Build an isolated development-only Git snapshot from HEAD plus declared task inputs."""
     destination = pathlib.Path(destination).resolve()
     destination.mkdir(parents=True, exist_ok=False)
@@ -277,9 +457,11 @@ def stage_source_snapshot(destination):
         target.write_bytes(source.read_bytes())
         target.chmod(source.stat().st_mode & 0o777)
     subprocess.run(["git", "init", "--quiet"], cwd=destination, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=destination, check=True)
+    if not commit:
+        return destination, None
     subprocess.run(["git", "config", "user.name", "Genewhip development snapshot"], cwd=destination, check=True)
     subprocess.run(["git", "config", "user.email", "development-snapshot@example.invalid"], cwd=destination, check=True)
-    subprocess.run(["git", "add", "-A"], cwd=destination, check=True)
     snapshot_env = dict(os.environ, GIT_CONFIG_NOSYSTEM="1",
                         GIT_AUTHOR_DATE="2000-01-01T00:00:00Z",
                         GIT_COMMITTER_DATE="2000-01-01T00:00:00Z")
@@ -313,6 +495,16 @@ def pinned_sdl_archive(*, required=True):
     return None
 
 
+def package_child_environment():
+    """Keep only required local tooling variables and the selected scope identity."""
+    names = ("PATH", "HOME", "TMPDIR", "DEVELOPER_DIR", "SDKROOT", "CC", "CXX",
+        "CFLAGS", "CXXFLAGS", "AR", "MACOSX_DEPLOYMENT_TARGET",
+        "GENEWHIP_QUALIFICATION_SCOPE_PATH", "GENEWHIP_QUALIFICATION_SCOPE_SHA256")
+    build_env = {name: os.environ[name] for name in names if name in os.environ}
+    build_env["GIT_CONFIG_NOSYSTEM"] = "1"
+    return build_env
+
+
 def execute_local_package(kind, public_evidence, output_dir):
     if kind not in ("sdk", "desktop"):
         raise ValueError("package-kind-invalid")
@@ -338,10 +530,7 @@ def execute_local_package(kind, public_evidence, output_dir):
         builder = "scripts/package_sdk.py" if kind == "sdk" else "scripts/package_desktop.py"
         command = [sys.executable, str(source / builder), "--release-version", "0.2.0", "--source-sha", revision,
                    "--public-evidence", str(evidence), "--output-dir", str(output), "--development-only"]
-        build_env = {name: os.environ[name] for name in (
-            "PATH", "HOME", "TMPDIR", "DEVELOPER_DIR", "SDKROOT", "CC", "CXX",
-            "CFLAGS", "CXXFLAGS", "AR", "MACOSX_DEPLOYMENT_TARGET") if name in os.environ}
-        build_env.update({"GIT_CONFIG_NOSYSTEM": "1"})
+        build_env = package_child_environment()
         if sdl_archive is not None:
             build_env["GENEWHIP_SDL3_ARCHIVE"] = str(sdl_archive)
         result = subprocess.run(command, cwd=source, env=build_env, text=True,

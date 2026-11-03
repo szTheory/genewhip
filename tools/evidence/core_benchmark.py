@@ -20,6 +20,10 @@ import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+_SCOPE_SPEC = importlib.util.spec_from_file_location(
+    "gw_v02_scope", ROOT / "scripts/evidence/v02_scope.py")
+_SCOPE = importlib.util.module_from_spec(_SCOPE_SPEC)
+_SCOPE_SPEC.loader.exec_module(_SCOPE)
 SCENARIO = ROOT / "fixtures/independent-game-v2/scenario.json"
 ORACLE = ROOT / "fixtures/independent-game-v2/oracle.json"
 ROM = ROOT / "fixtures/independent-game-v2/game.bin"
@@ -39,42 +43,15 @@ _ACTIVE_JOURNAL = None
 
 
 def qualification_scope_path(explicit=None):
-    """Honor only the exact prospective scope when its fixed profile is selected."""
-    legacy = ROOT / "evidence/v02-execution.json"
-    selected_sha = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", "")
-    selected_path = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH", "")
-    window_profiles = {
-        "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4":
-            "evidence/v02-phase7-full-execution-scope.json",
-        "a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c":
-            "evidence/v02-phase7-two-hour-execution-scope.json",
-        "bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c":
-            "evidence/v02-phase7-renewed-two-hour-execution-scope.json",
-    }
-    legacy_sha = "05eb7f5fa91d759fbef8fb86bbc9db402dc41812261235bcf5085a0e2aa9b1a5"
-    authorized_relative = "evidence/v02-phase7-authorized-execution-scope.json"
-    if selected_path == authorized_relative:
-        path = ROOT / authorized_relative
-        chosen = Path(explicit).resolve(strict=True) if explicit is not None else path.resolve(strict=True)
-        if (not re.fullmatch(r"[0-9a-f]{64}", selected_sha)
-                or chosen != path.resolve(strict=True)
-                or hashlib.sha256(path.read_bytes()).hexdigest() != selected_sha):
-            raise ValueError("qualification-scope-profile-invalid")
-        return path
-    if selected_sha not in ("", legacy_sha, *window_profiles):
-        raise ValueError("qualification-scope-profile-invalid")
-    if selected_sha in window_profiles:
-        window_rel = window_profiles[selected_sha]
-        path = ROOT / window_rel
-        chosen = Path(explicit).resolve(strict=True) if explicit is not None else path.resolve(strict=True)
-        if (selected_path != window_rel or chosen != path.resolve(strict=True)
-                or hashlib.sha256(path.read_bytes()).hexdigest() != selected_sha):
-            raise ValueError("qualification-scope-profile-invalid")
-        return path
-    chosen = Path(explicit).resolve(strict=True) if explicit is not None else legacy.resolve(strict=True)
-    if chosen != legacy.resolve(strict=True):
-        raise ValueError("qualification-scope-profile-not-selected")
-    return legacy
+    """Honor only one exact, repository-pinned scope profile."""
+    try:
+        return _SCOPE.resolve_scope(ROOT, explicit,
+            scope_path=os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH", ""),
+            scope_sha256=os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", ""))
+    except _SCOPE.ScopeSelectionError as error:
+        label = ("qualification-scope-profile-not-selected" if error.reason == "not-selected"
+                 else "qualification-scope-profile-invalid")
+        raise ValueError(label) from None
 
 
 def enforce_batch_wall_limit():
@@ -717,7 +694,8 @@ def source_identity():
                 "tools/evidence/core_benchmark.c", "tools/evidence/core_benchmark.py",
                 "tools/session/session.c", "tools/session/session.h",
                 "tools/session/route_controller.c", "tools/session/route_controller.h",
-                "scripts/evidence/phase6_routes.py", "fixtures/phase6/recursion94-consumed-map-v1.json",
+                "scripts/evidence/phase6_routes.py", "scripts/evidence/v02_scope.py",
+                "fixtures/phase6/recursion94-consumed-map-v1.json",
                 "fixtures/phase5-a", "fixtures/phase5-b",
                 "scripts/evidence/phase4_report.py",
                 "tests/fixtures/phase4_game.py", "fixtures/manifest.json",

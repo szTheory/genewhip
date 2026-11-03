@@ -3,11 +3,17 @@
 import hashlib
 import importlib.util
 import json
-import pathlib
-import tempfile
-import unittest
+import contextlib
+import copy
 import io
+import os
+import pathlib
+import stat
+import tempfile
+from types import SimpleNamespace
+import unittest
 import tarfile
+from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("gw_v02_transfer_contract", ROOT / "scripts/release/v02_transfer.py")
@@ -16,6 +22,208 @@ SPEC.loader.exec_module(TRANSFER)
 
 
 class RuntimeTransferContract(unittest.TestCase):
+    def _valid_benchmark_workload_report(self, scope_path, scope_sha256):
+        fixture_spec = importlib.util.spec_from_file_location(
+            "gw_benchmark_report_fixtures", ROOT / "tests/evidence/benchmark_contract.py")
+        fixtures = importlib.util.module_from_spec(fixture_spec)
+        fixture_spec.loader.exec_module(fixtures)
+        benchmark = TRANSFER._load_benchmark_module()
+        scope = json.loads(pathlib.Path(scope_path).read_text(encoding="utf-8"))
+        workload = copy.deepcopy(fixtures.valid_v02_report()["workloads"]["control"])
+        identity = {"video": [[1, 1, 256, 224, "a" * 64]], "pcm_frames": 480619,
+            "pcm_sha256": "b" * 64, "ram_sha256": "c" * 64, "machine_sha256": "d" * 64}
+        reference = workload["untimed_reference"]
+        reference["actual_tick_start"], reference["actual_tick_end"] = 0, 100
+        reference["output_identity"] = identity
+        for row in workload["timed_runs"]:
+            row["actual_tick_start"], row["actual_tick_end"] = 0, 100
+            row["output_identity"] = identity
+            row["untimed_output_identity"] = identity
+            row["route_status"] = 0
+        build = {
+            "compiler_sha256": "1" * 64,
+            "compiler_version_line": "Clang fixture version",
+            "build_rules_sha256": "2" * 64,
+            "build_configuration_sha256": "3" * 64,
+            "cmake": {},
+            "host_system": "Darwin",
+            "host_release": "fixture-release",
+            "host_macos_version": "fixture-version",
+            "host_machine": "arm64",
+            "host_model": "fixture-model",
+        }
+        host_keys = ("host_system", "host_release", "host_macos_version", "host_machine", "host_model")
+        report = {
+            "schema": "genewhip.v02-workload-benchmark-v1",
+            "workload": "control",
+            "outcome": "pass",
+            "qualification": True,
+            "source_identity_sha256": benchmark.source_identity(),
+            "source_revision": "a" * 40,
+            "head_sha": "a" * 40,
+            "base_sha": "b" * 40,
+            "run_id": "123",
+            "run_attempt": "1",
+            "scope_id": scope["scope_id"],
+            "scope_sha256": scope_sha256,
+            "build_identity": build,
+            "host_identity": {key: build[key] for key in host_keys},
+            "counts": {"timed_children": 20, "untimed_references": 1,
+                "process_starts": 21, "timed_samples_per_mode": 5},
+            **workload,
+        }
+        return report
+
+    def _run_benchmark_cli(self, report_path, scope_arg, selectors):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.dict(os.environ, selectors, clear=False), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            result = TRANSFER.main([
+                "benchmark", "--report", str(report_path), "--workload", "control",
+                "--scope", str(scope_arg), "--source-sha", "a" * 40,
+                "--head-sha", "a" * 40, "--base-sha", "b" * 40,
+                "--run-id", "123", "--run-attempt", "1"])
+        return result, stdout.getvalue(), stderr.getvalue()
+
+    def test_scope_profiles_and_benchmark_transfer_cli_use_shared_exact_pins(self):
+        scope = importlib.util.spec_from_file_location(
+            "gw_core_benchmark_scope_contract", ROOT / "tools/evidence/core_benchmark.py")
+        benchmark = importlib.util.module_from_spec(scope)
+        scope.loader.exec_module(benchmark)
+        profiles = TRANSFER._SCOPE.SCOPE_PROFILES
+        with mock.patch.dict(os.environ, {
+                "GENEWHIP_QUALIFICATION_SCOPE_PATH": "",
+                "GENEWHIP_QUALIFICATION_SCOPE_SHA256": ""}, clear=False):
+            self.assertEqual(benchmark.qualification_scope_path(), ROOT / TRANSFER._SCOPE.LEGACY_SCOPE_REL)
+            self.assertEqual(TRANSFER._qualification_scope_path(ROOT),
+                ROOT / TRANSFER._SCOPE.LEGACY_SCOPE_REL)
+            with self.assertRaisesRegex(ValueError, "transfer-qualification-scope-not-selected"):
+                TRANSFER._qualification_scope_path(ROOT, ROOT / "evidence/v02-phase7-authorized-execution-scope.json")
+        for digest, relative in profiles.items():
+            selectors = {"GENEWHIP_QUALIFICATION_SCOPE_PATH": relative.as_posix(),
+                "GENEWHIP_QUALIFICATION_SCOPE_SHA256": digest}
+            with self.subTest(profile=relative.name), mock.patch.dict(os.environ, selectors, clear=False):
+                selected = ROOT / relative
+                self.assertEqual(benchmark.qualification_scope_path(), selected)
+                self.assertEqual(TRANSFER._qualification_scope_path(ROOT, selected), selected)
+
+        authorized_sha = next(digest for digest, relative in profiles.items()
+            if relative.name == "v02-phase7-authorized-execution-scope.json")
+        authorized_rel = profiles[authorized_sha]
+        authorized_path = ROOT / authorized_rel
+        selectors = {"GENEWHIP_QUALIFICATION_SCOPE_PATH": authorized_rel.as_posix(),
+            "GENEWHIP_QUALIFICATION_SCOPE_SHA256": authorized_sha}
+        report = self._valid_benchmark_workload_report(authorized_path, authorized_sha)
+        with tempfile.TemporaryDirectory(prefix="gw-transfer-scope-cli-") as temporary:
+            report_path = pathlib.Path(temporary) / "benchmark.json"
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+            result, stdout, stderr = self._run_benchmark_cli(report_path, authorized_rel, selectors)
+            self.assertEqual(result, 0, stderr)
+            self.assertEqual(json.loads(stdout)["status"], "pass")
+
+            wrong_digest = copy.deepcopy(report)
+            wrong_digest["scope_sha256"] = "0" * 64
+            report_path.write_text(json.dumps(wrong_digest), encoding="utf-8")
+            result, _stdout, stderr = self._run_benchmark_cli(report_path, authorized_rel, selectors)
+            self.assertEqual(result, 1)
+            self.assertIn("transfer-benchmark-scope-digest-mismatch", stderr)
+
+            mismatched_path_selectors = {**selectors,
+                "GENEWHIP_QUALIFICATION_SCOPE_PATH": "evidence/v02-phase7-full-execution-scope.json"}
+            result, _stdout, stderr = self._run_benchmark_cli(report_path, authorized_rel,
+                mismatched_path_selectors)
+            self.assertEqual(result, 1)
+            self.assertIn("transfer-qualification-scope-profile-invalid", stderr)
+
+            report_path.write_text("[]", encoding="utf-8")
+            result, _stdout, stderr = self._run_benchmark_cli(report_path, authorized_rel, selectors)
+            self.assertEqual(result, 1)
+            self.assertIn("transfer-benchmark-report-object-required", stderr)
+
+    def test_benchmark_cli_rejects_tampered_selected_scope_bytes(self):
+        authorized_sha = "c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a"
+        relative = pathlib.Path("evidence/v02-phase7-authorized-execution-scope.json")
+        with tempfile.TemporaryDirectory(prefix="gw-transfer-scope-tamper-") as temporary:
+            root = pathlib.Path(temporary) / "checkout"
+            scope_path = root / relative
+            scope_path.parent.mkdir(parents=True)
+            scope_path.write_bytes((ROOT / relative).read_bytes() + b" ")
+            report_path = pathlib.Path(temporary) / "benchmark.json"
+            report_path.write_text("{}", encoding="utf-8")
+            selectors = {"GENEWHIP_QUALIFICATION_SCOPE_PATH": relative.as_posix(),
+                "GENEWHIP_QUALIFICATION_SCOPE_SHA256": authorized_sha}
+            with mock.patch.object(TRANSFER, "ROOT", root):
+                result, _stdout, stderr = self._run_benchmark_cli(report_path, relative, selectors)
+            self.assertEqual(result, 1)
+            self.assertIn("transfer-qualification-scope-profile-invalid", stderr)
+
+    def test_transfer_uses_verified_scope_snapshot_after_path_replacement(self):
+        authorized_sha = "c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a"
+        relative = pathlib.Path("evidence/v02-phase7-authorized-execution-scope.json")
+        original = (ROOT / relative).read_bytes()
+        changed_scope = json.loads(original)
+        changed_scope["scope_id"] = "replaced-after-selection"
+        replacement = json.dumps(changed_scope, sort_keys=True).encode()
+        replacement_sha = hashlib.sha256(replacement).hexdigest()
+        report = self._valid_benchmark_workload_report(ROOT / relative, authorized_sha)
+        report["scope_sha256"] = replacement_sha
+        benchmark = TRANSFER._load_benchmark_module()
+        observed = []
+        real_read_scope = TRANSFER._SCOPE.read_scope
+
+        with tempfile.TemporaryDirectory(prefix="gw-transfer-scope-snapshot-") as temporary:
+            root = pathlib.Path(temporary) / "checkout"
+            scope_path = root / relative
+            scope_path.parent.mkdir(parents=True)
+            scope_path.write_bytes(original)
+            report_path = pathlib.Path(temporary) / "benchmark.json"
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+
+            def replace_after_verified_read(*args, **kwargs):
+                path, raw = real_read_scope(*args, **kwargs)
+                path.write_bytes(replacement)
+                observed.append((path, raw))
+                return path, raw
+
+            selectors = {"GENEWHIP_QUALIFICATION_SCOPE_PATH": relative.as_posix(),
+                "GENEWHIP_QUALIFICATION_SCOPE_SHA256": authorized_sha}
+            with mock.patch.object(TRANSFER, "ROOT", root), \
+                    mock.patch.object(TRANSFER, "_load_benchmark_module", return_value=benchmark), \
+                    mock.patch.object(TRANSFER._SCOPE, "read_scope",
+                        side_effect=replace_after_verified_read), \
+                    mock.patch.dict(os.environ, selectors, clear=False):
+                with self.assertRaisesRegex(ValueError,
+                        "transfer-benchmark-scope-digest-mismatch"):
+                    TRANSFER.validate_benchmark_report(report_path, "control", relative,
+                        source_sha="a" * 40, head_sha="a" * 40, base_sha="b" * 40,
+                        run_id="123", run_attempt="1")
+            self.assertEqual(len(observed), 1)
+            self.assertEqual(observed[0][1], original)
+            self.assertEqual(observed[0][0].read_bytes(), replacement)
+
+    def test_scope_resolver_opens_nonblocking_and_rejects_special_file_race(self):
+        scope_module = TRANSFER._SCOPE
+        digest = "c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a"
+        relative = pathlib.Path("evidence/v02-phase7-authorized-execution-scope.json")
+        real_open, real_fstat = scope_module.os.open, scope_module.os.fstat
+        observed_flags = []
+
+        def tracked_open(path, flags):
+            observed_flags.append(flags)
+            return real_open(path, flags)
+
+        def raced_fifo_fstat(_descriptor):
+            return SimpleNamespace(st_mode=stat.S_IFIFO, st_nlink=1, st_size=0)
+
+        with mock.patch.object(scope_module.os, "open", side_effect=tracked_open), \
+                mock.patch.object(scope_module.os, "fstat", side_effect=raced_fifo_fstat):
+            with self.assertRaises(scope_module.ScopeSelectionError) as rejected:
+                scope_module.resolve_scope(ROOT, ROOT / relative,
+                    scope_path=relative.as_posix(), scope_sha256=digest)
+        self.assertEqual(rejected.exception.reason, "profile-invalid")
+        self.assertTrue(observed_flags[0] & os.O_NONBLOCK)
+        self.assertTrue(observed_flags[0] & os.O_NOFOLLOW)
+
     def _fixture(self, root, *, payload=bytes(320 * 224 * 4), unsafe_path=None):
         image_name = unsafe_path or "build/v02/runtime/core-work/canonical-core-fixture/recursion94-full-route-1/fields/field-120.bin"
         image = root / image_name

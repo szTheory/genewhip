@@ -42,14 +42,40 @@ def _json(path):
     return json.loads(pathlib.Path(path).read_text())
 
 
+def _load_scope_module():
+    """Load the shared exact execution-scope selector without path imports."""
+    path = pathlib.Path(__file__).resolve().parent / "evidence/v02_scope.py"
+    spec = importlib.util.spec_from_file_location("gw_package_execution_scope", path)
+    if spec is None or spec.loader is None:
+        raise ValueError("package-performance-scope-validator-unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_benchmark_module():
+    """Load the production public performance validator from this checkout."""
+    path = ROOT / "tools/evidence/core_benchmark.py"
+    spec = importlib.util.spec_from_file_location("gw_package_benchmark_policy", path)
+    if spec is None or spec.loader is None:
+        raise ValueError("package-performance-validator-unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _validate_performance_evidence(path, revision):
     """Re-run the production benchmark policy against the package's exact scope/run."""
-    scope_path = ROOT / "evidence/v02-execution.json"
-    scope = _json(scope_path)
-    spec = importlib.util.spec_from_file_location("gw_package_benchmark_policy",
-        ROOT / "tools/evidence/core_benchmark.py")
-    benchmark = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(benchmark)
+    scope_module = _load_scope_module()
+    try:
+        _scope_path, scope_bytes = scope_module.read_scope(ROOT,
+            scope_path=os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH", ""),
+            scope_sha256=os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", ""))
+    except scope_module.ScopeSelectionError as error:
+        raise ValueError("package-performance-scope-" + error.reason) from None
+    scope = json.loads(scope_bytes)
+    scope_sha256 = hashlib.sha256(scope_bytes).hexdigest()
+    benchmark = _load_benchmark_module()
     expected = {"source_sha": revision, "head_sha": os.environ.get("GITHUB_SHA", revision),
         "base_sha": os.environ.get("GITHUB_BASE_SHA", revision),
         "run_id": os.environ.get("GITHUB_RUN_ID", "local"),
@@ -62,7 +88,7 @@ def _validate_performance_evidence(path, revision):
         digests[workload] = hashlib.sha256(report_path.read_bytes()).hexdigest()
     problems = benchmark.validate_public_performance_projection(document, identity=expected,
         source_identity_sha256=benchmark.source_identity(), scope_id=scope["scope_id"],
-        scope_sha256=hashlib.sha256(scope_path.read_bytes()).hexdigest(),
+        scope_sha256=scope_sha256,
         expected_reports=reports, raw_report_digests=digests)
     if problems:
         raise ValueError("public-performance-policy-rejected:" + ",".join(problems))
