@@ -1339,8 +1339,8 @@ class NativePrefixDiagnosticContract(unittest.TestCase):
             class LaunchBoundaryReached(Exception):
                 pass
 
-            def launch(*_args, **_kwargs):
-                launches.append(True)
+            def launch(_client, command, work, _report, _timeout, **kwargs):
+                launches.append((command, work, kwargs))
                 raise LaunchBoundaryReached()
 
             old_projection = {key: core_row.get(key) for key in (
@@ -1360,9 +1360,20 @@ class NativePrefixDiagnosticContract(unittest.TestCase):
                     self.assertEqual(consumer_row[key], core_row[key])
                 with self.assertRaises(LaunchBoundaryReached):
                     desktop._retained_host_case(build, desktop_bin, route, mapping,
-                        {"runs": [consumer_row]}, core_report_path, "native",
+                        {"runs": [consumer_row]}, core_report_path, "software",
                         attempts / "full-row", {})
-            self.assertEqual(launches, [True])
+            self.assertEqual(len(launches), 1)
+            command, launch_work, launch_options = launches[0]
+            renderer_arg = command[command.index("--renderer-capture-output") + 1]
+            self.assertEqual(renderer_arg, "renderer-field.bin")
+            self.assertFalse(Path(renderer_arg).is_absolute())
+            self.assertEqual(Path(launch_work), attempts / "full-row" /
+                "recursion94-withhold-first-plate-attempt1")
+            self.assertIsNone(launch_options.get("child_cwd"),
+                "shared_launch uses its owned work directory as child cwd by default")
+            child_env = launch_options.get("env", {})
+            self.assertEqual(child_env.get("SDL_AUDIO_DISK_OUTPUT_FILE"), "sdlaudio.raw")
+            self.assertFalse(Path(child_env["SDL_AUDIO_DISK_OUTPUT_FILE"]).is_absolute())
 
     def test_real_collect_case_reaches_only_the_stubbed_launch_after_parent_exists(self):
         module = load("tests/fixtures/phase6_game.py", "phase7_prefix_real_collect_case")

@@ -6051,6 +6051,119 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
             self.assertTrue(command["output"])
             self.assertTrue(command["identity_dependencies"])
 
+    def test_safety_consumer_binds_report_compiler_metadata_to_portable_facts(self):
+        from unittest import mock
+
+        module = load_module(self)
+        source_root = ROOT
+        with tempfile.TemporaryDirectory(prefix="gw-v02-safety-consumer-") as temporary:
+            root = Path(temporary)
+            module.ROOT = root
+            runtime_spec = importlib.util.spec_from_file_location("v02_safety_consumer_runtime",
+                source_root / "scripts/evidence/v02_run.py")
+            runtime = importlib.util.module_from_spec(runtime_spec)
+            runtime_spec.loader.exec_module(runtime)
+            runtime.ROOT = root
+
+            original_runtime_loader = runtime._module
+            def load_checkout_module(path, name):
+                relative = Path(path).relative_to(root)
+                loaded = original_runtime_loader(source_root / relative, name)
+                if relative.as_posix() == "tests/fixtures/phase6_game.py":
+                    loaded.ROOT = root
+                return loaded
+            runtime._module = load_checkout_module
+
+            facts_path = root / "scripts/evidence/v02_safety_build_facts.py"
+            facts_path.parent.mkdir(parents=True)
+            facts_path.write_bytes((source_root / "scripts/evidence/v02_safety_build_facts.py").read_bytes())
+            fixture = original_runtime_loader(source_root / "tests/fixtures/phase6_game.py",
+                "v02_safety_consumer_fixture")
+            fixture.ROOT = root
+            for relative in fixture.SAFETY_SOURCE_PATHS:
+                source = root / relative
+                source.parent.mkdir(parents=True, exist_ok=True)
+                source.write_bytes(("consumer-fixture:" + relative + "\n").encode())
+
+            support_spec = importlib.util.spec_from_file_location("v02_safety_fixture_support",
+                source_root / "tests/evidence/v02_execution_contract.py")
+            support = importlib.util.module_from_spec(support_spec)
+            support_spec.loader.exec_module(support)
+            variants = support._safety_retention_fixture(root, runtime)
+            safety_module = original_runtime_loader(source_root / "tests/api/safety_contract.py",
+                "v02_safety_consumer_contract")
+            fuzz = {"denominator": 4096, "pass": 4096, "fail": 0, "unknown": 0,
+                "skipped": 0, "tick_budget": 128, "accepted_loads": 2048, "rejected_loads": 2048}
+            for row in variants:
+                variant = row["variant"]
+                row.update({"selected_tests": list(safety_module.REQUIRED_VARIANT_TESTS),
+                    "denominator": 12, "pass": 12, "fail": 0, "unknown": 0, "skipped": 0,
+                    "steps": 4096, "step_limit": 4096, "tick_budget": 128, "max_tick": 128,
+                    "returned_frames": 4096, "output_cap": 8192, "guards_checked": 12,
+                    "allocation_instrumented": variant != "hooks-off", "allocation_count_peak": 2,
+                    "steady_allocations": 0, "owned_bytes_peak": 1024 * 1024,
+                    "owned_bytes_limit": 2 * 1024 * 1024, "bounded_fuzz": dict(fuzz)})
+
+            candidate = {"fixture": "safety-consumer"}
+            candidate_path = root / "build/v02/runtime-observation/candidate.json"
+            candidate_path.parent.mkdir(parents=True)
+            candidate_path.write_text(json.dumps(candidate))
+            identity = {"schema": "consumer-test-identity", "run_id": "safety-consumer"}
+            identity_path = root / "build/v02/runtime-identity.json"
+            identity_path.parent.mkdir(parents=True, exist_ok=True)
+            identity_path.write_text(json.dumps(identity))
+            report_path = candidate_path.parent / "safety.json"
+            report = {"schema": "genewhip-phase6-safety-v1", "status": "pass",
+                "candidate_sha256": fixture.canonical_sha(candidate),
+                "source_provenance": {relative: runtime.sha(root / relative)
+                    for relative in fixture.SAFETY_SOURCE_PATHS},
+                "variants": variants}
+            report_path.write_text(json.dumps(report))
+            runtime.retain_safety_build_evidence(root / "build/v02/runtime-build",
+                candidate_path.parent, report_path, identity)
+
+            module._load_runtime_module = lambda: runtime
+            with mock.patch.object(module, "_load_runtime_module", return_value=runtime):
+                valid = module._dimension_semantic_errors("safety", report_path, {})
+            self.assertEqual(valid, [])
+
+            original = json.loads(report_path.read_text())
+            metadata_path = original["variants"][0]["build_identity"]["compiler_metadata"]["source_path"]
+            original_size = original["variants"][0]["build_identity"]["compiler_metadata"]["size"]
+            # Leave the producer's mutually bound manifest and facts untouched;
+            # only the safety report's compiler metadata identity is mutated.
+            changes = (("source_path", metadata_path.replace("/4.4.3/", "/4.4.4/"),
+                    "proof-safety-build-roster-invalid"),
+                ("sha256", "f" * 64, "proof-safety-build-roster-invalid"),
+                ("size", original_size + 1, "proof-safety-build-compiler-metadata-join-invalid"))
+            for field, value, expected_problem in changes:
+                with self.subTest(field=field):
+                    mutated = json.loads(json.dumps(original))
+                    mutated["variants"][0]["build_identity"]["compiler_metadata"][field] = value
+                    report_path.write_text(json.dumps(mutated))
+                    with mock.patch.object(module, "_load_runtime_module", return_value=runtime):
+                        problems = module._dimension_semantic_errors("safety", report_path, {})
+                    self.assertIn(expected_problem, problems)
+
+            manifest_ref = original["build_evidence"]
+            manifest_path = root / manifest_ref["path"]
+            manifest = json.loads(manifest_path.read_text())
+            native_metadata = original["variants"][0]["build_identity"]["compiler_metadata"]
+            native_entries = [entry for entry in manifest["entries"]
+                if entry.get("variant") == "native" and entry.get("source_path") == native_metadata["source_path"]]
+            self.assertEqual(len(native_entries), 1)
+            # Keep report and portable facts unchanged; alter only the raw-source
+            # size recorded in the manifest, then reseal its aggregate and digest.
+            native_entries[0]["source_size"] += 1
+            manifest["source_bytes_total"] = sum(entry["source_size"] for entry in manifest["entries"])
+            manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
+            resealed = json.loads(json.dumps(original))
+            resealed["build_evidence"]["sha256"] = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+            report_path.write_text(json.dumps(resealed))
+            with mock.patch.object(module, "_load_runtime_module", return_value=runtime):
+                problems = module._dimension_semantic_errors("safety", report_path, {})
+            self.assertIn("proof-safety-build-compiler-metadata-join-invalid", problems)
+
     def test_conjunction_rejects_missing_stale_skipped_and_native_missing(self):
         module = load_module(self)
         source = "a" * 40

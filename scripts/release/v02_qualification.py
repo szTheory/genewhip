@@ -6773,6 +6773,7 @@ def _dimension_semantic_errors(name: str, evidence_path: pathlib.Path,
                 return ["proof-safety-build-evidence-identity-invalid"]
             expected_binaries = {}
             expected_variants = {}
+            expected_compiler_metadata = {}
             for variant in doc["variants"]:
                 directory = pathlib.PurePosixPath(variant.get("build_directory", ""))
                 if (directory.is_absolute() or ".." in directory.parts or
@@ -6782,8 +6783,27 @@ def _dimension_semantic_errors(name: str, evidence_path: pathlib.Path,
                 variant_sources = {(directory / "CMakeCache.txt").as_posix(): identity.get("cache_sha256"),
                     (directory / "phase6_safety").as_posix(): identity.get("phase6_safety_sha256")}
                 variant_sources.update(identity.get("test_executables", {}))
+                compiler_metadata = identity.get("compiler_metadata")
+                if (not isinstance(compiler_metadata, dict) or
+                        set(compiler_metadata) != {"source_path", "sha256", "size"} or
+                        not isinstance(compiler_metadata.get("source_path"), str) or
+                        not isinstance(compiler_metadata.get("sha256"), str) or
+                        not re.fullmatch(r"[0-9a-f]{64}", compiler_metadata["sha256"]) or
+                        type(compiler_metadata.get("size")) is not int or
+                        compiler_metadata["size"] <= 0 or
+                        compiler_metadata["size"] > 1024 * 1024):
+                    return ["proof-safety-build-compiler-metadata-identity-invalid"]
+                metadata_path = pathlib.PurePosixPath(compiler_metadata["source_path"])
+                suffix = pathlib.PurePosixPath(*metadata_path.parts[len(directory.parts):]).as_posix()
+                if (metadata_path.is_absolute() or ".." in metadata_path.parts or
+                        metadata_path.parts[:len(directory.parts)] != directory.parts or
+                        not re.fullmatch(r"CMakeFiles/[0-9]+(?:\.[0-9]+){1,3}/CMakeCCompiler\.cmake", suffix)):
+                    return ["proof-safety-build-compiler-metadata-path-invalid"]
+                variant_name = variant.get("variant")
+                variant_sources[metadata_path.as_posix()] = compiler_metadata["sha256"]
+                expected_compiler_metadata[variant_name] = compiler_metadata
                 expected_binaries.update(variant_sources)
-                expected_variants[variant.get("variant")] = variant_sources
+                expected_variants[variant_name] = variant_sources
             entries = manifest.get("entries", [])
             observed_binaries = {row.get("source_path"): row.get("source_sha256") for row in entries if isinstance(row, dict)}
             if (manifest.get("raw_build_artifact_bytes_transferred") is not False or
@@ -6800,6 +6820,12 @@ def _dimension_semantic_errors(name: str, evidence_path: pathlib.Path,
                 variant_rows = [row for row in entries if row.get("variant") == variant]
                 if len(variant_rows) != len(sources):
                     return ["proof-safety-build-facts-roster-invalid"]
+                compiler_meta = expected_compiler_metadata[variant]
+                metadata_entries = [row for row in variant_rows if
+                    row.get("source_path") == compiler_meta["source_path"]]
+                if (len(metadata_entries) != 1 or
+                        metadata_entries[0].get("source_size") != compiler_meta["size"]):
+                    return ["proof-safety-build-compiler-metadata-join-invalid"]
                 facts_paths = {row.get("path") for row in variant_rows}
                 if len(facts_paths) != 1:
                     return ["proof-safety-build-facts-roster-invalid"]
@@ -6810,8 +6836,16 @@ def _dimension_semantic_errors(name: str, evidence_path: pathlib.Path,
                 if facts_file.is_symlink() or not facts_file.is_file() or facts_file.stat().st_size > 1024 * 1024:
                     return ["proof-safety-build-facts-unavailable"]
                 facts = json.loads(facts_file.read_text(encoding="utf-8"))
+                compiler_meta = expected_compiler_metadata.get(variant)
+                raw_identities = facts.get("raw_build_artifact_identities", [])
+                metadata_rows = [row for row in raw_identities if isinstance(row, dict) and
+                    row.get("source_path") == compiler_meta.get("source_path")]
+                if (len(metadata_rows) != 1 or
+                        metadata_rows[0].get("sha256") != compiler_meta.get("sha256") or
+                        metadata_rows[0].get("size") != compiler_meta.get("size")):
+                    return ["proof-safety-build-compiler-metadata-join-invalid"]
                 observed_sources = {row.get("source_path"): row.get("sha256")
-                    for row in facts.get("raw_build_artifact_identities", [])}
+                    for row in raw_identities if isinstance(row, dict)}
                 if (facts.get("schema") != "genewhip.v02-portable-build-facts.v1" or
                         facts.get("variant") != variant or observed_sources != sources or
                         facts.get("raw_build_artifact_bytes_transferred") is not False or

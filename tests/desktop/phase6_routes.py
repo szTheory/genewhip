@@ -356,7 +356,7 @@ def host_environment(backend: str, work: pathlib.Path) -> dict[str, str]:
     if backend == "software":
         env.update({"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "disk",
                     "SDL_RENDER_DRIVER": "software",
-                    "SDL_AUDIO_DISK_OUTPUT_FILE": str(work / "sdlaudio.raw")})
+                    "SDL_AUDIO_DISK_OUTPUT_FILE": "sdlaudio.raw"})
     else:
         env.update({"SDL_VIDEODRIVER": "cocoa", "SDL_AUDIODRIVER": "coreaudio",
                     "GENEWHIP_LIVE_DISPLAY": "1", "GENEWHIP_LIVE_AUDIO": "1"})
@@ -472,7 +472,7 @@ def _retained_host_case(build: pathlib.Path, desktop: pathlib.Path, route: dict,
     command = [str(desktop), "--route-plan", str(route_path), "--route-report", str(native_path),
         "--route-diagnostic", str(host_path), "--route-input-source", "virtual-gamepad",
         "--dump-audio", str(pcm_path), "--renderer-capture-field", str(scene_field),
-        "--renderer-capture-output", str(renderer_path), str(rom)]
+        "--renderer-capture-output", renderer_path.name, str(rom)]
     if backend == "software":
         monitored = ((pcm_path, 16 * 1024 * 1024), (renderer_path, 16 * 1024 * 1024),
                      (disk_path, 16 * 1024 * 1024))

@@ -25,6 +25,109 @@ MATRIX_OBSERVATION_KEYS = MATRIX_ROW_KEYS | {
 PRIVATE_MARKERS = ("/Users/", "/home/", "/private/var/", "quarantine", "launch_window")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _CURRENT_ROUTES = None
+
+# Portable verification policy for current source-progress observations. The live
+# collector projection still compiles phase6_routes.py and joins its per-case run
+# identities. A public bundle contains this module but deliberately does not ship
+# the private route compiler, so portable validation uses this small reviewed copy
+# of the route predicates and independent-game expectations. The contract suite
+# compares every entry below to the compiled route policy.
+PORTABLE_CURRENT_ROUTE_POLICIES = {
+    "tank-battle": {
+        "identity": {
+            "scenario_sha256": "0df6c9a42d9ba90a96f681e8f4ab7396c1f8c56d47dc887f64cab5a766792bb1",
+            "oracle_sha256": "2bf285d507c3e7c917329f3c4601c48d17fcdc14f4c01c8665fb98bbfe94fc3e",
+            "rom_sha256": "ceb75f72a08565424e88ed0a38d0d682e2c7f7cbb6e98b920f442b108e09f723",
+            "source_sha256": "a5c6c554372b0d23b8717326be9de8ca97bb69b92a85759115f7ca9a8398c9a9",
+            "roster_input_sha256": "e3478d34dcd98a71265b97f33c56b9f5f0f858628a516a9034cc3dbe0b5c8ed2",
+            "input_program_sha256": "e3478d34dcd98a71265b97f33c56b9f5f0f858628a516a9034cc3dbe0b5c8ed2",
+        },
+        "cases": {
+            "full-route": {"input_sha256": "43a1bfca71f01830bcd74fab3fce34013986f8272bc3e9c36efd8aae7280faf1",
+                "kind": "primary", "withheld_predicates": None, "frames": None, "expect": None,
+                "predicates": [
+                    {"id": "p1_score_one", "equals": 1, "field_window": [120, 500]},
+                    {"id": "p1_score_two", "equals": 2, "field_window": [2761, 3600]}]},
+            "withhold-early-hit": {"input_sha256": "43a1bfca71f01830bcd74fab3fce34013986f8272bc3e9c36efd8aae7280faf1",
+                "kind": "causal-control", "withheld_predicates": ["p1_score_one", "p1_score_two"],
+                "frames": None, "expect": None,
+                "predicates": [
+                    {"id": "p1_score_one", "equals": 1, "field_window": [120, 500]},
+                    {"id": "p1_score_two", "equals": 2, "field_window": [2761, 3600]}]},
+            "withhold-late-hit": {"input_sha256": "43a1bfca71f01830bcd74fab3fce34013986f8272bc3e9c36efd8aae7280faf1",
+                "kind": "causal-control", "withheld_predicates": ["p1_score_two"],
+                "frames": None, "expect": None,
+                "predicates": [
+                    {"id": "p1_score_one", "equals": 1, "field_window": [120, 500]},
+                    {"id": "p1_score_two", "equals": 2, "field_window": [2761, 3600]}]},
+        },
+    },
+    "recursion94": {
+        "identity": {
+            "scenario_sha256": "31e9c22129a6ce1b3ac2d1980c325e86bfbefb4e2fda85ae018c311e2cb40700",
+            "oracle_sha256": "5715af3a29ff25ba3550e1086b71bd7315ad7ee647073ae6a6e1cee55566e389",
+            "rom_sha256": "d334b18a46c4ffa6436b3e0bb95c0947cf6047ac96d5145cbf2d0f0ead5071ff",
+            "source_sha256": "f30c1c6a096cd570354be57258c33e9f6836e7179839b4022832609d2f0f8b19",
+            "roster_input_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+            "input_program_sha256": "a57d01c3d4ad92b508e9fc0459df509236f2788105c481eeecd13ea19d535f89",
+        },
+        "cases": {
+            "full-route": {"input_sha256": "67e81e5dbab490c621948b84cc8cc3bd6ef7ab98e7baeaa6a30febb621749bef",
+                "kind": "primary", "withheld_predicates": None, "frames": None, "expect": None,
+                "predicates": [
+                    {"id": "early_dependency_interaction", "equals": 1, "field_window": [1, 600]},
+                    {"id": "two_echoes_at_boot_cap", "equals": 2, "field_window": [1400, 1800]},
+                    {"id": "crossed_generated_door", "equals": 1, "field_window": [3500, 3600]},
+                    {"id": "late_program_stable", "equals": 1, "field_window": [2821, 3600]}]},
+            "withhold-first-plate": {"input_sha256": "67e81e5dbab490c621948b84cc8cc3bd6ef7ab98e7baeaa6a30febb621749bef",
+                "kind": "causal-control", "withheld_predicates": ["early_dependency_interaction"],
+                "frames": None, "expect": None,
+                "predicates": [
+                    {"id": "early_dependency_interaction", "equals": 1, "field_window": [1, 600]},
+                    {"id": "two_echoes_at_boot_cap", "equals": 2, "field_window": [1400, 1800]},
+                    {"id": "crossed_generated_door", "equals": 1, "field_window": [3500, 3600]},
+                    {"id": "late_program_stable", "equals": 1, "field_window": [2821, 3600]}]},
+            "withhold-final-b": {"input_sha256": "67e81e5dbab490c621948b84cc8cc3bd6ef7ab98e7baeaa6a30febb621749bef",
+                "kind": "causal-control", "withheld_predicates": ["late_program_stable"],
+                "frames": None, "expect": None,
+                "predicates": [
+                    {"id": "early_dependency_interaction", "equals": 1, "field_window": [1, 600]},
+                    {"id": "two_echoes_at_boot_cap", "equals": 2, "field_window": [1400, 1800]},
+                    {"id": "crossed_generated_door", "equals": 1, "field_window": [3500, 3600]},
+                    {"id": "late_program_stable", "equals": 1, "field_window": [2821, 3600]}]},
+        },
+    },
+    "genewhip-independent-game-v2": {
+        "identity": {
+            "scenario_sha256": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2",
+            "oracle_sha256": "1a9d99cb01496f26fe3dc33d0c1bcb0cf22bd9178088fa183e5bba37a8600f42",
+            "rom_sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb",
+            "source_sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe",
+            "roster_input_sha256": "de7821de93a49256806ee6539d97c2fc5f73a8c33164eee4dcb45ee2e21d9921",
+            "input_program_sha256": "3bece05f616f9b152f222b9f4d930c117d9f73ff228062e381e218058611c6fb",
+        },
+        "cases": {
+            "title-no-start": {"input_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                "kind": None, "withheld_predicates": None, "frames": 12,
+                "expect": {"play_state": 0, "position_min": 0, "position_max": 0, "psg_writes": []}, "predicates": []},
+            "start-idle": {"input_sha256": "b7fc825f6f68f33cee47e876fef78b955c6dadfbc6ff83659967a16ec736d4aa",
+                "kind": None, "withheld_predicates": None, "frames": 20,
+                "expect": {"play_state": 1, "position_min": 0, "position_max": 0, "psg_writes": []}, "predicates": []},
+            "start-move": {"input_sha256": "ecbe537e7587997f0c6bf2bc911717c2a97e88347dbf2b60322c00a6d836d097",
+                "kind": None, "withheld_predicates": None, "frames": 40,
+                "expect": {"play_state": 1, "position_min": 1, "position_max": 39, "psg_writes": []}, "predicates": []},
+            "action-sound": {"input_sha256": "f1141726cfbf5db16630cd3c3d9b02911fc9b3a72ca51a38b486a0edf701ce43",
+                "kind": None, "withheld_predicates": None, "frames": 24,
+                "expect": {"play_state": 1, "position_min": 0, "position_max": 0, "psg_writes": [132, 2, 144]}, "predicates": []},
+            "action-no-trigger": {"input_sha256": "67d461cda22228c449c915ef4612c5bd31b95dfcd23769e89d13ec80695542c9",
+                "kind": None, "withheld_predicates": None, "frames": 24,
+                "expect": {"play_state": 1, "position_min": 1, "position_max": 39, "psg_writes": []}, "predicates": []},
+            "sustained-play": {"input_sha256": "9e327678b0fa64828bf7e12b9863659558d00f8e297a7802109d74e2d55a00aa",
+                "kind": None, "withheld_predicates": None, "frames": 720,
+                "expect": {"play_state": 1, "position_min": 39, "position_max": 39, "psg_writes": [132, 2, 144]}, "predicates": []},
+        },
+    },
+}
 PUBLIC_SECRET_PATTERNS = (
     re.compile(r"gh[pousr]_[A-Za-z0-9]{20,}"),
     re.compile(r"github_pat_[A-Za-z0-9_]{30,}"),
@@ -494,15 +597,32 @@ def _current_routes() -> dict:
     return _CURRENT_ROUTES
 
 
+def portable_current_route_policy(expected: dict) -> dict:
+    """Return a source-progress rule from this self-contained verifier's policy table."""
+    if not isinstance(expected, dict):
+        _reject("matrix-current-route-policy-identity-invalid")
+    fixture, case_id = expected.get("title_id"), expected.get("case_id")
+    title_policy = PORTABLE_CURRENT_ROUTE_POLICIES.get(fixture)
+    case_policy = title_policy.get("cases", {}).get(case_id) if isinstance(title_policy, dict) else None
+    identity_policy = title_policy.get("identity", {}) if isinstance(title_policy, dict) else {}
+    identity = expected.get("identity")
+    if not isinstance(case_policy, dict) or not isinstance(identity, dict):
+        _reject("matrix-current-route-policy-unavailable")
+    for name in ("scenario_sha256", "oracle_sha256", "rom_sha256", "source_sha256"):
+        if identity.get(name) != identity_policy.get(name):
+            _reject("matrix-current-route-policy-identity-invalid")
+    if identity.get("input_sha256") != identity_policy.get("roster_input_sha256"):
+        _reject("matrix-current-route-policy-input-identity-invalid")
+    return case_policy
+
+
 def _validate_current_progress_observation(expected: dict, stage: str, observations: dict) -> None:
-    route = _current_routes().get((expected["title_id"], expected["case_id"]))
-    if route is None:
-        _reject("current-route-not-in-independent-roster")
+    route_policy = portable_current_route_policy(expected)
     facts = observations.get("source_predicates")
     if not isinstance(facts, list) or not facts or observations.get("causal_control") is not True:
         _reject("matrix-current-source-progress-missing")
     if expected["title_id"] == "genewhip-independent-game-v2":
-        declared = route["case"]["expect"]
+        declared = route_policy["expect"]
         values = {row.get("id"): row.get("value") for row in facts if isinstance(row, dict)}
         if (any(row.get("reached") is not True for row in facts if isinstance(row, dict)) or
                 values.get("play_state") != declared["play_state"] or
@@ -513,11 +633,11 @@ def _validate_current_progress_observation(expected: dict, stage: str, observati
         for name in ("input_sha256", "pcm_sha256", "video_sha256"):
             if not isinstance(observations.get(name), str) or SHA256.fullmatch(observations[name]) is None:
                 _reject("matrix-current-media-identity-invalid")
-        if stage == "sustained" and (observations.get("source_fields") != route["case"].get("frames") or
-                observations.get("progress_delta_fields") != route["case"].get("frames")):
+        if stage == "sustained" and (observations.get("source_fields") != route_policy.get("frames") or
+                observations.get("progress_delta_fields") != route_policy.get("frames")):
             _reject("matrix-current-sustained-source-window-invalid")
         return
-    definitions = {row["id"]: row for row in route["definitions"].get("predicates", [])}
+    definitions = {row["id"]: row for row in route_policy.get("predicates", [])}
     by_id = {row.get("id"): row for row in facts if isinstance(row, dict)}
     if set(by_id) != set(definitions):
         _reject("matrix-current-source-predicate-roster-invalid")
@@ -556,6 +676,8 @@ def project_current_observations(roster: dict, core_report: dict, host_reports: 
             _reject("current-host-collector-shape-invalid:" + client)
         hosts[client] = {(r.get("fixture"), r.get("case")): r for r in report["runs"] if isinstance(r, dict)}
     progress = _current_source_progress(core_report, core_runs)
+    production_identity = isinstance(core_report.get("candidate_manifest"), dict)
+    current_routes = _current_routes() if production_identity else {}
     identity_digest = _canonical_record_sha256(current_execution_identity)
     observations = []
     for expected in expected_matrix_rows(roster):
@@ -567,28 +689,61 @@ def project_current_observations(roster: dict, core_report: dict, host_reports: 
         run = core_runs.get((fixture, case, repetition))
         stage_record = core_stages.get((fixture, case, repetition, expected["stage"]))
         host_run = hosts[client].get((fixture, case)) if client in hosts else None
-        actual_pass = (run is not None and run.get("status") == "pass" and stage_record is not None and
-            stage_record.get("status") == "pass" and stage_record.get("reached") is True and
+        collector_execution_pass = (run is not None and run.get("status") == "pass" and stage_record is not None and
             (client == "core" or (host_run is not None and host_run.get("status") == "pass" and
                 host_run.get("backend") == client.removesuffix("-sdl"))))
+        collector_pass = (collector_execution_pass and stage_record.get("status") == "pass" and
+            stage_record.get("reached") is True)
+        collector_skip = (collector_execution_pass and stage_record.get("status") == "skipped" and
+            stage_record.get("reached") is False)
         stage = expected["stage"]
+        route = current_routes.get((fixture, case)) if production_identity else None
+        route_identity = route.get("identity") if isinstance(route, dict) else None
+        title_identity = expected["identity"]
+        if production_identity:
+            admitted_program_matches = (fixture == "genewhip-independent-game-v2" or
+                (isinstance(route_identity, dict) and
+                 route_identity.get("input_program_sha256") == title_identity.get("input_sha256")))
+            route_source_matches = (isinstance(route_identity, dict) and all(
+                route_identity.get(name) == title_identity.get(name)
+                for name in ("scenario_sha256", "oracle_sha256", "rom_sha256")))
+            core_identity_matches = run is not None and run.get("identity") == route_identity
+            host_identity_matches = (client == "core" or host_run is not None and
+                host_run.get("identity") == route_identity)
+            execution_identity_matches = bool(admitted_program_matches and route_source_matches and
+                core_identity_matches and host_identity_matches)
+        else:
+            execution_identity_matches = True
+        actual_pass = collector_pass and execution_identity_matches
         stage_fact = None
+        if stage in ("interaction", "sustained"):
+            stage_fact = progress.get((fixture, case, repetition, stage))
         obs: dict[str, object] = {}
         dependencies: dict[str, str] = {}
         if actual_pass and stage == "load":
             route_identity = run.get("identity", {})
             roster_identity = expected["identity"]
-            fixture_matches = all(route_identity.get(source) == roster_identity[target] for source, target in (
-                ("scenario_sha256", "scenario_sha256"), ("oracle_sha256", "oracle_sha256"),
-                ("rom_sha256", "rom_sha256"), ("input_sha256", "input_sha256")))
+            if production_identity:
+                # Current route identity binds both the input program and per-case log.
+                # REC/Tank's title-level roster field is the program hash; the indie
+                # roster field preserves a different historical fixture-input identity.
+                fixture_matches = execution_identity_matches
+            else:
+                fixture_matches = all(route_identity.get(source) == roster_identity[target] for source, target in (
+                    ("scenario_sha256", "scenario_sha256"), ("oracle_sha256", "oracle_sha256"),
+                    ("rom_sha256", "rom_sha256"), ("input_sha256", "input_sha256")))
             actual_pass = fixture_matches
             obs = {"rom_loaded": actual_pass, "fixture_identity_matches": fixture_matches}
         elif actual_pass and stage == "boot":
-            boot_fields = run.get("completed_fields", 0)
+            if fixture == "genewhip-independent-game-v2":
+                stage_fact = progress.get((fixture, case, repetition, "boot"))
+                boot_fields = (stage_fact.get("observations", {}).get("boot_fields", 0)
+                    if isinstance(stage_fact, dict) and stage_fact.get("outcome") == "pass" else 0)
+            else:
+                boot_fields = run.get("completed_fields", 0)
             actual_pass = type(boot_fields) is int and boot_fields > 0
             obs = {"boot_ready": actual_pass, "boot_fields": boot_fields if type(boot_fields) is int else 0}
         elif actual_pass and stage in ("interaction", "sustained"):
-            stage_fact = progress.get((fixture, case, repetition, stage))
             if stage_fact is None:
                 actual_pass = False
             elif stage_fact["outcome"] == "pass":
@@ -604,13 +759,16 @@ def project_current_observations(roster: dict, core_report: dict, host_reports: 
             dependencies["current_execution_identity_sha256"] = identity_digest
         if stage == "completion":
             outcome, reason, reached, obs = "unknown", "separate-current-completion-oracle-not-declared", False, {}
-        elif stage in ("interaction", "sustained") and not actual_pass and stage_fact is not None and stage_fact["outcome"] == "skipped":
+        elif (stage in ("interaction", "sustained") and not actual_pass and
+                (collector_pass or collector_skip) and
+                execution_identity_matches and stage_fact is not None and stage_fact["outcome"] == "skipped"):
             outcome, reason, reached, obs = (stage_fact["outcome"], stage_fact["reason"],
                 stage_fact["reached"], stage_fact["observations"])
             pass
         elif actual_pass:
             outcome, reason, reached = "pass", "current-source-collector-observation", True
-        elif client != "core" and host_run is not None and host_run.get("status") != "pass":
+        elif (client != "core" and host_run is not None and host_run.get("status") != "pass" and
+                execution_identity_matches):
             outcome, reason, reached = "fail", "current-host-case-failed", True
             obs = {"failure_predicate": "host-case-success", "failure_observed": True}
         else:
@@ -653,6 +811,10 @@ def _current_source_progress(core_report: dict, core_runs: dict) -> dict:
     out = {}
     for (fixture, case, repetition), run in core_runs.items():
         route = routes[(fixture, case)]
+        if run.get("identity") != route.get("identity"):
+            # A source-state result tied to a different input program or executed
+            # per-case log cannot qualify this current route.
+            continue
         if route["case"].get("kind") == "causal-control":
             predicates = route["case"].get("withheld_predicates", [])
             facts = run.get("predicate_results", {})
@@ -668,6 +830,14 @@ def _current_source_progress(core_report: dict, core_runs: dict) -> dict:
         if fixture == "genewhip-independent-game-v2":
             fact = report_cases[(fixture, case, repetition)]
             if not isinstance(fact, dict): _reject("current-independent-case-observation-missing")
+            if (fact.get("outcome") == "pass" and type(fact.get("fields")) is int and
+                    fact["fields"] > 0):
+                out[(fixture, case, repetition, "boot")] = {"outcome": "pass", "reached": True,
+                    "reason": "hash-bound-independent-source-fields-observed",
+                    "observations": {"boot_ready": True, "boot_fields": fact["fields"]}}
+            else:
+                out[(fixture, case, repetition, "boot")] = {"outcome": "unknown", "reached": False,
+                    "reason": "hash-bound-independent-source-fields-unavailable", "observations": {}}
             expect = route["case"]["expect"]
             matches = (fact.get("outcome") == "pass" and fact.get("play_state") == expect["play_state"] and
                 expect["position_min"] <= fact.get("position", -1) <= expect["position_max"] and

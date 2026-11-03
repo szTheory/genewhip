@@ -270,7 +270,8 @@ def source_identity(module) -> dict:
         "tests/desktop/phase4_sessions.py", "tests/session/phase6_controller_contract.py",
         "tests/fixtures/phase6_game.py", "tests/session/phase6_route_contract.py",
         "tests/desktop/phase6_routes.py", "scripts/evidence/phase6_routes.py",
-        "scripts/evidence/v02_matrix.py", "scripts/release/v02_qualification.py",
+        "scripts/evidence/v02_matrix.py", "scripts/evidence/v02_safety_build_facts.py",
+        "scripts/release/v02_qualification.py",
         "evidence/v02-roster.json", "evidence/v02-schema.json",
         "scripts/evidence/v02_run.py", "tests/evidence/v02_execution_contract.py",
         "tools/session/route_controller.c", "tools/session/session.c",
@@ -307,6 +308,10 @@ def retain_safety_build_evidence(build: pathlib.Path, runtime: pathlib.Path, rep
     entries = []
     total = 0
     compiler_identity = None
+    facts_spec = importlib.util.spec_from_file_location("gw_v02_safety_build_facts",
+        FACTS_POLICY_PATH)
+    facts_module = importlib.util.module_from_spec(facts_spec)
+    facts_spec.loader.exec_module(facts_module)
     for variant in ("native", "sanitize", "hooks-off"):
         row = next((item for item in report.get("variants", []) if item.get("variant") == variant), None)
         if not isinstance(row, dict):
@@ -319,6 +324,36 @@ def retain_safety_build_evidence(build: pathlib.Path, runtime: pathlib.Path, rep
         identity = row.get("build_identity", {})
         sources = {str((build_root / "CMakeCache.txt").relative_to(ROOT)): identity.get("cache_sha256"),
             str((build_root / "phase6_safety").relative_to(ROOT)): identity.get("phase6_safety_sha256")}
+        compiler_metadata = identity.get("compiler_metadata")
+        if (not isinstance(compiler_metadata, dict) or
+                set(compiler_metadata) != {"source_path", "sha256", "size"} or
+                not isinstance(compiler_metadata.get("source_path"), str) or
+                not isinstance(compiler_metadata.get("sha256"), str) or
+                type(compiler_metadata.get("size")) is not int or
+                compiler_metadata["size"] <= 0 or
+                compiler_metadata["size"] > facts_module.MAX_COMPILER_METADATA_BYTES):
+            raise ValueError("phase7-safety-build-compiler-metadata-identity-invalid:" + variant)
+        metadata_rel = pathlib.PurePosixPath(compiler_metadata["source_path"])
+        if (metadata_rel.is_absolute() or ".." in metadata_rel.parts or
+                not str(metadata_rel).startswith(build_root.relative_to(ROOT).as_posix() + "/") or
+                metadata_rel.name != "CMakeCCompiler.cmake"):
+            raise ValueError("phase7-safety-build-compiler-metadata-path-invalid:" + variant)
+        metadata_path = ROOT / pathlib.Path(*metadata_rel.parts)
+        if (not re.fullmatch(r"CMakeFiles/[0-9]+(?:\.[0-9]+){1,3}/CMakeCCompiler\.cmake",
+                pathlib.PurePosixPath(*metadata_rel.parts[len(build_root.relative_to(ROOT).parts):]).as_posix()) or
+                metadata_path.is_symlink() or not metadata_path.is_file()):
+            raise ValueError("phase7-safety-build-compiler-metadata-path-invalid:" + variant)
+        observed_facts, observed_compiler_input = facts_module.project_cache_inputs(
+            build_root / "CMakeCache.txt")
+        if (observed_compiler_input["path"].relative_to(ROOT).as_posix() != compiler_metadata["source_path"] or
+                observed_compiler_input["sha256"] != compiler_metadata["sha256"] or
+                observed_compiler_input["size"] != compiler_metadata["size"]):
+            raise ValueError("phase7-safety-build-compiler-metadata-changed:" + variant)
+        configuration_problem = facts_module.validate_configuration(variant, observed_facts)
+        if configuration_problem:
+            raise ValueError("phase7-safety-build-configuration-invalid:" + variant + ":" +
+                configuration_problem)
+        sources[compiler_metadata["source_path"]] = compiler_metadata["sha256"]
         binaries = identity.get("test_executables", {})
         if not isinstance(binaries, dict) or not binaries:
             raise ValueError("phase7-safety-evidence-binaries-missing:" + variant)
@@ -333,11 +368,7 @@ def retain_safety_build_evidence(build: pathlib.Path, runtime: pathlib.Path, rep
             if total > 256 * 1024 * 1024:
                 raise ValueError("phase7-safety-evidence-byte-cap")
             fact_entries.append({"source_path": source_path, "sha256": digest, "size": source.stat().st_size})
-        facts_spec = importlib.util.spec_from_file_location("gw_v02_safety_build_facts",
-            FACTS_POLICY_PATH)
-        facts_module = importlib.util.module_from_spec(facts_spec)
-        facts_spec.loader.exec_module(facts_module)
-        cache = facts_module.project_cache(build_root / "CMakeCache.txt")
+        cache = observed_facts
         fact_problem = facts_module.validate_facts(variant, cache, sources)
         observed_compiler = (cache.get("CMAKE_C_COMPILER_ID"), cache.get("CMAKE_C_COMPILER_VERSION"))
         if fact_problem or (compiler_identity is not None and observed_compiler != compiler_identity):
@@ -1072,12 +1103,36 @@ def _collect_checked_host_batch(desktop, compiler, backend: str, build: pathlib.
     return host
 
 
+def completed_chunk_reference(path: pathlib.Path) -> dict:
+    """Do not mark runtime complete until both title comparisons have passed."""
+    report = json.loads(path.read_text(encoding="utf-8"))
+    rows = report.get("routes") if isinstance(report, dict) else None
+    if (not isinstance(report, dict) or report.get("schema") != "genewhip-phase6-chunk-v1" or
+            report.get("status") != "pass" or not isinstance(rows, list) or len(rows) != 2 or
+            any(not isinstance(row, dict) or row.get("status") != "pass" or
+                row.get("fixture") not in ("recursion94", "tank-battle") for row in rows) or
+            {row.get("fixture") for row in rows} != {"recursion94", "tank-battle"}):
+        raise ValueError("phase7-chunk-roster-incomplete")
+    return {"path": str(path.relative_to(ROOT)), "sha256": sha(path)}
+
+
 def run_execution(mode: str, build: pathlib.Path, scope_path: pathlib.Path, out: pathlib.Path) -> dict:
     """Dispatch the existing bounded collectors under a fresh explicit Phase 7 scope."""
     if mode not in ("full", "safety", "chunk"):
         raise ValueError("phase7-runtime-mode-not-owned:" + mode)
     scope, limits = validate_execution_scope(scope_path, mode)
     build = build.resolve(strict=True); out = out.resolve()
+    if mode == "full":
+        facts_module = _module(FACTS_POLICY_PATH, "gw_v02_safety_build_facts_preflight")
+        try:
+            native_facts, _native_compiler_input = facts_module.project_cache_inputs(
+                build / "CMakeCache.txt")
+        except (OSError, ValueError) as error:
+            raise ValueError("phase7-safety-build-configuration-preflight-invalid:native:" +
+                str(error)) from error
+        problem = facts_module.validate_configuration("native", native_facts)
+        if problem:
+            raise ValueError("phase7-safety-build-configuration-preflight-invalid:native:" + problem)
     plan = plan_mode(mode, build, scope_path, out)
     route_contract = _module(ROOT / "tests/session/phase6_route_contract.py", "gw_v02_runtime_boundary")
     fixture = _module(ROOT / "tests/fixtures/phase6_game.py", "gw_v02_runtime_fixture")
@@ -1184,7 +1239,7 @@ def run_execution(mode: str, build: pathlib.Path, scope_path: pathlib.Path, out:
                 "build_evidence": safety_build_ref}
             chunk_path = runtime / "chunk.json"
             fixture.chunk(build, candidate_path, mapping_path, chunk_path)
-            rows["chunk"] = {"path": str(chunk_path.relative_to(ROOT)), "sha256": sha(chunk_path)}
+            rows["chunk"] = completed_chunk_reference(chunk_path)
             matrix = identity_module
             roster = json.loads((ROOT / "evidence/v02-roster.json").read_text(encoding="utf-8"))
             observations = matrix.project_current_observations(roster, runtime_inputs["core"],
@@ -1209,7 +1264,7 @@ def run_execution(mode: str, build: pathlib.Path, scope_path: pathlib.Path, out:
             fixture.set_execution_scope(scoped)
             chunk_path=runtime/"chunk.json"
             fixture.chunk(build,candidate_path,mapping_path,chunk_path)
-            rows["chunk"]={"path":str(chunk_path.relative_to(ROOT)),"sha256":sha(chunk_path)}
+            rows["chunk"]=completed_chunk_reference(chunk_path)
         scoped_state = fixture._read_window()
     except BaseException as error:
         failure = {"schema": "genewhip-v02-runtime-observation-v1", "status": "fail",

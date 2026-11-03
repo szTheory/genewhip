@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import pathlib
@@ -375,11 +376,196 @@ class SchemaClosureContract(unittest.TestCase):
                 "headless_sha256": "3" * 64, "desktop_sha256": "4" * 64}}
         return core, host_reports, identity
 
+    @staticmethod
+    def _production_current_inputs(module, roster, root):
+        """Build a retained-report-shaped, source-bound current collector fixture."""
+        route_spec = importlib.util.spec_from_file_location(
+            "gw_v02_matrix_adapter_routes", ROOT / "scripts/evidence/phase6_routes.py")
+        if route_spec is None or route_spec.loader is None:
+            raise AssertionError("current route compiler is unavailable")
+        route_module = importlib.util.module_from_spec(route_spec)
+        route_spec.loader.exec_module(route_module)
+        routes = {(row["fixture"], row["case"]["id"]): row
+            for row in route_module.compile_routes()["routes"]}
+        module._CURRENT_ROUTES = routes
+
+        # The independent report reader requires report references to stay beneath
+        # its checkout root. Point only this imported test module at the disposable
+        # fixture tree so no retained/private report is consulted or rewritten.
+        module.__file__ = str(root / "scripts/evidence/v02_matrix.py")
+        control_path = root / "build/v02/runtime/control-report.json"
+        control_path.parent.mkdir(parents=True)
+        independent_results = []
+        for (fixture, case), route in routes.items():
+            if fixture != "genewhip-independent-game-v2":
+                continue
+            expected = route["case"]["expect"]
+            independent_results.append({
+                "id": case,
+                "outcome": "pass",
+                "play_state": expected["play_state"],
+                "position": expected["position_min"],
+                "psg": expected["psg_writes"],
+                "fields": route["case"]["frames"],
+                "input_sha256": route["identity"]["input_sha256"],
+                "retained_pcm": {"sha256": "c" * 64},
+                "raw_geometry_sha256": "d" * 64,
+            })
+        control_report = {"schema": "genewhip-phase4-gameplay-v1", "outcome": "pass",
+            "results": independent_results}
+        control_bytes = (json.dumps(control_report, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        control_path.write_bytes(control_bytes)
+        control_reference = {"path": "build/v02/runtime/control-report.json",
+            "sha256": hashlib.sha256(control_bytes).hexdigest()}
+
+        core_runs = []
+        stages = []
+        for (fixture, case), route in routes.items():
+            for repetition in (1, 2):
+                if fixture == "genewhip-independent-game-v2":
+                    run = {"fixture": fixture, "case": case, "repetition": repetition,
+                        "status": "pass", "identity": route["identity"],
+                        "control_report": control_reference}
+                else:
+                    predicates = route["definitions"].get("predicates", [])
+                    if route["case"].get("kind") == "causal-control":
+                        facts = {name: {"reached": False}
+                            for name in route["case"].get("withheld_predicates", [])}
+                    else:
+                        facts = {predicate["id"]: {"reached": True,
+                            "value": predicate["equals"],
+                            "field": predicate["field_window"][0]} for predicate in predicates}
+                    run = {"fixture": fixture, "case": case, "repetition": repetition,
+                        "status": "pass", "identity": route["identity"],
+                        "completed_fields": 9, "predicate_results": facts}
+                core_runs.append(run)
+
+                for stage in module.MATRIX_STAGES:
+                    status, reached = "pass", True
+                    if stage == "completion":
+                        status, reached = "unknown", False
+                    elif fixture == "genewhip-independent-game-v2":
+                        if stage == "interaction" and case in ("title-no-start", "action-no-trigger") and repetition == 1:
+                            status, reached = "skipped", False
+                        elif stage == "sustained" and case != "sustained-play":
+                            status, reached = "skipped", False
+                    stages.append({"fixture": fixture, "case": case,
+                        "repetition": repetition, "stage": stage,
+                        "status": status, "reached": reached})
+
+        host_reports = {}
+        for client in ("software-sdl", "native-sdl"):
+            backend = client.removesuffix("-sdl")
+            host_reports[client] = {"schema": "genewhip-phase6-host-v1", "backend": backend,
+                "runs": [{"fixture": case["title_id"], "case": case["case_id"],
+                    "status": "pass", "backend": backend,
+                    "identity": routes[(case["title_id"], case["case_id"])]["identity"]}
+                    for case in roster["matrix"]["host_case_ids"]]}
+
+        digest = "a" * 64
+        identity = {"schema": "genewhip-v02-runtime-identity-v1", "source_sha256": digest,
+            "git_head": "b" * 40, "base_sha": "c" * 40, "run_id": "123", "run_attempt": "2",
+            "scope_sha256": "d" * 64, "candidate_sha256": "e" * 64,
+            "build_identity": {"cmake_cache_sha256": "1" * 64, "configuration_sha256": "2" * 64,
+                "headless_sha256": "3" * 64, "desktop_sha256": "4" * 64}}
+        core = {"schema": "genewhip-phase6-product-report-v1", "runs": core_runs,
+            "stages": stages, "candidate_manifest": {"schema": "test-candidate-manifest-v1"}}
+        return core, host_reports, identity, routes, control_path
+
     def test_current_runtime_adapter_preserves_history_and_binds_current_launch_identity(self) -> None:
         module = PublicMatrixContract._module()
         roster = json.loads((ROOT / "evidence/v02-roster.json").read_text())
-        core, hosts, identity = self._current_inputs(module, roster)
-        rows = module.project_current_observations(roster, core, hosts, identity)
+        with tempfile.TemporaryDirectory(prefix="gw-v02-current-production-adapter-") as directory:
+            core, hosts, identity, routes, control_path = self._production_current_inputs(
+                module, roster, pathlib.Path(directory))
+            rows = module.project_current_observations(roster, core, hosts, identity)
+            module.validate_qualification_matrix(rows)
+
+            by_key = {(row["title_id"], row["case_id"], row["client_scope"],
+                row["stage"], row["repetition"]): row for row in rows}
+            self.assertEqual(len(by_key), 180)
+            self.assertEqual(sum(row["outcome"] == "pass" for row in rows if row["stage"] == "load"), 36)
+            self.assertEqual(sum(row["outcome"] == "pass" for row in rows if row["stage"] == "boot"), 36)
+            self.assertEqual(sum(row["outcome"] == "unknown" for row in rows if row["stage"] == "completion"), 36)
+
+            # The historical title input is the source input-program digest. The
+            # current route identity separately carries its per-case execution log.
+            roster_title = {row["title_id"]: row for row in roster["matrix"]["titles"]}
+            for fixture in ("tank-battle", "recursion94"):
+                route = routes[(fixture, "full-route")]
+                self.assertEqual(route["identity"]["input_program_sha256"],
+                    roster_title[fixture]["input_sha256"])
+                self.assertNotEqual(route["identity"]["input_sha256"],
+                    roster_title[fixture]["input_sha256"])
+            indie_route = routes[("genewhip-independent-game-v2", "start-idle")]
+            self.assertNotEqual(indie_route["identity"]["input_program_sha256"],
+                roster_title["genewhip-independent-game-v2"]["input_sha256"])
+
+            # A skipped collector stage remains an intentional source disposition,
+            # and source progress alone cannot turn it into a pass.
+            self.assertEqual(by_key[("genewhip-independent-game-v2", "title-no-start", "core",
+                "interaction", 1)]["outcome"], "skipped")
+            self.assertEqual(by_key[("tank-battle", "withhold-early-hit", "core",
+                "interaction", 1)]["outcome"], "skipped")
+            authored_control_stage = next(stage for stage in core["stages"] if
+                stage["fixture"] == "tank-battle" and stage["case"] == "withhold-early-hit" and
+                stage["repetition"] == 1 and stage["stage"] == "interaction")
+            self.assertEqual((authored_control_stage["status"], authored_control_stage["reached"]), ("pass", True))
+
+            failed_collector = json.loads(json.dumps(core))
+            next(run for run in failed_collector["runs"] if run["fixture"] ==
+                "genewhip-independent-game-v2" and run["case"] == "title-no-start" and
+                run["repetition"] == 1)["status"] = "fail"
+            failed_rows = module.project_current_observations(roster, failed_collector, hosts, identity)
+            for stage in ("interaction", "sustained"):
+                failed_control = next(row for row in failed_rows if row["title_id"] ==
+                    "genewhip-independent-game-v2" and row["case_id"] == "title-no-start" and
+                    row["client_scope"] == "core" and row["stage"] == stage and row["repetition"] == 1)
+                self.assertEqual(failed_control["outcome"], "unknown",
+                    "source-derived skip needs a successful collector execution")
+            # Independent game reports omit completed_fields on the route run; boot
+            # is sourced from the same hash-bound per-case gameplay report as progress.
+            indie_boot = by_key[("genewhip-independent-game-v2", "start-move", "core", "boot", 1)]
+            self.assertEqual(indie_boot["outcome"], "pass")
+            self.assertEqual(indie_boot["observations"]["boot_fields"],
+                routes[("genewhip-independent-game-v2", "start-move")]["case"]["frames"])
+            self.assertTrue(all("completed_fields" not in run for run in core["runs"]
+                if run["fixture"] == "genewhip-independent-game-v2"))
+
+            # Mutating only the per-case input identity, while leaving the admitted
+            # input-program identity intact, must suppress qualification.
+            for changed_identity in ("input_sha256", "input_program_sha256"):
+                with self.subTest(changed_identity=changed_identity):
+                    bad_core = json.loads(json.dumps(core))
+                    bad_run = next(run for run in bad_core["runs"] if run["fixture"] == "recursion94" and
+                        run["case"] == "full-route" and run["repetition"] == 1)
+                    bad_run["identity"][changed_identity] = "f" * 64
+                    for stage in bad_core["stages"]:
+                        if (stage["fixture"], stage["case"], stage["repetition"]) == ("recursion94", "full-route", 1) and stage["stage"] in ("boot", "interaction", "sustained"):
+                            stage.update(status="skipped", reached=False)
+                    rejected = module.project_current_observations(roster, bad_core, hosts, identity)
+                    bad_load = next(row for row in rejected if row["title_id"] == "recursion94" and
+                        row["case_id"] == "full-route" and row["client_scope"] == "core" and
+                        row["stage"] == "load" and row["repetition"] == 1)
+                    self.assertEqual(bad_load["outcome"], "unknown")
+
+            # A matching, hash-updated report with no completed source fields cannot
+            # manufacture an independent-game boot result.
+            changed = json.loads(control_path.read_text())
+            next(result for result in changed["results"] if result["id"] == "title-no-start")["fields"] = 0
+            changed_bytes = (json.dumps(changed, sort_keys=True, separators=(",", ":")) + "\n").encode()
+            control_path.write_bytes(changed_bytes)
+            changed_sha = hashlib.sha256(changed_bytes).hexdigest()
+            bad_boot_core = json.loads(json.dumps(core))
+            for run in bad_boot_core["runs"]:
+                if run["fixture"] == "genewhip-independent-game-v2":
+                    run["control_report"]["sha256"] = changed_sha
+            bad_boot = module.project_current_observations(roster, bad_boot_core, hosts, identity)
+            title_boots = [row for row in bad_boot if row["title_id"] == "genewhip-independent-game-v2" and
+                row["case_id"] == "title-no-start" and row["client_scope"] == "core" and row["stage"] == "boot"]
+            self.assertTrue(title_boots)
+            self.assertTrue(all(row["outcome"] == "unknown" for row in title_boots))
+
         self.assertEqual(len(rows), 180)
         self.assertTrue(any(row["outcome"] == "pass" for row in rows))
         self.assertTrue(all(row["identity"]["build_sha256"] == next(
@@ -387,6 +573,109 @@ class SchemaClosureContract(unittest.TestCase):
             for row in rows), "historical roster build identities must remain unchanged")
         self.assertTrue(all(row["observation_dependencies"].get("current_execution_identity_sha256") ==
             module._canonical_record_sha256(identity) for row in rows if row["outcome"] == "pass"))
+
+    def test_copied_verifier_validates_current_source_progress_without_checkout_routes(self) -> None:
+        module = PublicMatrixContract._module()
+        roster = json.loads((ROOT / "evidence/v02-roster.json").read_text())
+        with tempfile.TemporaryDirectory(prefix="gw-v02-portable-current-verifier-") as directory:
+            isolated = pathlib.Path(directory)
+            (isolated / "evidence").mkdir()
+            (isolated / "scripts/evidence").mkdir(parents=True)
+            (isolated / "evidence/v02-roster.json").write_bytes((ROOT / "evidence/v02-roster.json").read_bytes())
+            (isolated / "evidence/v02-schema.json").write_bytes((ROOT / "evidence/v02-schema.json").read_bytes())
+            producer_copy = isolated / "scripts/evidence/v02_matrix.py"
+            producer_copy.write_bytes(MATRIX_PATH.read_bytes())
+            self.assertFalse((producer_copy.parent / "phase6_routes.py").exists())
+
+            core, hosts, identity, routes, _ = self._production_current_inputs(module, roster, isolated)
+            observations = module.project_current_observations(roster, core, hosts, identity)
+            module.validate_qualification_matrix(observations)
+            # Keep this comparison in the live producer test, so a change to the
+            # compact offline verifier policy cannot silently drift from routes.
+            titles = {row["title_id"]: row for row in roster["matrix"]["titles"]}
+            route_policy = {}
+            for fixture in titles:
+                title_routes = {case: route for (route_fixture, case), route in routes.items()
+                    if route_fixture == fixture}
+                representative = next(iter(title_routes.values()))
+                route_policy[fixture] = {"identity": {
+                    "scenario_sha256": representative["identity"]["scenario_sha256"],
+                    "oracle_sha256": representative["identity"]["oracle_sha256"],
+                    "rom_sha256": representative["identity"]["rom_sha256"],
+                    "source_sha256": titles[fixture]["source_sha256"],
+                    "roster_input_sha256": titles[fixture]["input_sha256"],
+                    "input_program_sha256": representative["identity"]["input_program_sha256"]},
+                    "cases": {}}
+                for case, route in title_routes.items():
+                    expected = route["case"].get("expect")
+                    route_policy[fixture]["cases"][case] = {
+                        "input_sha256": route["identity"]["input_sha256"],
+                        "kind": route["case"].get("kind"),
+                        "withheld_predicates": route["case"].get("withheld_predicates"),
+                        "frames": route["case"].get("frames"),
+                        "expect": ({name: expected[name] for name in (
+                            "play_state", "position_min", "position_max", "psg_writes")}
+                            if isinstance(expected, dict) else None),
+                        "predicates": [{"id": item["id"], "equals": item["equals"],
+                            "field_window": item["field_window"]}
+                            for item in route["definitions"].get("predicates", [])]}
+            policy = module.PORTABLE_CURRENT_ROUTE_POLICIES
+            self.assertEqual(policy, route_policy)
+
+            public = isolated / "public"
+            module.project_public_closure(roster, observations, public, identity, identity)
+            verifier_path = public / "verifier.py"
+            self.assertFalse((public / "phase6_routes.py").exists())
+            self.assertNotIn(str(ROOT), verifier_path.read_text())
+            write_bytecode = sys.dont_write_bytecode
+            sys.dont_write_bytecode = True
+            try:
+                spec = importlib.util.spec_from_file_location("gw_v02_copied_matrix_verifier", verifier_path)
+                self.assertIsNotNone(spec)
+                verifier = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(verifier)
+            finally:
+                sys.dont_write_bytecode = write_bytecode
+            self.assertEqual(verifier.PORTABLE_CURRENT_ROUTE_POLICIES, policy)
+
+            attempts = []
+            original_spec_from_file = verifier.importlib.util.spec_from_file_location
+            def watched_file_import(name, location, *args, **kwargs):
+                attempts.append((name, pathlib.Path(location).resolve()))
+                return original_spec_from_file(name, location, *args, **kwargs)
+            verifier.importlib.util.spec_from_file_location = watched_file_import
+            try:
+                result = verifier.verify_public_closure(public,
+                    isolated / "evidence/v02-roster.json", identity)
+            finally:
+                verifier.importlib.util.spec_from_file_location = original_spec_from_file
+            self.assertEqual(attempts, [], "portable validation must not import a checkout route module")
+            self.assertEqual(result["status"], "pass")
+            self.assertEqual(result["row_count"], 180)
+
+            # Recompute the outer manifest after changing a source predicate so
+            # rejection proves the copied verifier enforces the source window.
+            observations_path = public / "observations.json"
+            rows = json.loads(observations_path.read_text())
+            target = next(row for row in rows if row["title_id"] == "tank-battle" and
+                row["case_id"] == "full-route" and row["client_scope"] == "core" and
+                row["stage"] == "interaction" and row["repetition"] == 1)
+            target["observations"]["source_predicates"][0]["field"] = 99999
+            observations_path.write_text(json.dumps(rows, sort_keys=True, separators=(",", ":")) + "\n")
+            manifest_path = public / "manifest.json"
+            manifest = json.loads(manifest_path.read_text())
+            manifest["members"]["observations.json"] = hashlib.sha256(observations_path.read_bytes()).hexdigest()
+            manifest["closure_id"] = hashlib.sha256(json.dumps(manifest["members"], sort_keys=True,
+                separators=(",", ":")).encode()).hexdigest()
+            manifest_path.write_text(json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n")
+            attempts.clear()
+            verifier.importlib.util.spec_from_file_location = watched_file_import
+            try:
+                with self.assertRaisesRegex(ValueError, "matrix-current-source-predicate-invalid"):
+                    verifier.verify_public_closure(public, isolated / "evidence/v02-roster.json", identity)
+            finally:
+                verifier.importlib.util.spec_from_file_location = original_spec_from_file
+            self.assertEqual(attempts, [], "tamper rejection must remain checkout-independent")
 
     def test_current_execution_identity_mutants_reject_after_outer_digest_recompute(self) -> None:
         import hashlib
