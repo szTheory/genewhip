@@ -435,7 +435,9 @@ def run_workload(build, workload, scope_path, out, *, untimed=False, contracts_o
     routes = routes_module.compile_routes(mapping, "public-core")["routes"]
     route_contract = load_route_contract()
     hooks_on = build_identity(build)["cmake"].get("GENEWHIP_TEST_HOOKS") == "ON"
-    with tempfile.TemporaryDirectory(prefix="gw-bench-v02-", dir=build / "v02") as scratch_name:
+    scratch_parent = build / "v02"
+    scratch_parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="gw-bench-v02-", dir=scratch_parent) as scratch_name:
         scratch = Path(scratch_name)
         for spec in specs:
             title = spec["workload"]
