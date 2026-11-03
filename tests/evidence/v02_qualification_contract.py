@@ -4122,6 +4122,15 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
             start_dt = datetime.datetime.fromisoformat(start)
             now = start_dt + datetime.timedelta(minutes=2)
             created = start_dt + datetime.timedelta(minutes=1)
+            real_public_clock = window_module.validate_public_clock
+
+            def fixed_public_clock(clock_root, **kwargs):
+                # This profile is intentionally historical now. Keep the runtime
+                # budget test tied to its declared in-window instant rather than
+                # weakening production rejection after the cutoff.
+                kwargs["now"] = now
+                return real_public_clock(clock_root, **kwargs)
+
             new_scope_path = window_module.TWO_HOUR_SCOPE_PATH
             new_scope_sha = window_module.TWO_HOUR_SCOPE_SHA256
             new_auth_path = window_module.TWO_HOUR_AUTH_PATH
@@ -4141,7 +4150,9 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
             with mock.patch.dict(os.environ, selected, clear=True), \
                  mock.patch.object(module, "_load_phase7_window_module",
                     return_value=window_module), \
-                 mock.patch.object(window_module, "load_window", return_value=window_context):
+                 mock.patch.object(window_module, "load_window", return_value=window_context), \
+                 mock.patch.object(window_module, "validate_public_clock",
+                    side_effect=fixed_public_clock):
                 profile = module._phase7_window_profile()
                 self.assertEqual(profile["profile_id"], "two-hour")
                 self.assertEqual(module.phase7_execution_scope_path(root=root),

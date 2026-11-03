@@ -37,6 +37,11 @@ PHASE7_TWO_HOUR_AUTH_SHA256 = "abe4ac195dfa2fb0cd851f3d022b503b31229a7d16481a0be
 PHASE7_TWO_HOUR_SCOPE_PATH = pathlib.Path("evidence/v02-phase7-two-hour-execution-scope.json")
 PHASE7_TWO_HOUR_SCOPE_SHA256 = "a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c"
 PHASE7_TWO_HOUR_ATTEMPT_NAMESPACE = pathlib.Path("build/v02/phase7-qualification-20261102T220829Z/attempts")
+PHASE7_RENEWED_TWO_HOUR_AUTH_PATH = pathlib.Path("build/v02/phase7-qualification-20261103T000225Z/authorization.json")
+PHASE7_RENEWED_TWO_HOUR_AUTH_SHA256 = "c4e65420cca6bab3754702e12026610bf4e266175f7f2b6023e11acac0aaedbc"
+PHASE7_RENEWED_TWO_HOUR_SCOPE_PATH = pathlib.Path("evidence/v02-phase7-renewed-two-hour-execution-scope.json")
+PHASE7_RENEWED_TWO_HOUR_SCOPE_SHA256 = "bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c"
+PHASE7_RENEWED_TWO_HOUR_ATTEMPT_NAMESPACE = pathlib.Path("build/v02/phase7-qualification-20261103T000225Z/attempts")
 LEGACY_SCOPE_SHA256 = "05eb7f5fa91d759fbef8fb86bbc9db402dc41812261235bcf5085a0e2aa9b1a5"
 PHASE7_WINDOW_PROFILES = (
     {"profile_id": "four-hour", "authority_path": PHASE7_WINDOW_AUTH_PATH,
@@ -47,6 +52,11 @@ PHASE7_WINDOW_PROFILES = (
         "authority_sha256": PHASE7_TWO_HOUR_AUTH_SHA256,
         "scope_path": PHASE7_TWO_HOUR_SCOPE_PATH, "scope_sha256": PHASE7_TWO_HOUR_SCOPE_SHA256,
         "attempt_namespace": PHASE7_TWO_HOUR_ATTEMPT_NAMESPACE},
+    {"profile_id": "renewed-two-hour", "authority_path": PHASE7_RENEWED_TWO_HOUR_AUTH_PATH,
+        "authority_sha256": PHASE7_RENEWED_TWO_HOUR_AUTH_SHA256,
+        "scope_path": PHASE7_RENEWED_TWO_HOUR_SCOPE_PATH,
+        "scope_sha256": PHASE7_RENEWED_TWO_HOUR_SCOPE_SHA256,
+        "attempt_namespace": PHASE7_RENEWED_TWO_HOUR_ATTEMPT_NAMESPACE},
 )
 PHASE7_MERGE_PUSH_EVIDENCE_LIMIT_BYTES = 4 * 1024 * 1024
 SINGLE_NATIVE_POLICY_ROOT = pathlib.Path("build/v02/native-capture-retest-20261102T034752Z-repair")
@@ -5173,13 +5183,14 @@ def _phase7_window_push_run_identity(run: Any, repository: str, source_sha: str,
 
 
 def _phase7_window_push_jobs(value: Any, *, run_id: int, run_attempt: int,
-        state: str) -> list[dict[str, Any]]:
+        state: str, controller_cancel_confirmed: bool = False,
+        profile_id: str | None = None) -> list[dict[str, Any]]:
     """Validate the complete provider snapshot for one exact workflow attempt."""
     if (not isinstance(value, dict) or not isinstance(value.get("jobs"), list)
             or type(value.get("total_count")) is not int
             or value["total_count"] != len(value["jobs"]) or len(value["jobs"]) >= 100):
         raise ValueError("phase7-merge-push-jobs-incomplete")
-    if state not in {"active", "cancelled", "successful"}:
+    if state not in {"active", "cancelled", "cancelled-aggregate", "successful"}:
         raise ValueError("phase7-merge-push-jobs-state-invalid")
     known_names = {"safety", "gameplay", "desktop", "package", "performance",
         "product-smoke", "phase7-fast", "required-ci", "attestation", "v02-runtime",
@@ -5204,6 +5215,40 @@ def _phase7_window_push_jobs(value: Any, *, run_id: int, run_attempt: int,
             raise ValueError("phase7-merge-push-job-record-invalid")
         normalized.append({"name": job["name"], "status": status,
             "conclusion": conclusion.upper() if isinstance(conclusion, str) else None})
+    if state == "cancelled-aggregate":
+        expected_names = {"safety", "gameplay", "desktop", "package", "performance",
+            "product-smoke", "phase7-fast", "required-ci", "attestation", "v02-runtime",
+            "extended", "v02-benchmark-control", "v02-benchmark-recursion94",
+            "v02-benchmark-tank-battle", "v02-package", "v02-release-qualification"}
+        if (not controller_cancel_confirmed or profile_id != "renewed-two-hour"
+                or names != expected_names or any(job.get("status", "").upper() != "COMPLETED"
+                    or job.get("conclusion") not in {"success", "cancelled", "skipped", "failure"}
+                    or (job.get("name") != "required-ci" and job.get("conclusion") == "failure")
+                    or (job.get("name") == "required-ci" and job.get("conclusion") != "failure")
+                    for job in value["jobs"])):
+            raise ValueError("phase7-merge-push-cancelled-aggregate-invalid")
+        required_ci = next(job for job in value["jobs"] if job["name"] == "required-ci")
+        steps = required_ci.get("steps")
+        if not isinstance(steps, list):
+            raise ValueError("phase7-merge-push-cancelled-aggregate-invalid")
+        failures = []
+        for job in value["jobs"]:
+            job_steps = job.get("steps")
+            if not isinstance(job_steps, list):
+                raise ValueError("phase7-merge-push-cancelled-aggregate-invalid")
+            for step in job_steps:
+                if (not isinstance(step, dict) or not isinstance(step.get("status"), str)
+                        or step["status"].upper() != "COMPLETED"
+                        or step.get("conclusion") not in {"success", "cancelled", "skipped", "failure"}):
+                    raise ValueError("phase7-merge-push-cancelled-aggregate-invalid")
+                if step.get("conclusion") == "failure":
+                    failures.append((job, step))
+        if (required_ci.get("conclusion") != "failure"
+                or len(failures) != 1
+                or failures[0][0] is not required_ci
+                or failures[0][1].get("name") != "Reject incomplete or stale required lanes"):
+            raise ValueError("phase7-merge-push-cancelled-aggregate-invalid")
+        return normalized
     if state == "successful":
         if any(row["conclusion"] is None for row in normalized):
             raise ValueError("phase7-merge-push-job-record-invalid")
@@ -5471,8 +5516,13 @@ def _settle_phase7_window_merge_push_ci(repository: str, source_sha: str,
         raw, record, journal_path, journal)
     if disposition == "superseded-not-qualification-credit":
         try:
+            selected_profile = _phase7_window_profile()
             normalized_jobs = _phase7_window_push_jobs(jobs_value, run_id=int(run_id),
-                run_attempt=run_attempt, state="cancelled")
+                run_attempt=run_attempt,
+                state="cancelled-aggregate" if selected_profile is not None
+                    and selected_profile["profile_id"] == "renewed-two-hour" else "cancelled",
+                controller_cancel_confirmed=cancelled_by_controller,
+                profile_id=selected_profile["profile_id"] if selected_profile else None)
         except ValueError:
             record.update({"disposition": "cancelled-but-terminal-roster-invalid-stop"})
             _write_json(journal_path, journal)
