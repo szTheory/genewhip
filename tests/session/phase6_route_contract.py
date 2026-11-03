@@ -1052,6 +1052,96 @@ class ScratchTreeContract(unittest.TestCase):
             self.assertEqual(diagnostics, [{"kind": "path-disappeared-during-scan", "errno": 2,
                                            "path": "changing"}])
 
+    def test_owned_zero_link_file_is_skipped_only_when_recheck_confirms_enoent(self) -> None:
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory(prefix="gw-scratch-zero-link-removed-") as directory:
+            root = pathlib.Path(directory)
+            target = root / "changing"
+            target.write_text("safe")
+            original_lstat = pathlib.Path.lstat
+            calls = 0
+            zero_link = SimpleNamespace(st_mode=stat.S_IFREG | 0o600, st_nlink=0,
+                st_uid=os.getuid(), st_size=4, st_dev=1, st_ino=2)
+
+            def zero_then_missing(path: pathlib.Path):
+                nonlocal calls
+                if path == target:
+                    calls += 1
+                    if calls == 1:
+                        return zero_link
+                    raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(target))
+                return original_lstat(path)
+
+            diagnostics: list[dict[str, object]] = []
+            with mock.patch.object(pathlib.Path, "lstat", new=zero_then_missing):
+                measured = _safe_tree_bytes(root, diagnostics)
+            self.assertEqual(calls, 2, "the zero-link snapshot must be followed by one no-follow recheck")
+            self.assertEqual(measured, 0, "a confirmed removed entry contributes no live scratch bytes")
+            self.assertEqual(diagnostics, [{"kind": "path-disappeared-during-scan", "errno": errno.ENOENT,
+                                           "path": "changing"}])
+            self.assertTrue(target.exists(), "the controlled lstat sequence, not fixture deletion, reaches the branch")
+
+    def test_owned_zero_link_file_stays_rejected_if_recheck_finds_any_object(self) -> None:
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory(prefix="gw-scratch-zero-link-present-") as directory:
+            root = pathlib.Path(directory)
+            target = root / "changing"
+            target.write_text("safe")
+            original_lstat = pathlib.Path.lstat
+            calls = 0
+            zero_link = SimpleNamespace(st_mode=stat.S_IFREG | 0o600, st_nlink=0,
+                st_uid=os.getuid(), st_size=4, st_dev=1, st_ino=2)
+
+            def zero_then_present(path: pathlib.Path):
+                nonlocal calls
+                if path == target:
+                    calls += 1
+                    if calls == 1:
+                        return zero_link
+                return original_lstat(path)
+
+            diagnostics: list[dict[str, object]] = []
+            with mock.patch.object(pathlib.Path, "lstat", new=zero_then_present):
+                measured = _safe_tree_bytes(root, diagnostics)
+            self.assertEqual(calls, 2)
+            self.assertIsNone(measured, "a still-present path must not inherit the vanished-file exception")
+            self.assertEqual(diagnostics, [{"kind": "hardlink-file", "path": "changing",
+                                           "link_count": 0, "owned": True}])
+
+    def test_owned_zero_link_file_recheck_errors_remain_rejected(self) -> None:
+        from types import SimpleNamespace
+        recheck_errors = (
+            PermissionError(errno.EACCES, os.strerror(errno.EACCES)),
+            FileNotFoundError(errno.ENOTDIR, os.strerror(errno.ENOTDIR)),
+        )
+        for error in recheck_errors:
+            with self.subTest(errno=error.errno), \
+                    tempfile.TemporaryDirectory(prefix="gw-scratch-zero-link-error-") as directory:
+                root = pathlib.Path(directory)
+                target = root / "changing"
+                target.write_text("safe")
+                original_lstat = pathlib.Path.lstat
+                calls = 0
+                zero_link = SimpleNamespace(st_mode=stat.S_IFREG | 0o600, st_nlink=0,
+                    st_uid=os.getuid(), st_size=4, st_dev=1, st_ino=2)
+
+                def zero_then_error(path: pathlib.Path):
+                    nonlocal calls
+                    if path == target:
+                        calls += 1
+                        if calls == 1:
+                            return zero_link
+                        raise error
+                    return original_lstat(path)
+
+                diagnostics: list[dict[str, object]] = []
+                with mock.patch.object(pathlib.Path, "lstat", new=zero_then_error):
+                    measured = _safe_tree_bytes(root, diagnostics)
+                self.assertEqual(calls, 2)
+                self.assertIsNone(measured, "only an ENOENT recheck may classify the entry as vanished")
+                self.assertEqual(diagnostics, [{"kind": "scan-oserror", "errno": error.errno,
+                    "error_type": type(error).__name__, "path": "changing"}])
+
     def test_permission_scan_error_stays_rejected_and_records_errno(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gw-scratch-permission-") as directory:
             root = pathlib.Path(directory)
@@ -1094,6 +1184,33 @@ class ScratchTreeContract(unittest.TestCase):
             diagnostics: list[dict[str, object]] = []
             self.assertIsNone(_safe_tree_bytes(root, diagnostics))
             self.assertEqual(diagnostics[0]["kind"], "hardlink-file")
+
+    def test_scratch_diagnostic_cap_preserves_terminal_kinds_over_benign_disappearances(self) -> None:
+        diagnostics: list[dict[str, object]] = []
+        for index in range(8):
+            _record_scratch_diagnostic(diagnostics, {"kind": "path-disappeared-during-scan",
+                "path": f"gone-{index}", "errno": errno.ENOENT})
+        hardlink = {"kind": "hardlink-file", "path": "alias", "link_count": 2, "owned": True}
+        _record_scratch_diagnostic(diagnostics, hardlink)
+        self.assertEqual(len(diagnostics), 8)
+        self.assertIn(hardlink, diagnostics, "the terminal failure must displace one benign row")
+
+        for index in range(9):
+            _record_scratch_diagnostic(diagnostics, {"kind": "path-disappeared-during-scan",
+                "path": f"later-gone-{index}", "errno": errno.ENOENT})
+        self.assertEqual(len(diagnostics), 8)
+        self.assertIn(hardlink, diagnostics, "later benign rows must not overwrite the terminal failure")
+
+        unsafe_link = {"kind": "unsafe-file-symlink", "path": "unsafe-link", "reason": "target-invalid"}
+        _record_scratch_diagnostic(diagnostics, unsafe_link)
+        self.assertIn(unsafe_link, diagnostics, "the existing unsafe symlink priority must be preserved")
+        self.assertIn(hardlink, diagnostics, "unsafe symlink priority can replace a benign row first")
+
+        terminal_only = [dict(hardlink, path=f"alias-{index}") for index in range(8)]
+        priority_rows = terminal_only.copy()
+        _record_scratch_diagnostic(priority_rows, unsafe_link)
+        self.assertIn(unsafe_link, priority_rows,
+            "unsafe symlink remains higher priority when the diagnostic cap has no benign slot")
 
     def test_build_link_mode_counts_each_owned_hardlink_path_without_relaxing_default(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gw-scratch-build-hardlink-") as directory:
@@ -1672,11 +1789,30 @@ def _record_scratch_diagnostic(diagnostics: list[dict[str, object]] | None,
         return
     if len(diagnostics) < 8:
         diagnostics.append(entry)
-    elif entry.get("kind") == "unsafe-file-symlink":
+        return
+
+    benign_kind = "path-disappeared-during-scan"
+    entry_kind = entry.get("kind")
+    if entry_kind == "unsafe-file-symlink":
+        # Prefer replacing a benign row, preserving both this highest-priority
+        # unsafe-link result and any other terminal category already retained.
+        for index in range(len(diagnostics) - 1, -1, -1):
+            if diagnostics[index].get("kind") == benign_kind:
+                diagnostics[index] = entry
+                return
+        # Preserve the established unsafe-file-symlink priority when every
+        # retained row is terminal; never replace another unsafe-link result.
         for index in range(len(diagnostics) - 1, -1, -1):
             if diagnostics[index].get("kind") != "unsafe-file-symlink":
                 diagnostics[index] = entry
-                break
+                return
+    elif entry_kind != benign_kind:
+        # A terminal scan failure must not be hidden behind eight ordinary
+        # disappearances. Once full, replace one benign row and retain the cap.
+        for index in range(len(diagnostics) - 1, -1, -1):
+            if diagnostics[index].get("kind") == benign_kind:
+                diagnostics[index] = entry
+                return
 
 
 def _same_path_identity(left: os.stat_result, right: os.stat_result) -> bool:
@@ -2016,6 +2152,25 @@ def _safe_tree_bytes(root: pathlib.Path,
                         "errno": error.errno, "error_type": type(error).__name__})
                     return None
                 regular_file = stat.S_ISREG(info.st_mode)
+                if (regular_file and info.st_uid == os.getuid() and info.st_nlink == 0
+                        and not allow_build_file_links):
+                    try:
+                        path.lstat()
+                    except FileNotFoundError as error:
+                        if error.errno == errno.ENOENT:
+                            _record_scratch_diagnostic(diagnostics, {
+                                "kind": "path-disappeared-during-scan",
+                                "path": _scratch_relative_path(root, path), "errno": error.errno})
+                            continue
+                        _record_scratch_diagnostic(diagnostics, {
+                            "kind": "scan-oserror", "path": _scratch_relative_path(root, path),
+                            "errno": error.errno, "error_type": type(error).__name__})
+                        return None
+                    except OSError as error:
+                        _record_scratch_diagnostic(diagnostics, {
+                            "kind": "scan-oserror", "path": _scratch_relative_path(root, path),
+                            "errno": error.errno, "error_type": type(error).__name__})
+                        return None
                 if stat.S_ISLNK(info.st_mode) and allow_build_file_links:
                     failure_reason = ("target-invalid" if root_fd is None or info.st_nlink != 1
                         or info.st_uid != os.getuid() else

@@ -265,6 +265,15 @@ def _failure_summary(fixture: Any, result: Any, process: Any, streams: Any,
     # phase6_game owns this projection: it replaces streams and paths with enums.
     if not isinstance(value, dict) or set(value) - {"driver", "nested", "nested_count", "stderr_reason", "case"}:
         return {"stderr_reason": "unclassified", "case_id": None}
+    for key in ("driver", "nested"):
+        facts = value.get(key)
+        if isinstance(facts, dict):
+            kind = facts.get("scratch_tree_kind")
+            facts["scratch_tree_kind"] = kind if type(kind) is str and kind in {
+                "scratch-root-invalid", "symlink-directory", "scan-oserror",
+                "unsafe-file-symlink", "symlink-file", "non-regular-file",
+                "hardlink-file", "foreign-owner-file", "path-disappeared-during-scan"
+            } else "unavailable"
     return value
 
 
