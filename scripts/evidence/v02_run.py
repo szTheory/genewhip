@@ -180,6 +180,11 @@ def validate_execution_scope(scope_path: pathlib.Path, mode: str) -> tuple[dict,
             "relative": "evidence/v02-phase7-two-hour-execution-scope.json",
             "budget": {"wall_seconds": 7200, "runtime_wall_seconds": 5700,
                 "package_wall_seconds": 1200, "close_wall_seconds": 300}},
+        "bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c": {
+            "path": ROOT / "evidence/v02-phase7-renewed-two-hour-execution-scope.json",
+            "relative": "evidence/v02-phase7-renewed-two-hour-execution-scope.json",
+            "budget": {"wall_seconds": 7200, "runtime_wall_seconds": 5700,
+                "package_wall_seconds": 1200, "close_wall_seconds": 300}},
     }
     legacy_scope_sha = "05eb7f5fa91d759fbef8fb86bbc9db402dc41812261235bcf5085a0e2aa9b1a5"
     selected_sha = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", "")

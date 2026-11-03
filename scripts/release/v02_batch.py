@@ -10,7 +10,9 @@ import os
 from pathlib import Path
 import re
 import importlib.util
+import subprocess
 import stat
+import time
 from typing import Any, Callable
 
 
@@ -277,6 +279,83 @@ TWO_HOUR_FIXED_RECORD_SHA256 = {
     "prepare_exit": "eb9bb8b3659bebeaa11b38365c91901dbc2706cbba39716c38384ac4cfcfe180",
     "prepare_controller": "f46fadb4e607862841463860c1c3661432660943f3b7b955a85e72490e58d22c",
 }
+RENEWED_TWO_HOUR_AUTH_PATH = Path("build/v02/phase7-qualification-20261103T000225Z/authorization.json")
+RENEWED_TWO_HOUR_AUTH_SHA256 = "c4e65420cca6bab3754702e12026610bf4e266175f7f2b6023e11acac0aaedbc"
+RENEWED_TWO_HOUR_SCOPE_PATH = Path("evidence/v02-phase7-renewed-two-hour-execution-scope.json")
+RENEWED_TWO_HOUR_SCOPE_SHA256 = "bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c"
+RENEWED_TWO_HOUR_PREDECESSOR_REF = {"path":
+    "build/v02/phase7-qualification-20261103T000225Z/operator/predecessor-observation.json",
+    "sha256": "6bd1a5ba9ae45b2f7420efb1b7ddff928d09fa30a6838479bce8d2b4d81e0191"}
+RENEWED_TWO_HOUR_ATTEMPT_NAMESPACE = Path("build/v02/phase7-qualification-20261103T000225Z/attempts")
+RENEWED_TWO_HOUR_STARTED_AT = "2026-11-03T00:02:25+00:00"
+RENEWED_TWO_HOUR_PREDECESSOR = {
+    "attempt_index": 2,
+    "attempt_root": "build/v02/phase7-qualification-20261102T220829Z/attempts/attempt-0002",
+    "terminal": {"path": "build/v02/phase7-qualification-20261103T000225Z/operator/predecessor-observation.json",
+        "sha256": "6bd1a5ba9ae45b2f7420efb1b7ddff928d09fa30a6838479bce8d2b4d81e0191"},
+    "status": "settled-preclaim-route-rejection-no-qualification-credit",
+    "qualification_accepted": False,
+    "local_cleanup": "settled",
+}
+RENEWED_TWO_HOUR_ATTEMPT2_PREDECESSOR = {
+    "attempt_index": 1,
+    "attempt_root": "build/v02/phase7-qualification-20261102T220829Z/attempts/attempt-0001",
+    "terminal": {"path": "build/v02/phase7-qualification-20261102T220829Z/operator/continuation/cancelled-preview-terminal-v5.json",
+        "sha256": "ebc11dafe9e54276f414d741a5dd55caa86d1697be7585542e80f513f91a91ad"},
+    "status": "settled-cancelled-preview-no-qualification-credit",
+    "qualification_accepted": False,
+    "local_cleanup": "settled",
+}
+RENEWED_TWO_HOUR_ATTEMPT2_ROOT = Path("build/v02/phase7-qualification-20261102T220829Z/attempts/attempt-0002")
+RENEWED_TWO_HOUR_EXTERNAL_DIR = RENEWED_TWO_HOUR_ATTEMPT2_ROOT / "coordinator-external-attempts"
+RENEWED_TWO_HOUR_FIXED_REFS = {
+    "failure": RENEWED_TWO_HOUR_ATTEMPT2_ROOT / "failure.json",
+    "journal": RENEWED_TWO_HOUR_ATTEMPT2_ROOT / "hosted-delivery-journal.json",
+    "hosted_controller": RENEWED_TWO_HOUR_ATTEMPT2_ROOT / "operator/hosted-argv-controller.json",
+    "hosted_exit": RENEWED_TWO_HOUR_ATTEMPT2_ROOT / "operator/hosted-argv-exit.json",
+    "hosted_started": RENEWED_TWO_HOUR_ATTEMPT2_ROOT / "operator/hosted-argv-started.json",
+    "hosted_argv": RENEWED_TWO_HOUR_ATTEMPT2_ROOT / "operator/hosted-argv.json",
+    "hosted_log": RENEWED_TWO_HOUR_ATTEMPT2_ROOT / "operator/hosted-argv.log",
+    "public_admission": RENEWED_TWO_HOUR_ATTEMPT2_ROOT / "public-admission.json",
+    "source_admission": RENEWED_TWO_HOUR_ATTEMPT2_ROOT / "source-admission.json",
+    "prior_authorization": Path("build/v02/phase7-qualification-20261102T220829Z/authorization.json"),
+    "controller_observation": Path("build/v02/phase7-qualification-20261102T220829Z/operator/closed-controller-observation-v1.json"),
+    "prior_review": Path("build/v02/phase7-qualification-20261102T220829Z/operator/continuation-v6-review-v1.md"),
+    "prior_cancelled_terminal": Path("build/v02/phase7-qualification-20261102T220829Z/operator/continuation/cancelled-preview-terminal-v5.json"),
+    "prior_continuation": Path("build/v02/phase7-qualification-20261102T220829Z/operator/continuation/continuation-v5.py"),
+    "prior_draft": Path("build/v02/phase7-qualification-20261102T220829Z/operator/continuation/continuation-v6-draft.py"),
+    "preservation": Path("build/v02/phase7-qualification-20261102T220829Z/operator/current-preservation-v1.json"),
+    "prior_selection": Path("build/v02/phase7-qualification-20261102T220829Z/selection.json"),
+}
+RENEWED_TWO_HOUR_EXTERNAL_COMMANDS = {
+    ("git", "ls-files", "-z"): 3,
+    ("git", "merge-base", "--is-ancestor", "208da236ecd5ef9cddd59556324fbb4b1deeabdf",
+        "27b67e6b92fba562603fac0aceffaa581236903a"): 3,
+    ("gh", "pr", "list", "--repo", "szTheory/genewhip", "--head", "v0.2-source-1b7a661c3c1d",
+        "--state", "all", "--json", "number,url,headRefOid,baseRefName,state,mergeCommit"): 1,
+    ("gh", "api", "repos/szTheory/genewhip/git/commits/3aad8e372a75b473c7b897cc2ffb90d06056f464"): 1,
+    ("gh", "api", "repos/szTheory/genewhip/git/ref/heads/main"): 2,
+}
+RENEWED_TWO_HOUR_EXTERNAL_PID = "21895"
+RENEWED_TWO_HOUR_CONTROLLER_OBSERVATION_SHA256 = "7c1e3ad2385f2e0a85332e23669b75bd0acad6c1fd7798c78a6b8a6c5c665416"
+RENEWED_TWO_HOUR_PREVIOUS_CANCELLED_SHA256 = "ebc11dafe9e54276f414d741a5dd55caa86d1697be7585542e80f513f91a91ad"
+RENEWED_TWO_HOUR_OBSERVATION_SHA256 = "6bd1a5ba9ae45b2f7420efb1b7ddff928d09fa30a6838479bce8d2b4d81e0191"
+RENEWED_TWO_HOUR_OLD_TWO_HOUR_ROOT = Path("build/v02/phase7-qualification-20261102T220829Z")
+RENEWED_TWO_HOUR_OLD_TWO_HOUR_ATTEMPT1 = RENEWED_TWO_HOUR_OLD_TWO_HOUR_ROOT / "attempts/attempt-0001"
+RENEWED_TWO_HOUR_OLD_TWO_HOUR_ATTEMPT2 = RENEWED_TWO_HOUR_ATTEMPT2_ROOT
+RENEWED_TWO_HOUR_OLD_TWO_HOUR_SOURCE = "27b67e6b92fba562603fac0aceffaa581236903a"
+RENEWED_TWO_HOUR_OLD_TWO_HOUR_SOURCE_ANCESTOR = "208da236ecd5ef9cddd59556324fbb4b1deeabdf"
+RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_HEAD = "1b7a661c3c1d7366a4a4214f874bfeb7126e89c9"
+RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_BASE = "3c1ae8db9fbe31347553d5a5ed601100dceb282c"
+RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_TREE = "f7afa0344f236f3f914ca7e38b721670abc9cf2a"
+RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_SOURCE = "3aad8e372a75b473c7b897cc2ffb90d06056f464"
+RENEWED_TWO_HOUR_OLD_TWO_HOUR_OBSERVER_PID = 21893
+RENEWED_TWO_HOUR_OLD_TWO_HOUR_CONTROLLER_PID = 21895
+RENEWED_TWO_HOUR_OLD_TWO_HOUR_PREPARE_CONTROLLER_PID = 21768
+RENEWED_TWO_HOUR_OLD_TWO_HOUR_PREPARE_OBSERVER_PID = 21767
+RENEWED_TWO_HOUR_OLD_TWO_HOUR_TERMINAL_RUN_ID = 41541363230
+RENEWED_TWO_HOUR_OLD_TWO_HOUR_PR = 67
+RENEWED_TWO_HOUR_OLD_TWO_HOUR_PREVIOUS_ATTEMPT1_EXTERNAL_PIDS = {80108: 5, 88618: 1, 89944: 85}
 TWO_HOUR_JOB_RESULTS = {
     "product-smoke": "success", "safety": "success", "desktop": "success",
     "performance": "success", "phase7-fast": "success", "package": "success",
@@ -297,6 +376,14 @@ WINDOW_PROFILES = {
         "attempt_namespace": TWO_HOUR_ATTEMPT_NAMESPACE, "started_at": TWO_HOUR_STARTED_AT,
         "claim_schema": "genewhip.phase7-two-hour-dispatch-claim.v1",
         "failure_schema": "genewhip.phase7-two-hour-attempt-failure.v1"},
+    "renewed-two-hour": {"authority_path": RENEWED_TWO_HOUR_AUTH_PATH,
+        "authority_sha256": RENEWED_TWO_HOUR_AUTH_SHA256,
+        "scope_path": RENEWED_TWO_HOUR_SCOPE_PATH,
+        "scope_sha256": RENEWED_TWO_HOUR_SCOPE_SHA256,
+        "attempt_namespace": RENEWED_TWO_HOUR_ATTEMPT_NAMESPACE,
+        "started_at": RENEWED_TWO_HOUR_STARTED_AT,
+        "claim_schema": "genewhip.phase7-renewed-two-hour-dispatch-claim.v1",
+        "failure_schema": "genewhip.phase7-renewed-two-hour-attempt-failure.v1"},
 }
 _WINDOW_MODULE = None
 
@@ -1180,11 +1267,615 @@ def _phase7_window_validate_two_hour_predecessor(root: Path,
         raise ValueError(label)
     return dict(TWO_HOUR_INITIAL_PREDECESSOR)
 
+def _phase7_window_validate_renewed_external_receipts(root: Path, refs: Any) -> list[dict[str, Any]]:
+    """Reopen the exact ten preclaim child receipts for the renewed window."""
+    label = "phase7-window-renewed-external-receipts-invalid"
+    if not isinstance(refs, dict):
+        raise ValueError(label)
+    prefix = RENEWED_TWO_HOUR_EXTERNAL_DIR.as_posix() + "/"
+    selected = {name: ref for name, ref in refs.items()
+        if isinstance(name, str) and name.startswith(prefix)}
+    if (any(not isinstance(name, str) for name in refs)
+            or len(selected) != 10):
+        raise ValueError(label)
+    directory = _resolve_no_symlink(root, root / RENEWED_TWO_HOUR_EXTERNAL_DIR,
+        label=label)
+    expected_commands = dict(RENEWED_TWO_HOUR_EXTERNAL_COMMANDS)
+    seen_commands: dict[tuple[str, ...], int] = {}
+    receipt_rows = []
+    process_rows = []
+    paths = []
+    total = 0
+    for relative_name, reference in sorted(selected.items()):
+        relative = _safe_relative(relative_name, label)
+        match = re.fullmatch(r"external-21895-([0-9]+)\.attempt\.json", relative.name)
+        if (relative.parent != RENEWED_TWO_HOUR_EXTERNAL_DIR
+                or match is None or not isinstance(reference, dict)
+                or set(reference) != {"bytes", "path", "sha256"}
+                or reference.get("path") != relative_name
+                or type(reference.get("bytes")) is not int
+                or not re.fullmatch(r"[0-9a-f]{64}", str(reference.get("sha256", "")))):
+            raise ValueError(label)
+        raw = _read_regular(_path(root, relative), cap=MAX_CONNECTOR_CAPTURE_BYTES, label=label)
+        total += len(raw)
+        if (total > TWO_HOUR_EXTERNAL_BYTES_LIMIT or len(raw) != reference["bytes"]
+                or _digest(raw) != reference["sha256"]):
+            raise ValueError(label)
+        receipt = _json_object(raw, label)
+        command = receipt.get("argv")
+        if not isinstance(command, list) or not command or not all(isinstance(x, str) for x in command):
+            raise ValueError(label)
+        command_key = tuple(command)
+        seen_commands[command_key] = seen_commands.get(command_key, 0) + 1
+        processes = receipt.get("processes")
+        if (receipt.get("schema") != "genewhip.v02-coordinator-child-attempt.v1"
+                or receipt.get("label") != relative.stem.removesuffix(".attempt")
+                or receipt.get("returncode") != 0 or receipt.get("launch_error") is not None
+                or receipt.get("process_group_cleanup") != "confirmed"
+                or not isinstance(processes, list) or not processes
+                or any(not isinstance(row, dict) or row.get("status") != "completed"
+                    or type(row.get("return_code")) is not int or row["return_code"] != 0
+                    or row.get("process_group_cleanup") != "confirmed"
+                    or row.get("bound_violation") is not False for row in processes)):
+            raise ValueError(label)
+        process_rows.extend(processes)
+        paths.append(relative_name)
+        receipt_rows.append(receipt)
+    try:
+        entries = list(directory.iterdir())
+        external_entries = [entry for entry in entries
+            if entry.name.startswith("external-") and entry.name.endswith(".attempt.json")]
+        if (any(entry.is_symlink() or not entry.is_file() for entry in external_entries)
+                or any(entry.name != "process-receipts" and entry not in external_entries
+                    for entry in entries)):
+            raise ValueError(label)
+        listed = sorted(entry.relative_to(root).as_posix() for entry in external_entries)
+        process_dir = directory / "process-receipts"
+        if process_dir.is_symlink() or not process_dir.is_dir():
+            raise ValueError(label)
+        process_files = list(process_dir.iterdir())
+        if (len(process_files) != len(process_rows)
+                or any(item.is_symlink() or not item.is_file()
+                    or re.fullmatch(r"[0-9a-f]{32}\.json", item.name) is None
+                    for item in process_files)):
+            raise ValueError(label)
+        sidecar_rows = []
+        for item in process_files:
+            sidecar = _json_object(_read_regular(item, cap=MAX_CONNECTOR_CAPTURE_BYTES,
+                label=label), label)
+            if not isinstance(sidecar.get("processes"), list) or len(sidecar["processes"]) != 1:
+                raise ValueError(label)
+            sidecar_rows.extend(sidecar["processes"])
+        if sorted(_canonical(row) for row in sidecar_rows) != sorted(
+                _canonical(row) for row in process_rows):
+            raise ValueError(label)
+    except OSError:
+        raise ValueError(label) from None
+    if paths != sorted(set(paths)) or listed != paths or seen_commands != expected_commands:
+        raise ValueError(label)
+    return receipt_rows
+
+
+def _phase7_window_renewed_historical_paths(root: Path, *, deadline_monotonic: float | None = None) -> set[str]:
+    """Derive the old publication roster from its immutable Git tree, not its pins."""
+    label = "phase7-window-renewed-historical-roster-invalid"
+    timeout = 30 if deadline_monotonic is None else min(30, deadline_monotonic - time.monotonic())
+    if timeout <= 0:
+        raise ValueError(label)
+    ancestry_timeout = 15 if deadline_monotonic is None else min(
+        15, deadline_monotonic - time.monotonic())
+    if ancestry_timeout <= 0:
+        raise ValueError(label)
+    try:
+        ancestry = subprocess.run(["git", "merge-base", "--is-ancestor",
+                RENEWED_TWO_HOUR_OLD_TWO_HOUR_SOURCE_ANCESTOR,
+                RENEWED_TWO_HOUR_OLD_TWO_HOUR_SOURCE], cwd=root,
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=ancestry_timeout, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        raise ValueError(label) from None
+    if ancestry.returncode != 0:
+        raise ValueError(label)
+    try:
+        result = subprocess.run(["git", "ls-tree", "-r", "-z", "--name-only",
+                RENEWED_TWO_HOUR_OLD_TWO_HOUR_SOURCE], cwd=root,
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=timeout, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        raise ValueError(label) from None
+    if result.returncode != 0:
+        raise ValueError(label)
+    try:
+        names = [item.decode("utf-8", "strict") for item in result.stdout.split(b"\0") if item]
+    except UnicodeDecodeError:
+        raise ValueError(label) from None
+    spec = importlib.util.spec_from_file_location("gw_v02_historical_roster",
+        root / "scripts/release/v02_qualification.py")
+    if spec is None or spec.loader is None:
+        raise ValueError(label)
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+        paths = module._publication_paths_from_names(root, names)
+    except (OSError, ValueError, AttributeError):
+        raise ValueError(label) from None
+    roster = set(paths)
+    if len(roster) != 603 or len(paths) != len(roster):
+        raise ValueError(label)
+    return roster
+
+
+def _phase7_window_validate_renewed_previous_cancelled(root: Path, terminal: Any,
+        reference: dict[str, Any]) -> None:
+    """Reopen the prior cancelled preview's provider and child-cleanup evidence."""
+    label = "phase7-window-renewed-prior-cancellation-invalid"
+    if (not isinstance(terminal, dict)
+            or reference.get("sha256") != RENEWED_TWO_HOUR_PREVIOUS_CANCELLED_SHA256
+            or terminal.get("schema") != "genewhip.phase7-cancelled-preview-terminal.v1"
+            or terminal.get("attempt_index") != 1
+            or terminal.get("attempt_root") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_ATTEMPT1.as_posix()
+            or terminal.get("authorization_sha256") != TWO_HOUR_AUTH_SHA256
+            or terminal.get("scope_sha256") != TWO_HOUR_SCOPE_SHA256
+            or terminal.get("status") != "settled-cancelled-preview-no-qualification-credit"
+            or terminal.get("qualification_accepted") is not False
+            or terminal.get("qualification_credit") is not False
+            or terminal.get("remote_execution") != "not-started"
+            or terminal.get("dispatch_claim") != "absent"
+            or terminal.get("local_cleanup") != "settled"
+            or terminal.get("controller_exit") != 1
+            or terminal.get("failed_job") != "required-ci"
+            or terminal.get("failed_step") != "Reject incomplete or stale required lanes"
+            or terminal.get("run_id") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_TERMINAL_RUN_ID
+            or terminal.get("run_attempt") != 1 or terminal.get("run_conclusion") != "cancelled"
+            or terminal.get("pull_request") != str(RENEWED_TWO_HOUR_OLD_TWO_HOUR_PR)
+            or terminal.get("candidate_sha") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_HEAD
+            or terminal.get("public_base_sha") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_BASE
+            or terminal.get("public_source_sha") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_SOURCE
+            or terminal.get("public_tree") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_TREE
+            or terminal.get("source_head") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_SOURCE):
+        raise ValueError(label)
+    refs = terminal.get("refs")
+    if not isinstance(refs, dict) or set(refs) != {"cancel_command", "external_attempts",
+            "provider_refs", "failure", "hosted_argv", "hosted_controller", "hosted_exit",
+            "hosted_started", "journal", "preparation", "prepare_argv", "prepare_controller",
+            "prepare_exit", "prepare_started", "repository_policy", "public_admission",
+            "source_admission"}:
+        raise ValueError(label)
+    provider_refs = refs.get("provider_refs")
+    external_refs = refs.get("external_attempts")
+    if not isinstance(provider_refs, list) or len(provider_refs) != 33 \
+            or not isinstance(external_refs, list) or len(external_refs) != 91:
+        raise ValueError(label)
+    provider_names = set()
+    for item in provider_refs:
+        if (not isinstance(item, dict) or set(item) != {"bytes", "name", "path", "sha256"}
+                or not isinstance(item["name"], str) or item["name"] in provider_names
+                or type(item["bytes"]) is not int or item["bytes"] < 0
+                or not isinstance(item["path"], str)
+                or not re.fullmatch(r"[0-9a-f]{64}", str(item["sha256"]))):
+            raise ValueError(label)
+        rel = _safe_relative(item["path"], label)
+        if (rel.parent != RENEWED_TWO_HOUR_OLD_TWO_HOUR_ATTEMPT1 / "merge-preview-settlement"
+                or rel.name != item["name"]):
+            raise ValueError(label)
+        raw = _read_regular(_path(root, rel), cap=MAX_CONNECTOR_CAPTURE_BYTES, label=label)
+        if len(raw) != item["bytes"] or _digest(raw) != item["sha256"]:
+            raise ValueError(label)
+        provider_names.add(item["name"])
+    if ("terminal-jobs.json" not in provider_names or "merge-pull-request.json" not in provider_names
+            or "post-cancel-run-026.json" not in provider_names):
+        raise ValueError(label)
+    names_by_pid: dict[int, int] = {}
+    seen_external_paths = []
+    previous_process_rows = []
+    for item in external_refs:
+        if not isinstance(item, dict) or set(item) != {"path", "sha256"}:
+            raise ValueError(label)
+        rel = _safe_relative(item["path"], label)
+        if rel.parent != RENEWED_TWO_HOUR_OLD_TWO_HOUR_ATTEMPT1 / "coordinator-external-attempts":
+            raise ValueError(label)
+        match = re.fullmatch(r"external-([0-9]+)-([0-9]+)\.attempt\.json", rel.name)
+        if match is None:
+            raise ValueError(label)
+        pid = int(match.group(1)); names_by_pid[pid] = names_by_pid.get(pid, 0) + 1
+        raw = _read_regular(_path(root, rel), cap=MAX_CONNECTOR_CAPTURE_BYTES, label=label)
+        if _digest(raw) != item["sha256"]:
+            raise ValueError(label)
+        receipt = _json_object(raw, label); processes = receipt.get("processes")
+        if (receipt.get("schema") != "genewhip.v02-coordinator-child-attempt.v1"
+                or receipt.get("label") != rel.stem.removesuffix(".attempt")
+                or receipt.get("returncode") != 0 or receipt.get("launch_error") is not None
+                or receipt.get("process_group_cleanup") != "confirmed"
+                or not isinstance(processes, list) or not processes
+                or any(not isinstance(row, dict) or row.get("status") != "completed"
+                    or type(row.get("return_code")) is not int or row["return_code"] != 0
+                    or row.get("process_group_cleanup") != "confirmed"
+                    or row.get("bound_violation") is not False for row in processes)):
+            raise ValueError(label)
+        previous_process_rows.extend(processes)
+        seen_external_paths.append(rel.as_posix())
+    old_external_directory = RENEWED_TWO_HOUR_OLD_TWO_HOUR_ATTEMPT1 / "coordinator-external-attempts"
+    try:
+        old_external_entries = list((root / old_external_directory).iterdir())
+        old_external_files = [entry for entry in old_external_entries
+            if entry.name.startswith("external-") and entry.name.endswith(".attempt.json")]
+        old_external_listed = sorted(entry.relative_to(root).as_posix()
+            for entry in old_external_files)
+        if (any(entry.is_symlink() or not entry.is_file() for entry in old_external_files)
+                or any(entry.name != "process-receipts" and entry not in old_external_files
+                    for entry in old_external_entries)):
+            raise ValueError(label)
+        previous_process_dir = (root / old_external_directory / "process-receipts")
+        if previous_process_dir.is_symlink() or not previous_process_dir.is_dir():
+            raise ValueError(label)
+        previous_sidecars = list(previous_process_dir.iterdir())
+        if (len(previous_sidecars) != len(previous_process_rows)
+                or any(item.is_symlink() or not item.is_file()
+                    or re.fullmatch(r"[0-9a-f]{32}\.json", item.name) is None
+                    for item in previous_sidecars)):
+            raise ValueError(label)
+        sidecar_rows = []
+        for item in previous_sidecars:
+            sidecar = _json_object(_read_regular(item, cap=MAX_CONNECTOR_CAPTURE_BYTES,
+                label=label), label)
+            if not isinstance(sidecar.get("processes"), list) or len(sidecar["processes"]) != 1:
+                raise ValueError(label)
+            sidecar_rows.extend(sidecar["processes"])
+        if sorted(_canonical(row) for row in sidecar_rows) != sorted(
+                _canonical(row) for row in previous_process_rows):
+            raise ValueError(label)
+    except OSError:
+        raise ValueError(label) from None
+    if (names_by_pid != RENEWED_TWO_HOUR_OLD_TWO_HOUR_PREVIOUS_ATTEMPT1_EXTERNAL_PIDS
+            or seen_external_paths != sorted(set(seen_external_paths))
+            or old_external_listed != seen_external_paths):
+        raise ValueError(label)
+    settlement = RENEWED_TWO_HOUR_OLD_TWO_HOUR_ATTEMPT1 / "merge-preview-settlement"
+    terminal_jobs = _json_object(_read_regular(settlement / "terminal-jobs.json",
+        cap=MAX_CONNECTOR_CAPTURE_BYTES, label=label), label)
+    if terminal_jobs.get("total_count") != 16 or not isinstance(terminal_jobs.get("jobs"), list) \
+            or len(terminal_jobs["jobs"]) != 16:
+        raise ValueError(label)
+    job_names, job_ids = [], []
+    for job in terminal_jobs["jobs"]:
+        if (not isinstance(job, dict) or type(job.get("id")) is not int
+                or job.get("run_id") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_TERMINAL_RUN_ID
+                or job.get("run_attempt") != 1 or job.get("status") != "completed"
+                or job.get("name") not in TWO_HOUR_JOB_RESULTS):
+            raise ValueError(label)
+        expected_conclusion = ("failure" if job["name"] == "required-ci"
+            else "cancelled" if job["name"] in {"product-smoke", "performance", "package",
+                "gameplay", "desktop", "safety", "phase7-fast", "attestation"} else "skipped")
+        if job.get("conclusion") != expected_conclusion:
+            raise ValueError(label)
+        steps = job.get("steps")
+        if not isinstance(steps, list) or any(not isinstance(step, dict)
+                or step.get("status") != "completed"
+                or step.get("conclusion") not in {"success", "cancelled", "skipped", "failure"}
+                for step in steps):
+            raise ValueError(label)
+        failures = [step for step in steps if step.get("conclusion") == "failure"]
+        if job["name"] == "required-ci":
+            if (len(failures) != 1 or failures[0].get("name") !=
+                    "Reject incomplete or stale required lanes"
+                    or any(step.get("conclusion") != "success" for step in steps if step not in failures)):
+                raise ValueError(label)
+        elif failures:
+            raise ValueError(label)
+        job_names.append(job["name"]); job_ids.append(job["id"])
+    if set(job_names) != set(TWO_HOUR_JOB_RESULTS) or len(set(job_names)) != 16 \
+            or len(set(job_ids)) != 16:
+        raise ValueError(label)
+    run = _json_object(_read_regular(settlement / "post-cancel-run-026.json",
+        cap=MAX_CONNECTOR_CAPTURE_BYTES, label=label), label)
+    cancel = _json_object(_read_regular(settlement / "cancel-command.json",
+        cap=MAX_CONNECTOR_CAPTURE_BYTES, label=label), label)
+    pull = _json_object(_read_regular(settlement / "merge-pull-request.json",
+        cap=MAX_CONNECTOR_CAPTURE_BYTES, label=label), label)
+    if (run.get("id") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_TERMINAL_RUN_ID
+            or run.get("run_attempt") != 1 or run.get("status") != "completed"
+            or run.get("conclusion") != "cancelled" or run.get("event") != "push"
+            or run.get("workflow_id") != 392236816
+            or run.get("head_branch") != "main"
+            or run.get("head_sha") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_SOURCE
+            or run.get("path") != ".github/workflows/ci.yml"
+            or run.get("repository", {}).get("full_name") != "szTheory/genewhip"
+            or not isinstance(run.get("created_at"), str)
+            or not isinstance(run.get("run_started_at"), str)
+            or not isinstance(run.get("updated_at"), str)
+            or _utc(run["run_started_at"]) < _utc(run["created_at"])
+            or _utc(run["updated_at"]) < _utc(run["run_started_at"])
+            or cancel.get("returncode") != 0
+            or cancel.get("argv") != ["gh", "run", "cancel", str(run["id"]), "--repo", "szTheory/genewhip"]
+            or pull.get("number") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_PR
+            or pull.get("state") != "closed" or pull.get("merged") is not True
+            or pull.get("merge_commit_sha") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_SOURCE
+            or pull.get("head", {}).get("sha") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_HEAD
+            or pull.get("head", {}).get("ref") != "v0.2-source-1b7a661c3c1d"
+            or pull.get("base", {}).get("sha") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_BASE
+            or pull.get("base", {}).get("ref") != "main"
+            or _utc(run["created_at"]) < _utc(pull.get("merged_at"))):
+        raise ValueError(label)
+
+
+def _phase7_window_validate_renewed_predecessor(root: Path,
+        observation: dict[str, Any], *, git_deadline_monotonic: float | None = None) -> dict[str, Any]:
+    """Validate the immutable attempt-2 preclaim failure before renewed attempt 1."""
+    label = "phase7-window-renewed-predecessor-invalid"
+    root = Path(os.path.abspath(root)).resolve(strict=True)
+    if (not isinstance(observation, dict) or set(observation) != {"schema", "status", "attempt_root",
+            "historical_source_head", "dispatch_claim_observed", "full_qualification_dispatched",
+            "qualification_credit", "refs"}
+            or observation.get("schema") != "genewhip.phase7-renewed-two-hour-predecessor-observation.v1"
+            or observation.get("status") != "observed-preclaim-failure-not-admission"
+            or observation.get("attempt_root") != RENEWED_TWO_HOUR_ATTEMPT2_ROOT.as_posix()
+            or observation.get("historical_source_head") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_SOURCE
+            or observation.get("dispatch_claim_observed") is not False
+            or observation.get("full_qualification_dispatched") is not False
+            or observation.get("qualification_credit") is not False
+            or not isinstance(observation.get("refs"), dict)):
+        raise ValueError(label)
+    refs = observation["refs"]
+    expected_fixed = {path.as_posix() for path in RENEWED_TWO_HOUR_FIXED_REFS.values()}
+    external_paths = {path for path in refs if isinstance(path, str)
+        and path.startswith(RENEWED_TWO_HOUR_EXTERNAL_DIR.as_posix() + "/")}
+    if set(refs) != expected_fixed | external_paths or len(external_paths) != 10:
+        raise ValueError(label)
+    for name, reference in refs.items():
+        if (not isinstance(reference, dict) or set(reference) != {"bytes", "path", "sha256"}
+                or reference.get("path") != name or type(reference.get("bytes")) is not int
+                or not re.fullmatch(r"[0-9a-f]{64}", str(reference.get("sha256", "")))):
+            raise ValueError(label)
+        raw = _read_regular(_path(root, _safe_relative(name, label)),
+            cap=MAX_CANDIDATE_BYTES if name.endswith(".py") else MAX_CONNECTOR_CAPTURE_BYTES,
+            label=label)
+        if len(raw) != reference["bytes"] or _digest(raw) != reference["sha256"]:
+            raise ValueError(label)
+    old_window = _phase7_window_module().load_window(root,
+        authority_path=TWO_HOUR_AUTH_PATH, authority_sha256=TWO_HOUR_AUTH_SHA256,
+        scope_path=TWO_HOUR_SCOPE_PATH, scope_sha256=TWO_HOUR_SCOPE_SHA256)
+    if (old_window.get("source_ancestor") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_SOURCE_ANCESTOR
+            or old_window.get("started_at") != TWO_HOUR_STARTED_AT):
+        raise ValueError(label)
+    if _digest(_read_regular(_path(root, RENEWED_TWO_HOUR_PREDECESSOR_REF and
+            Path(RENEWED_TWO_HOUR_PREDECESSOR_REF["path"])), cap=256 * 1024, label=label)) != \
+            RENEWED_TWO_HOUR_OBSERVATION_SHA256:
+        raise ValueError(label)
+    renewed_receipts = _phase7_window_validate_renewed_external_receipts(root, refs)
+    for receipt in renewed_receipts:
+        command = receipt["argv"]
+        tail = receipt.get("stdout_tail")
+        if command[:2] == ["gh", "pr"]:
+            try:
+                rows = json.loads(tail)
+            except (TypeError, json.JSONDecodeError):
+                raise ValueError(label) from None
+            if (command != ["gh", "pr", "list", "--repo", "szTheory/genewhip",
+                    "--head", "v0.2-source-1b7a661c3c1d", "--state", "all", "--json",
+                    "number,url,headRefOid,baseRefName,state,mergeCommit"]
+                    or not isinstance(rows, list) or len(rows) != 1
+                    or rows[0].get("number") != 67 or rows[0].get("headRefOid") !=
+                        RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_HEAD
+                    or rows[0].get("baseRefName") != "main" or rows[0].get("state") != "MERGED"
+                    or rows[0].get("mergeCommit", {}).get("oid") !=
+                        RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_SOURCE):
+                raise ValueError(label)
+        elif command == ["gh", "api", "repos/szTheory/genewhip/git/commits/" +
+                RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_SOURCE]:
+            try:
+                commit = json.loads(tail)
+            except (TypeError, json.JSONDecodeError):
+                raise ValueError(label) from None
+            if (commit.get("sha") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_SOURCE
+                    or commit.get("tree", {}).get("sha") !=
+                        RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_TREE):
+                raise ValueError(label)
+        elif command == ["gh", "api", "repos/szTheory/genewhip/git/ref/heads/main"]:
+            try:
+                ref = json.loads(tail)
+            except (TypeError, json.JSONDecodeError):
+                raise ValueError(label) from None
+            if (ref.get("ref") != "refs/heads/main"
+                    or ref.get("object", {}).get("sha") !=
+                        RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_SOURCE
+                    or ref.get("object", {}).get("type") != "commit"):
+                raise ValueError(label)
+    prior_terminal_ref = RENEWED_TWO_HOUR_FIXED_REFS["prior_cancelled_terminal"].as_posix()
+    prior_terminal_raw = _read_regular(root / prior_terminal_ref,
+        cap=MAX_ADMISSION_BYTES, label=label)
+    if _digest(prior_terminal_raw) != RENEWED_TWO_HOUR_PREVIOUS_CANCELLED_SHA256:
+        raise ValueError(label)
+    prior_terminal = _json_object(prior_terminal_raw, label)
+    _phase7_window_validate_renewed_previous_cancelled(root, prior_terminal,
+        {"path": prior_terminal_ref, "sha256": _digest(prior_terminal_raw)})
+    old_attempt = RENEWED_TWO_HOUR_ATTEMPT2_ROOT
+    def doc(name: str, *, cap: int = MAX_ADMISSION_BYTES):
+        return _json_object(_read_regular(root / name, cap=cap, label=label), label)
+    failure = doc((old_attempt / "failure.json").as_posix())
+    journal = doc((old_attempt / "hosted-delivery-journal.json").as_posix())
+    source = doc((old_attempt / "source-admission.json").as_posix())
+    public = doc((old_attempt / "public-admission.json").as_posix())
+    preparation = doc((old_attempt / "candidate/preparation.json").as_posix(), cap=MAX_CANDIDATE_BYTES)
+    policy_rel = _safe_relative((public.get("candidate") or {}).get("repository_policy_path"), label)
+    if old_attempt / "candidate" not in policy_rel.parents:
+        raise ValueError(label)
+    policy = doc(policy_rel.as_posix(), cap=MAX_CANDIDATE_BYTES)
+    source_keys = {"schema", "status", "authorization_path", "authorization_sha256",
+        "scope_path", "scope_sha256", "batch_root", "attempt_index", "attempt_root",
+        "predecessor", "disposition", "started_at", "source_head", "source_pins",
+        "source_payload_sha256", "source_reviews"}
+    candidate_keys = {"preparation_path", "preparation_sha256", "publication_path",
+        "repository_policy_path", "repository_policy_sha256", "public_head", "public_base",
+        "public_tree", "source_manifest_sha256", "candidate_payload_sha256", "candidate_reviews"}
+    common_keys = ("schema", "authorization_path", "authorization_sha256", "scope_path",
+        "scope_sha256", "batch_root", "attempt_index", "attempt_root", "predecessor",
+        "disposition", "started_at", "source_head", "source_pins", "source_payload_sha256",
+        "source_reviews")
+    if (failure != {"attempt_index": 2, "attempt_root": old_attempt.as_posix(),
+            "authorization_sha256": TWO_HOUR_AUTH_SHA256, "observed_at": "2026-11-02T23:21:16.835333+00:00",
+            "reason": "fresh-batch-qualification-failed", "schema": "genewhip.phase7-two-hour-attempt-failure.v1",
+            "scope_sha256": TWO_HOUR_SCOPE_SHA256, "stage": "preview-ci"}
+            or journal.get("repository") != "szTheory/genewhip"
+            or journal.get("pull_request") != "67"
+            or journal.get("candidate_sha") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_HEAD
+            or journal.get("schema") != "genewhip.v02-delivery-journal.v1"
+            or journal.get("branch") != "v0.2-source-1b7a661c3c1d"
+            or journal.get("merge_strategy") != "squash"
+            or journal.get("merge_parents") != [RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_BASE]
+            or journal.get("public_source_sha") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_SOURCE
+            or journal.get("public_base_sha") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_BASE
+            or journal.get("tree_sha") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_TREE
+            or journal.get("push_performed") is not True
+            or journal.get("qualification_dispatch_submitted") is not None
+            or source.get("schema") != SCHEMA or public.get("schema") != SCHEMA
+            or source.get("status") != "source-preparation" or public.get("status") != "public-effects"
+            or source.get("attempt_index") != 2 or public.get("attempt_index") != 2
+            or source.get("attempt_root") != old_attempt.as_posix()
+            or public.get("attempt_root") != old_attempt.as_posix()
+            or source.get("authorization_sha256") != TWO_HOUR_AUTH_SHA256
+            or source.get("scope_sha256") != TWO_HOUR_SCOPE_SHA256
+            or source.get("authorization_path") != TWO_HOUR_AUTH_PATH.as_posix()
+            or source.get("scope_path") != TWO_HOUR_SCOPE_PATH.as_posix()
+            or source.get("started_at") != TWO_HOUR_STARTED_AT
+            or source.get("source_head") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_SOURCE
+            or source.get("predecessor") != RENEWED_TWO_HOUR_ATTEMPT2_PREDECESSOR
+            or source.get("disposition") != "evidence-backed-infrastructure-retry"
+            or set(source) != source_keys or set(public) != source_keys | {"candidate"}
+            or any(source.get(key) != public.get(key) for key in common_keys)
+            or not isinstance(source.get("source_pins"), dict)
+            or not isinstance(public.get("candidate"), dict)):
+        raise ValueError(label)
+    source_payload = source_review_payload(source_head=source["source_head"],
+        started_at=source["started_at"], attempt_root=old_attempt.as_posix(), attempt_index=2,
+        predecessor=source["predecessor"], disposition=source["disposition"],
+        source_pins=source["source_pins"], authorization_sha256=TWO_HOUR_AUTH_SHA256,
+        scope_sha256=TWO_HOUR_SCOPE_SHA256)
+    source_payload_sha = _digest(_canonical(source_payload))
+    if source.get("source_payload_sha256") != source_payload_sha:
+        raise ValueError(label)
+    for key, role in SOURCE_ROLES.items():
+        _check_review(root, source["source_reviews"].get(key), role=role,
+            payload_sha256=source_payload_sha)
+    historical_paths = _phase7_window_renewed_historical_paths(root,
+        deadline_monotonic=git_deadline_monotonic)
+    phase7_window_validate_git_blob_pins(root, source["source_head"], source["source_pins"],
+        expected_paths=historical_paths, deadline_monotonic=git_deadline_monotonic)
+    candidate = public["candidate"]
+    if (set(candidate) != candidate_keys or set(source["source_reviews"]) != set(SOURCE_ROLES)
+            or not isinstance(candidate.get("candidate_reviews"), dict)
+            or set(candidate["candidate_reviews"]) != set(CANDIDATE_ROLES)):
+        raise ValueError(label)
+    prep_ref = {"path": candidate.get("preparation_path"), "sha256": candidate.get("preparation_sha256")}
+    preparation, preparation_raw = _phase7_window_read_json_reference(root, prep_ref,
+        label=label, cap=MAX_CANDIDATE_BYTES)
+    candidate_policy_ref = {"path": candidate.get("repository_policy_path"),
+        "sha256": candidate.get("repository_policy_sha256")}
+    policy, _ = _phase7_window_read_json_reference(root, candidate_policy_ref,
+        label=label, cap=MAX_CANDIDATE_BYTES)
+    publication_path = old_attempt / "candidate/publication-copy"
+    publication_dir = _resolve_no_symlink(root, root / publication_path, label=label)
+    if (not publication_dir.is_dir()
+            or candidate.get("preparation_path") != (old_attempt / "candidate/preparation.json").as_posix()
+            or candidate.get("publication_path") != (old_attempt / "candidate/publication-copy").as_posix()
+            or candidate.get("public_head") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_HEAD
+            or candidate.get("public_base") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_BASE
+            or candidate.get("public_tree") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_PUBLIC_TREE
+            or candidate.get("source_manifest_sha256") != preparation.get("source_manifest_sha256")
+            or preparation.get("status") != "prepared" or preparation.get("mutations_performed") != 0
+            or preparation.get("workflow_dispatched") is not False
+            or preparation.get("push_performed") is not False
+            or preparation.get("pull_request_opened") is not False
+            or preparation.get("blockers") != []
+            or preparation.get("source_identity", {}).get("private_git_head") != source["source_head"]
+            or preparation.get("source_identity", {}).get("source_manifest_sha256") != candidate.get("source_manifest_sha256")
+            or policy.get("repository") != "szTheory/genewhip"
+            or policy.get("mutations_performed") != 0
+            or policy.get("repository_observations", {}).get("ready") is not True
+            or policy.get("privacy_scan", {}).get("publication_copy", {}).get("status") != "pass"):
+        raise ValueError(label)
+    candidate_payload = candidate_review_payload(source_payload, candidate)
+    candidate_payload_sha = _digest(_canonical(candidate_payload))
+    if candidate.get("candidate_payload_sha256") != candidate_payload_sha:
+        raise ValueError(label)
+    for key, role in CANDIDATE_ROLES.items():
+        _check_review(root, candidate.get("candidate_reviews", {}).get(key), role=role,
+            payload_sha256=candidate_payload_sha)
+    argv_path = RENEWED_TWO_HOUR_FIXED_REFS["hosted_argv"]
+    argv_raw = _read_regular(root / argv_path, cap=4096, label=label)
+    argv = json.loads(argv_raw)
+    started = doc((old_attempt / "operator/hosted-argv-started.json").as_posix())
+    exit_value = doc((old_attempt / "operator/hosted-argv-exit.json").as_posix())
+    controller = doc((old_attempt / "operator/hosted-argv-controller.json").as_posix())
+    expected_adapter_path = root / RENEWED_TWO_HOUR_FIXED_REFS["prior_continuation"]
+    if (not isinstance(argv, list) or len(argv) < 4 or not isinstance(argv[0], str)
+            or not Path(argv[0]).name.startswith("python3")
+            or argv[-2:] != [str(expected_adapter_path), "run"]
+            or len(argv) < 4 or argv[1:3] != ["-B", "-I"]
+            or started.get("source_head") != source["source_head"]
+            or started.get("argv_sha256") != _digest(argv_raw)
+            or exit_value.get("argv_sha256") != _digest(argv_raw)
+            or started.get("adapter_sha256") != refs[RENEWED_TWO_HOUR_FIXED_REFS["prior_continuation"].as_posix()]["sha256"]
+            or started.get("pid") != exit_value.get("pid")
+            or exit_value.get("controller_pid") != RENEWED_TWO_HOUR_OLD_TWO_HOUR_CONTROLLER_PID
+            or exit_value.get("exit_code") != 1 or exit_value.get("error") is not None
+            or controller.get("pid") != exit_value.get("controller_pid")
+            or controller.get("started_at") is None
+            or started.get("started_at") != exit_value.get("started_at")
+            or _utc(exit_value.get("finished_at")) < _utc(started.get("started_at"))
+            or exit_value.get("cleanup_established_by_recorder") is not False):
+        raise ValueError(label)
+    claim_path = RENEWED_TWO_HOUR_ATTEMPT2_ROOT / "dispatch-claim.json"
+    if (claim_path.exists() or claim_path.is_symlink()
+            or (RENEWED_TWO_HOUR_ATTEMPT2_ROOT / "runtime/native-prefix-diagnostic").exists()
+            or (RENEWED_TWO_HOUR_ATTEMPT2_ROOT / "hosted-qualification.json").exists()):
+        raise ValueError(label)
+    observer = doc(RENEWED_TWO_HOUR_FIXED_REFS["controller_observation"].as_posix())
+    observed_receipts = observer.get("exit_receipts", {})
+    attempt1_exit = (RENEWED_TWO_HOUR_OLD_TWO_HOUR_ATTEMPT1 / "operator/hosted-argv-exit.json").as_posix()
+    attempt2_exit = (RENEWED_TWO_HOUR_ATTEMPT2_ROOT / "operator/hosted-argv-exit.json").as_posix()
+    if (observer.get("schema") != "genewhip.closed-controller-observation.v1"
+            or observer.get("returncode") != 1 or observer.get("all_queried_pids_absent") is not True
+            or observer.get("queried_pids") != [89923, 89944, 21893, 21895]
+            or set(observed_receipts) != {attempt1_exit, attempt2_exit}
+            or observed_receipts.get(attempt2_exit) != {"controller_pid": 21895,
+                "leader_reaped_by_observer": True, "observer_pid": 21893,
+                "recorder_establishes_child_group_cleanup": False,
+                "sha256": refs[RENEWED_TWO_HOUR_FIXED_REFS["hosted_exit"].as_posix()]["sha256"]}):
+        raise ValueError(label)
+    return dict(RENEWED_TWO_HOUR_PREDECESSOR)
+
+
+def renewed_two_hour_initial_predecessor(root: Path, window: dict[str, Any]) -> dict[str, Any]:
+    """Production helper for operators/tests: return only a fully reopened predecessor."""
+    profile_id, _ = _phase7_window_profile(window)
+    if profile_id != "renewed-two-hour":
+        raise ValueError("phase7-window-renewed-predecessor-invalid")
+    root = Path(os.path.abspath(root)).resolve(strict=True)
+    remaining = _phase7_window_module().check_window(window, phase="runtime")["remaining_seconds"]
+    git_deadline = time.monotonic() + max(0.0, float(remaining) - 30.0)
+    if git_deadline <= time.monotonic():
+        raise ValueError("phase7-window-renewed-predecessor-invalid")
+    raw = _read_regular(root / RENEWED_TWO_HOUR_PREDECESSOR_REF["path"],
+        cap=256 * 1024, label="phase7-window-renewed-predecessor-invalid")
+    if _digest(raw) != RENEWED_TWO_HOUR_OBSERVATION_SHA256:
+        raise ValueError("phase7-window-renewed-predecessor-invalid")
+    observation = _json_object(raw, "phase7-window-renewed-predecessor-invalid")
+    return _phase7_window_validate_renewed_predecessor(root, observation,
+        git_deadline_monotonic=git_deadline)
+
+
 def _phase7_window_predecessor(root: Path, admission: dict[str, Any],
                                *, attempt_index: int, window: dict[str, Any]) -> dict[str, Any]:
     """Bind the prior closed attempt; unknown or unclean predecessors stop retries."""
     predecessor = admission.get("predecessor")
     profile_id, _ = _phase7_window_profile(window)
+    if profile_id == "renewed-two-hour":
+        if attempt_index != 1 or predecessor != RENEWED_TWO_HOUR_PREDECESSOR:
+            raise ValueError("phase7-window-renewed-predecessor-invalid")
+        checked = renewed_two_hour_initial_predecessor(root, window)
+        if checked != predecessor:
+            raise ValueError("phase7-window-renewed-predecessor-invalid")
+        return checked
     if profile_id == "two-hour":
         expected = dict(TWO_HOUR_INITIAL_PREDECESSOR)
         if attempt_index != 1:
@@ -4873,6 +5564,99 @@ def _check_pins(root: Path, pins: Any, *, required_paths: set[str]) -> dict[str,
             raise ValueError("fresh-batch-source-pin-stale")
         checked[relative.as_posix()] = actual
     return checked
+
+
+def phase7_window_validate_git_blob_pins(root: Path, source_head: str, pins: Any, *,
+        expected_paths: set[str], deadline_monotonic: float | None = None) -> dict[str, str]:
+    """Validate a historical admission's complete pin set against immutable Git blobs.
+
+    This is for readback of a closed attempt whose worktree may have changed since
+    it ran. It never trusts current filesystem bytes as a substitute for the
+    admitted commit. Both Git queries are bounded and every path is checked before
+    being passed to Git.
+    """
+    label = "phase7-window-historical-source-pins-invalid"
+    if (not isinstance(source_head, str)
+            or re.fullmatch(r"[0-9a-f]{40}", source_head) is None
+            or not isinstance(pins, dict) or set(pins) != expected_paths
+            or not pins or len(pins) > 8192):
+        raise ValueError(label)
+    names = []
+    expected_digests = {}
+    for name, digest in pins.items():
+        relative = _safe_relative(name, label)
+        if relative.as_posix() != name or not isinstance(digest, str) \
+                or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+            raise ValueError(label)
+        names.append(name)
+        expected_digests[name] = digest
+    names.sort()
+    queries = "".join(f"{source_head}:{name}\n" for name in names).encode("utf-8")
+    def command_timeout(limit: float) -> float:
+        if deadline_monotonic is None:
+            return limit
+        remaining = deadline_monotonic - time.monotonic()
+        if remaining <= 0:
+            raise ValueError(label)
+        return min(limit, remaining)
+    try:
+        commit = subprocess.run(["git", "cat-file", "-e", f"{source_head}^{{commit}}"],
+            cwd=root, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, timeout=command_timeout(15), check=False)
+        if commit.returncode != 0:
+            raise ValueError(label)
+        checked = subprocess.run(["git", "cat-file", "--batch-check"], cwd=root,
+            input=queries, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=command_timeout(45), check=False)
+        if checked.returncode != 0:
+            raise ValueError(label)
+        check_lines = checked.stdout.splitlines()
+        if len(check_lines) != len(names):
+            raise ValueError(label)
+        blob_sizes = []
+        total_size = 0
+        for line in check_lines:
+            fields = line.split()
+            if len(fields) != 3 or fields[1] != b"blob" or not fields[2].isdigit():
+                raise ValueError(label)
+            size = int(fields[2])
+            if size > MAX_SOURCE_BYTES:
+                raise ValueError(label)
+            total_size += size
+            if total_size > MAX_SOURCE_TOTAL_BYTES:
+                raise ValueError(label)
+            blob_sizes.append((fields[0], size))
+        result = subprocess.run(["git", "cat-file", "--batch"], cwd=root,
+            input=queries, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=command_timeout(60), check=False)
+        if result.returncode != 0:
+            raise ValueError(label)
+    except (OSError, subprocess.TimeoutExpired):
+        raise ValueError(label) from None
+    output = result.stdout
+    cursor = 0
+    validated = {}
+    for name, (expected_oid, expected_size) in zip(names, blob_sizes, strict=True):
+        header_end = output.find(b"\n", cursor)
+        if header_end < 0:
+            raise ValueError(label)
+        header = output[cursor:header_end].split()
+        if len(header) != 3 or header[0] != expected_oid or header[1] != b"blob" \
+                or not header[2].isdigit() or int(header[2]) != expected_size:
+            raise ValueError(label)
+        cursor = header_end + 1
+        end = cursor + expected_size
+        if end >= len(output) or output[end:end + 1] != b"\n":
+            raise ValueError(label)
+        blob = output[cursor:end]
+        digest = _digest(blob)
+        if digest != expected_digests[name]:
+            raise ValueError(label)
+        validated[name] = digest
+        cursor = end + 1
+    if cursor != len(output):
+        raise ValueError(label)
+    return validated
 
 
 def _utc(value: Any) -> datetime.datetime:

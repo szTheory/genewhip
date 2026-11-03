@@ -82,6 +82,33 @@ TWO_HOUR_PREDECESSOR_REF = {
 TWO_HOUR_BUDGET = {"wall_seconds": 7200, "runtime_wall_seconds": 5700,
     "package_wall_seconds": 1200, "close_wall_seconds": 300}
 
+# A renewed prospective window uses the same bounded two-hour budget and its
+# own immutable identity. Earlier profiles remain available for frozen artifacts.
+RENEWED_TWO_HOUR_AUTH_PATH = Path("build/v02/phase7-qualification-20261103T000225Z/authorization.json")
+RENEWED_TWO_HOUR_AUTH_SHA256 = "c4e65420cca6bab3754702e12026610bf4e266175f7f2b6023e11acac0aaedbc"
+RENEWED_TWO_HOUR_SCOPE_PATH = Path("evidence/v02-phase7-renewed-two-hour-execution-scope.json")
+RENEWED_TWO_HOUR_SCOPE_SHA256 = "bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c"
+RENEWED_TWO_HOUR_SCHEMA = "genewhip.phase7-renewed-two-hour-authorization.v1"
+RENEWED_TWO_HOUR_SOURCE_ANCESTOR = "27b67e6b92fba562603fac0aceffaa581236903a"
+RENEWED_TWO_HOUR_STARTED_AT = "2026-11-03T00:02:25+00:00"
+RENEWED_TWO_HOUR_RUNTIME_CUTOFF = "2026-11-03T01:37:25+00:00"
+RENEWED_TWO_HOUR_PACKAGE_CUTOFF = "2026-11-03T01:57:25+00:00"
+RENEWED_TWO_HOUR_GLOBAL_CUTOFF = "2026-11-03T02:02:25+00:00"
+RENEWED_TWO_HOUR_ATTEMPT_NAMESPACE = Path("build/v02/phase7-qualification-20261103T000225Z/attempts")
+RENEWED_TWO_HOUR_SELECTION_REF = {
+    "path": "build/v02/phase7-qualification-20261103T000225Z/selection.json",
+    "sha256": "efa12c7f0d74f3eacdcfa25d40f3a99b8c72dc454cd6df0e35e158d25a878c2c",
+}
+RENEWED_TWO_HOUR_EVIDENCE_REF = {
+    "path": ".planning/phases/GW-07-consolidated-compatibility-matrix-and-exact-byte-delivery/07-10-RENEWED-TWO-HOUR-WINDOW.md",
+    "sha256": "d55f3945bbfbc453eacd3053e35d9ecad6f9aff0862a8ed373031b439bfb7e1b",
+}
+RENEWED_TWO_HOUR_PREDECESSOR_REF = {
+    "path": "build/v02/phase7-qualification-20261103T000225Z/operator/predecessor-observation.json",
+    "sha256": "6bd1a5ba9ae45b2f7420efb1b7ddff928d09fa30a6838479bce8d2b4d81e0191",
+}
+RENEWED_TWO_HOUR_BUDGET = dict(TWO_HOUR_BUDGET)
+
 _PROFILES = {
     "four-hour": {
         "authority_path": AUTH_PATH, "authority_sha256": AUTH_SHA256,
@@ -106,6 +133,25 @@ _PROFILES = {
         "predecessor": TWO_HOUR_PREDECESSOR_REF, "budget": TWO_HOUR_BUDGET,
         "selection_schema": "genewhip.phase7-two-hour-selection.v1",
         "selection_ancestor": TWO_HOUR_SOURCE_ANCESTOR,
+    },
+    "renewed-two-hour": {
+        "authority_path": RENEWED_TWO_HOUR_AUTH_PATH,
+        "authority_sha256": RENEWED_TWO_HOUR_AUTH_SHA256,
+        "scope_path": RENEWED_TWO_HOUR_SCOPE_PATH,
+        "scope_sha256": RENEWED_TWO_HOUR_SCOPE_SHA256,
+        "schema": RENEWED_TWO_HOUR_SCHEMA,
+        "source_ancestor": RENEWED_TWO_HOUR_SOURCE_ANCESTOR,
+        "started_at": RENEWED_TWO_HOUR_STARTED_AT,
+        "runtime_cutoff": RENEWED_TWO_HOUR_RUNTIME_CUTOFF,
+        "package_cutoff": RENEWED_TWO_HOUR_PACKAGE_CUTOFF,
+        "global_cutoff": RENEWED_TWO_HOUR_GLOBAL_CUTOFF,
+        "attempt_namespace": RENEWED_TWO_HOUR_ATTEMPT_NAMESPACE,
+        "selection": RENEWED_TWO_HOUR_SELECTION_REF,
+        "evidence": RENEWED_TWO_HOUR_EVIDENCE_REF,
+        "predecessor": RENEWED_TWO_HOUR_PREDECESSOR_REF,
+        "budget": RENEWED_TWO_HOUR_BUDGET,
+        "selection_schema": "genewhip.phase7-renewed-two-hour-selection.v1",
+        "selection_ancestor": RENEWED_TWO_HOUR_SOURCE_ANCESTOR,
     },
 }
 
@@ -197,8 +243,8 @@ def load_window(root: Path, *, authority_path: Path = AUTH_PATH,
         scope_sha256: str = SCOPE_SHA256) -> dict[str, Any]:
     """Reopen one exact user-authorized profile and its immutable basis refs.
 
-    The no-argument form remains the frozen four-hour reader. A second profile is
-    accepted only when all four authority/scope identity values match its constants.
+    The no-argument form remains the frozen four-hour reader. Prospective profiles
+    are accepted only when all four authority/scope identity values match pins.
     """
     profile_id, profile = _profile_for_identity(authority_path=authority_path,
         authority_sha256=authority_sha256, scope_path=scope_path,
@@ -361,20 +407,26 @@ def select_public_event_window(root: Path, *, workflow_created_at: str,
     instant = instant.astimezone(datetime.timezone.utc)
     if created > instant:
         raise ValueError("phase7-window-workflow-clock-invalid")
+    matching = []
     for profile_id, profile in _PROFILES.items():
         start = _utc(profile["started_at"], "phase7-window-clock-invalid")
         global_cutoff = _utc(profile["global_cutoff"], "phase7-window-cutoff-invalid")
         if start <= created < global_cutoff:
-            checked = validate_public_clock(root,
-                scope_path=profile["scope_path"].as_posix(),
-                scope_sha256=profile["scope_sha256"], started_at=profile["started_at"],
-                phase="preparation", now=now, workflow_created_at=workflow_created_at)
-            return {"selected": True, "profile_id": profile_id,
-                "scope_path": profile["scope_path"].as_posix(),
-                "scope_sha256": profile["scope_sha256"],
-                "started_at": profile["started_at"],
-                "phase_cutoff": checked["phase_cutoff"],
-                "remaining_seconds": checked["remaining_seconds"]}
+            matching.append((start, profile_id, profile))
+    if matching:
+        # Overlapping prospective windows must select the newest authority. An
+        # older active profile must not shadow a later retry window.
+        _, profile_id, profile = max(matching, key=lambda item: item[0])
+        checked = validate_public_clock(root,
+            scope_path=profile["scope_path"].as_posix(),
+            scope_sha256=profile["scope_sha256"], started_at=profile["started_at"],
+            phase="preparation", now=now, workflow_created_at=workflow_created_at)
+        return {"selected": True, "profile_id": profile_id,
+            "scope_path": profile["scope_path"].as_posix(),
+            "scope_sha256": profile["scope_sha256"],
+            "started_at": profile["started_at"],
+            "phase_cutoff": checked["phase_cutoff"],
+            "remaining_seconds": checked["remaining_seconds"]}
     return {"selected": False, "profile_id": None,
         "scope_path": LEGACY_SCOPE_PATH.as_posix(),
         "scope_sha256": LEGACY_SCOPE_SHA256, "started_at": None}

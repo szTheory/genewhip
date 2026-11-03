@@ -48,6 +48,8 @@ def qualification_scope_path(explicit=None):
             "evidence/v02-phase7-full-execution-scope.json",
         "a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c":
             "evidence/v02-phase7-two-hour-execution-scope.json",
+        "bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c":
+            "evidence/v02-phase7-renewed-two-hour-execution-scope.json",
     }
     legacy_sha = "05eb7f5fa91d759fbef8fb86bbc9db402dc41812261235bcf5085a0e2aa9b1a5"
     if selected_sha not in ("", legacy_sha, *window_profiles):
