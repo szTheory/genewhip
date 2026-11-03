@@ -49,6 +49,13 @@ AUTHORIZED_RUN_PREDECESSOR = {
     "sha256": "201bb30f61165622962ad04f91a9c5215784cf2a6074959770043aa0ab96419a",
 }
 AUTHORIZED_RUN_PREDECESSOR_BUNDLE = ROOT / AUTHORIZED_RUN_PREDECESSOR["path"]
+AUTHORIZED_RUN_ATTEMPT1_ROOT = Path(
+    "build/v02/phase7-qualification-20261103T023257Z/attempts/attempt-0001"
+)
+AUTHORIZED_RUN_ATTEMPT1_BUNDLE = {
+    "path": (AUTHORIZED_RUN_ATTEMPT1_ROOT / "operator/closed-full-failure-bundle.json").as_posix(),
+    "sha256": "651ae5632d58f3846c833f64187489a22745511f1a5eb0b1d16d675b6dedc981",
+}
 
 
 def load_batch_module():
@@ -510,6 +517,57 @@ class AuthorizedRunPredecessorContract(unittest.TestCase):
         self.assertFalse(timeout_scratch.is_symlink())
         self.assertEqual(list(timeout_scratch.iterdir()), [])
 
+    def test_actual_full_failure_bundle_is_the_only_attempt2_predecessor(self):
+        if not (ROOT / AUTHORIZED_RUN_ATTEMPT1_BUNDLE["path"]).is_file():
+            self.skipTest("private authorized-run attempt-1 bundle is unavailable")
+        window = WINDOW.load_authorized_window(ROOT,
+            authority_path=AUTHORIZED_RUN_PATH,
+            authority_sha256=AUTHORIZED_RUN_SHA256,
+            scope_path=WINDOW.AUTHORIZED_SCOPE_PATH,
+            scope_sha256=AUTHORIZED_RUN_SCOPE_SHA256)
+        expected = {
+            "attempt_index": 1,
+            "attempt_root": AUTHORIZED_RUN_ATTEMPT1_ROOT.as_posix(),
+            "terminal": AUTHORIZED_RUN_ATTEMPT1_BUNDLE,
+            "status": "settled-full-qualification-failure",
+            "qualification_accepted": False,
+            "local_cleanup": "settled",
+        }
+        clock_module = BATCH._phase7_window_module()
+        real_check = clock_module.check_window
+        fixture_now = datetime.datetime.fromisoformat(window["started_at"]) + datetime.timedelta(minutes=2)
+
+        def historical_check(value, **kwargs):
+            return real_check(value, **{**kwargs, "now": fixture_now})
+
+        with mock.patch.object(clock_module, "check_window", side_effect=historical_check):
+            actual = BATCH._phase7_window_predecessor(
+                ROOT, {"predecessor": expected}, attempt_index=2, window=window)
+        self.assertEqual(actual, expected)
+
+        invalid_predecessors = []
+        for key, value in (
+            ("attempt_index", 0),
+            ("attempt_root", "build/v02/foreign/attempt-0001"),
+            ("status", "settled-success"),
+            ("qualification_accepted", True),
+            ("local_cleanup", "unknown"),
+        ):
+            mutant = dict(expected)
+            mutant[key] = value
+            invalid_predecessors.append(mutant)
+        for terminal_key, value in (("path", "build/v02/foreign/bundle.json"),
+                                    ("sha256", "0" * 64)):
+            mutant = dict(expected)
+            mutant["terminal"] = dict(expected["terminal"], **{terminal_key: value})
+            invalid_predecessors.append(mutant)
+        with mock.patch.object(clock_module, "check_window", side_effect=historical_check):
+            for mutant in invalid_predecessors:
+                with self.subTest(mutant=mutant):
+                    with self.assertRaises(ValueError):
+                        BATCH._phase7_window_predecessor(
+                            ROOT, {"predecessor": mutant}, attempt_index=2, window=window)
+
 
 class AuthorizedHostedProfileContract(unittest.TestCase):
     def setUp(self):
@@ -704,7 +762,7 @@ class AuthorizedHostedProfileContract(unittest.TestCase):
         self.assertEqual(observed["label"], "runtime")
         self.assertEqual(observed["timeout"], 10800 - 30)
         self.assertEqual(observed["limits"]["wall_seconds"], 10800 - 30)
-        self.assertEqual(observed["kwargs"], {})
+        self.assertEqual(observed["kwargs"], {"file_size_limit_bytes": 2147483648})
         self.assertTrue(out.with_suffix(out.suffix + ".attempt.json").is_file())
         self.assertEqual(observed["host_env"]["GENEWHIP_QUALIFICATION_SCOPE_PATH"],
             WINDOW.AUTHORIZED_SCOPE_PATH.as_posix())

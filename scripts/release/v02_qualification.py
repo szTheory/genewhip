@@ -8272,7 +8272,11 @@ def run_runtime(build: pathlib.Path, scope: pathlib.Path, out: pathlib.Path) -> 
     limits["wall_seconds"] = runtime_budget
     scratch=out.parent/(out.stem+"-attempts")
     attempt=_bounded_command(command,limits=limits,scratch=scratch,
-        timeout=runtime_budget,label="runtime")
+        timeout=runtime_budget,label="runtime",
+        # The orchestration child launches bounded CMake builds. Its inherited
+        # hard ceiling must permit their existing explicit binary-file cap;
+        # ordinary nested workload leaves still select the default trace cap.
+        file_size_limit_bytes=limits["max_binary_file_bytes"])
     if shared_start:
         _require_hosted_budget(shared_start, datetime.datetime.now(datetime.timezone.utc).isoformat(),
                                scope_data, phase="runtime")
@@ -8449,7 +8453,10 @@ def run_package(public_evidence: pathlib.Path, out: pathlib.Path) -> dict[str, A
         child_env["TMPDIR"] = str(package_temp)
         package_limits["wall_seconds"] = budget
         return _bounded_command(command, limits=package_limits, scratch=command_scratch,
-            timeout=budget, label=label, env=child_env)
+            timeout=budget, label=label, env=child_env,
+            # Package builders/materializers may create files above the trace
+            # cap; retain the reviewed binary ceiling for their descendants.
+            file_size_limit_bytes=package_limits["max_binary_file_bytes"])
     for role in ("sdk", "desktop"):
         script = ROOT / ("scripts/package_sdk.py" if role == "sdk" else "scripts/package_desktop.py")
         command = [sys.executable, "-I", str(script), "--release-version", "0.2.0",

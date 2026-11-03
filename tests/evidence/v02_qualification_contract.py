@@ -173,6 +173,76 @@ def synthetic_qualified_reports(benchmark, identity, source_digest, scope_id, sc
 
 
 class QualificationCoordinatorContract(unittest.TestCase):
+    def test_runtime_orchestrator_carries_reviewed_binary_file_ceiling(self):
+        from unittest import mock
+        module = load_module(self)
+        cap = 2 * 1024**3
+        with tempfile.TemporaryDirectory() as temp:
+            scope = Path(temp) / "scope.json"
+            scope.write_text(json.dumps({"per_child_limits": {"wall_seconds": 600,
+                "max_binary_file_bytes": cap}}))
+            class ReachedBoundary(Exception): pass
+            def boundary(command, **kwargs):
+                self.assertEqual(command[command.index("--mode") + 1], "full")
+                self.assertEqual(kwargs["file_size_limit_bytes"], cap)
+                self.assertEqual(kwargs["limits"]["max_binary_file_bytes"], cap)
+                raise ReachedBoundary()
+            with mock.patch.object(module, "qualification_plan",
+                    return_value={"limits": {"runtime_seconds": 600}}), \
+                 mock.patch.dict(os.environ, {"GENEWHIP_QUALIFICATION_STARTED_AT": ""}), \
+                 mock.patch.object(module, "_bounded_command", side_effect=boundary):
+                with self.assertRaises(ReachedBoundary):
+                    module.run_runtime(Path(temp), scope, Path(temp) / "out.json")
+
+    def test_nested_fixture_build_cap_survives_orchestrator_but_leaf_stays_strict(self):
+        require_process_context()
+        module = load_module(self)
+        cap = 2 * 1024**3
+        scope = json.loads((ROOT / "evidence/v02-execution.json").read_text())
+        limits = {**scope["per_child_limits"], "max_binary_file_bytes": cap}
+        with tempfile.TemporaryDirectory(prefix="nested-fsize-", dir=ROOT / "build/v02") as temp:
+            root = Path(temp)
+            fake = root / "cmake"
+            fake.write_text("#!" + sys.executable + "\nimport pathlib,sys\n"
+                "with (pathlib.Path(sys.argv[2])/'tiny.bin').open('wb') as f:\n"
+                " for _ in range(17): f.write(bytes(1024*1024))\n")
+            fake.chmod(0o700)
+            inner = '''import importlib.util,json,pathlib,resource,sys
+root,base,label,raw=sys.argv[1:]
+root=pathlib.Path(root);base=pathlib.Path(base);scope=json.loads(raw)
+spec=importlib.util.spec_from_file_location('fixture_nested',root/'tests/fixtures/phase6_game.py')
+fixture=importlib.util.module_from_spec(spec);spec.loader.exec_module(fixture)
+fixture.set_execution_scope(scope)
+command=[str(base.parent/'cmake'),'--build',str(base/'build'),'--target','tiny-write']
+assert fixture._phase7_cmake_build_root(command,root)==base/'build'
+result,receipt,_=fixture.shared_launch(pathlib.Path(command[0]),command,base/'work',base/'work/report.json',10,
+ child_cwd=root,build_scratch_root=base/'build',build_file_size_limit_bytes=2147483648,allow_build_file_links=True)
+if label=='red':
+ assert result.returncode==127 and 'preexec_fn' in result.stderr,(result,receipt)
+else:
+ assert result.returncode==0 and (base/'build/tiny.bin').stat().st_size==17825792,(result,receipt)
+ result,receipt,_=fixture.shared_launch(pathlib.Path(command[0]),command,base/'leaf',base/'leaf/report.json',10,child_cwd=root)
+ assert result.returncode!=0 and receipt['process_group_cleanup']=='confirmed',(result,receipt)
+print(json.dumps({'parent_limit':resource.getrlimit(resource.RLIMIT_FSIZE),'status':label}))
+'''
+            scope.update({"per_child_limits": limits,
+                "owned_roots": [root.relative_to(ROOT).as_posix()]})
+            scope.pop("qualification_started_at", None)
+            scope.pop("qualification_deadline", None)
+            for label, explicit in (("red", None), ("green", cap)):
+                base = root / label
+                for name in ("build", "work", "leaf", "outer"):
+                    (base / name).mkdir(parents=True)
+                kwargs = {} if explicit is None else {"file_size_limit_bytes": explicit}
+                attempt = module._bounded_command([sys.executable, "-B", "-I", "-c", inner,
+                    str(ROOT), str(base), label, json.dumps(scope)], limits=limits,
+                    scratch=base / "outer", scratch_roots=(base,), timeout=20,
+                    label=label, **kwargs)
+                self.assertEqual(attempt["returncode"], 0)
+                self.assertEqual(attempt["process_group_cleanup"], "confirmed")
+                expected = 16 * 1024**2 if explicit is None else cap
+                self.assertEqual(json.loads(attempt["stdout_tail"])["parent_limit"], [expected, expected])
+
     def test_native_prefix_producer_has_no_unresolved_module_globals(self):
         table = symtable.symtable(MODULE.read_text(encoding="utf-8"), str(MODULE), "exec")
         module_names = set(table.get_identifiers())
@@ -6228,8 +6298,10 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
             class ReachedFirstBuilder(Exception):
                 pass
 
-            def builder_boundary(command, *, limits, scratch, timeout, label, env):
+            def builder_boundary(command, *, limits, scratch, timeout, label, env,
+                                 file_size_limit_bytes):
                 self.assertEqual(label, "package-sdk")
+                self.assertEqual(file_size_limit_bytes, scope["per_child_limits"]["max_binary_file_bytes"])
                 projection_path = public / "performance.json"
                 self.assertTrue(projection_path.is_file(), "projection must exist before SDK builder invocation")
                 projection = json.loads(projection_path.read_text())
