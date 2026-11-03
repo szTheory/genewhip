@@ -53,7 +53,7 @@ runs:
         test -n "$created_at"
         QUALIFICATION_RUN_CREATED_AT="$created_at" python3 -I -c 'import os,sys;sys.path.insert(0,os.getcwd()); from scripts.release.v02_qualification import _validate_workflow_clock; _validate_workflow_clock(os.environ["GENEWHIP_QUALIFICATION_STARTED_AT"], os.environ["QUALIFICATION_RUN_CREATED_AT"], os.environ["GENEWHIP_QUALIFICATION_NONCE"], os.environ["GITHUB_BASE_SHA"], phase=os.environ["QUALIFICATION_PHASE"])'
     - name: Enforce minimum remaining prospective window
-      if: ${{ inputs.minimum_remaining_seconds != '0' && (env.GENEWHIP_QUALIFICATION_SCOPE_SHA256 == '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' || env.GENEWHIP_QUALIFICATION_SCOPE_SHA256 == 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' || env.GENEWHIP_QUALIFICATION_SCOPE_SHA256 == 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c') }}
+      if: ${{ inputs.minimum_remaining_seconds != '0' && (env.GENEWHIP_QUALIFICATION_SCOPE_PATH == 'evidence/v02-phase7-authorized-execution-scope.json' || env.GENEWHIP_QUALIFICATION_SCOPE_SHA256 == '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' || env.GENEWHIP_QUALIFICATION_SCOPE_SHA256 == 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' || env.GENEWHIP_QUALIFICATION_SCOPE_SHA256 == 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c') }}
       shell: bash
       env:
         MINIMUM_REMAINING_SECONDS: ${{ inputs.minimum_remaining_seconds }}

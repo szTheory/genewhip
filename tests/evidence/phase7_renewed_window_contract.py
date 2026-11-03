@@ -417,7 +417,15 @@ class RenewedPredecessorContract(unittest.TestCase):
             authority_sha256=profile["authority_sha256"],
             scope_path=profile["scope_path"],
             scope_sha256=profile["scope_sha256"])
-        predecessor = BATCH.renewed_two_hour_initial_predecessor(ROOT, window)
+        # This retained historical reader is time bounded in production. Pin its
+        # contract clock inside the original authorized interval so CI remains
+        # deterministic after the historical window itself has elapsed.
+        clock_module = BATCH._phase7_window_module()
+        check_window = clock_module.check_window
+        with mock.patch.object(clock_module, "check_window",
+                side_effect=lambda value, **kwargs: check_window(value,
+                    now="2026-11-03T00:03:00+00:00", **kwargs)):
+            predecessor = BATCH.renewed_two_hour_initial_predecessor(ROOT, window)
         self.assertEqual(predecessor, BATCH.RENEWED_TWO_HOUR_PREDECESSOR)
         self.assertEqual(predecessor["attempt_index"], 2)
         self.assertEqual(predecessor["attempt_root"], HISTORICAL_ATTEMPT2.relative_to(ROOT).as_posix())
@@ -425,9 +433,12 @@ class RenewedPredecessorContract(unittest.TestCase):
         self.assertFalse(predecessor["qualification_accepted"])
         self.assertEqual(predecessor["local_cleanup"], "settled")
 
-        with self.assertRaisesRegex(ValueError, "phase7-window-renewed-predecessor-invalid"):
-            BATCH._phase7_window_predecessor(ROOT,
-                {"predecessor": predecessor}, attempt_index=2, window=window)
+        with mock.patch.object(clock_module, "check_window",
+                side_effect=lambda value, **kwargs: check_window(value,
+                    now="2026-11-03T00:03:00+00:00", **kwargs)):
+            with self.assertRaisesRegex(ValueError, "phase7-window-renewed-predecessor-invalid"):
+                BATCH._phase7_window_predecessor(ROOT,
+                    {"predecessor": predecessor}, attempt_index=2, window=window)
 
         observation = json.loads(PREDECESSOR_OBSERVATION_PATH.read_bytes())
         for mutation in (

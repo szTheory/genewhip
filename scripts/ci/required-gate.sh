@@ -16,6 +16,7 @@ if [[ "${1:-}" == "--phase7-fast" ]]; then
   TIMEFORMAT='ci-stage phase7-fresh-batch %3R seconds'; time python3 -I tests/evidence/phase7_fresh_batch_contract.py
   TIMEFORMAT='ci-stage phase7-two-hour-contract %3R seconds'; time python3 -I tests/evidence/phase7_two_hour_contract.py
   TIMEFORMAT='ci-stage phase7-renewed-window-contract %3R seconds'; time python3 -I tests/evidence/phase7_renewed_window_contract.py
+  TIMEFORMAT='ci-stage phase7-authorized-window-contract %3R seconds'; time python3 -I tests/evidence/phase7_authorized_window_contract.py
   TIMEFORMAT='ci-stage phase7-single-native-contract %3R seconds'; time python3 -I tests/evidence/phase7_single_native_contract.py
   TIMEFORMAT='ci-stage binutils-configure-probe-contract %3R seconds'; time python3 -I tests/evidence/binutils_configure_probe_contract.py
   TIMEFORMAT='ci-stage qualification-contracts %3R seconds'; time python3 -I tests/evidence/v02_qualification_contract.py --contracts
@@ -111,6 +112,7 @@ TIMEFORMAT='ci-stage phase7-diagnostic %3R seconds'; time python3 -I tests/evide
 TIMEFORMAT='ci-stage phase7-fresh-batch %3R seconds'; time python3 -I tests/evidence/phase7_fresh_batch_contract.py
 TIMEFORMAT='ci-stage phase7-two-hour-contract %3R seconds'; time python3 -I tests/evidence/phase7_two_hour_contract.py
 TIMEFORMAT='ci-stage phase7-renewed-window-contract %3R seconds'; time python3 -I tests/evidence/phase7_renewed_window_contract.py
+TIMEFORMAT='ci-stage phase7-authorized-window-contract %3R seconds'; time python3 -I tests/evidence/phase7_authorized_window_contract.py
 TIMEFORMAT='ci-stage ctest-skip-contract %3R seconds'; time python3 tests/evidence/ctest_skip_contract.py
 TIMEFORMAT='ci-stage dependency-contract %3R seconds'; time python3 tests/evidence/ci_dependency_contract.py
 TIMEFORMAT='ci-stage toolchain-receipt-self-test %3R seconds'; time python3 tests/evidence/independent_game_toolchain.py --self-test-current-receipt

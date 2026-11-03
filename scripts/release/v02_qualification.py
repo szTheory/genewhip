@@ -42,6 +42,7 @@ PHASE7_RENEWED_TWO_HOUR_AUTH_SHA256 = "c4e65420cca6bab3754702e12026610bf4e266175
 PHASE7_RENEWED_TWO_HOUR_SCOPE_PATH = pathlib.Path("evidence/v02-phase7-renewed-two-hour-execution-scope.json")
 PHASE7_RENEWED_TWO_HOUR_SCOPE_SHA256 = "bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c"
 PHASE7_RENEWED_TWO_HOUR_ATTEMPT_NAMESPACE = pathlib.Path("build/v02/phase7-qualification-20261103T000225Z/attempts")
+PHASE7_AUTHORIZED_SCOPE_PATH = pathlib.Path("evidence/v02-phase7-authorized-execution-scope.json")
 LEGACY_SCOPE_SHA256 = "05eb7f5fa91d759fbef8fb86bbc9db402dc41812261235bcf5085a0e2aa9b1a5"
 PHASE7_WINDOW_PROFILES = (
     {"profile_id": "four-hour", "authority_path": PHASE7_WINDOW_AUTH_PATH,
@@ -120,7 +121,78 @@ def _phase7_window_profile(*, scope_sha256: str | None = None,
                 and (supplied[2] is None or supplied[2] == profile["authority_path"])
                 and (supplied[3] is None or supplied[3] == profile["authority_sha256"])):
             return profile
+    if (supplied[0] == pathlib.Path("evidence/v02-phase7-authorized-execution-scope.json")
+            and supplied[1] is not None and supplied[2] is not None and supplied[3] is not None):
+        window = _load_phase7_window_module().load_authorized_window(ROOT,
+            authority_path=supplied[2], authority_sha256=supplied[3],
+            scope_path=supplied[0], scope_sha256=supplied[1])
+        return {"profile_id": "authorized-run",
+            "authority_path": pathlib.Path(window["authority_path"]),
+            "authority_sha256": window["authority_sha256"],
+            "scope_path": pathlib.Path(window["scope_path"]),
+            "scope_sha256": window["scope_sha256"],
+            "attempt_namespace": pathlib.Path(window["attempt_namespace"]),
+            "started_at": window["started_at"],
+            "source_ancestor": window["source_ancestor"],
+            "budget": dict(window["budget"])}
     raise ValueError("phase7-window-scope-or-authority-profile-invalid")
+
+
+def _phase7_public_window_profile(*, scope_sha256: str | None = None,
+        scope_path: str | pathlib.Path | None = None) -> dict[str, Any] | None:
+    """Resolve a public clock and bind an operator grant when its pair is present.
+
+    Hosted jobs carry the public scope pin and original start time. The local
+    operator may also carry the matching private authority selectors; those are
+    forwarded to the strict resolver instead of being discarded.
+    """
+    if scope_sha256 is None:
+        scope_sha256 = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256") or None
+    if scope_path is None:
+        scope_path = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH") or None
+    if scope_path in (None, "") and scope_sha256 is None:
+        return None
+    selected_path = pathlib.Path(scope_path) if scope_path not in (None, "") else None
+    authorization_path = os.environ.get("GENEWHIP_QUALIFICATION_WINDOW_AUTH_PATH") or None
+    authorization_sha256 = os.environ.get("GENEWHIP_QUALIFICATION_WINDOW_AUTH_SHA256") or None
+    try:
+        selected = _phase7_window_profile(scope_path=selected_path,
+            scope_sha256=scope_sha256, authorization_path=authorization_path,
+            authorization_sha256=authorization_sha256)
+    except ValueError:
+        # This is the sole public-only profile. Do not use it if the hosted
+        # process has a partial or conflicting private-authority selector.
+        auth_path = os.environ.get("GENEWHIP_QUALIFICATION_WINDOW_AUTH_PATH")
+        auth_sha = os.environ.get("GENEWHIP_QUALIFICATION_WINDOW_AUTH_SHA256")
+        if (selected_path != PHASE7_AUTHORIZED_SCOPE_PATH
+                or not isinstance(scope_sha256, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", scope_sha256)
+                or auth_path not in (None, "") or auth_sha not in (None, "")):
+            raise
+        module = _load_phase7_window_module()
+        module.load_public_scope(ROOT, scope_path=selected_path.as_posix(),
+            scope_sha256=scope_sha256)
+        return {"profile_id": "authorized-run-public",
+            "scope_path": selected_path, "scope_sha256": scope_sha256,
+            "started_at": os.environ.get("GENEWHIP_QUALIFICATION_STARTED_AT")}
+    if selected is None:
+        return None
+    module = _load_phase7_window_module()
+    module.load_public_scope(ROOT, scope_path=selected["scope_path"].as_posix(),
+        scope_sha256=selected["scope_sha256"])
+    return {**selected,
+        "started_at": selected.get("started_at")
+            or os.environ.get("GENEWHIP_QUALIFICATION_STARTED_AT")}
+
+
+def _load_window_for_profile(root: pathlib.Path, profile: dict[str, Any]) -> dict[str, Any]:
+    module = _load_phase7_window_module()
+    arguments = {"authority_path": profile["authority_path"],
+        "authority_sha256": profile["authority_sha256"],
+        "scope_path": profile["scope_path"], "scope_sha256": profile["scope_sha256"]}
+    if profile.get("profile_id") == "authorized-run":
+        return module.load_authorized_window(root, **arguments)
+    return module.load_window(root, **arguments)
 
 
 def _fresh_batch_attempt_root(root: pathlib.Path = ROOT) -> pathlib.Path:
@@ -274,6 +346,11 @@ def _fresh_batch_guard(*, batch_authorization: pathlib.Path | None,
         + tuple((ROOT / relative).resolve(strict=False) for relative in RETIRED_SINGLE_NATIVE_POLICY_ROOTS)
         + tuple((ROOT / profile["attempt_namespace"]).resolve(strict=False)
             for profile in PHASE7_WINDOW_PROFILES))
+    if os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH") == PHASE7_AUTHORIZED_SCOPE_PATH.as_posix():
+        dynamic_profile = _phase7_window_profile()
+        if dynamic_profile is None:
+            raise ValueError("phase7-window-profile-unavailable")
+        resolved_batch_roots += ((ROOT / dynamic_profile["attempt_namespace"]).resolve(strict=False),)
     resolved_single_root = (ROOT / SINGLE_NATIVE_POLICY_ROOT).resolve(strict=False)
     mutable_inputs = (journal_path, publication_copy, preflight_path, output_path)
     uses_fresh_root = any(
@@ -311,11 +388,22 @@ def _fresh_batch_guard(*, batch_authorization: pathlib.Path | None,
                     == ROOT / candidate_profile["scope_path"]):
             selected_profile = candidate_profile
             break
+    authorized_scope_path = pathlib.Path("evidence/v02-phase7-authorized-execution-scope.json")
+    if selected_profile is None and rooted(scope_path).resolve(strict=False) == ROOT / authorized_scope_path:
+        if (batch_authorization is None or batch_authorization_sha256 is None
+                or batch_admission is None or batch_admission_sha256 is None):
+            raise ValueError("phase7-window-authority-and-admission-required")
+        selected_profile = _phase7_window_profile(
+            scope_path=authorized_scope_path,
+            scope_sha256=os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256"),
+            authorization_path=batch_authorization,
+            authorization_sha256=batch_authorization_sha256)
     window_auth_partial = any(
         auth_value.resolve(strict=False) == ROOT / candidate_profile["authority_path"]
         or batch_authorization_sha256 == candidate_profile["authority_sha256"]
         or rooted(scope_path).resolve(strict=False) == ROOT / candidate_profile["scope_path"]
-        for candidate_profile in PHASE7_WINDOW_PROFILES)
+        for candidate_profile in PHASE7_WINDOW_PROFILES) or (
+            rooted(scope_path).resolve(strict=False) == ROOT / authorized_scope_path)
     if window_auth_partial and selected_profile is None:
         raise ValueError("phase7-window-authority-and-admission-required")
     if selected_profile is not None:
@@ -325,11 +413,7 @@ def _fresh_batch_guard(*, batch_authorization: pathlib.Path | None,
         os.environ["GENEWHIP_QUALIFICATION_SCOPE_PATH"] = selected_profile["scope_path"].as_posix()
         os.environ["GENEWHIP_QUALIFICATION_SCOPE_SHA256"] = selected_profile["scope_sha256"]
         window_module = _load_phase7_window_module()
-        window_context = window_module.load_window(ROOT,
-            authority_path=selected_profile["authority_path"],
-            authority_sha256=selected_profile["authority_sha256"],
-            scope_path=selected_profile["scope_path"],
-            scope_sha256=selected_profile["scope_sha256"])
+        window_context = _load_window_for_profile(ROOT, selected_profile)
         named_attempt_root, attempt_index = module._phase7_window_admission_location(
             ROOT, rooted(batch_admission), stage, window=window_context)
         safe_attempt_root = module.phase7_window_attempt_root(ROOT, attempt_index,
@@ -627,7 +711,7 @@ def _external(argv: list[str], *, cwd: pathlib.Path = ROOT, timeout: int = 120,
     if started_at:
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         remaining_budget = _require_hosted_budget(started_at, now, scope, phase=phase)
-        if _phase7_window_profile(
+        if _phase7_public_window_profile(
                 scope_sha256=child_env.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256"),
                 scope_path=child_env.get("GENEWHIP_QUALIFICATION_SCOPE_PATH")) is not None:
             remaining_phase = remaining_budget
@@ -1200,7 +1284,7 @@ def _run_bounded_phase7_cmake(command: list[str], *, timeout: int,
         raise ValueError("phase7-bounded-cmake-build-root-invalid") from None
     if not relative.parts or relative.parts[0] != "build":
         raise ValueError("phase7-bounded-cmake-build-root-invalid")
-    selected_profile = _phase7_window_profile()
+    selected_profile = _phase7_public_window_profile()
     if selected_profile is None:
         raise ValueError("phase7-bounded-cmake-window-profile-required")
     scope = _load_phase7_window_module().load_public_scope(ROOT,
@@ -1309,7 +1393,7 @@ def _validate_workflow_clock(started_at: str, run_created_at: str,
     if start > current or created < start or created > current:
         raise ValueError("qualification-dispatch-clock-invalid")
     try:
-        selected_profile = _phase7_window_profile()
+        selected_profile = _phase7_public_window_profile()
     except ValueError:
         scope_pin = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", "")
         known_scope_pins = {item["scope_sha256"] for item in PHASE7_WINDOW_PROFILES}
@@ -1369,7 +1453,7 @@ def _require_hosted_budget(started_at: str, now: str,
                            scope: dict[str, Any], *, phase: str | None = None) -> float:
     """Keep one shared deadline and the declared final-close time reserved."""
     try:
-        selected_profile = _phase7_window_profile()
+        selected_profile = _phase7_public_window_profile()
     except ValueError:
         scope_pin = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", "")
         known_scope_pins = {item["scope_sha256"] for item in PHASE7_WINDOW_PROFILES}
@@ -1424,25 +1508,36 @@ def _active_phase7_window_context(root: pathlib.Path = ROOT) -> dict[str, Any] |
     profile = _phase7_window_profile()
     if profile is None:
         return None
-    return _load_phase7_window_module().load_window(root,
-        authority_path=profile["authority_path"],
-        authority_sha256=profile["authority_sha256"],
-        scope_path=profile["scope_path"], scope_sha256=profile["scope_sha256"])
+    return _load_window_for_profile(root, profile)
 
 
 def phase7_window_remaining_seconds(phase: str, *,
         now: datetime.datetime | str | None = None,
         root: pathlib.Path = ROOT) -> float:
     """Return remaining time from the selected immutable profile's phase clock."""
-    profile = _phase7_window_profile()
+    profile = _phase7_public_window_profile()
     if profile is None:
         profile = PHASE7_WINDOW_PROFILES[0]
-    window = _load_phase7_window_module().load_window(root,
-        authority_path=profile["authority_path"],
-        authority_sha256=profile["authority_sha256"],
-        scope_path=profile["scope_path"], scope_sha256=profile["scope_sha256"])
-    return _load_phase7_window_module().check_window(window, phase=phase,
-        now=now)["remaining_seconds"]
+    module = _load_phase7_window_module()
+    if profile.get("profile_id") in {"authorized-run", "authorized-run-public"}:
+        started_at = profile.get("started_at") or os.environ.get(
+            "GENEWHIP_QUALIFICATION_STARTED_AT")
+        if not isinstance(started_at, str):
+            raise ValueError("phase7-window-start-required")
+        result = module.validate_public_clock(root,
+            scope_path=profile["scope_path"].as_posix(),
+            scope_sha256=profile["scope_sha256"], started_at=started_at,
+            phase=phase, now=now)
+    else:
+        # The older fixed profiles own their start in the private authority.
+        # Keep that reader path for historical callers and fixtures that do not
+        # carry the new explicit public start selector.
+        window = _load_window_for_profile(root, profile)
+        started_at = profile.get("started_at") or os.environ.get(
+            "GENEWHIP_QUALIFICATION_STARTED_AT")
+        result = module.check_window(window, phase=phase, now=now,
+            started_at=started_at)
+    return result["remaining_seconds"]
 
 
 def phase7_execution_scope_path(*, root: pathlib.Path = ROOT,
@@ -1453,10 +1548,11 @@ def phase7_execution_scope_path(*, root: pathlib.Path = ROOT,
     selected_path = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH", "")
     legacy = root / "evidence/v02-execution.json"
     try:
-        selected_profile = _phase7_window_profile()
+        selected_profile = _phase7_public_window_profile()
     except ValueError:
         known = {item["scope_sha256"]: item["scope_path"].as_posix()
             for item in PHASE7_WINDOW_PROFILES}
+        known["authorized-public"] = PHASE7_AUTHORIZED_SCOPE_PATH.as_posix()
         if selected_sha in known and selected_path != known[selected_sha]:
             raise ValueError("qualification-scope-path-invalid") from None
         if selected_sha not in ("", *known):
@@ -5220,7 +5316,8 @@ def _phase7_window_push_jobs(value: Any, *, run_id: int, run_attempt: int,
             "product-smoke", "phase7-fast", "required-ci", "attestation", "v02-runtime",
             "extended", "v02-benchmark-control", "v02-benchmark-recursion94",
             "v02-benchmark-tank-battle", "v02-package", "v02-release-qualification"}
-        if (not controller_cancel_confirmed or profile_id != "renewed-two-hour"
+        if (not controller_cancel_confirmed
+                or profile_id not in {"renewed-two-hour", "authorized-run"}
                 or names != expected_names or any(job.get("status", "").upper() != "COMPLETED"
                     or job.get("conclusion") not in {"success", "cancelled", "skipped", "failure"}
                     or (job.get("name") != "required-ci" and job.get("conclusion") == "failure")
@@ -5516,11 +5613,12 @@ def _settle_phase7_window_merge_push_ci(repository: str, source_sha: str,
         raw, record, journal_path, journal)
     if disposition == "superseded-not-qualification-credit":
         try:
-            selected_profile = _phase7_window_profile()
+            selected_profile = _phase7_public_window_profile()
             normalized_jobs = _phase7_window_push_jobs(jobs_value, run_id=int(run_id),
                 run_attempt=run_attempt,
                 state="cancelled-aggregate" if selected_profile is not None
-                    and selected_profile["profile_id"] == "renewed-two-hour" else "cancelled",
+                    and selected_profile["profile_id"] in {"renewed-two-hour", "authorized-run"}
+                    else "cancelled",
                 controller_cancel_confirmed=cancelled_by_controller,
                 profile_id=selected_profile["profile_id"] if selected_profile else None)
         except ValueError:
@@ -5595,8 +5693,9 @@ def _dispatch_qualification_run(repository: str, source_sha: str, base_sha: str,
         module.loader.exec_module(claim_module)
         claim_module.create_phase7_window_dispatch_claim(ROOT, batch, nonce)
         profile_id = batch.get("window_profile")
-        profile = next((item for item in PHASE7_WINDOW_PROFILES
-            if item["profile_id"] == profile_id), None)
+        profile = _phase7_window_profile()
+        if profile is not None and profile.get("profile_id") != profile_id:
+            profile = None
         if profile is None:
             raise ValueError("phase7-window-profile-required")
         command.extend(["--field", "qualification_scope_sha256=" + profile["scope_sha256"]])
@@ -8625,7 +8724,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.mode == "bounded-command":
             command = args.command
-            selected_profile = _phase7_window_profile()
+            selected_profile = _phase7_public_window_profile()
             if (args.out is not None or args.command_phase not in {"preparation", "runtime", "package"}
                     or type(args.command_timeout) is not int or args.command_timeout <= 0
                     or args.command_timeout > 600
@@ -8712,6 +8811,21 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("single-native-authorization-required")
         window_roots = tuple((ROOT / profile["attempt_namespace"]).resolve(strict=False)
             for profile in PHASE7_WINDOW_PROFILES)
+        if args.scope is not None and (args.scope if args.scope.is_absolute()
+                else ROOT / args.scope).resolve(strict=False) == ROOT / PHASE7_AUTHORIZED_SCOPE_PATH:
+            if batch_requested:
+                authorized_profile = _phase7_window_profile(
+                    scope_path=PHASE7_AUTHORIZED_SCOPE_PATH,
+                    scope_sha256=os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256"),
+                    authorization_path=args.batch_authorization,
+                    authorization_sha256=args.batch_authorization_sha256)
+                window_roots += ((ROOT / authorized_profile["attempt_namespace"]).resolve(strict=False),)
+            else:
+                public_profile = _phase7_public_window_profile(
+                    scope_path=PHASE7_AUTHORIZED_SCOPE_PATH,
+                    scope_sha256=os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256"))
+                if public_profile is None:
+                    raise ValueError("phase7-window-public-scope-required")
         uses_window_root = any(value is not None and any(
             (value if value.is_absolute() else ROOT / value).resolve(strict=False) == window_root
             or window_root in (value if value.is_absolute() else ROOT / value).resolve(strict=False).parents
@@ -8726,6 +8840,13 @@ def main(argv: list[str] | None = None) -> int:
             and args.batch_authorization_sha256 == profile["authority_sha256"]
             and selected_scope_path == ROOT / profile["scope_path"]
             for profile in PHASE7_WINDOW_PROFILES)
+        if (batch_requested and selected_scope_path == ROOT / PHASE7_AUTHORIZED_SCOPE_PATH
+                and not window_authorized):
+            window_authorized = _phase7_window_profile(
+                scope_path=PHASE7_AUTHORIZED_SCOPE_PATH,
+                scope_sha256=os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256"),
+                authorization_path=args.batch_authorization,
+                authorization_sha256=args.batch_authorization_sha256) is not None
         if uses_window_root and not window_authorized:
             raise ValueError("phase7-window-authorization-required")
         if single_requested and (args.single_native_authority_sha256 not in (

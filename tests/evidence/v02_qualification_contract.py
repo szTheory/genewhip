@@ -6100,11 +6100,19 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
         self.assertIn("inputs.qualification_scope_sha256 == '" +
             "a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' && " +
             "'evidence/v02-phase7-two-hour-execution-scope.json'", text)
+        self.assertIn("inputs.qualification_scope_sha256 == '" +
+            "c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' && " +
+            "'evidence/v02-phase7-authorized-execution-scope.json'", text)
         two_hour_cmake_guard = (
             "[ \"${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}\" = "
             "'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ]")
         self.assertEqual(text.count(two_hour_cmake_guard), 10,
             "all Phase 7 CI CMake setup branches must recognize the selected two-hour scope")
+        authorized_cmake_guard = (
+            "[ \"${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}\" = "
+            "'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ]")
+        self.assertEqual(text.count(authorized_cmake_guard), 10,
+            "all Phase 7 CI CMake setup branches must recognize the authorized scope")
         self.assertEqual(text.count(
             "python3 -I scripts/release/v02_qualification.py --mode bounded-command "
             "--command-phase \"$GENEWHIP_QUALIFICATION_PHASE\" --command-timeout 600 "
