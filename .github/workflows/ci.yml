@@ -756,9 +756,9 @@ jobs:
       - name: Configure benchmark under the prospective child and phase cutoff
         run: |
           if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ]; then
-            python3 -I scripts/release/v02_qualification.py --mode bounded-command --command-phase "$GENEWHIP_QUALIFICATION_PHASE" --command-timeout 600 --command cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=ON -DGENEWHIP_TEST_HOOKS=ON
+            python3 -I scripts/release/v02_qualification.py --mode bounded-command --command-phase "$GENEWHIP_QUALIFICATION_PHASE" --command-timeout 600 --command cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=OFF -DGENEWHIP_TEST_HOOKS=ON
           else
-            cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=ON -DGENEWHIP_TEST_HOOKS=ON
+            cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=OFF -DGENEWHIP_TEST_HOOKS=ON
           fi
       - name: Build benchmark under the prospective child and phase cutoff
         run: |
@@ -794,9 +794,9 @@ jobs:
       - name: Configure benchmark under the prospective child and phase cutoff
         run: |
           if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ]; then
-            python3 -I scripts/release/v02_qualification.py --mode bounded-command --command-phase "$GENEWHIP_QUALIFICATION_PHASE" --command-timeout 600 --command cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=ON -DGENEWHIP_TEST_HOOKS=ON
+            python3 -I scripts/release/v02_qualification.py --mode bounded-command --command-phase "$GENEWHIP_QUALIFICATION_PHASE" --command-timeout 600 --command cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=OFF -DGENEWHIP_TEST_HOOKS=ON
           else
-            cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=ON -DGENEWHIP_TEST_HOOKS=ON
+            cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=OFF -DGENEWHIP_TEST_HOOKS=ON
           fi
       - name: Build benchmark under the prospective child and phase cutoff
         run: |
@@ -832,9 +832,9 @@ jobs:
       - name: Configure benchmark under the prospective child and phase cutoff
         run: |
           if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ]; then
-            python3 -I scripts/release/v02_qualification.py --mode bounded-command --command-phase "$GENEWHIP_QUALIFICATION_PHASE" --command-timeout 600 --command cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=ON -DGENEWHIP_TEST_HOOKS=ON
+            python3 -I scripts/release/v02_qualification.py --mode bounded-command --command-phase "$GENEWHIP_QUALIFICATION_PHASE" --command-timeout 600 --command cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=OFF -DGENEWHIP_TEST_HOOKS=ON
           else
-            cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=ON -DGENEWHIP_TEST_HOOKS=ON
+            cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=OFF -DGENEWHIP_TEST_HOOKS=ON
           fi
       - name: Build benchmark under the prospective child and phase cutoff
         run: |

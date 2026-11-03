@@ -434,6 +434,73 @@ class BenchmarkContract(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "field cap"):
             benchmark.workload_spec("tank-battle", {"workload": {"max_fields": 3600}})
 
+    def test_route_workload_creates_scratch_parent_for_cold_build(self):
+        scope = {"scope_id": "cold-build-test", "owned_roots": ["build/v02"],
+            "qualification_batch": {"runtime_wall_seconds": 3600,
+                "benchmark_sub_batch_seconds": 3600},
+            "per_child_limits": {"max_capture_bytes": 2 * 1024**3,
+                "max_rss_bytes": 4 * 1024**3, "max_calls": 100_000_000},
+            "workload": {"serial_children": True, "max_fields": 7200,
+                "tank_route_max_calls": 10_000_000}}
+        limits = scope["per_child_limits"]
+        original_globals = (benchmark._ACTIVE_BATCH_START, benchmark._ACTIVE_BATCH_LIMIT_SECONDS,
+            benchmark._ACTIVE_QUALIFICATION_START, benchmark._ACTIVE_RUNTIME_LIMIT_SECONDS,
+            benchmark._ACTIVE_JOURNAL)
+
+        class Journal:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+        class ScratchParentCreated(RuntimeError):
+            pass
+
+        with tempfile.TemporaryDirectory(prefix="gw-bench-cold-parent-",
+                dir=ROOT / "build/v02") as directory:
+            root = Path(directory)
+            build = root / "benchmark"
+            build.mkdir()
+            scratch_parent = build / "v02"
+            self.assertFalse(scratch_parent.exists())
+            scope_path = root / "scope.json"
+            scope_path.write_text("{}\n")
+            out = root / "out" / "workload.json"
+            out.parent.mkdir()
+
+            def stop_after_scratch_creation(*_args, **_kwargs):
+                self.assertTrue(scratch_parent.is_dir())
+                scratch_entries = list(scratch_parent.iterdir())
+                self.assertEqual(len(scratch_entries), 1)
+                self.assertTrue(scratch_entries[0].is_dir())
+                raise ScratchParentCreated("route planning reached after scratch creation")
+
+            routes = SimpleNamespace(
+                compile_routes=lambda *_args, **_kwargs: {"routes": [{"fixture": "recursion94",
+                    "case": {"id": "full-route"}}]},
+                lower_route=stop_after_scratch_creation)
+            launcher = SimpleNamespace(validate_execution_scope=lambda *_args: (scope, limits),
+                available_memory_bytes=lambda: 16 * 1024**3,
+                require_memory_reserve=lambda *_args: None)
+            try:
+                with mock.patch.object(benchmark, "load_v02_launcher", return_value=launcher), \
+                     mock.patch.object(benchmark.platform, "system", return_value="Darwin"), \
+                     mock.patch.object(benchmark, "source_identity", return_value="a" * 64), \
+                     mock.patch.object(benchmark, "qualification_runtime_remaining", return_value=3600), \
+                     mock.patch.object(benchmark, "MeasurementJournal", Journal), \
+                     mock.patch.object(benchmark, "load_phase6_routes", return_value=routes), \
+                     mock.patch.object(benchmark, "load_route_contract", return_value=object()), \
+                     mock.patch.object(benchmark, "build_identity",
+                         return_value={"cmake": {"GENEWHIP_TEST_HOOKS": "OFF"}}), \
+                     mock.patch.dict(benchmark.os.environ, {"GENEWHIP_QUALIFICATION_STARTED_AT": ""}):
+                    with self.assertRaisesRegex(ScratchParentCreated, "after scratch creation"):
+                        benchmark.run_workload(build, "recursion94", scope_path, out)
+            finally:
+                (benchmark._ACTIVE_BATCH_START, benchmark._ACTIVE_BATCH_LIMIT_SECONDS,
+                 benchmark._ACTIVE_QUALIFICATION_START, benchmark._ACTIVE_RUNTIME_LIMIT_SECONDS,
+                 benchmark._ACTIVE_JOURNAL) = original_globals
+
+            self.assertTrue(scratch_parent.is_dir())
+            self.assertEqual(list(scratch_parent.iterdir()), [])
+
     def test_all_workload_roster_binds_each_real_route_and_denominator(self):
         try:
             specs = benchmark.workload_spec("all", {"workload": {"max_fields": 7200}})
