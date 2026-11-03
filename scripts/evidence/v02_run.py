@@ -190,17 +190,39 @@ def validate_execution_scope(scope_path: pathlib.Path, mode: str) -> tuple[dict,
     selected_sha = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", "")
     selected_path = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH", "")
     selected_profile = window_profiles.get(selected_sha) if selected_sha else None
-    if selected_sha not in ("", legacy_scope_sha, *window_profiles):
+    authorized_relative = "evidence/v02-phase7-authorized-execution-scope.json"
+    authorized_path = ROOT / authorized_relative
+    selected_authorized = selected_path == authorized_relative
+    path_is_authorized = path == authorized_path
+    if selected_sha not in ("", legacy_scope_sha, *window_profiles) and not selected_authorized:
         raise ValueError("phase7-window-scope-profile-invalid")
+    if selected_authorized or path_is_authorized:
+        # The private authority selects the start time. Hosted jobs receive only
+        # the same reviewed public policy, its exact byte digest, and that start.
+        # Historical dated identities below remain available for archived reads.
+        if (selected_path != authorized_relative or not selected_sha
+                or path != authorized_path or actual_sha != selected_sha):
+            raise ValueError("phase7-window-scope-profile-invalid")
+        baseline_path = ROOT / "evidence/v02-phase7-full-execution-scope.json"
+        if (hashlib.sha256(baseline_path.read_bytes()).hexdigest()
+                != "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4"):
+            raise ValueError("phase7-window-scope-profile-invalid")
+        baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+        if scope != baseline:
+            raise ValueError("phase7-window-scope-profile-invalid")
+        selected_profile = {"path": authorized_path, "relative": authorized_relative,
+            "budget": {key: scope["qualification_batch"][key] for key in (
+                "wall_seconds", "runtime_wall_seconds", "package_wall_seconds",
+                "close_wall_seconds")}}
     if selected_profile is not None and (selected_path != selected_profile["relative"]
             or path != selected_profile["path"].resolve(strict=False)
             or actual_sha != selected_sha):
         raise ValueError("phase7-window-scope-profile-invalid")
-    path_profile = next((profile for sha, profile in window_profiles.items()
+    path_profile = selected_profile or next((profile for sha, profile in window_profiles.items()
         if path == profile["path"].resolve(strict=False) or actual_sha == sha), None)
     if path_profile is not None:
-        profile_sha = next(sha for sha, profile in window_profiles.items()
-            if profile is path_profile)
+        profile_sha = selected_sha if path_profile is selected_profile else next(
+            sha for sha, profile in window_profiles.items() if profile is path_profile)
         if (actual_sha != profile_sha or path != path_profile["path"].resolve(strict=False)
                 or selected_sha != profile_sha
                 or selected_path != path_profile["relative"]):

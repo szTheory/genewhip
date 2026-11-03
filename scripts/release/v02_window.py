@@ -19,6 +19,8 @@ SCOPE_PATH = Path("evidence/v02-phase7-full-execution-scope.json")
 SCOPE_SHA256 = "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4"
 LEGACY_SCOPE_PATH = Path("evidence/v02-execution.json")
 LEGACY_SCOPE_SHA256 = "05eb7f5fa91d759fbef8fb86bbc9db402dc41812261235bcf5085a0e2aa9b1a5"
+AUTHORIZED_SCOPE_PATH = Path("evidence/v02-phase7-authorized-execution-scope.json")
+AUTHORIZED_RUN_SCHEMA = "genewhip.phase7-execution-window.v1"
 SCHEMA = "genewhip.phase7-four-hour-authorization.v1"
 REPOSITORY = "szTheory/genewhip"
 SOURCE_ANCESTOR = "0de74de60375f044336711f86090cec2f77394ee"
@@ -318,6 +320,134 @@ def load_window(root: Path, *, authority_path: Path = AUTH_PATH,
         "source_ancestor": profile["source_ancestor"], "budget": dict(profile["budget"])}
 
 
+def _authorized_scope_budget(scope: dict[str, Any]) -> dict[str, int]:
+    batch = scope.get("qualification_batch")
+    keys = ("wall_seconds", "runtime_wall_seconds", "package_wall_seconds",
+        "close_wall_seconds")
+    if (not isinstance(batch, dict) or any(type(batch.get(key)) is not int or
+            batch[key] <= 0 for key in keys)):
+        raise ValueError("phase7-window-scope-budget-invalid")
+    budget = {key: batch[key] for key in keys}
+    if sum(budget[key] for key in keys[1:]) != budget["wall_seconds"]:
+        raise ValueError("phase7-window-cutoff-partition-invalid")
+    if (batch.get("benchmark_sub_batch_seconds") != 43200
+            or batch.get("publication_reserve_seconds") != 7200):
+        raise ValueError("phase7-window-scope-budget-invalid")
+    return budget
+
+
+def _authorized_cutoffs(started_at: str, budget: dict[str, int]) -> dict[str, str]:
+    required = {"wall_seconds", "runtime_wall_seconds", "package_wall_seconds",
+        "close_wall_seconds"}
+    if (not isinstance(budget, dict) or set(budget) != required
+            or any(type(budget[key]) is not int or budget[key] <= 0 for key in required)
+            or sum(budget[key] for key in required - {"wall_seconds"}) != budget["wall_seconds"]):
+        raise ValueError("phase7-window-cutoff-partition-invalid")
+    start = _utc(started_at, "phase7-window-start-invalid")
+    def plus(seconds: int) -> str:
+        return (start + datetime.timedelta(seconds=seconds)).isoformat()
+    return {"runtime_cutoff": plus(budget["runtime_wall_seconds"]),
+        "package_cutoff": plus(budget["runtime_wall_seconds"] + budget["package_wall_seconds"]),
+        "global_cutoff": plus(budget["wall_seconds"])}
+
+
+def load_authorized_window(root: Path, *, authority_path: Path,
+        authority_sha256: str, scope_path: Path | str,
+        scope_sha256: str) -> dict[str, Any]:
+    """Load an explicitly reviewed run authority over the reusable public 4h scope.
+
+    The authority, rather than a date-specific product constant, selects the start,
+    source ancestor, attempt namespace, and settled predecessor. The public scope
+    itself must match the reviewed 4h execution policy exactly.
+    """
+    supplied_root = Path(os.path.abspath(root))
+    root = supplied_root.resolve(strict=True)
+    if supplied_root != root:
+        raise ValueError("phase7-window-root-invalid")
+    if (not re.fullmatch(r"[0-9a-f]{64}", authority_sha256)
+            or not re.fullmatch(r"[0-9a-f]{64}", scope_sha256)):
+        raise ValueError("phase7-window-authority-or-scope-pin-invalid")
+    authority_path = Path(authority_path)
+    scope_path = Path(scope_path)
+    if (authority_path.is_absolute() or any(part in ("", ".", "..")
+            for part in authority_path.parts) or authority_path.parts[:2] != ("build", "v02")
+            or scope_path != AUTHORIZED_SCOPE_PATH):
+        raise ValueError("phase7-window-authority-or-scope-path-invalid")
+    authority_raw = _read_regular(root, authority_path, cap=256 * 1024)
+    if _sha(authority_raw) != authority_sha256:
+        raise ValueError("phase7-window-authority-stale")
+    authority = _json(authority_raw, "phase7-window-authority-invalid")
+    if set(authority) != AUTH_KEYS or authority.get("schema") != AUTHORIZED_RUN_SCHEMA:
+        raise ValueError("phase7-window-authority-identity-invalid")
+    if (authority.get("repository") != REPOSITORY
+            or authority.get("scope_path") != scope_path.as_posix()
+            or authority.get("scope_sha256") != scope_sha256
+            or authority.get("ordinary_ci_retries_approved") is not True
+            or authority.get("per_attempt_user_approval") is not False
+            or authority.get("per_child_limits_unchanged") is not True
+            or authority.get("full_qualification_authorized") is not True
+            or authority.get("merge_authorized") is not True
+            or authority.get("release_authorized") is not True
+            or authority.get("next_phase_authorized") is not False
+            or authority.get("historical_risk_accepted") is not False
+            or authority.get("safety_stop_required") is not True
+            or authority.get("failure_stop_scope") != "attempt"):
+        raise ValueError("phase7-window-authority-identity-invalid")
+    scope = load_public_scope(root, scope_path=scope_path.as_posix(),
+        scope_sha256=scope_sha256)
+    budget = _authorized_scope_budget(scope)
+    if authority.get("budget") != budget:
+        raise ValueError("phase7-window-authority-budget-invalid")
+    started_at = authority.get("started_at")
+    if not isinstance(started_at, str):
+        raise ValueError("phase7-window-start-invalid")
+    cutoffs = _authorized_cutoffs(started_at, budget)
+    if any(authority.get(key) != value for key, value in cutoffs.items()):
+        raise ValueError("phase7-window-authority-cutoff-invalid")
+    attempt_namespace = Path(authority.get("attempt_namespace", ""))
+    if (attempt_namespace.is_absolute() or attempt_namespace.parts[:2] != ("build", "v02")
+            or any(part in ("", ".", "..") for part in attempt_namespace.parts)
+            or attempt_namespace in {profile["attempt_namespace"] for profile in _PROFILES.values()}):
+        raise ValueError("phase7-window-attempt-namespace-invalid")
+    source_ancestor = authority.get("source_ancestor")
+    if not isinstance(source_ancestor, str) or not re.fullmatch(r"[0-9a-f]{40}", source_ancestor):
+        raise ValueError("phase7-window-source-ancestor-invalid")
+    def reference(name: str) -> dict[str, str]:
+        value = authority.get(name)
+        if (not isinstance(value, dict) or set(value) != {"path", "sha256"}
+                or not isinstance(value.get("path"), str)
+                or not re.fullmatch(r"[0-9a-f]{64}", str(value.get("sha256", "")))):
+            raise ValueError("phase7-window-" + name + "-invalid")
+        return value
+    selection = reference("selection")
+    evidence = reference("evidence")
+    predecessor = reference("predecessor")
+    _reference(root, authority.get("selection"), selection,
+        "phase7-window-selection-invalid", cap=256 * 1024)
+    selection_value = _json(_read_regular(root, Path(selection["path"]), cap=256 * 1024),
+        "phase7-window-selection-invalid")
+    if (selection_value.get("schema") != "genewhip.phase7-execution-window-selection.v1"
+            or selection_value.get("started_at") != started_at
+            or selection_value.get("source_ancestor") != source_ancestor
+            or selection_value.get("runtime_deadline") != cutoffs["runtime_cutoff"]
+            or selection_value.get("package_deadline") != cutoffs["package_cutoff"]
+            or selection_value.get("hard_deadline") != cutoffs["global_cutoff"]
+            or selection_value.get("retries_reset_clock") is not False
+            or selection_value.get("phase_advance_authorized") is not False):
+        raise ValueError("phase7-window-selection-invalid")
+    _reference(root, authority.get("evidence"), evidence,
+        "phase7-window-evidence-invalid", cap=256 * 1024)
+    _reference(root, authority.get("predecessor"), predecessor,
+        "phase7-window-predecessor-invalid", cap=4 * 1024 * 1024)
+    return {"profile_id": "authorized-run",
+        "authority": authority, "authority_path": authority_path.as_posix(),
+        "authority_sha256": authority_sha256,
+        "scope": scope, "scope_path": scope_path.as_posix(),
+        "scope_sha256": scope_sha256, "started_at": started_at,
+        **cutoffs, "attempt_namespace": attempt_namespace.as_posix(),
+        "source_ancestor": source_ancestor, "budget": budget}
+
+
 def check_window(window: dict[str, Any], *, phase: str,
         now: datetime.datetime | str | None = None,
         started_at: str | None = None,
@@ -328,15 +458,36 @@ def check_window(window: dict[str, Any], *, phase: str,
     if not isinstance(window, dict):
         raise ValueError("phase7-window-context-invalid")
     profile_id = window.get("profile_id")
+    if profile_id == "authorized-run":
+        if (window.get("scope_path") != AUTHORIZED_SCOPE_PATH.as_posix()
+                or not re.fullmatch(r"[0-9a-f]{64}", str(window.get("scope_sha256", "")))):
+            raise ValueError("phase7-window-context-invalid")
+        budget = window.get("budget")
+        scope = window.get("scope")
+        if (not isinstance(budget, dict) or not isinstance(scope, dict)
+                or _authorized_scope_budget(scope) != budget):
+            raise ValueError("phase7-window-context-invalid")
+        cutoffs = _authorized_cutoffs(window.get("started_at"), budget)
+        if any(window.get(key) != value for key, value in cutoffs.items()):
+            raise ValueError("phase7-window-context-invalid")
+        profile = {"started_at": window["started_at"],
+            "scope_path": AUTHORIZED_SCOPE_PATH,
+            "scope_sha256": window["scope_sha256"],
+            "runtime_cutoff": cutoffs["runtime_cutoff"],
+            "package_cutoff": cutoffs["package_cutoff"],
+            "global_cutoff": cutoffs["global_cutoff"]}
+    else:
+        profile = None
     if profile_id is None:
         # Preserve the small public-clock context used by existing callers.
         profile_id = next((name for name, profile in _PROFILES.items()
             if window.get("scope_sha256") == profile["scope_sha256"]), None)
-    profile = _PROFILES.get(profile_id)
-    if (profile is None or window.get("scope_sha256") != profile["scope_sha256"]
-            or (window.get("scope_path") is not None
-                and window.get("scope_path") != profile["scope_path"].as_posix())):
-        raise ValueError("phase7-window-context-invalid")
+    if profile_id != "authorized-run":
+        profile = _PROFILES.get(profile_id)
+        if (profile is None or window.get("scope_sha256") != profile["scope_sha256"]
+                or (window.get("scope_path") is not None
+                    and window.get("scope_path") != profile["scope_path"].as_posix())):
+            raise ValueError("phase7-window-context-invalid")
     expected_start = _utc(profile["started_at"], "phase7-window-clock-invalid")
     supplied_start = _utc(started_at or window.get("started_at"),
         "phase7-window-start-invalid")
@@ -374,12 +525,21 @@ def validate_public_clock(root: Path, *, scope_path: str, scope_sha256: str,
         started_at: str, phase: str, now: str | datetime.datetime | None = None,
         workflow_created_at: str | None = None) -> dict[str, Any]:
     """Validate the public clock on hosted runners that cannot access private authority."""
-    profile_id, profile = _profile_for_identity(scope_path=scope_path,
-        scope_sha256=scope_sha256)
     supplied_root = Path(os.path.abspath(root))
     root = supplied_root.resolve(strict=True)
     if supplied_root != root:
         raise ValueError("phase7-window-root-invalid")
+    if Path(scope_path) == AUTHORIZED_SCOPE_PATH:
+        scope = load_public_scope(root, scope_path=scope_path, scope_sha256=scope_sha256)
+        budget = _authorized_scope_budget(scope)
+        cutoffs = _authorized_cutoffs(started_at, budget)
+        clock = {"profile_id": "authorized-run", "scope_path": scope_path,
+            "scope_sha256": scope_sha256, "started_at": started_at,
+            "budget": budget, "scope": scope, **cutoffs}
+        return check_window(clock, phase=phase, now=now, started_at=started_at,
+            workflow_created_at=workflow_created_at)
+    profile_id, profile = _profile_for_identity(scope_path=scope_path,
+        scope_sha256=scope_sha256)
     load_public_scope(root, scope_path=scope_path, scope_sha256=scope_sha256)
     clock = {"profile_id": profile_id, "scope_path": profile["scope_path"].as_posix(),
         "scope_sha256": profile["scope_sha256"], "started_at": profile["started_at"]}
@@ -435,6 +595,25 @@ def select_public_event_window(root: Path, *, workflow_created_at: str,
 def load_public_scope(root: Path, *, scope_path: str = SCOPE_PATH.as_posix(),
         scope_sha256: str = SCOPE_SHA256) -> dict[str, Any]:
     """Load one of the exact public scopes on runners without private authority."""
+    if Path(scope_path) == AUTHORIZED_SCOPE_PATH:
+        supplied_root = Path(os.path.abspath(root))
+        root = supplied_root.resolve(strict=True)
+        if supplied_root != root:
+            raise ValueError("phase7-window-root-invalid")
+        if not re.fullmatch(r"[0-9a-f]{64}", scope_sha256):
+            raise ValueError("phase7-window-public-scope-pin-invalid")
+        raw = _read_regular(root, AUTHORIZED_SCOPE_PATH)
+        if _sha(raw) != scope_sha256:
+            raise ValueError("phase7-window-scope-stale")
+        scope = _json(raw, "phase7-window-scope-invalid")
+        baseline_raw = _read_regular(root, SCOPE_PATH)
+        if _sha(baseline_raw) != SCOPE_SHA256:
+            raise ValueError("phase7-window-legacy-four-hour-scope-stale")
+        baseline = _json(baseline_raw, "phase7-window-scope-invalid")
+        if scope != baseline:
+            raise ValueError("phase7-window-scope-content-invalid")
+        _authorized_scope_budget(scope)
+        return scope
     _, profile = _profile_for_identity(scope_path=scope_path,
         scope_sha256=scope_sha256)
     supplied_root = Path(os.path.abspath(root))

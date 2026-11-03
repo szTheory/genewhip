@@ -52,6 +52,15 @@ def qualification_scope_path(explicit=None):
             "evidence/v02-phase7-renewed-two-hour-execution-scope.json",
     }
     legacy_sha = "05eb7f5fa91d759fbef8fb86bbc9db402dc41812261235bcf5085a0e2aa9b1a5"
+    authorized_relative = "evidence/v02-phase7-authorized-execution-scope.json"
+    if selected_path == authorized_relative:
+        path = ROOT / authorized_relative
+        chosen = Path(explicit).resolve(strict=True) if explicit is not None else path.resolve(strict=True)
+        if (not re.fullmatch(r"[0-9a-f]{64}", selected_sha)
+                or chosen != path.resolve(strict=True)
+                or hashlib.sha256(path.read_bytes()).hexdigest() != selected_sha):
+            raise ValueError("qualification-scope-profile-invalid")
+        return path
     if selected_sha not in ("", legacy_sha, *window_profiles):
         raise ValueError("qualification-scope-profile-invalid")
     if selected_sha in window_profiles:
