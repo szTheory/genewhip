@@ -400,10 +400,11 @@ def run_workload(build, workload, scope_path, out, *, untimed=False, contracts_o
         reference = run_control_reference(build, scope, limits)
         timed = normalize_control_rows(control)
         for row in timed:
+            # Mode reports are projected summaries: they retain output_identity
+            # but no longer contain the raw capture fields used to build it.
             row.update({"workload": "control", "fields_completed": row.get("fields"),
                 "warmup_fields": 120, "ticks_completed": row.get("ticks"),
                 "last_stop_reason": row.get("stop_reason"), "untimed": False,
-                "output_identity": output_identity(row),
                 "untimed_output_identity": reference["output_identity"]})
         build_info = control["build_identity"]
         workload_report = {"schema": "genewhip.v02-workload-benchmark-v1", "workload": workload,
@@ -1636,13 +1637,12 @@ def main(argv=None):
                 raise ValueError("legacy control workload has a measured warmup split and cannot be wholly untimed")
             report = run_workload(args.build, args.workload, args.scope, args.out,
                 untimed=args.untimed, contracts_only=args.contracts_only, source_sha=args.source_sha)
-            if args.contracts_only or args.workload != "control":
-                args.out.parent.mkdir(parents=True, exist_ok=True)
-                args.out.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n")
-                print(f"core benchmark: v2 workload {args.workload}; "
-                      f"timed={report.get('counts', {}).get('timed_children', 0)}; "
-                      f"references={report.get('counts', {}).get('untimed_references', 0)}")
-                return 0
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            args.out.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n")
+            print(f"core benchmark: v2 workload {args.workload}; "
+                  f"timed={report.get('counts', {}).get('timed_children', 0)}; "
+                  f"references={report.get('counts', {}).get('untimed_references', 0)}")
+            return 0
         else:
             if args.scope or args.contracts_only or args.untimed or args.source_sha:
                 raise ValueError("v2 workload flags require --workload")
