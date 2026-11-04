@@ -7232,10 +7232,12 @@ def _dimension_semantic_errors(name: str, evidence_path: pathlib.Path,
                 if inventory_path.is_symlink() or not inventory_path.is_file() or _sha(inventory_path) != doc.get("inventory_sha256"):
                     return ["proof-package-inventory-binding-invalid"]
                 attempts = doc.get("attempts", [])
+                package_scope = json.loads(phase7_execution_scope_path(root=ROOT).read_text(encoding="utf-8"))
+                # These are aggregate builder groups; run_package caps them at four hours.
+                attempt_limits = {**package_scope["per_child_limits"], "wall_seconds": 4 * 60 * 60}
                 if (doc.get("identity") != expected or len(attempts) != 4 or
                         [attempt.get("label") for attempt in attempts] != ["package-sdk", "package-desktop", "package-docs", "package-inventory"] or
-                        any(attempt.get("returncode") != 0 or attempt.get("process_group_cleanup") != "confirmed" or
-                            len(attempt.get("processes", [])) != 1 for attempt in attempts)):
+                        any(not _public_package_attempt_valid(attempt, attempt_limits) for attempt in attempts)):
                     return ["proof-package-attempts-invalid"]
             inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
             asset_dir = inventory_path.parent
@@ -7261,11 +7263,13 @@ def _dimension_semantic_errors(name: str, evidence_path: pathlib.Path,
                     _sha(attempt_path) != doc.get("attempt_sha256")):
                 return ["proof-privacy-attempt-binding-invalid"]
             attempt = json.loads(attempt_path.read_text(encoding="utf-8"))
+            expected_stdout = ("hygiene controls: 4/4 intended rejections; original upstream notices preserved\n"
+                               "public hygiene: PASS\n")
             if (attempt.get("label") != "public-hygiene" or attempt.get("argv") != ["bash", "scripts/ci/public-hygiene.sh", "--self-test"] or
                     attempt.get("returncode") != 0 or
                     attempt.get("process_group_cleanup") != "confirmed" or
                     attempt.get("streams", {}).get("stdout", {}).get("sha256") != doc.get("stdout_sha256") or
-                    attempt.get("streams", {}).get("stdout", {}).get("text", "").strip() != "public hygiene: PASS"):
+                    attempt.get("streams", {}).get("stdout", {}).get("text") != expected_stdout):
                 return ["proof-privacy-attempt-invalid"]
         else:
             return ["proof-dimension-validator-missing:" + name]
@@ -7275,45 +7279,51 @@ def _dimension_semantic_errors(name: str, evidence_path: pathlib.Path,
 
 
 def _referenced_evidence_files(dimension_sources: dict[str, pathlib.Path]) -> dict[str, str]:
-    """Collect and bound every path+digest attachment reachable from direct evidence JSON."""
+    """Use the transfer consumer's schema policy for retained evidence attachments."""
     found: dict[str, str] = {}
     total = 0
-    visited_documents: set[str] = set()
-    def add_file(relative: str, digest: str) -> tuple[str, pathlib.Path]:
+    spec = importlib.util.spec_from_file_location("gw_v02_evidence_reference_policy",
+        pathlib.Path(__file__).resolve().with_name("v02_transfer.py"))
+    if spec is None or spec.loader is None:
+        raise RuntimeError("qualification-evidence-reference-policy-unavailable")
+    transfer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(transfer)
+
+    def read_attachment(relative: str, digest: str) -> bytes:
+        nonlocal total
         path = pathlib.Path(relative)
-        if not path.is_absolute(): path = ROOT / path
+        if path.is_absolute() or ".." in path.parts:
+            raise ValueError("qualification-evidence-reference-outside-root")
+        path = ROOT / path
         try: name = path.resolve(strict=True).relative_to(ROOT.resolve()).as_posix()
-        except (OSError, ValueError) as error: raise ValueError("qualification-evidence-reference-outside-root") from error
-        if path.is_symlink() or not path.is_file() or path.stat().st_size > 64 * 1024 * 1024 or _sha(path) != digest:
+        except (OSError, ValueError) as error:
+            raise ValueError("qualification-evidence-reference-outside-root") from error
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > 64 * 1024 * 1024:
+            raise ValueError("qualification-evidence-reference-invalid:" + name)
+        data = path.read_bytes()
+        if hashlib.sha256(data).hexdigest() != digest:
             raise ValueError("qualification-evidence-reference-invalid:" + name)
         prior = found.get(name)
         if prior is not None and prior != digest:
             raise ValueError("qualification-evidence-reference-conflict:" + name)
-        found[name] = digest
-        return name, path
-    def visit(value: Any, depth: int = 0) -> None:
-        nonlocal total
-        if isinstance(value, dict):
-            for ref_key in ("path", "retained_path"):
-                relative, digest = value.get(ref_key), value.get("sha256")
-                if isinstance(relative, str) and isinstance(digest, str) and len(digest) == 64:
-                    name, path = add_file(relative, digest)
-                    if path.suffix == ".json" and name not in visited_documents and depth < 4:
-                        visited_documents.add(name)
-                        visit(json.loads(path.read_text(encoding="utf-8")), depth + 1)
-            for child in value.values(): visit(child, depth)
-        elif isinstance(value, list):
-            for child in value: visit(child, depth)
-    for path in dimension_sources.values():
+        if prior is None:
+            total += len(data)
+            if len(found) >= 256:
+                raise ValueError("qualification-evidence-reference-count-cap")
+            if total > 512 * 1024 * 1024:
+                raise ValueError("qualification-evidence-reference-byte-cap")
+            found[name] = digest
+        return data
+
+    documents = {}
+    for name, path in dimension_sources.items():
         if path.is_symlink() or not path.is_file() or path.stat().st_size > 32 * 1024 * 1024:
             raise ValueError("qualification-evidence-source-invalid")
-        visit(json.loads(path.read_text(encoding="utf-8")))
-    if len(found) > 256:
-        raise ValueError("qualification-evidence-reference-count-cap")
-    for name in found:
-        total += (ROOT / name).stat().st_size
-    if total > 512 * 1024 * 1024:
-        raise ValueError("qualification-evidence-reference-byte-cap")
+        documents[name] = {"path": path.relative_to(ROOT).as_posix(),
+            "document": json.loads(path.read_text(encoding="utf-8"))}
+    references = transfer._collect_qualification_references(documents, read_attachment)
+    if references != found:
+        raise ValueError("qualification-evidence-reference-policy-disagreement")
     return dict(sorted(found.items()))
 
 
@@ -8757,6 +8767,84 @@ def _validate_validation_readiness_receipt(receipt: Any, expected: dict[str, Any
         raise ValueError("hosted-validation-readiness-receipt-invalid") from None
 
 
+_PACKAGE_ATTEMPT_LABELS = ("package-sdk", "package-desktop", "package-docs", "package-inventory")
+_PACKAGE_PROCESS_FIELDS = ("status", "return_code", "process_group_cleanup", "bound_violation",
+    "rss_bytes_observed", "rss_bytes_peak", "wall_seconds", "stdout_bytes", "stderr_bytes")
+_PACKAGE_STREAM_FIELDS = ("sha256", "observed_bytes", "retained_bytes", "truncated")
+
+
+def _public_package_attempt_valid(value: Any, limits: dict[str, Any]) -> bool:
+    """Validate portable success facts without accepting missing fields as success."""
+    if (not isinstance(value, dict) or set(value) != {"schema", "label", "returncode",
+            "process_group_cleanup", "processes", "streams", "original_attempt_sha256"}
+            or value.get("schema") != "genewhip.v02-public-package-attempt.v1"
+            or value.get("label") not in _PACKAGE_ATTEMPT_LABELS
+            or type(value.get("returncode")) is not int or value["returncode"] != 0
+            or value.get("process_group_cleanup") != "confirmed"
+            or not isinstance(value.get("original_attempt_sha256"), str)
+            or re.fullmatch(r"[0-9a-f]{64}", value["original_attempt_sha256"]) is None
+            or not isinstance(value.get("processes"), list) or len(value["processes"]) != 1
+            or not isinstance(value.get("streams"), dict) or set(value["streams"]) != {"stdout", "stderr"}):
+        return False
+    process = value["processes"][0]
+    if (not isinstance(process, dict) or set(process) != set(_PACKAGE_PROCESS_FIELDS)
+            or process.get("status") != "completed" or type(process.get("return_code")) is not int
+            or process["return_code"] != 0 or process.get("process_group_cleanup") != "confirmed"
+            or process.get("bound_violation") is not False):
+        return False
+    for field in ("rss_bytes_observed", "rss_bytes_peak", "stdout_bytes", "stderr_bytes"):
+        if type(process[field]) is not int or process[field] < 0:
+            return False
+    wall = process["wall_seconds"]
+    if (type(wall) not in (int, float) or (type(wall) is float and not math.isfinite(wall)) or wall < 0
+            or not 0 < process["rss_bytes_peak"] <= limits["max_rss_bytes"]
+            or process["rss_bytes_observed"] > process["rss_bytes_peak"]
+            or wall > min(limits["wall_seconds"],
+                300 if value["label"] == "package-inventory" else limits["wall_seconds"])
+                + limits["cleanup_grace_seconds"]):
+        return False
+    for name, stream in value["streams"].items():
+        if (not isinstance(stream, dict) or set(stream) != set(_PACKAGE_STREAM_FIELDS)
+                or not isinstance(stream["sha256"], str)
+                or re.fullmatch(r"[0-9a-f]{64}", stream["sha256"]) is None
+                or type(stream["observed_bytes"]) is not int
+                or type(stream["retained_bytes"]) is not int
+                or not 0 <= stream["retained_bytes"] <= stream["observed_bytes"]
+                or type(stream["truncated"]) is not bool
+                or (not stream["truncated"] and stream["retained_bytes"] != stream["observed_bytes"])
+                or process[name + "_bytes"] != stream["observed_bytes"]
+                or stream["observed_bytes"] > limits["max_stdout_stderr_bytes"]):
+            return False
+    observed = sum(stream["observed_bytes"] for stream in value["streams"].values())
+    retained = sum(stream["retained_bytes"] for stream in value["streams"].values())
+    return (observed <= min(limits["max_stdout_stderr_bytes"], limits["max_capture_bytes"])
+        and retained <= limits["max_retained_bytes"])
+
+
+def _public_package_attempt(attempt: dict[str, Any], limits: dict[str, Any]) -> dict[str, Any]:
+    """Keep raw receipts private; bind their canonical content and portable facts."""
+    if (not isinstance(attempt, dict)
+            or attempt.get("schema") != "genewhip.v02-coordinator-child-attempt.v1"
+            or "launch_error" not in attempt or attempt["launch_error"] is not None
+            or not isinstance(attempt.get("processes"), list) or len(attempt["processes"]) != 1):
+        raise ValueError("qualification-package-attempt-not-successful")
+    process = attempt["processes"][0]
+    streams = attempt.get("streams", {})
+    if not isinstance(process, dict) or not isinstance(streams, dict):
+        raise ValueError("qualification-package-attempt-not-successful")
+    value = {"schema": "genewhip.v02-public-package-attempt.v1",
+        "label": attempt.get("label"), "returncode": attempt.get("returncode"),
+        "process_group_cleanup": attempt.get("process_group_cleanup"),
+        "processes": [{field: process.get(field) for field in _PACKAGE_PROCESS_FIELDS}],
+        "streams": {name: {field: stream.get(field) for field in _PACKAGE_STREAM_FIELDS}
+            for name, stream in streams.items() if isinstance(stream, dict)},
+        "original_attempt_sha256": hashlib.sha256(json.dumps(attempt, sort_keys=True,
+            separators=(",", ":"), allow_nan=False).encode("utf-8")).hexdigest()}
+    if not _public_package_attempt_valid(value, limits):
+        raise ValueError("qualification-package-attempt-not-successful")
+    return value
+
+
 def run_package(public_evidence: pathlib.Path, out: pathlib.Path) -> dict[str, Any]:
     """Build actual clean-source archives and bind every proof dimension to retained bytes."""
     public_evidence = public_evidence.resolve(strict=True)
@@ -8860,7 +8948,8 @@ def run_package(public_evidence: pathlib.Path, out: pathlib.Path) -> dict[str, A
         "inventory": (inventory / "inventory.json").relative_to(ROOT).as_posix(), "inventory_sha256": _sha(inventory / "inventory.json"),
         "docs_receipt": docs.relative_to(ROOT).as_posix(), "docs_sha256": _sha(docs),
         "rights_and_members_checked_by": "scripts/release/promote.py prepare --release-version 0.2.0",
-        "attempts": attempts, "commands": [_public_argv(command)]}
+        "attempts": [_public_package_attempt(attempt, {**limits, "wall_seconds": 4 * 60 * 60})
+            for attempt in attempts]}
     _write_json(out.parent / "package-receipt.json", value)
     runtime_root = public_evidence.parent / "runtime-observation"
     runtime_receipt_path = public_evidence.parent / "runtime-observation.json"
