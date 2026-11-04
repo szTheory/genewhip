@@ -775,7 +775,8 @@ def negative_controls(build: pathlib.Path, core_path: pathlib.Path, map_path: pa
                       output: pathlib.Path, candidate_path: pathlib.Path, offline: bool = False,
                       software_override: pathlib.Path | None = None,
                       native_override: pathlib.Path | None = None,
-                      semantic_only: bool = False) -> int:
+                      semantic_only: bool = False,
+                      trusted_runtime_identity=None) -> int:
     """Exercise the production host consumer with retained independent receipts."""
     software_path = software_override or ROOT / "evidence/phase6-host-software-current.json"
     native_path = native_override or ROOT / "evidence/phase6-host-native.json"
@@ -784,9 +785,12 @@ def negative_controls(build: pathlib.Path, core_path: pathlib.Path, map_path: pa
     software = json.loads(software_path.read_text())
     native = json.loads(native_path.read_text())
     candidate = json.loads(candidate_path.read_text())
+    def validate_host(report, selected):
+        return compiler.validate_host_report(report, selected,
+            trusted_runtime_identity=trusted_runtime_identity)
     if semantic_only:
-        compiler.validate_host_report(software, candidate)
-        compiler.validate_host_report(native, candidate)
+        validate_host(software, candidate)
+        validate_host(native, candidate)
     # Preserve real accepted captures. Fault controls use byte-correct copies in a
     # separate owned directory, with outer digests recomputed after each mutation.
     evidence_root = build.resolve(strict=True) / "evidence"
@@ -819,7 +823,7 @@ def negative_controls(build: pathlib.Path, core_path: pathlib.Path, map_path: pa
     ):
         edit(report)
         try:
-            compiler.validate_host_report(report, candidate)
+            validate_host(report, candidate)
         except compiler.Invalid as error:
             actual = str(error)
             mutations.append({"id": label, "expected_reason": expected, "actual_reason": actual,
@@ -836,7 +840,7 @@ def negative_controls(build: pathlib.Path, core_path: pathlib.Path, map_path: pa
         write_json(path,receipt)
         row["process_receipt"]=phase6_game.artifact(path)
         actual=None
-        try:compiler.validate_host_report(mutant,candidate)
+        try:validate_host(mutant,candidate)
         except compiler.Invalid as error:actual=str(error)
         mutations.append({"id":name,"expected_reason":expected,"actual_reason":actual,"rejected":actual==expected})
     def boolean_wall(report,row,receipt):
@@ -858,7 +862,7 @@ def negative_controls(build: pathlib.Path, core_path: pathlib.Path, map_path: pa
 
     def check_mutant(label: str, mutant: dict, expected: str) -> None:
         try:
-            compiler.validate_host_report(mutant, candidate)
+            validate_host(mutant, candidate)
         except compiler.Invalid as error:
             actual = str(error)
             mutations.append({"id": label, "expected_reason": expected,

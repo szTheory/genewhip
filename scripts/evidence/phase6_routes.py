@@ -34,6 +34,97 @@ class Invalid(ValueError):
     pass
 
 
+_RUNTIME_IDENTITY_CONTEXT_TAG = "genewhip-trusted-runtime-identity-context-v1"
+_RUNTIME_IDENTITY_SUBJECT_FIELDS = (
+    "source_sha256", "git_head", "base_sha", "run_id", "run_attempt", "candidate_sha256")
+_RUNTIME_IDENTITY_FIELDS = {
+    "schema", "source_sha256", "git_head", "base_sha", "run_id", "run_attempt",
+    "scope_sha256", "candidate_sha256", "build_identity"}
+_RUNTIME_BUILD_IDENTITY_FIELDS = {
+    "cmake_cache_sha256", "configuration_sha256", "headless_sha256", "desktop_sha256"}
+
+
+def trusted_runtime_identity_from_bytes(raw: bytes, *, expected_sha256: str,
+                                        expected_subject: dict, expected_scope_sha256: str) -> tuple:
+    """Build a portable consumer context from externally anchored identity bytes.
+
+    The caller supplies the digest and subject independently (the qualification
+    coordinator obtains them from its authenticated job output). This function
+    never derives authority from a candidate, report, or transferred inventory.
+    The returned tuple is immutable and can cross independently loaded module
+    aliases; validators recheck its raw bytes and all anchors on every use.
+    """
+    if (not isinstance(raw, bytes) or not 0 < len(raw) <= 65536 or
+            not isinstance(expected_sha256, str) or len(expected_sha256) != 64 or
+            any(char not in "0123456789abcdef" for char in expected_sha256) or
+            hashlib.sha256(raw).hexdigest() != expected_sha256 or
+            not isinstance(expected_scope_sha256, str) or len(expected_scope_sha256) != 64 or
+            any(char not in "0123456789abcdef" for char in expected_scope_sha256) or
+            not isinstance(expected_subject, dict) or set(expected_subject) != set(_RUNTIME_IDENTITY_SUBJECT_FIELDS)):
+        raise Invalid("runtime-identity-context-invalid")
+    subject = tuple(expected_subject.get(name) for name in _RUNTIME_IDENTITY_SUBJECT_FIELDS)
+    if (any(not isinstance(value, str) or not value for value in subject) or
+            any(len(value) != 64 or any(char not in "0123456789abcdef" for char in value)
+                for value in (subject[0], subject[5])) or
+            any(len(value) != 40 or any(char not in "0123456789abcdef" for char in value)
+                for value in (subject[1], subject[2])) or
+            not subject[4].isdigit()):
+        raise Invalid("runtime-identity-context-invalid")
+    try:
+        identity = json.loads(raw)
+    except (ValueError, UnicodeError, TypeError) as error:
+        raise Invalid("runtime-identity-context-invalid") from error
+    build = identity.get("build_identity") if isinstance(identity, dict) else None
+    if (not isinstance(identity, dict) or set(identity) != _RUNTIME_IDENTITY_FIELDS or
+            identity.get("schema") != "genewhip-v02-runtime-identity-v1" or
+            not isinstance(build, dict) or set(build) != _RUNTIME_BUILD_IDENTITY_FIELDS or
+            any(not isinstance(build.get(name), str) or len(build[name]) != 64 or
+                any(char not in "0123456789abcdef" for char in build[name])
+                for name in _RUNTIME_BUILD_IDENTITY_FIELDS) or
+            any(identity.get(name) != expected for name, expected in zip(_RUNTIME_IDENTITY_SUBJECT_FIELDS, subject)) or
+            identity.get("scope_sha256") != expected_scope_sha256):
+        raise Invalid("runtime-identity-context-invalid")
+    return (_RUNTIME_IDENTITY_CONTEXT_TAG, raw, expected_sha256, subject, expected_scope_sha256)
+
+
+def _trusted_runtime_identity(context: object) -> dict:
+    """Revalidate a context locally so independently loaded aliases interoperate."""
+    if (type(context) is not tuple or len(context) != 5 or context[0] != _RUNTIME_IDENTITY_CONTEXT_TAG or
+            not isinstance(context[1], bytes) or not isinstance(context[2], str) or
+            type(context[3]) is not tuple or not isinstance(context[4], str)):
+        raise Invalid("runtime-identity-context-invalid")
+    subject = context[3]
+    if len(subject) != len(_RUNTIME_IDENTITY_SUBJECT_FIELDS):
+        raise Invalid("runtime-identity-context-invalid")
+    expected_subject = dict(zip(_RUNTIME_IDENTITY_SUBJECT_FIELDS, subject))
+    rebound = trusted_runtime_identity_from_bytes(context[1], expected_sha256=context[2],
+        expected_subject=expected_subject, expected_scope_sha256=context[4])
+    if rebound != context:
+        raise Invalid("runtime-identity-context-invalid")
+    return json.loads(context[1])
+
+
+def _validate_trusted_candidate(candidate: dict, context: object) -> dict:
+    identity = _trusted_runtime_identity(context)
+    build = identity["build_identity"]
+    clients = candidate.get("client_identities") if isinstance(candidate, dict) else None
+    core = clients.get("public-core") if isinstance(clients, dict) else None
+    candidate_build = candidate.get("build_identity") if isinstance(candidate, dict) else None
+    if (not isinstance(core, dict) or core.get("path") !=
+            "build/v02/runtime-build/tools/session/gw_headless" or
+            core.get("sha256") != build["headless_sha256"]):
+        raise Invalid("product-stale-client")
+    if (not isinstance(candidate_build, dict) or
+            candidate_build.get("cmake_cache_sha256") != build["cmake_cache_sha256"]):
+        raise Invalid("product-stale-build")
+    return identity
+
+
+def _validate_trusted_candidate_digest(candidate: dict, identity: dict) -> None:
+    if canonical_digest(candidate) != identity.get("candidate_sha256"):
+        raise Invalid("product-candidate")
+
+
 def load(path: pathlib.Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -573,11 +664,15 @@ def validate_report(report: dict) -> None:
         _validate_host_receipt(report["host"].get("evidence"))
 
 
-def validate_product_report(report: dict, candidate: dict) -> None:
+def validate_product_report(report: dict, candidate: dict, *, trusted_runtime_identity=None) -> None:
     """Validate the complete repeated roster against source and exact raw runs."""
     if (report.get("schema") != "genewhip-phase6-product-report-v1" or
             report.get("candidate_sha256") != canonical_digest(candidate)):
         raise Invalid("product-candidate")
+    trusted_identity = (_trusted_runtime_identity(trusted_runtime_identity)
+        if trusted_runtime_identity is not None else None)
+    if trusted_identity is not None:
+        _validate_trusted_candidate(candidate, trusted_runtime_identity)
     manifest=_read_receipt(report.get("candidate_manifest"),"product-candidate-manifest",64*1024)
     if canonical_digest(manifest)!=canonical_digest(candidate):
         raise Invalid("product-candidate-manifest")
@@ -597,12 +692,17 @@ def validate_product_report(report: dict, candidate: dict) -> None:
         path = (ROOT / relative).resolve()
         if not path.is_relative_to(ROOT) or not path.is_file() or digest(path) != expected:
             raise Invalid("product-stale-source")
-    for identity in candidate.get("client_identities", {}).values():
+    for client_name, identity in candidate.get("client_identities", {}).items():
+        if trusted_identity is not None and client_name == "public-core":
+            # The independently anchored runtime identity preserves this
+            # executable's exact digest while privacy keeps its bytes private.
+            continue
         path = (ROOT / identity.get("path", "")).resolve()
         if not path.is_relative_to(ROOT) or not path.is_file() or digest(path) != identity.get("sha256"):
             raise Invalid("product-stale-client")
     headless = ROOT / candidate["client_identities"]["public-core"]["path"]
-    if digest(headless.parents[2]/"CMakeCache.txt") != candidate.get("build_identity",{}).get("cmake_cache_sha256"):
+    if (trusted_identity is None and
+            digest(headless.parents[2]/"CMakeCache.txt") != candidate.get("build_identity",{}).get("cmake_cache_sha256")):
         raise Invalid("product-stale-build")
     if candidate.get("configuration_identity") != {"audio_rate_hz":48000,"profile":"VA3-NTSC-U","test_hooks":True}:
         raise Invalid("product-configuration")
@@ -618,6 +718,8 @@ def validate_product_report(report: dict, candidate: dict) -> None:
     validate_delivery_map(mapping)
     if canonical_digest(mapping) != candidate["delivery_map_identity"]["sha256"]:
         raise Invalid("product-map")
+    if trusted_identity is not None:
+        _validate_trusted_candidate_digest(candidate, trusted_identity)
     routes = compile_routes()["routes"]
     expected = {(r["fixture"],r["case"]["id"]):r for r in routes}
     if report.get("roster") != [{"fixture":r["fixture"],"case":r["case"],"identity":r["identity"]} for r in routes]:
@@ -806,7 +908,7 @@ def validate_product_report(report: dict, candidate: dict) -> None:
         raise Invalid("product-outcome")
 
 
-def validate_media_report(report: dict, candidate: dict) -> None:
+def validate_media_report(report: dict, candidate: dict, *, trusted_runtime_identity=None) -> None:
     """Recompute media features from bounded raw captures, never outer digests alone."""
     if (not isinstance(report, dict) or report.get("schema") != "genewhip-phase6-media-v1" or
             report.get("result") != "pass" or report.get("candidate_sha256") != canonical_digest(candidate)):
@@ -826,7 +928,7 @@ def validate_media_report(report: dict, candidate: dict) -> None:
     if (report.get("core_routes_sha256") != report["core_routes"]["sha256"] or
             routes.get("candidate_sha256") != canonical_digest(candidate)):
         raise Invalid("media-route-receipt-identity")
-    validate_product_report(routes,candidate)
+    validate_product_report(routes,candidate,trusted_runtime_identity=trusted_runtime_identity)
     rows = report.get("captures")
     expected = {(item["fixture"], item["case"]) for item in expectations.get("captures", [])}
     if not isinstance(rows, list) or len(rows) != len(expected):
@@ -920,7 +1022,7 @@ def _validate_host_process(process: dict, receipt_ref: dict, cap: int) -> None:
         raise Invalid("host-process-binding")
 
 
-def validate_host_report(report: dict, candidate: dict) -> None:
+def validate_host_report(report: dict, candidate: dict, *, trusted_runtime_identity=None) -> None:
     """Validate actual SDL host observations against the immutable current core product."""
     if not isinstance(report, dict) or report.get("schema") != "genewhip-phase6-host-v1":
         raise Invalid("host-envelope")
@@ -945,13 +1047,26 @@ def validate_host_report(report: dict, candidate: dict) -> None:
     if identity.get("desktop_test_source_sha256") != digest(ROOT / "tests/desktop/phase6_routes.py"):
         raise Invalid("host-identity")
     desktop = identity.get("desktop_binary", {})
-    desktop_path = (ROOT / desktop.get("path", "")).resolve()
-    if (not desktop_path.is_relative_to(ROOT) or not desktop_path.is_file() or
-            desktop.get("sha256") != digest(desktop_path)):
-        raise Invalid("host-identity")
-    cache_path = desktop_path.parents[2] / "CMakeCache.txt"
-    if identity.get("cmake_cache_sha256") != digest(cache_path):
-        raise Invalid("host-identity")
+    trusted_build = (_trusted_runtime_identity(trusted_runtime_identity)["build_identity"]
+        if trusted_runtime_identity is not None else None)
+    if trusted_build is None:
+        desktop_path = (ROOT / desktop.get("path", "")).resolve()
+        if (not desktop_path.is_relative_to(ROOT) or not desktop_path.is_file() or
+                desktop.get("sha256") != digest(desktop_path)):
+            raise Invalid("host-identity")
+        cache_path = desktop_path.parents[2] / "CMakeCache.txt"
+        if identity.get("cmake_cache_sha256") != digest(cache_path):
+            raise Invalid("host-identity")
+    else:
+        if (desktop.get("path") != "build/v02/runtime-build/tools/desktop/genewhip-desktop" or
+                desktop.get("sha256") != trusted_build["desktop_sha256"] or
+                identity.get("cmake_cache_sha256") != trusted_build["cmake_cache_sha256"]):
+            raise Invalid("host-identity")
+        desktop_client = candidate.get("client_identities", {}).get("sdl")
+        if (desktop_client is not None and
+                (desktop_client.get("path") != desktop.get("path") or
+                 desktop_client.get("sha256") != trusted_build["desktop_sha256"])):
+            raise Invalid("host-identity")
     input_ref = identity.get("input_contract", {})
     input_path = (ROOT / input_ref.get("path", "")).resolve()
     if not input_path.is_relative_to(ROOT) or not input_path.is_file() or digest(input_path) != input_ref.get("sha256"):
@@ -978,7 +1093,7 @@ def validate_host_report(report: dict, candidate: dict) -> None:
     core = _read_receipt(core_ref, "host-core-report", 16 * 1024 * 1024)
     if core_ref.get("sha256") != digest(ROOT / core_ref.get("path", "")):
         raise Invalid("host-core-identity")
-    validate_product_report(core, candidate)
+    validate_product_report(core, candidate, trusted_runtime_identity=trusted_runtime_identity)
     expected = [(fixture, case) for fixture, cases in (
         ("recursion94", ("full-route", "withhold-first-plate", "withhold-final-b")),
         ("tank-battle", ("full-route", "withhold-early-hit", "withhold-late-hit"))) for case in cases]

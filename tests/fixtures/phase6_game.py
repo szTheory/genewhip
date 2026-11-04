@@ -2036,7 +2036,8 @@ def core(build,map_path,candidate_path,output,resume_batch=None):
         raise
 
 
-def core_contract(build,candidate_path,output,report_path=None,media_path=None):
+def core_contract(build,candidate_path,output,report_path=None,media_path=None,
+                  trusted_runtime_identity=None):
     """Offline actual-consumer mutants; no clients, no test-only validator."""
     path=report_path or ROOT/"evidence/phase6-core-routes.json"
     media_path=media_path or ROOT/"evidence/phase6-media.json"
@@ -2044,10 +2045,16 @@ def core_contract(build,candidate_path,output,report_path=None,media_path=None):
         write_json(output,{"schema":"genewhip-phase6-core-check-v1","status":"skipped","reason":"no canonical report; source feature checks are a separate test"})
         return 77
     report=json.loads(path.read_text());candidate=json.loads(candidate_path.read_text())
-    compiler.validate_product_report(report,candidate)
+    def validate_product(value, selected):
+        compiler.validate_product_report(value, selected,
+            trusted_runtime_identity=trusted_runtime_identity)
+    def validate_media(value, selected):
+        compiler.validate_media_report(value, selected,
+            trusted_runtime_identity=trusted_runtime_identity)
+    validate_product(report,candidate)
     checks=[]
     directory=pathlib.Path(tempfile.mkdtemp(prefix="semantic-mutants-",dir=build.resolve()/"evidence"))
-    def check(name,mutate,expected,base=report,manifest=candidate,validator=compiler.validate_product_report):
+    def check(name,mutate,expected,base=report,manifest=candidate,validator=None):
         altered=json.loads(json.dumps(base));selected=json.loads(json.dumps(manifest))
         mutate(altered,selected)
         # Candidate mutations need a matching retained manifest artifact so
@@ -2056,7 +2063,7 @@ def core_contract(build,candidate_path,output,report_path=None,media_path=None):
         if canonical_sha(selected)!=canonical_sha(manifest):
             candidate_file=directory/(name+"-candidate.json");write_json(candidate_file,selected)
             altered["candidate_manifest"]=artifact(candidate_file)
-        try:validator(altered,selected)
+        try:(validator or validate_product)(altered,selected)
         except compiler.Invalid as error:
             if str(error)!=expected:raise AssertionError(f"{name}: expected {expected}, got {error}")
             checks.append({"name":name,"reason":str(error),"status":"pass"})
@@ -2096,9 +2103,9 @@ def core_contract(build,candidate_path,output,report_path=None,media_path=None):
     raw_mutant("3599-source-steps",lambda r:(r["samples"].pop(),r.update(active_ticks=3599)),"native-incomplete-observation")
     raw_mutant("oversized-work",lambda r:r.update(boundary_calls=100_000_001),"product-work-cap")
     raw_mutant("oversized-field-count",lambda r:r.update(fields=7201),"product-work-cap")
-    media_report=json.loads(media_path.read_text());compiler.validate_media_report(media_report,candidate)
-    check("missing-media-row",lambda r,c:r["captures"].pop(),"media-roster",media_report,validator=compiler.validate_media_report)
-    check("stale-media-expectation",lambda r,c:r.update(media_expectations_sha256="0"*64),"media-expectations-identity",media_report,validator=compiler.validate_media_report)
+    media_report=json.loads(media_path.read_text());validate_media(media_report,candidate)
+    check("missing-media-row",lambda r,c:r["captures"].pop(),"media-roster",media_report,validator=validate_media)
+    check("stale-media-expectation",lambda r,c:r.update(media_expectations_sha256="0"*64),"media-expectations-identity",media_report,validator=validate_media)
     def media_file_mutant(name,kind,content,expected,fixture="recursion94"):
         altered=json.loads(json.dumps(media_report));row=next(x for x in altered["captures"] if x["fixture"]==fixture)
         raw=(ROOT/row[kind]["path"]).read_bytes();changed=content(raw);file=directory/(name+".bin");file.write_bytes(changed)
@@ -2117,7 +2124,7 @@ def core_contract(build,candidate_path,output,report_path=None,media_path=None):
             expected="product-pcm-length"
         routes_path=directory/(name+"-routes.json");write_json(routes_path,routes)
         altered["core_routes"]=artifact(routes_path);altered["core_routes_sha256"]=sha(routes_path)
-        check(name,lambda r,c:r.update(altered),expected,media_report,validator=compiler.validate_media_report)
+        check(name,lambda r,c:r.update(altered),expected,media_report,validator=validate_media)
     media_file_mutant("blank-rec-scene","image",lambda b:bytes(len(b)),"media-rec-source-actor-mask")
     media_file_mutant("filled-rec-scene","image",lambda b:b"\xff\xff\xff\0"*(len(b)//4),"media-rec-source-actor-mask")
     media_file_mutant("wrong-tank-tile","image",lambda b:b[:(24*320+16)*4]+bytes([b[(24*320+16)*4]^1])+b[(24*320+16)*4+1:],"media-tank-source-tile","tank-battle")

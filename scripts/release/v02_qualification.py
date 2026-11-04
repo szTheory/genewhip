@@ -824,8 +824,12 @@ def _external(argv: list[str], *, cwd: pathlib.Path = ROOT, timeout: int = 120,
             bounded_options["file_size_limit_bytes"] = file_size_limit_bytes
         attempt = _bounded_command(argv, limits=limits, scratch=scratch, timeout=timeout,
             label=label, env=child_env, cwd=cwd, check=check, **bounded_options)
-    except (OSError, RuntimeError, subprocess.TimeoutExpired) as error:
+    except (OSError, subprocess.TimeoutExpired):
         raise ValueError("hosted-delivery-command-unavailable:" + pathlib.Path(argv[0]).name) from None
+    except RuntimeError:
+        # The boundary has already retained and classified this failed attempt.
+        # A completed nonzero child is not evidence of a missing executable.
+        raise ValueError("hosted-delivery-command-failed:" + pathlib.Path(argv[0]).name) from None
     result = subprocess.CompletedProcess(argv, int(attempt.get("returncode") or 0),
         str(attempt.get("streams", {}).get("stdout", {}).get("text", attempt.get("stdout_tail", ""))),
         str(attempt.get("streams", {}).get("stderr", {}).get("text", attempt.get("stderr_tail", ""))))
@@ -6302,9 +6306,11 @@ def run_hosted_qualification(packet_path: pathlib.Path, publication_copy: pathli
     package_download = download_root / "v02-package"
     release_download = download_root / "release-input"
     identity_download = download_root / "release-identity"
+    runtime_identity_download = download_root / "runtime-identity-anchor"
     for prefix, target in (("v02-package", package_download),
                            ("release-input", release_download),
-                           ("release-identity", identity_download)):
+                           ("release-identity", identity_download),
+                           ("v02-runtime-identity", runtime_identity_download)):
         _require_hosted_budget(started_at, datetime.datetime.now(datetime.timezone.utc).isoformat(),
                                scope, phase="package")
         _download_run_artifact(repository, run_id, run_attempt, prefix, target, phase="package")
@@ -6341,13 +6347,22 @@ def run_hosted_qualification(packet_path: pathlib.Path, publication_copy: pathli
         "base_sha": base_sha}
     if ci_identity != expected_identity:
         raise ValueError("hosted-package-run-identity-mismatch")
+    # This small artifact is selected from the already verified successful run,
+    # independently of the package payload and all report/candidate mutations.
+    runtime_anchor = runtime_identity_download / "runtime-identity.json"
+    if (runtime_anchor.is_symlink() or not runtime_anchor.is_file()
+            or not 0 < runtime_anchor.stat().st_size <= 1024 * 1024
+            or {path.name for path in runtime_identity_download.iterdir()} != {"runtime-identity.json"}):
+        raise ValueError("hosted-runtime-identity-anchor-invalid")
+    runtime_identity_sha256 = _sha(runtime_anchor)
     environment = os.environ.copy()
     environment.update({"GITHUB_REPOSITORY": repository, "GITHUB_SHA": source_sha,
         "GITHUB_BASE_SHA": base_sha, "GITHUB_RUN_ID": run_id,
         "GITHUB_RUN_ATTEMPT": run_attempt, "GITHUB_EVENT_NAME": run_identity["event"],
         "GITHUB_REF": "refs/heads/main", "GITHUB_WORKFLOW": "Required preview checks",
         "GENEWHIP_QUALIFICATION_STARTED_AT": started_at,
-        "GENEWHIP_QUALIFICATION_NONCE": nonce})
+        "GENEWHIP_QUALIFICATION_NONCE": nonce,
+        TRUSTED_RUNTIME_IDENTITY_ENV: runtime_identity_sha256})
     semantic_expected = {"source_sha": source_sha, "head_sha": source_sha, "base_sha": base_sha,
         "run_id": str(run_id), "run_attempt": str(run_attempt)}
     semantic_mutants_out = hosted_root / "build/v02/semantic-mutant-receipt.json"
@@ -6527,6 +6542,59 @@ def qualification_plan(build: pathlib.Path, scope: pathlib.Path) -> dict[str, An
         "final_credit_source": "authenticated-downloaded-byte-adoption-only"}
 
 
+TRUSTED_RUNTIME_IDENTITY_ENV = "GENEWHIP_QUALIFICATION_RUNTIME_IDENTITY_SHA256"
+
+
+def _trusted_runtime_identity(route_module: Any, expected: dict[str, str]):
+    """Bind portable build facts to an independently supplied runtime-job digest.
+
+    The digest comes from the successful runtime job output, or from its separate
+    provider-selected identity artifact in the outer coordinator. It must never
+    be inferred from the candidate, report, or transferred inventory.
+    """
+    anchor = os.environ.get(TRUSTED_RUNTIME_IDENTITY_ENV, "")
+    if not re.fullmatch(r"[0-9a-f]{64}", anchor):
+        raise ValueError("qualification-trusted-runtime-identity-required")
+    if expected.get("head_sha") != expected.get("source_sha"):
+        raise ValueError("qualification-runtime-subject-head-mismatch")
+    path = ROOT / "build/v02/runtime-identity.json"
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        try:
+            before = os.fstat(fd)
+            if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
+                    or not 0 < before.st_size <= 1024 * 1024):
+                raise ValueError("qualification-runtime-identity-file-invalid")
+            raw = os.read(fd, 1024 * 1024 + 1)
+            after = os.fstat(fd)
+            if ((before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+                    != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+                    or len(raw) != before.st_size):
+                raise ValueError("qualification-runtime-identity-file-changed")
+        finally:
+            os.close(fd)
+    except OSError:
+        raise ValueError("qualification-runtime-identity-file-unavailable") from None
+    if hashlib.sha256(raw).hexdigest() != anchor:
+        raise ValueError("qualification-runtime-identity-anchor-mismatch")
+    candidate_path = ROOT / "build/v02/runtime-observation/candidate.json"
+    if (candidate_path.is_symlink() or not candidate_path.is_file()
+            or candidate_path.stat().st_size > 8 * 1024 * 1024):
+        raise ValueError("qualification-runtime-candidate-invalid")
+    candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+    runtime = _load_runtime_module()
+    source = runtime.source_identity(route_module)
+    subject = {"source_sha256": source["source_sha256"],
+        "git_head": expected["source_sha"], "base_sha": expected["base_sha"],
+        "run_id": str(expected["run_id"]), "run_attempt": str(expected["run_attempt"]),
+        "candidate_sha256": hashlib.sha256(json.dumps(candidate, sort_keys=True,
+            separators=(",", ":")).encode()).hexdigest()}
+    scope_path = phase7_execution_scope_path(root=ROOT)
+    return route_module.trusted_runtime_identity_from_bytes(raw,
+        expected_sha256=anchor, expected_subject=subject,
+        expected_scope_sha256=_sha(scope_path))
+
+
 def _run_semantic_mutant_suites(out: pathlib.Path, expected: dict[str, str],
                                 scope: dict[str, Any]) -> dict[str, Any]:
     """Run the retained actual-validator mutation duties against fresh v0.2 reports."""
@@ -6557,15 +6625,19 @@ def _run_semantic_mutant_suites(out: pathlib.Path, expected: dict[str, str],
     fixture_spec.loader.exec_module(fixture)
     host = importlib.util.module_from_spec(host_spec)
     host_spec.loader.exec_module(host)
+    routes = _load_runtime_module()._module(ROOT / "scripts/evidence/phase6_routes.py",
+        "gw_v02_semantic_portable_routes")
+    trusted_runtime_identity = _trusted_runtime_identity(routes, expected)
     core_out = evidence / "core-mutants.json"
     host_out = evidence / "host-mutants.json"
     candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
-    if fixture.core_contract(build, candidate_path, core_out, core_path, media_path) != 0:
+    if fixture.core_contract(build, candidate_path, core_out, core_path, media_path,
+            trusted_runtime_identity=trusted_runtime_identity) != 0:
         raise ValueError("qualification-core-semantic-mutants-failed")
     if host.negative_controls(build, ROOT / "fixtures/phase6/recursion94-consumed-map-v1.json",
             ROOT / "fixtures/phase6/recursion94-consumed-map-v1.json", host_out,
             candidate_path, software_override=software_path, native_override=native_path,
-            semantic_only=True) != 0:
+            semantic_only=True, trusted_runtime_identity=trusted_runtime_identity) != 0:
         raise ValueError("qualification-host-semantic-mutants-failed")
     _check_environment_clock(scope, "package")
     core_result = json.loads(core_out.read_text(encoding="utf-8"))
@@ -6723,13 +6795,16 @@ def _dimension_semantic_errors(name: str, evidence_path: pathlib.Path,
         runtime = _load_runtime_module()
         fixture = runtime._module(ROOT / "tests/fixtures/phase6_game.py", "gw_v02_dimension_fixture")
         route = runtime._module(ROOT / "scripts/evidence/phase6_routes.py", "gw_v02_dimension_routes")
+        portable_options = {}
+        if name in ("core", "host", "host-native", "media") and os.environ.get(TRUSTED_RUNTIME_IDENTITY_ENV):
+            portable_options["trusted_runtime_identity"] = _trusted_runtime_identity(route, expected)
         candidate_path = ROOT / "build/v02/runtime-observation/candidate.json"
         if name in ("core", "host", "host-native", "media", "safety", "determinism"):
             if candidate_path.is_symlink() or not candidate_path.is_file() or candidate_path.stat().st_size > 8 * 1024 * 1024:
                 return ["proof-current-candidate-unavailable:" + name]
             candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
         if name == "core":
-            route.validate_product_report(doc, candidate)
+            route.validate_product_report(doc, candidate, **portable_options)
             if (doc.get("outcomes", {}).get("status") not in ("pass", "pass-diagnostic") or
                     len(doc.get("runs", [])) != 24 or len(doc.get("stages", [])) != 120 or
                     len(doc.get("media_captures", [])) < 2):
@@ -6737,7 +6812,7 @@ def _dimension_semantic_errors(name: str, evidence_path: pathlib.Path,
             mutant_error = _semantic_mutant_receipt_error(expected)
             if mutant_error: return [mutant_error]
         elif name in ("host", "host-native"):
-            route.validate_host_report(doc, candidate)
+            route.validate_host_report(doc, candidate, **portable_options)
             backend = "software" if name == "host" else "native"
             if (doc.get("backend") != backend or doc.get("outcome", doc.get("status")) not in ("pass", "pass-diagnostic") or
                     len(doc.get("runs", [])) != 6):
@@ -6745,7 +6820,7 @@ def _dimension_semantic_errors(name: str, evidence_path: pathlib.Path,
             mutant_error = _semantic_mutant_receipt_error(expected)
             if mutant_error: return [mutant_error]
         elif name == "media":
-            route.validate_media_report(doc, candidate)
+            route.validate_media_report(doc, candidate, **portable_options)
             if doc.get("result") != "pass":
                 return ["proof-media-outcome-invalid"]
         elif name == "safety":
@@ -8562,13 +8637,15 @@ def run_package(public_evidence: pathlib.Path, out: pathlib.Path) -> dict[str, A
             hashlib.sha256(candidate_path.read_bytes()).hexdigest() != candidate_ref.get("sha256")):
         raise ValueError("qualification-current-candidate-manifest-invalid")
     candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
-    route_module.validate_product_report(core_report, candidate)
+    trusted_runtime_identity = _trusted_runtime_identity(route_module, expected)
+    portable_options = {"trusted_runtime_identity": trusted_runtime_identity}
+    route_module.validate_product_report(core_report, candidate, **portable_options)
     media_path = runtime_root / "media-report.json"
     media_report = json.loads(media_path.read_text(encoding="utf-8"))
-    route_module.validate_media_report(media_report, candidate)
+    route_module.validate_media_report(media_report, candidate, **portable_options)
     for backend in ("software", "native"):
         host_report = json.loads((runtime_root / f"host-{backend}.json").read_text(encoding="utf-8"))
-        route_module.validate_host_report(host_report, candidate)
+        route_module.validate_host_report(host_report, candidate, **portable_options)
     chunk_report_path = runtime_root / "chunk.json"
     chunk_report = json.loads(chunk_report_path.read_text(encoding="utf-8"))
     if chunk_report.get("schema") != "genewhip-phase6-chunk-v1" or chunk_report.get("status") != "pass" or \

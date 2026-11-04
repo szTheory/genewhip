@@ -64,8 +64,24 @@ def _load_benchmark_module():
     return module
 
 
-def _validate_performance_evidence(path, revision):
-    """Re-run the production benchmark policy against the package's exact scope/run."""
+def _validate_performance_identity(identity, revision):
+    """Require a separate, complete subject identity for explicit evidence reads."""
+    fields = {"source_sha", "head_sha", "base_sha", "run_id", "run_attempt"}
+    if (not isinstance(identity, dict) or set(identity) != fields
+            or not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision)
+            or any(not isinstance(identity.get(name), str) for name in fields)
+            or any(not re.fullmatch(r"[0-9a-f]{40}", identity[name])
+                   for name in ("source_sha", "head_sha", "base_sha"))
+            or not re.fullmatch(r"[0-9]+", identity["run_id"])
+            or not re.fullmatch(r"[1-9][0-9]*", identity["run_attempt"])):
+        raise ValueError("package-performance-identity-invalid")
+    if identity["source_sha"] != revision:
+        raise ValueError("package-performance-identity-source-mismatch")
+    return dict(identity)
+
+
+def _validate_performance_evidence(path, revision, *, expected_identity=None):
+    """Re-run benchmark policy against the exact scope and an explicit subject when supplied."""
     scope_module = _load_scope_module()
     try:
         _scope_path, scope_bytes = scope_module.read_scope(ROOT,
@@ -76,10 +92,15 @@ def _validate_performance_evidence(path, revision):
     scope = json.loads(scope_bytes)
     scope_sha256 = hashlib.sha256(scope_bytes).hexdigest()
     benchmark = _load_benchmark_module()
-    expected = {"source_sha": revision, "head_sha": os.environ.get("GITHUB_SHA", revision),
-        "base_sha": os.environ.get("GITHUB_BASE_SHA", revision),
-        "run_id": os.environ.get("GITHUB_RUN_ID", "local"),
-        "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT", "1")}
+    if expected_identity is None:
+        # Preserve the existing release-builder behavior when callers do not
+        # provide an independently selected evidence subject.
+        expected = {"source_sha": revision, "head_sha": os.environ.get("GITHUB_SHA", revision),
+            "base_sha": os.environ.get("GITHUB_BASE_SHA", revision),
+            "run_id": os.environ.get("GITHUB_RUN_ID", "local"),
+            "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT", "1")}
+    else:
+        expected = _validate_performance_identity(expected_identity, revision)
     document = _json(path)
     reports, digests = {}, {}
     for workload in benchmark.WORKLOADS:

@@ -35,6 +35,9 @@ FORBIDDEN_NAMES = {"CMakeCache.txt", "phase6_safety", "gw_headless", "genewhip-d
 PUBLIC_CLOSURE = ("compatibility-matrix.md", "manifest.json", "observations.json", "roster.json", "schema.json", "verifier.py")
 PUBLIC_SCHEMA_MEMBER = "build/v02/public/schema.json"
 CANONICAL_SCHEMA_SOURCE = "evidence/v02-schema.json"
+CMAKE_PROVENANCE_SOURCE_PATHS = ("CMakeLists.txt", "tools/session/CMakeLists.txt")
+CMAKE_PROVENANCE_MAX_BYTES = 131072
+RUNTIME_CANDIDATE_MEMBER = "build/v02/runtime-observation/candidate.json"
 CORE_FILES = {"candidate.json", "previous-report-before-new-batch.json", "failed-report-"}
 CORE_OUTPUTS = {"route.gwrc", "native.json", "process.json", "run.json", "recovered-run.json",
     "audio.pcm", "audio-trace.jsonl", "control.json"}
@@ -47,6 +50,13 @@ REFERENCE_ROLES = {"candidate_manifest", "process_receipt", "native_report", "pc
     "input_contract", "public-core", "compiler_identity", "delivery_map_identity",
     "media_expectations_identity", "test_source", "test_executable", "desktop_binary",
     "route_metadata", "stdout", "stderr", "compiler_metadata", "raw_build_artifact_identities", "public-matrix"}
+CONTROL_CASE_IDS = ("title-no-start", "start-idle", "start-move", "action-sound",
+    "action-no-trigger", "sustained-play")
+CONTROL_FIELD_LOG_MAX_BYTES = 1024 * 1024
+CONTROL_FIELD_NAME = re.compile(
+    r"^build/v02/runtime/core-work/canonical-core-[A-Za-z0-9_-]{8}/controls-([12])/artifacts/"
+    r"(title-no-start|start-idle|start-move|action-sound|action-no-trigger|sustained-play)/"
+    r"headless/child\.stdout\.raw$")
 IDENTITY_REFERENCE_PATHS = {
     "public-core": "build/v02/runtime-build/tools/session/gw_headless",
     "compiler_identity": "scripts/evidence/phase6_routes.py",
@@ -120,8 +130,12 @@ def _runtime_member_allowed(name):
         return True
     if re.fullmatch(r"build/v02/runtime-observation/safety-build-evidence/(native|sanitize|hooks-off)\.json", name):
         return True
+    if _is_candidate_cmake_snapshot_name(name):
+        return True
     core_base = r"build/v02/runtime/core-work/canonical-core-[A-Za-z0-9_-]+/"
     if re.fullmatch(core_base + r"(?:candidate\.json|previous-report-before-new-batch\.json|failed-report-[0-9a-f]{16}\.json)", name):
+        return True
+    if CONTROL_FIELD_NAME.fullmatch(name):
         return True
     core_case = core_base + r"(?:recursion94|tank-battle)-[A-Za-z0-9_-]+-[12]/"
     if re.fullmatch(core_case + r"(?:route\.gwrc|native\.json|process\.json|run\.json|recovered-run\.json|audio\.pcm|audio-trace\.jsonl)", name):
@@ -157,6 +171,65 @@ def _runtime_member_allowed(name):
     }:
         return True
     return False
+
+
+def _is_candidate_cmake_snapshot_name(name):
+    return (isinstance(name, str) and re.fullmatch(
+        r"build/v02/runtime-build/evidence/build-provenance/[0-9a-f]{64}\.cmake", name) is not None)
+
+
+def _candidate_cmake_source_bindings(candidate):
+    if not isinstance(candidate, dict) or not isinstance(candidate.get("source_files"), dict):
+        raise ValueError("transfer-cmake-provenance-candidate-invalid")
+    rows = {}
+    for relative, digest in candidate["source_files"].items():
+        if not isinstance(relative, str):
+            raise ValueError("transfer-cmake-provenance-candidate-invalid")
+        if pathlib.PurePosixPath(relative).name == "CMakeLists.txt":
+            if relative not in CMAKE_PROVENANCE_SOURCE_PATHS or not _sha256_string(digest):
+                raise ValueError("transfer-cmake-provenance-candidate-invalid")
+            rows[relative] = digest
+    if set(rows) != set(CMAKE_PROVENANCE_SOURCE_PATHS):
+        raise ValueError("transfer-cmake-provenance-candidate-invalid")
+    return rows
+
+
+def _candidate_cmake_snapshot_path(digest):
+    return "build/v02/runtime-build/evidence/build-provenance/" + digest + ".cmake"
+
+
+def _verify_candidate_cmake_snapshot_graph(candidate, members, snapshots):
+    """Join only the two named build snapshots to trusted source bytes and candidate hashes."""
+    bindings = _candidate_cmake_source_bindings(candidate)
+    expected = {}
+    for relative, digest in bindings.items():
+        expected.setdefault(_candidate_cmake_snapshot_path(digest), []).append((relative, digest))
+    observed = {name for name in members if _is_candidate_cmake_snapshot_name(name)}
+    if observed != set(expected) or set(snapshots) != set(expected):
+        raise ValueError("transfer-cmake-provenance-roster-invalid")
+    for name, rows in expected.items():
+        facts = members.get(name)
+        snapshot_bytes = snapshots.get(name)
+        for source_path, digest in rows:
+            source_bytes = _read_owned_file_snapshot(ROOT, source_path,
+                label="candidate-cmake-source:" + source_path, max_bytes=CMAKE_PROVENANCE_MAX_BYTES)
+            if (not isinstance(facts, dict) or type(facts.get("size")) is not int
+                    or len(source_bytes) > CMAKE_PROVENANCE_MAX_BYTES
+                    or _sha(source_bytes) != digest
+                    or not isinstance(snapshot_bytes, bytes)
+                    or snapshot_bytes != source_bytes
+                    or facts.get("sha256") != digest
+                    or facts["size"] != len(source_bytes)):
+                raise ValueError("transfer-cmake-provenance-binding-invalid:" + source_path)
+
+
+def _read_candidate_cmake_source(root, root_fd, relative, digest):
+    source_bytes = _read_owned_file_snapshot(root, relative,
+        label="candidate-cmake-source:" + relative,
+        max_bytes=CMAKE_PROVENANCE_MAX_BYTES, root_fd=root_fd)
+    if _sha(source_bytes) != digest:
+        raise ValueError("transfer-cmake-provenance-source-mismatch:" + relative)
+    return source_bytes
 
 
 def _package_member_allowed(name):
@@ -301,6 +374,10 @@ def _role_allows(role, name):
         return name == identity_path
     if not _runtime_member_allowed(name):
         return False
+    # These files are included only by resolving candidate.source_files below.
+    # A report path/ref cannot broaden the exact build-input snapshot roster.
+    if _is_candidate_cmake_snapshot_name(name):
+        return False
     direct_roles = {
         "core": "build/v02/runtime-observation/core-report.json",
         "media": "build/v02/runtime-observation/media-report.json",
@@ -394,11 +471,15 @@ def _validate_hash_metadata(role, value):
             r"headless/child\." + role_suffix + r"\.raw"
         )
         observed, retained = value.get("observed_bytes"), value.get("retained_bytes")
-        return (set(value) == expected and isinstance(relative, str)
-                and re.fullmatch(stream_path, relative) is not None
-                and type(observed) is int and observed >= 0 and type(retained) is int
-                and 0 <= retained <= observed and isinstance(value.get("truncated"), bool)
-                and (value["truncated"] or retained == observed))
+        if (set(value) != expected or not isinstance(relative, str)
+                or type(observed) is not int or observed < 0 or type(retained) is not int
+                or retained < 0 or not isinstance(value.get("truncated"), bool)):
+            return False
+        if role == "stdout" and CONTROL_FIELD_NAME.fullmatch(relative):
+            return (observed == retained and observed <= CONTROL_FIELD_LOG_MAX_BYTES
+                    and value["truncated"] is False)
+        return (re.fullmatch(stream_path, relative) is not None
+                and retained <= observed and (value["truncated"] or retained == observed))
     if "path" in value:
         return False
     if role == "route_metadata":
@@ -466,6 +547,8 @@ def _classify_reference(role, value):
         if not _validate_hash_metadata(role, value):
             raise ValueError("transfer-hash-metadata-invalid:" + role)
         if "path" in value:
+            if role == "stdout" and CONTROL_FIELD_NAME.fullmatch(value["path"]):
+                return "control-field-log"
             return "stream"
         if role in {"compiler_metadata", "raw_build_artifact_identities"}:
             return "build-identity"
@@ -478,6 +561,252 @@ def _classify_reference(role, value):
             or not _role_allows(role, value["path"])):
         raise ValueError("transfer-reference-role-or-identity-invalid:" + role)
     return "artifact"
+
+
+def _control_case_contract():
+    """Load and pin the public control IDs and expected field counts from their fixture source."""
+    source = _read_owned_file_snapshot(ROOT, "fixtures/independent-game-v2/scenario.json",
+        label="canonical-independent-game-control-scenarios", max_bytes=MAX_FILE_BYTES)
+    try:
+        document = json.loads(source)
+        cases = document["cases"]
+        if (not isinstance(document, dict) or document.get("schema_version") != 1
+                or document.get("fixture_id") != "genewhip-independent-game-v2"
+                or not isinstance(cases, list)):
+            raise ValueError("transfer-control-field-source-invalid")
+        rows = {}
+        for case in cases:
+            if (not isinstance(case, dict) or not isinstance(case.get("id"), str)
+                    or type(case.get("frames")) is not int or case["frames"] <= 0
+                    or case["id"] in rows):
+                raise ValueError("transfer-control-field-source-invalid")
+            rows[case["id"]] = case["frames"]
+    except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+        raise ValueError("transfer-control-field-source-invalid") from error
+    if tuple(rows) != CONTROL_CASE_IDS:
+        raise ValueError("transfer-control-field-source-invalid")
+    return document, rows, _sha(source)
+
+
+def _control_field_log_name(name):
+    match = CONTROL_FIELD_NAME.fullmatch(name) if isinstance(name, str) else None
+    if match is None:
+        return None
+    parts = pathlib.PurePosixPath(name).parts
+    return {"repetition": int(match.group(1)), "case": match.group(2),
+        "prefix": "/".join(parts[:5])}
+
+
+def _json_object_no_duplicates(pairs):
+    value = {}
+    for key, child in pairs:
+        if key in value:
+            raise ValueError("duplicate-json-key")
+        value[key] = child
+    return value
+
+
+def _reject_json_constant(_value):
+    raise ValueError("nonfinite-json-number")
+
+
+def _validate_control_field_log(name, data):
+    """Validate the exact line grammar emitted by the three session.c field-log writers."""
+    contract = _control_field_log_name(name)
+    if contract is None or not isinstance(data, bytes) or not data or len(data) > CONTROL_FIELD_LOG_MAX_BYTES:
+        raise ValueError("transfer-control-field-log-path-or-size-invalid")
+    _source, case_frames, _source_sha256 = _control_case_contract()
+    expected_fields = case_frames[contract["case"]]
+    if not data.endswith(b"\n") or b"\r" in data:
+        raise ValueError("transfer-control-field-log-line-ending-invalid")
+    lines = data.splitlines(keepends=True)
+    if len(lines) != expected_fields + 2 or any(line == b"\n" for line in lines):
+        raise ValueError("transfer-control-field-log-row-count-invalid")
+    field_keys = ("sequence", "width", "height", "pitch_bytes", "end_tick", "fnv1a64")
+    final_keys = ("fields", "ram_fnv1a64", "peek", "unsupported", "stop_reason",
+        "instruction_address", "opcode", "fault_address")
+    audio_keys = ("audio_rate_hz", "mix_id", "filter_id", "frames", "lost", "clipped",
+        "complete", "fnv1a64")
+    uint64_max = (1 << 64) - 1
+    uint32_max = (1 << 32) - 1
+
+    def parse_line(raw):
+        if not raw.endswith(b"\n") or raw.count(b"\n") != 1:
+            raise ValueError("transfer-control-field-log-line-invalid")
+        try:
+            value = json.loads(raw[:-1].decode("utf-8", "strict"),
+                object_pairs_hook=_json_object_no_duplicates, parse_constant=_reject_json_constant)
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+            raise ValueError("transfer-control-field-log-json-invalid") from error
+        if not isinstance(value, dict):
+            raise ValueError("transfer-control-field-log-row-not-object")
+        return value
+
+    previous_tick = -1
+    for index, raw in enumerate(lines[:expected_fields]):
+        row = parse_line(raw)
+        if tuple(row) != field_keys:
+            raise ValueError("transfer-control-field-log-field-shape-invalid")
+        if (type(row["sequence"]) is not int or row["sequence"] != index
+                or type(row["width"]) is not int or row["width"] != 256
+                or type(row["height"]) is not int or row["height"] != 224
+                or type(row["pitch_bytes"]) is not int or row["pitch_bytes"] != 1280
+                or type(row["end_tick"]) is not int or not 0 <= row["end_tick"] <= uint64_max
+                or row["end_tick"] <= previous_tick
+                or not isinstance(row["fnv1a64"], str)
+                or re.fullmatch(r"[0-9a-f]{16}", row["fnv1a64"]) is None):
+            raise ValueError("transfer-control-field-log-field-value-invalid")
+        previous_tick = row["end_tick"]
+
+    final = parse_line(lines[expected_fields])
+    if tuple(final) != final_keys:
+        raise ValueError("transfer-control-field-log-final-shape-invalid")
+    if (type(final["fields"]) is not int or final["fields"] != expected_fields
+            or not isinstance(final["ram_fnv1a64"], str)
+            or re.fullmatch(r"[0-9a-f]{16}", final["ram_fnv1a64"]) is None
+            or not isinstance(final["peek"], str)
+            or re.fullmatch(r"[0-9a-f]{8}", final["peek"]) is None
+            or any(type(final[key]) is not int or not 0 <= final[key] <= uint32_max
+                for key in final_keys[4:])
+            or type(final["unsupported"]) is not int or final["unsupported"] not in (0, 1)):
+        raise ValueError("transfer-control-field-log-final-value-invalid")
+
+    audio = parse_line(lines[expected_fields + 1])
+    if tuple(audio) != audio_keys:
+        raise ValueError("transfer-control-field-log-audio-shape-invalid")
+    if (type(audio["audio_rate_hz"]) is not int or audio["audio_rate_hz"] != 48000
+            or any(type(audio[key]) is not int or not 0 <= audio[key] <= uint32_max
+                for key in ("mix_id", "filter_id"))
+            or any(type(audio[key]) is not int or not 0 <= audio[key] <= uint64_max
+                for key in ("frames", "lost", "clipped"))
+            or audio["complete"] is not True
+            or not isinstance(audio["fnv1a64"], str)
+            or re.fullmatch(r"[0-9a-f]{16}", audio["fnv1a64"]) is None):
+        raise ValueError("transfer-control-field-log-audio-value-invalid")
+
+
+def _validate_control_stdout_reference(document_name, value):
+    info = _control_field_log_name(value.get("path"))
+    parent = re.fullmatch(
+        r"(build/v02/runtime/core-work/canonical-core-[A-Za-z0-9_-]{8})/controls-([12])/control\.json",
+        document_name or "")
+    if (info is None or parent is None or info["prefix"] != parent.group(1)
+            or info["repetition"] != int(parent.group(2))):
+        raise ValueError("transfer-control-field-log-report-binding-invalid")
+
+
+def _validate_control_report(document_name, document):
+    match = re.fullmatch(
+        r"(build/v02/runtime/core-work/canonical-core-[A-Za-z0-9_-]{8})/controls-([12])/control\.json",
+        document_name or "")
+    if match is None:
+        return
+    result_rows = document.get("results")
+    native_rows = document.get("native_child_processes")
+    has_typed_field_log = (
+        isinstance(result_rows, list)
+        and any(isinstance(row, dict)
+            and isinstance(row.get("process_streams"), dict)
+            and isinstance(row["process_streams"].get("stdout"), dict)
+            and _control_field_log_name(row["process_streams"]["stdout"].get("path")) is not None
+            for row in result_rows)
+    ) or (
+        isinstance(native_rows, list)
+        and any(isinstance(row, dict)
+            and isinstance(row.get("streams"), dict)
+            and isinstance(row["streams"].get("stdout"), dict)
+            and _control_field_log_name(row["streams"]["stdout"].get("path")) is not None
+            for row in native_rows)
+    )
+    if not has_typed_field_log:
+        return
+    scenario, case_frames, scenario_sha256 = _control_case_contract()
+    if (document.get("schema") != "genewhip-phase4-gameplay-v1"
+            or document.get("fixture_id") != scenario["fixture_id"]
+            or document.get("source_sha256") != scenario["source"]["sha256"]
+            or document.get("rom_sha256") != scenario["rom"]["sha256"]
+            or document.get("scenario_sha256") != scenario_sha256):
+        raise ValueError("transfer-control-field-report-source-binding-invalid")
+    results = document.get("results")
+    native = document.get("native_child_processes")
+    if (not isinstance(results, list) or not isinstance(native, list)
+            or [row.get("id") for row in results if isinstance(row, dict)] != list(CONTROL_CASE_IDS)
+            or [row.get("case") for row in native if isinstance(row, dict)] != list(CONTROL_CASE_IDS)
+            or len(results) != len(CONTROL_CASE_IDS) or len(native) != len(CONTROL_CASE_IDS)):
+        raise ValueError("transfer-control-field-report-case-roster-invalid")
+    repetition = int(match.group(2))
+    for result, child in zip(results, native):
+        case_id = result["id"]
+        expected_path = (match.group(1) + f"/controls-{repetition}/artifacts/{case_id}/"
+            "headless/child.stdout.raw")
+        expected_fields = case_frames[case_id]
+        process_streams = result.get("process_streams")
+        child_streams = child.get("streams")
+        stdout = process_streams.get("stdout") if isinstance(process_streams, dict) else None
+        child_stdout = child_streams.get("stdout") if isinstance(child_streams, dict) else None
+        process = result.get("process")
+        if (not isinstance(stdout, dict) or stdout != child_stdout
+                or stdout.get("path") != expected_path or stdout.get("truncated") is not False
+                or type(stdout.get("observed_bytes")) is not int
+                or stdout["observed_bytes"] != stdout.get("retained_bytes")
+                or stdout["observed_bytes"] > CONTROL_FIELD_LOG_MAX_BYTES
+                or not _sha256_string(stdout.get("sha256"))
+                or result.get("fields") != expected_fields
+                or not isinstance(process, dict)
+                or process.get("stdout_sha256") != stdout["sha256"]
+                or process.get("stdout_bytes") != stdout["observed_bytes"]
+                or child.get("stdout_sha256") != stdout["sha256"]
+                or child.get("stdout_bytes") != stdout["observed_bytes"]):
+            raise ValueError("transfer-control-field-report-stream-binding-invalid:" + case_id)
+
+
+def _validate_control_field_log_graph(documents, members):
+    """Join the 12 field logs to their paired control reports and one candidate prefix."""
+    field_names = {name for name in members if _control_field_log_name(name) is not None}
+    if not field_names:
+        return
+    control_names = {name for name in documents if name.endswith("/control.json")
+        and re.fullmatch(r"build/v02/runtime/core-work/canonical-core-[A-Za-z0-9_-]{8}/controls-[12]/control\.json", name)}
+    if len(field_names) != 12 or len(control_names) != 2:
+        raise ValueError("transfer-control-field-log-roster-incomplete")
+    prefix = next(iter(_control_field_log_name(name)["prefix"] for name in field_names))
+    expected_controls = {prefix + "/controls-1/control.json", prefix + "/controls-2/control.json"}
+    if control_names != expected_controls:
+        raise ValueError("transfer-control-field-log-prefix-roster-invalid")
+    _scenario, _case_frames, _scenario_sha256 = _control_case_contract()
+    expected_names = {prefix + f"/controls-{repetition}/artifacts/{case}/headless/child.stdout.raw"
+        for repetition in (1, 2) for case in CONTROL_CASE_IDS}
+    if field_names != expected_names:
+        raise ValueError("transfer-control-field-log-case-roster-invalid")
+    per_case = {}
+    for name in sorted(control_names):
+        document = documents[name]
+        _validate_control_report(name, document)
+        for result in document["results"]:
+            ref = result["process_streams"]["stdout"]
+            facts = (ref["sha256"], ref["observed_bytes"])
+            prior = per_case.setdefault(result["id"], facts)
+            if prior != facts:
+                raise ValueError("transfer-control-field-log-repeat-digest-mismatch:" + result["id"])
+    core_report_name = "build/v02/runtime-observation/core-report.json"
+    core_report = documents.get(core_report_name)
+    if not isinstance(core_report, dict):
+        raise ValueError("transfer-control-field-log-core-report-missing")
+    candidate_ref = core_report.get("candidate_manifest")
+    control_refs = core_report.get("controls")
+    expected_candidate = prefix + "/candidate.json"
+    if (not isinstance(candidate_ref, dict) or candidate_ref.get("path") != expected_candidate
+            or expected_candidate not in members
+            or not isinstance(control_refs, list) or len(control_refs) != 2
+            or {row.get("path") for row in control_refs if isinstance(row, dict)} != expected_controls
+            or any(members.get(row["path"], {}).get("sha256") != row.get("sha256")
+                for row in control_refs if isinstance(row, dict))):
+        raise ValueError("transfer-control-field-log-candidate-prefix-binding-invalid")
+    candidate_document = documents.get(expected_candidate)
+    if (not isinstance(candidate_document, dict)
+            or candidate_document.get("schema") != "genewhip-phase6-candidate-v1"
+            or members.get(expected_candidate, {}).get("sha256") != candidate_ref.get("sha256")):
+        raise ValueError("transfer-control-field-log-candidate-prefix-binding-invalid")
 
 
 def _verify_identity_reference(root, role, value, *, root_fd=None):
@@ -863,15 +1192,21 @@ def _validate_references(value, members, role="", *, document_name=None,
         return
     if isinstance(value, dict):
         classification = _classify_reference(role, value)
-        if classification == "artifact":
+        if classification in {"artifact", "control-field-log"}:
             relative, digest = value["path"], value["sha256"]
             if relative not in members or members[relative].get("sha256") != digest:
                 raise ValueError("transfer-reference-role-or-identity-invalid:" + role)
+            if classification == "control-field-log":
+                _validate_control_stdout_reference(document_name, value)
+                if (type(value.get("observed_bytes")) is not int
+                        or value["observed_bytes"] != value.get("retained_bytes")
+                        or members[relative].get("size") != value["observed_bytes"]):
+                    raise ValueError("transfer-control-field-log-size-binding-invalid")
         for key, child in value.items():
-            _validate_references(child, members, key)
+            _validate_references(child, members, key, document_name=document_name)
     elif isinstance(value, list):
         for child in value:
-            _validate_references(child, members, role)
+            _validate_references(child, members, role, document_name=document_name)
 
 
 def _load_benchmark_module():
@@ -1269,7 +1604,9 @@ def _collect(root, *, captured_bytes=None):
     root = pathlib.Path(root).resolve(strict=True)
     root_path, root_fd = _open_trusted_root(root, "collection")
     found = {}
+    documents = {}
     visited = set()
+    cmake_snapshot_data = {}
     total = 0
 
     def add(name, expected=None, depth=0, role=None):
@@ -1280,7 +1617,9 @@ def _collect(root, *, captured_bytes=None):
         if prior is not None:
             if expected is not None and prior["sha256"] != expected:
                 raise ValueError("transfer-reference-digest-mismatch:" + name)
-            return
+            if captured_bytes is not None:
+                return captured_bytes.get(name)
+            return cmake_snapshot_data.get(name)
         if len(found) >= MAX_MEMBERS:
             raise ValueError("transfer-member-count-limit")
         remaining = MAX_TOTAL_BYTES - total
@@ -1299,24 +1638,53 @@ def _collect(root, *, captured_bytes=None):
         _scan(name, data)
         if name.endswith(".bin") and len(data) != 320 * 224 * 4:
             raise ValueError("transfer-field-image-size-invalid")
+        if _control_field_log_name(name) is not None:
+            _validate_control_field_log(name, data)
         found[name] = {"sha256": digest, "size": len(data)}
         total += len(data)
         if captured_bytes is not None:
             captured_bytes[name] = data
+        if _is_candidate_cmake_snapshot_name(name):
+            cmake_snapshot_data[name] = data
+        if name.endswith(".json"):
+            document = json.loads(data)
+            documents[name] = document
+            _validate_control_report(name, document)
         if name.endswith(".json") and name not in visited and depth < 4:
             visited.add(name)
-            _validate_references(json.loads(data), found, document_name=name,
+            _validate_references(document, found, document_name=name,
                 document_bytes=data,
-                reference_visitor=lambda document: visit(document, depth + 1))
+                reference_visitor=lambda value: visit(value, depth + 1, document_name=name))
+        if name == RUNTIME_CANDIDATE_MEMBER:
+            bindings = _candidate_cmake_source_bindings(json.loads(data))
+            for source_path, digest in bindings.items():
+                source_bytes = _read_candidate_cmake_source(root_path, root_fd,
+                    source_path, digest)
+                snapshot_name = _candidate_cmake_snapshot_path(digest)
+                snapshot_bytes = add(snapshot_name, expected=digest, depth=depth,
+                    role="candidate-cmake-provenance")
+                if snapshot_bytes != source_bytes:
+                    raise ValueError("transfer-cmake-provenance-binding-invalid:" + source_path)
         if len(found) > MAX_MEMBERS:
             raise ValueError("transfer-member-count-limit")
+        return data
 
-    def visit(value, depth, role=""):
+    def visit(value, depth, role="", document_name=None):
         if isinstance(value, dict):
             classification = _classify_reference(role, value)
             if classification == "artifact":
                 relative, digest = value["path"], value["sha256"]
                 add(relative, digest, depth, role=role)
+            elif classification == "control-field-log":
+                _validate_control_stdout_reference(document_name, value)
+                prior = found.get(value["path"])
+                if prior is None:
+                    captured = add(value["path"], value["sha256"], depth, role=role)
+                    captured_size = len(captured)
+                else:
+                    captured_size = prior["size"]
+                if captured_size != value["observed_bytes"]:
+                    raise ValueError("transfer-control-field-log-size-binding-invalid")
             elif classification == "identity":
                 _verify_identity_reference(root_path, role, value, root_fd=root_fd)
             elif classification == "stream":
@@ -1324,10 +1692,10 @@ def _collect(root, *, captured_bytes=None):
             elif classification == "build-identity":
                 _verify_build_identity_reference(root_path, role, value, root_fd=root_fd)
             for key, child in value.items():
-                visit(child, depth, key)
+                visit(child, depth, key, document_name=document_name)
         elif isinstance(value, list):
             for child in value:
-                visit(child, depth, role)
+                visit(child, depth, role, document_name=document_name)
 
     try:
         direct = list(DIRECT_MEMBERS)
@@ -1336,6 +1704,7 @@ def _collect(root, *, captured_bytes=None):
             direct.append("build/v02/public/execution-identity.json")
         for name in direct:
             add(name, depth=0)
+        _validate_control_field_log_graph(documents, found)
     finally:
         os.close(root_fd)
     return dict(sorted(found.items())), total
@@ -1410,6 +1779,9 @@ def verify(payload_root, inventory_path, *, captured_bytes=None):
     if actual_dirs != expected_dirs:
         raise ValueError("transfer-unlisted-directory")
     root_path, root_fd = _open_trusted_root(payload_root, "runtime-transfer-receiver")
+    candidate_document = None
+    documents = {}
+    candidate_cmake_snapshot_bytes = {}
     try:
         for name, facts in members.items():
             path = pathlib.PurePosixPath(name)
@@ -1436,14 +1808,26 @@ def verify(payload_root, inventory_path, *, captured_bytes=None):
             if _sha(data) != facts["sha256"]:
                 raise ValueError("transfer-member-identity-invalid:" + name)
             _scan(name, data)
+            if _control_field_log_name(name) is not None:
+                _validate_control_field_log(name, data)
             if name.endswith(".json"):
-                _validate_references(json.loads(data), members,
+                document = json.loads(data)
+                documents[name] = document
+                _validate_control_report(name, document)
+                _validate_references(document, members,
                     document_name=name, document_bytes=data)
+                if name == RUNTIME_CANDIDATE_MEMBER:
+                    candidate_document = document
+            if _is_candidate_cmake_snapshot_name(name):
+                candidate_cmake_snapshot_bytes[name] = data
             if name.endswith(".bin") and len(data) != 320 * 224 * 4:
                 raise ValueError("transfer-field-image-size-invalid")
             total += len(data)
             if captured_bytes is not None:
                 captured_bytes[name] = data
+        _verify_candidate_cmake_snapshot_graph(candidate_document, members,
+            candidate_cmake_snapshot_bytes)
+        _validate_control_field_log_graph(documents, members)
         _check_root_binding(root_path, root_fd, "runtime-transfer-receiver")
     finally:
         os.close(root_fd)

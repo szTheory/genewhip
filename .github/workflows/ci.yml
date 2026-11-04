@@ -425,6 +425,7 @@ jobs:
       base_sha: ${{ inputs.qualification_base_sha || github.event.before || github.sha }}
       run_id: ${{ github.run_id }}
       run_attempt: ${{ github.run_attempt }}
+      runtime_identity_sha256: ${{ steps.runtime_identity_anchor.outputs.sha256 }}
     steps:
       - name: Capture queue-aware job start before checkout
         id: native_prefix_queue_clock
@@ -703,6 +704,35 @@ jobs:
           python3 -I scripts/release/v02_qualification.py --mode native-prefix-diagnostic
           --build build/v02/runtime-build --scope "$GENEWHIP_QUALIFICATION_SCOPE_PATH"
           --out build/v02/native-prefix-diagnostic.json
+      - name: Bind runtime identity separately from transferred reports
+        id: runtime_identity_anchor
+        if: inputs.native_diagnostic_case != 'recursion94-withhold-first-plate' && inputs.native_diagnostic_case != 'recursion94-native-prefix' && inputs.native_diagnostic_case != 'original-control'
+        run: |
+          python3 -I - <<'PY'
+          import hashlib, os, pathlib, stat
+          path = pathlib.Path("build/v02/runtime-identity.json")
+          descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+          try:
+              before = os.fstat(descriptor)
+              if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or not 0 < before.st_size <= 1048576:
+                  raise SystemExit("invalid runtime identity file")
+              raw = os.read(descriptor, 1048577)
+              after = os.fstat(descriptor)
+              if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns) or len(raw) != before.st_size:
+                  raise SystemExit("runtime identity changed")
+          finally:
+              os.close(descriptor)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("sha256=" + hashlib.sha256(raw).hexdigest() + "\n")
+          PY
+      - name: Retain the separate trusted runtime identity
+        if: inputs.native_diagnostic_case != 'recursion94-withhold-first-plate' && inputs.native_diagnostic_case != 'recursion94-native-prefix' && inputs.native_diagnostic_case != 'original-control'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v02-runtime-identity-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/v02/runtime-identity.json
+          if-no-files-found: error
+          retention-days: 30
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: inputs.native_diagnostic_case != 'recursion94-withhold-first-plate' && inputs.native_diagnostic_case != 'recursion94-native-prefix' && inputs.native_diagnostic_case != 'original-control'
         with:
@@ -860,6 +890,7 @@ jobs:
     env:
       GENEWHIP_QUALIFICATION_PHASE: package
       GITHUB_BASE_SHA: ${{ inputs.qualification_base_sha }}
+      GENEWHIP_QUALIFICATION_RUNTIME_IDENTITY_SHA256: ${{ needs.v02-runtime.outputs.runtime_identity_sha256 }}
     permissions:
       contents: read
       actions: read
@@ -981,6 +1012,7 @@ jobs:
     env:
       GENEWHIP_QUALIFICATION_PHASE: package
       GITHUB_BASE_SHA: ${{ inputs.qualification_base_sha }}
+      GENEWHIP_QUALIFICATION_RUNTIME_IDENTITY_SHA256: ${{ needs.v02-runtime.outputs.runtime_identity_sha256 }}
     permissions:
       contents: read
       actions: read

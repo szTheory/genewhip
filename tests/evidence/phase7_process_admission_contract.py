@@ -143,7 +143,7 @@ class ProcessAdmissionContract(unittest.TestCase):
             self.assertIn("process-host-admission-required", attempt["launch_error"])
             self.assertEqual(attempt["processes"], [])
             self.assertIsNone(attempt["returncode"])
-            with self.assertRaisesRegex(ValueError, "hosted-delivery-command-unavailable"):
+            with self.assertRaisesRegex(ValueError, "hosted-delivery-command-failed:no-client"):
                 self.coordinator._external([str(self.client)], cwd=self.root, timeout=1)
         self.assertEqual(len(DENIED), self.denials_before)
 
