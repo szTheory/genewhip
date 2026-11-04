@@ -497,6 +497,127 @@ class V02DownloadContract(unittest.TestCase):
                 qualify_delivery._run_v02_download_docs(command, ROOT / "build/v02/downloads")
         launch.assert_not_called()
 
+    def test_download_docs_forwards_authorized_file_cap(self):
+        from scripts.release import v02_qualification as coordinator
+        scope_path = ROOT / "evidence/v02-phase7-authorized-execution-scope.json"
+        scope = json.loads(scope_path.read_text())
+        cap = scope["per_child_limits"]["max_binary_file_bytes"]
+        scope_sha = hashlib.sha256(scope_path.read_bytes()).hexdigest()
+        calls = []
+        def fake_external(argv, **kwargs):
+            calls.append((argv, kwargs))
+            return __import__("subprocess").CompletedProcess(argv, 0, "", "")
+        with mock.patch.dict(os.environ, {
+                "GENEWHIP_QUALIFICATION_SCOPE_PATH": "evidence/v02-phase7-authorized-execution-scope.json",
+                "GENEWHIP_QUALIFICATION_SCOPE_SHA256": scope_sha}, clear=True), \
+                mock.patch.object(promote, "execution_window_active", return_value=True), \
+                mock.patch.object(promote, "execution_window_timeout", return_value=900), \
+                mock.patch.object(coordinator, "_external", side_effect=fake_external):
+            command = [sys.executable, "docs_commands.py", "--verify"]
+            qualify_delivery._run_v02_download_docs(command, ROOT / "build/v02/downloads")
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0], command)
+        self.assertEqual(calls[0][1]["file_size_limit_bytes"], cap)
+        self.assertLessEqual(cap, 2 * 1024**3)
+        self.assertEqual(calls[0][1]["phase"], "close")
+        self.assertFalse(calls[0][1]["check"])
+
+    def test_docs_anchor_forwards_public_cap_and_route_receipt_sink(self):
+        spec = importlib.util.spec_from_file_location(
+            "gw_v02_materialization_docs_contract", ROOT / "tests/package/docs_commands.py")
+        docs = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(docs)
+        scope = json.loads((ROOT / "evidence/v02-phase7-authorized-execution-scope.json").read_text())
+        cap = scope["per_child_limits"]["max_binary_file_bytes"]
+        calls = []
+        def fake_client(_client, command, runs, **kwargs):
+            calls.append(kwargs)
+            runs.append({"process_group_cleanup": "confirmed"})
+            return __import__("subprocess").CompletedProcess(command, 0, "", "")
+        with tempfile.TemporaryDirectory(prefix="v02-anchor-cap-") as temporary:
+            scratch = pathlib.Path(temporary) / "scratch"
+            scratch.mkdir()
+            scratch_without_cap = pathlib.Path(temporary) / "scratch-without-cap"
+            scratch_without_cap.mkdir()
+            runs = []
+            runs_without_cap = []
+            with mock.patch.object(docs.platform, "system", return_value="Darwin"), \
+                    mock.patch.object(docs.shutil, "which", return_value="/usr/bin/sandbox-exec"), \
+                    mock.patch.object(docs, "validate_anchor_command", return_value="true"), \
+                    mock.patch.object(docs, "_phase7_child_limits", return_value=scope["per_child_limits"]), \
+                    mock.patch.object(docs._ROUTE, "_run_client", side_effect=fake_client), \
+                    mock.patch.object(docs, "persist_bounded_output"):
+                docs.run_bounded_anchor(ROOT / "README.md", "v02-play", {}, scratch, runs,
+                    file_size_limit_bytes=cap)
+                self.assertEqual(calls[-1]["file_size_limit_bytes"], cap)
+                docs.run_bounded_anchor(ROOT / "README.md", "v02-play", {},
+                    scratch_without_cap, runs_without_cap)
+                self.assertNotIn("file_size_limit_bytes", calls[-1])
+        # Verify the actual route boundary persists the receipt and forwards the cap.
+        receipts = []
+        runs = []
+        def fake_owned(_client, command, owned_runs, **kwargs):
+            owned_runs.append({"pid": 321, "pgid": 321, "process_group_cleanup": "confirmed"})
+            kwargs["_ownership_callback"]()
+            return __import__("subprocess").CompletedProcess(command, 0, "", "")
+        with tempfile.TemporaryFile(mode="w+") as sink, \
+                mock.patch.object(docs._ROUTE, "require_host_process_context"), \
+                mock.patch.object(docs._ROUTE, "_run_client_owned", side_effect=fake_owned) as owned:
+            docs._ROUTE._run_client(pathlib.Path("client"), ["client"], runs,
+                report=pathlib.Path("report.json"), timeout=1, process_receipt_stream=sink,
+                ownership_callback=receipts.append, file_size_limit_bytes=cap)
+            self.assertEqual(owned.call_args.kwargs["file_size_limit_bytes"], cap)
+            self.assertEqual(receipts, runs)
+            sink.seek(0)
+            self.assertEqual(json.load(sink)["processes"], runs)
+        self.assertEqual(docs._ROUTE.MAX_TRACE_BYTES, 16 * 1024**2)
+
+    def test_run_v02_uses_cap_only_for_public_download_not_local_mode(self):
+        spec = importlib.util.spec_from_file_location(
+            "gw_v02_materialization_docs_mode", ROOT / "tests/package/docs_commands.py")
+        docs = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(docs)
+        source = "a" * 40
+        names = {"sdk": f"genewhip-0.2.0-sdk-diagnostic-darwin-arm64-{source[:12]}.tar.gz",
+            "desktop": f"genewhip-0.2.0-playable-preview-macos-arm64-{source[:12]}.tar.gz"}
+        digests = {names["sdk"]: "b" * 64, names["desktop"]: "c" * 64}
+        scope = json.loads((ROOT / "evidence/v02-phase7-authorized-execution-scope.json").read_text())
+        cap = scope["per_child_limits"]["max_binary_file_bytes"]
+        with tempfile.TemporaryDirectory(prefix="v02-run-cap-", dir=ROOT) as temporary:
+            root = pathlib.Path(temporary); artifact_dir = root / "release-inputs"; artifact_dir.mkdir()
+            packet_path = root / "publisher-packet.json"
+            packet = {"source_sha": source, "repository": "szTheory/genewhip", "release_tag": "v0.2.0",
+                "asset_digests": digests}
+            packet_path.write_text(json.dumps(packet))
+            artifacts = {role: {"archive": artifact_dir / names[role], "sha256": digests[names[role]],
+                "source_revision": source, "receipt_path": artifact_dir / (names[role] + ".receipt"),
+                "receipt": {"source_state": "clean", "public_evidence_digest": "d" * 64}} for role in names}
+            package_root = root / "extracted"; package_root.mkdir(); caps = []
+            def anchor(_md, _anchor, _env, _scratch, runs, **kwargs):
+                caps.append(kwargs.get("file_size_limit_bytes")); runs.append({"process_group_cleanup":"confirmed"}); return ""
+            def extract(_archive, _files, _package_root, _out):
+                rom=package_root/"share/genewhip/tank-battle.bin";rom.parent.mkdir(parents=True,exist_ok=True)
+                rom.write_bytes(b"fixture");return package_root
+            def public_archive(_directory, _name, role, _source): return artifacts[role]
+            def local_archive(_directory, role, _expected, _state): return artifacts[role]
+            def release(_release, _repo, _tag, _directory, _source, _version):
+                return {"assets":[{"name":n,"sha256":d} for n,d in digests.items()]}
+            with mock.patch.object(docs._DELIVERY,"validate_v02_publisher_packet",return_value=[]), \
+                    mock.patch.object(docs._DELIVERY,"authenticate_v02_publisher_packet",return_value={"release":{}}), \
+                    mock.patch.object(docs._DELIVERY,"verify_v02_subject_attestations"), \
+                    mock.patch.object(docs._DELIVERY,"validate_release",side_effect=release), \
+                    mock.patch.object(docs.subprocess,"check_output",return_value=source), \
+                    mock.patch.object(docs,"verify_public_archive",side_effect=public_archive), \
+                    mock.patch.object(docs,"_select_local_archive",side_effect=local_archive), \
+                    mock.patch.object(docs,"run_bounded_anchor",side_effect=anchor), \
+                    mock.patch.object(docs._DESKTOP,"validate_v02_archive",return_value=([],[],package_root)), \
+                    mock.patch.object(docs._DESKTOP,"extract_verified",side_effect=extract), \
+                    mock.patch.object(docs._DESKTOP._PACKAGE,"check_staged_inventory"), \
+                    mock.patch.object(docs,"_phase7_child_limits",return_value=scope["per_child_limits"]):
+                result=docs.run_v02(artifact_dir,expected_source=source,offline=True,public_download=True,
+                    publisher_packet=packet_path)
+
+
     def test_failed_actual_adoption_writes_external_nonqualified_receipt(self):
         packet = copy.deepcopy(self.packet)
         inventory = b"synthetic inventory after publisher authentication"

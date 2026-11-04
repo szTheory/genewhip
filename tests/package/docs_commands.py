@@ -352,9 +352,14 @@ def _redacted_output_tail(streams, scratch):
 
 
 def run_bounded_anchor(markdown_path, anchor, env, scratch, process_runs, *, offline=True,
-                       monitored_files=()):
+                       monitored_files=(), file_size_limit_bytes=None):
     if not offline or platform.system() != "Darwin" or not shutil.which("sandbox-exec"):
         raise ValueError("required-network-denial-capability-unavailable")
+    if file_size_limit_bytes is not None:
+        declared_cap = _phase7_child_limits().get("max_binary_file_bytes")
+        if (type(file_size_limit_bytes) is not int or file_size_limit_bytes <= 0
+                or type(declared_cap) is not int or file_size_limit_bytes > declared_cap):
+            raise ValueError("docs-binary-file-limit-invalid")
     block = validate_anchor_command(pathlib.Path(markdown_path).read_text(), anchor, env.keys())
     home = scratch.parent / (scratch.name + "-empty-home")
     cache = scratch.parent / (scratch.name + "-empty-cache")
@@ -374,11 +379,15 @@ def run_bounded_anchor(markdown_path, anchor, env, scratch, process_runs, *, off
     scratch_diagnostics = []
     streams = {}
     try:
+        client_options = {"report": report, "timeout": 600, "cwd": ROOT,
+                          "env": command_env, "retained_streams": streams,
+                          "monitored_files": tuple(monitored_files),
+                          "limits": _phase7_child_limits(), "scratch_roots": (scratch,),
+                          "scratch_diagnostics": scratch_diagnostics}
+        if file_size_limit_bytes is not None:
+            client_options["file_size_limit_bytes"] = file_size_limit_bytes
         result = _ROUTE._run_client(pathlib.Path(command[0]), command, process_runs,
-                                   report=report, timeout=600, cwd=ROOT, env=command_env,
-                                   retained_streams=streams, monitored_files=tuple(monitored_files),
-                                   limits=_phase7_child_limits(), scratch_roots=(scratch,),
-                                   scratch_diagnostics=scratch_diagnostics)
+                                   **client_options)
     except BaseException:
         process = process_runs[-1] if process_runs else {"status": "runner-failed-before-launch"}
         if scratch_diagnostics:
@@ -463,6 +472,10 @@ def run_v02(artifact_dir, *, expected_source=None, refresh_local=False, offline=
         local_source_identity = None
     process_runs = []
     outputs = {}
+    # Only a public release-download adoption gets the existing binary-file cap.
+    # Local and ordinary docs runs omit it and keep the legacy 16 MiB child limit.
+    materialization_file_limit = (_phase7_child_limits()["max_binary_file_bytes"]
+                                  if public_download else None)
     with tempfile.TemporaryDirectory(prefix="gw-docs-v02-") as tmp:
         root = pathlib.Path(tmp)
         play = root / "play"
@@ -474,7 +487,8 @@ def run_v02(artifact_dir, *, expected_source=None, refresh_local=False, offline=
              "EXTRACT_DIR": str(play / "extract"), "PACKAGE_DIR": str(play / "unused-package")},
             play, process_runs, offline=offline,
             monitored_files=((artifacts["desktop"]["archive"], _DESKTOP.MAX_V02_ARCHIVE_BYTES),
-                             (artifacts["desktop"]["receipt_path"], 1024 * 1024)))
+                             (artifacts["desktop"]["receipt_path"], 1024 * 1024)),
+            file_size_limit_bytes=materialization_file_limit)
 
         for name, anchor in (("build", "v02-build-core"), ("embed", "v02-embed")):
             scratch = root / name
@@ -488,13 +502,15 @@ def run_v02(artifact_dir, *, expected_source=None, refresh_local=False, offline=
                  "ROM_PATH": str(scratch / "unused-rom")},
                 scratch, process_runs, offline=offline,
                 monitored_files=((artifacts["sdk"]["archive"], _DESKTOP.MAX_V02_ARCHIVE_BYTES),
-                                 (artifacts["sdk"]["receipt_path"], 1024 * 1024)))
+                                 (artifacts["sdk"]["receipt_path"], 1024 * 1024)),
+                file_size_limit_bytes=materialization_file_limit)
 
         source_build = root / "source-build"
         source_build.mkdir()
         outputs["offline_source_core_build"] = run_bounded_anchor(
             ROOT / "README.md", "source-build", {"BUILD_DIR": str(source_build / "build")},
-            source_build, process_runs, offline=offline)
+            source_build, process_runs, offline=offline,
+            file_size_limit_bytes=materialization_file_limit)
 
         desktop = artifacts["desktop"]
         roster, files, package_root = _DESKTOP.validate_v02_archive(
@@ -511,7 +527,7 @@ def run_v02(artifact_dir, *, expected_source=None, refresh_local=False, offline=
         unsupported_log = input_dir / "unsupported.log"
         unsupported_log.write_text("genewhip-input-log 99\n")
         drop_script = input_dir / "drop.script"
-        drop_script.write_text("1 drop " + str(truncated_rom) + "\n30 quit\n")
+        drop_script.write_text("1 drop " + os.path.relpath(truncated_rom, ROOT) + "\n30 quit\n")
         error_output = root / "errors"
         error_output.mkdir()
         outputs["errors"] = run_bounded_anchor(
@@ -525,7 +541,8 @@ def run_v02(artifact_dir, *, expected_source=None, refresh_local=False, offline=
             monitored_files=((desktop["archive"], _DESKTOP.MAX_V02_ARCHIVE_BYTES),
                              (desktop["receipt_path"], 1024 * 1024),
                              (valid_rom, valid_rom.stat().st_size),
-                             (truncated_rom, 512), (unsupported_log, 1024), (drop_script, 4096)))
+                             (truncated_rom, 512), (unsupported_log, 1024), (drop_script, 4096)),
+            file_size_limit_bytes=materialization_file_limit)
     if any(item.get("process_group_cleanup") != "confirmed" for item in process_runs):
         raise ValueError("documented-command-cleanup-unconfirmed")
     receipt = {
@@ -652,13 +669,15 @@ class DocumentationCommandContract(unittest.TestCase):
         self.assertEqual((ROOT / "docs/core.md").read_text().count(
             '<a id="v02-embed"></a>'), 1)
 
-    def test_v02_documentation_uses_pending_publication_and_tested_scope(self):
+    def test_v02_documentation_uses_published_release_and_tested_scope(self):
         readme = (ROOT / "README.md").read_text()
         desktop = (ROOT / "packaging/desktop/README.md").read_text()
         sdk = (ROOT / "packaging/README.md").read_text()
         consumer = (ROOT / "tests/consumer/CMakeLists.txt").read_text()
         self.assertIn("v0.2.0", readme)
-        self.assertIn("development-only", readme)
+        self.assertIn("published prerelease", readme)
+        self.assertIn("https://github.com/szTheory/genewhip/releases/tag/v0.2.0", readme)
+        self.assertIn("unsigned and unnotarized", readme)
         self.assertIn("v0.2.0", desktop)
         self.assertIn("v0.2.0", sdk)
         self.assertIn("unsigned", desktop.lower())
@@ -671,7 +690,7 @@ class DocumentationCommandContract(unittest.TestCase):
     def test_contract_selector_reports_selected_assertion_count(self):
         report = run_contracts("0.2.0")
         self.assertEqual(report["outcome"], "pass")
-        self.assertEqual(report["selected_tests"], 9)
+        self.assertEqual(report["selected_tests"], 13)
 
     def test_v02_controls_and_recovery_match_runner_source(self):
         docs = (ROOT / "packaging/desktop/README.md").read_text()

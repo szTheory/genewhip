@@ -862,8 +862,12 @@ def _run_v02_download_docs(command: list[str], directory: pathlib.Path):
             "per_child_limits"]["cleanup_grace_seconds"]
         if timeout <= 0:
             raise DeliveryError("download-adoption-cleanup-reserve-exhausted")
+        file_size_limit = scope.get("per_child_limits", {}).get("max_binary_file_bytes")
+        if type(file_size_limit) is not int or file_size_limit <= 0:
+            raise DeliveryError("download-adoption-binary-file-limit-invalid")
         return _external(command, cwd=ROOT, check=False, phase="close",
-            timeout=timeout, owned_roots=(directory,))
+            timeout=timeout, owned_roots=(directory,),
+            file_size_limit_bytes=file_size_limit)
     return subprocess.run(command, cwd=ROOT, text=True, capture_output=True,
                           timeout=14400, check=False)
 

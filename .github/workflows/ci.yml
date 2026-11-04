@@ -174,8 +174,6 @@ jobs:
         with: {phase: preparation}
       - name: Verify event integration checkout
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-      - name: Prepare pinned evidence dependencies
-        run: bash scripts/ci/prepare_evidence_dependencies.sh
       - name: Build current public clients
         run: |
           if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea' ]; then
