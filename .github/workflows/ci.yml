@@ -267,7 +267,7 @@ jobs:
           retention-days: 30
   package:
     if: github.event_name != 'schedule' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 45
     permissions:
       contents: read
@@ -287,10 +287,58 @@ jobs:
         with: {phase: package}
       - name: Verify event integration checkout
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Check desktop qualification memory reserve before package builds
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          python3 -I - <<'PY'
+          import importlib.util
+          import json
+          import pathlib
+          import shutil
+          import tempfile
+          spec = importlib.util.spec_from_file_location("memory_preflight", "scripts/evidence/v02_run.py")
+          runner = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(runner)
+          limits = json.loads(pathlib.Path("evidence/v02-phase7-authorized-execution-scope.json").read_text())["per_child_limits"]
+          required = limits["max_rss_bytes"]
+          available = runner.available_memory_bytes()
+          scratch_free = shutil.disk_usage(tempfile.gettempdir()).free
+          print(json.dumps({"schema": "genewhip.memory-reserve-preflight.v1",
+              "stage": "source-ci-before-package-builds", "available_bytes": available,
+              "required_bytes": required, "scratch_available_bytes": scratch_free,
+              "scratch_required_bytes": limits["max_scratch_bytes"]}, sort_keys=True), flush=True)
+          runner.require_memory_reserve(available, required)
+          if scratch_free < limits["max_scratch_bytes"]:
+              raise ValueError("package-objective-route-scratch-reserve")
+          PY
       - if: github.event_name != 'workflow_dispatch'
         run: python3 scripts/package_sdk.py
       - if: github.event_name != 'workflow_dispatch'
         run: python3 scripts/package_desktop.py
+      - name: Check desktop qualification memory reserve after package builds
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          python3 -I - <<'PY'
+          import importlib.util
+          import json
+          import pathlib
+          import shutil
+          import tempfile
+          spec = importlib.util.spec_from_file_location("memory_preflight", "scripts/evidence/v02_run.py")
+          runner = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(runner)
+          limits = json.loads(pathlib.Path("evidence/v02-phase7-authorized-execution-scope.json").read_text())["per_child_limits"]
+          required = limits["max_rss_bytes"]
+          available = runner.available_memory_bytes()
+          scratch_free = shutil.disk_usage(tempfile.gettempdir()).free
+          print(json.dumps({"schema": "genewhip.memory-reserve-preflight.v1",
+              "stage": "source-ci-after-package-builds", "available_bytes": available,
+              "required_bytes": required, "scratch_available_bytes": scratch_free,
+              "scratch_required_bytes": limits["max_scratch_bytes"]}, sort_keys=True), flush=True)
+          runner.require_memory_reserve(available, required)
+          if scratch_free < limits["max_scratch_bytes"]:
+              raise ValueError("package-objective-route-scratch-reserve")
+          PY
       - if: github.event_name != 'workflow_dispatch'
         run: python3 tests/package/docs_commands.py --local-artifacts artifacts
       - name: Assemble exact qualified package inventory
@@ -411,7 +459,7 @@ jobs:
           --out build/performance/ci-quick-report.json --quick
   v02-runtime:
     if: github.event_name == 'workflow_dispatch'
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: ${{ (inputs.native_diagnostic_case == 'recursion94-withhold-first-plate' || inputs.native_diagnostic_case == 'recursion94-native-prefix' || inputs.native_diagnostic_case == 'original-control') && 45 || 180 }}
     permissions:
       actions: read
@@ -771,7 +819,7 @@ jobs:
   v02-benchmark-control:
     # Explicit needs chain below keeps all three workload benchmarks serial (max-parallel: 1).
     if: github.event_name == 'workflow_dispatch' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 180
     env:
       GENEWHIP_QUALIFICATION_PHASE: runtime
@@ -809,7 +857,7 @@ jobs:
   v02-benchmark-recursion94:
     if: github.event_name == 'workflow_dispatch' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     needs: [v02-benchmark-control]
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 180
     env:
       GENEWHIP_QUALIFICATION_PHASE: runtime
@@ -847,7 +895,7 @@ jobs:
   v02-benchmark-tank-battle:
     if: github.event_name == 'workflow_dispatch' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     needs: [v02-benchmark-recursion94]
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 180
     env:
       GENEWHIP_QUALIFICATION_PHASE: runtime
@@ -885,7 +933,7 @@ jobs:
   v02-package:
     if: github.event_name == 'workflow_dispatch' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     needs: [v02-runtime, v02-benchmark-control, v02-benchmark-recursion94, v02-benchmark-tank-battle]
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 45
     env:
       GENEWHIP_QUALIFICATION_PHASE: package
@@ -1027,7 +1075,7 @@ jobs:
   v02-release-qualification:
     if: github.event_name == 'workflow_dispatch' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     needs: [v02-runtime, v02-benchmark-control, v02-benchmark-recursion94, v02-benchmark-tank-battle, v02-package]
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 15
     env:
       GENEWHIP_QUALIFICATION_PHASE: package

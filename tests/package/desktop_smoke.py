@@ -598,6 +598,11 @@ def run_v02_smoke(archive, digest, revision, roster_path, scratch):
             else:
                 env.pop("SDL_VIDEODRIVER", None)
             available = v02_run.available_memory_bytes()
+            print(json.dumps({"schema": "genewhip.memory-reserve-preflight.v1",
+                "stage": "desktop-archive-smoke", "fixture": fixture,
+                "backend": backend, "available_bytes": available,
+                "required_bytes": limits["max_rss_bytes"]}, sort_keys=True),
+                file=sys.stderr, flush=True)
             v02_run.require_memory_reserve(available, limits["max_rss_bytes"])
             if shutil.disk_usage(scratch).free < limits["max_scratch_bytes"]:
                 raise ValueError("package-objective-route-scratch-reserve")

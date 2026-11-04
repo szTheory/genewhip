@@ -59,15 +59,29 @@ def workflow_base_sha(head: str) -> str:
     return value or head
 
 
+def _darwin_available_memory(output: str, page_size: int) -> int | None:
+    """Count disjoint reclaimable page buckets, using the producer's units."""
+    headers = re.findall(r"page size of ([0-9]+) bytes", output)
+    if (len(output) > 16384 or len(headers) != 1 or type(page_size) is not int
+            or page_size <= 0 or int(headers[0]) != page_size):
+        return None
+    rows = re.findall(r"^Pages (free|inactive|speculative|purgeable):\s+([0-9]+)\.$",
+                      output, re.MULTILINE)
+    if len(rows) != 4 or {name for name, _ in rows} != {
+            "free", "inactive", "speculative", "purgeable"}:
+        return None
+    values = {name: int(count) for name, count in rows}
+    # XNU includes speculative pages in free_count. Purgeable pages also overlap
+    # other categories, so adding either field would count pages twice.
+    return (values["free"] + values["inactive"]) * page_size
+
+
 def available_memory_bytes() -> int | None:
     if sys.platform == "darwin":
         try:
             result = subprocess.run(["/usr/bin/vm_stat"], text=True, capture_output=True,
                                     timeout=5, check=True)
-            values = {name: int(count.replace(".", "")) for name, count in
-                      re.findall(r"^Pages ([a-z]+):\s+([0-9.]+)", result.stdout, re.MULTILINE)}
-            reclaimable = sum(values.get(name, 0) for name in ("free", "inactive", "speculative", "purgeable"))
-            return reclaimable * os.sysconf("SC_PAGE_SIZE")
+            return _darwin_available_memory(result.stdout, os.sysconf("SC_PAGE_SIZE"))
         except (OSError, subprocess.SubprocessError, ValueError):
             return None
     if sys.platform.startswith("linux"):

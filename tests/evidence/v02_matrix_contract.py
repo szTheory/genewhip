@@ -938,6 +938,71 @@ class SchemaClosureContract(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "phase7-memory-reserve-unobservable"):
             runner.require_memory_reserve(None, 1)
 
+    def test_darwin_memory_uses_disjoint_buckets_and_validates_units(self) -> None:
+        spec = importlib.util.spec_from_file_location("v02_memory_accounting", ROOT / "scripts/evidence/v02_run.py")
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        for page_size in (4096, 16384):
+            sample = (f"Mach Virtual Memory Statistics: (page size of {page_size} bytes)\n"
+                "Pages free:                               100.\n"
+                "Pages active:                             900.\n"
+                "Pages inactive:                           200.\n"
+                "Pages speculative:                         30.\n"
+                "Pages purgeable:                           40.\n")
+            with self.subTest(page_size=page_size):
+                self.assertEqual(runner._darwin_available_memory(sample, page_size), 300 * page_size)
+                self.assertEqual(runner.require_memory_reserve(300 * page_size, 300 * page_size),
+                                 300 * page_size)
+                for invalid in (sample.replace("Pages inactive:", "Pages absent:"),
+                        sample + "Pages free: 1.\n", sample.replace("200.", "-200."),
+                        sample.replace("100.", "100x"), sample + sample,
+                        sample + "x" * 16385):
+                    self.assertIsNone(runner._darwin_available_memory(invalid, page_size))
+                for invalid_size in (page_size * 2, 0, -1, True, None):
+                    self.assertIsNone(runner._darwin_available_memory(sample, invalid_size))
+
+    def test_source_ci_memory_preflight_logs_and_preserves_reserve(self) -> None:
+        from unittest.mock import patch
+        import contextlib
+        import io
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        limits = json.loads((ROOT / "evidence/v02-phase7-authorized-execution-scope.json").read_text())["per_child_limits"]
+        required, scratch_required = limits["max_rss_bytes"], limits["max_scratch_bytes"]
+        self.assertEqual(required, 4 * 1024**3)
+        self.assertEqual(scratch_required, 16 * 1024**3)
+        original = importlib.util.module_from_spec
+        def memory_module(spec):
+            module = original(spec)
+            loader = spec.loader.exec_module
+            def load(target):
+                loader(target)
+                target.available_memory_bytes = lambda: available
+            spec.loader.exec_module = load
+            return module
+        from types import SimpleNamespace
+        import shutil
+        for position in ("before", "after"):
+            block = workflow.split(f"      - name: Check desktop qualification memory reserve {position} package builds\n", 1)[1]
+            script = block.split("          python3 -I - <<'PY'\n", 1)[1].split("          PY\n", 1)[0]
+            script = "\n".join(line[10:] for line in script.splitlines())
+            for available in (None, required - 1, required):
+                for scratch_free in (scratch_required - 1, scratch_required):
+                    output = io.StringIO()
+                    with self.subTest(position=position, available=available, scratch=scratch_free), \
+                            patch.object(importlib.util, "module_from_spec", memory_module), \
+                            patch.object(shutil, "disk_usage", return_value=SimpleNamespace(free=scratch_free)), \
+                            contextlib.redirect_stdout(output):
+                        if available == required and scratch_free == scratch_required:
+                            exec(compile(script, "source-ci-resource-preflight", "exec"), {})
+                        else:
+                            reason = "phase7-memory-reserve-" if available != required else "package-objective-route-scratch-reserve"
+                            with self.assertRaisesRegex(ValueError, reason):
+                                exec(compile(script, "source-ci-resource-preflight", "exec"), {})
+                    self.assertEqual(json.loads(output.getvalue()), {
+                        "schema": "genewhip.memory-reserve-preflight.v1", "stage": f"source-ci-{position}-package-builds",
+                        "available_bytes": available, "required_bytes": required,
+                        "scratch_available_bytes": scratch_free, "scratch_required_bytes": scratch_required})
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()

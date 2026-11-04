@@ -213,8 +213,21 @@ class CIDependencyContract(unittest.TestCase):
 
     def test_required_tests_and_packages_use_the_locked_native_host(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
-        self.assertGreaterEqual(workflow.count("runs-on: macos-26"), 7)
-        self.assertNotIn("runs-on: macos-15", workflow)
+        older_host_jobs = {"package", "v02-runtime", "v02-benchmark-control",
+            "v02-benchmark-recursion94", "v02-benchmark-tank-battle", "v02-package",
+            "v02-release-qualification"}
+        observed = {}
+        for block in re.split(r"(?m)(?=^  [a-z][a-z0-9-]*:\n)", workflow):
+            job = re.match(r"  ([a-z][a-z0-9-]*):\n", block)
+            runner = re.search(r"^    runs-on: (.+)$", block, re.M)
+            if job and runner:
+                observed[job.group(1)] = runner.group(1)
+        self.assertEqual({name for name, host in observed.items() if host == "macos-15"}, older_host_jobs)
+        for name in ("safety", "gameplay", "desktop", "performance", "product-smoke", "attestation", "extended"):
+            self.assertEqual(observed[name], "macos-26")
+        package = workflow.split("  package:\n", 1)[1].split("  attestation:\n", 1)[0]
+        self.assertLess(package.index("memory reserve before package builds"), package.index("run: python3 scripts/package_sdk.py"))
+        self.assertLess(package.index("run: python3 scripts/package_desktop.py"), package.index("memory reserve after package builds"))
 
     def test_native_gate_and_desktop_lane_reject_unapproved_skips(self):
         required = (ROOT / "scripts/ci/required-gate.sh").read_text()
