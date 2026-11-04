@@ -331,7 +331,9 @@ class Phase7CiMemoryContract(unittest.TestCase):
                         "streams": {"stdout": {"text": ""}, "stderr": {"text": ""}}}
 
                 try:
-                    with mock.patch.object(module, "_bounded_command", side_effect=bounded):
+                    # This fixture exercises scope limits without a hosted clock.
+                    with mock.patch.dict(os.environ, {}, clear=True), \
+                         mock.patch.object(module, "_bounded_command", side_effect=bounded):
                         result = module._external(["fixed-builder"], timeout=600, phase="package",
                             env={"GENEWHIP_QUALIFICATION_SCOPE_PATH": relative.as_posix(),
                                 "GENEWHIP_QUALIFICATION_SCOPE_SHA256": digest},
