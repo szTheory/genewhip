@@ -26,6 +26,8 @@ if [[ "${1:-}" == "--phase7-fast" ]]; then
   TIMEFORMAT='ci-stage matrix-contracts %3R seconds'; time python3 -I tests/evidence/v02_matrix_contract.py --contracts
   TIMEFORMAT='ci-stage execution-contracts %3R seconds'; time python3 -I tests/evidence/v02_execution_contract.py --contracts
   TIMEFORMAT='ci-stage transfer-contract %3R seconds'; time python3 -I tests/evidence/v02_transfer_contract.py
+  TIMEFORMAT='ci-stage portable-runtime-contract %3R seconds'; time python3 -I tests/evidence/v02_portable_runtime_contract.py
+  TIMEFORMAT='ci-stage package-identity-contract %3R seconds'; time python3 -I tests/evidence/v02_package_identity_contract.py
   TIMEFORMAT='ci-stage package-contract %3R seconds'; time python3 -I tests/evidence/v02_package_contract.py
   TIMEFORMAT='ci-stage promotion-contract %3R seconds'; time python3 -I tests/evidence/promotion_contract.py
   TIMEFORMAT='ci-stage publisher-contract %3R seconds'; time python3 -I tests/evidence/v02_delivery_contract.py --publisher

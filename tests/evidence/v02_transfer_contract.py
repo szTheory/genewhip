@@ -224,11 +224,27 @@ class RuntimeTransferContract(unittest.TestCase):
         self.assertTrue(observed_flags[0] & os.O_NONBLOCK)
         self.assertTrue(observed_flags[0] & os.O_NOFOLLOW)
 
+    def _trusted_cmake_bindings(self):
+        source_bytes = {name: (ROOT / name).read_bytes()
+            for name in TRANSFER.CMAKE_PROVENANCE_SOURCE_PATHS}
+        bindings = {name: hashlib.sha256(data).hexdigest()
+            for name, data in source_bytes.items()}
+        return source_bytes, bindings
+
     def _fixture(self, root, *, payload=bytes(320 * 224 * 4), unsafe_path=None):
         image_name = unsafe_path or "build/v02/runtime/core-work/canonical-core-fixture/recursion94-full-route-1/fields/field-120.bin"
         image = root / image_name
         image.parent.mkdir(parents=True, exist_ok=True)
         image.write_bytes(payload)
+        cmake_sources, cmake_bindings = self._trusted_cmake_bindings()
+        for source_path, source_bytes in cmake_sources.items():
+            source = root / source_path
+            source.parent.mkdir(parents=True, exist_ok=True)
+            source.write_bytes(source_bytes)
+            digest = cmake_bindings[source_path]
+            snapshot = root / TRANSFER._candidate_cmake_snapshot_path(digest)
+            snapshot.parent.mkdir(parents=True, exist_ok=True)
+            snapshot.write_bytes(source_bytes)
         for name in TRANSFER.DIRECT_MEMBERS:
             path = root / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -245,7 +261,8 @@ class RuntimeTransferContract(unittest.TestCase):
             elif name.endswith("execution-scope.json"):
                 body = json.dumps({"schema": "genewhip-v02-execution-v1", "scope_id": "fixture"}).encode()
             elif name.endswith("candidate.json"):
-                body = json.dumps({"schema": "genewhip-phase6-candidate-v1"}).encode()
+                body = json.dumps({"schema": "genewhip-phase6-candidate-v1",
+                    "source_files": cmake_bindings}).encode()
             elif name.endswith("media-report.json"):
                 body = json.dumps({"schema": "genewhip-phase6-media-v1", "result": "pass"}).encode()
             elif name.endswith(("host-software.json", "host-native.json")):
@@ -347,22 +364,26 @@ class RuntimeTransferContract(unittest.TestCase):
         write_bytes(stdout_path, stdout_data)
         write_bytes(stderr_path, stderr_data)
 
-        def stream_ref(path, data):
-            return {"path": path, "sha256": hashlib.sha256(data).hexdigest(),
+        def stream_ref(path, data, *, include_path=True):
+            record = {"sha256": hashlib.sha256(data).hexdigest(),
                 "observed_bytes": len(data), "retained_bytes": len(data), "truncated": False}
+            if include_path:
+                record["path"] = path
+            return record
 
         control_report = {
             "results": [{"retained_pcm": ref(control_pcm), "process_streams": {
-                "stdout": stream_ref(stdout_path, stdout_data),
+                "stdout": stream_ref(stdout_path, stdout_data, include_path=False),
                 "stderr": stream_ref(stderr_path, stderr_data)}}],
             "native_child_processes": [{"streams": {
-                "stdout": stream_ref(stdout_path, stdout_data),
+                "stdout": stream_ref(stdout_path, stdout_data, include_path=False),
                 "stderr": stream_ref(stderr_path, stderr_data)}}],
         }
         write_json(control_path, control_report)
         image_ref = ref(image_path)
         write_json("build/v02/runtime-observation/candidate.json", {
             "schema": "genewhip-phase6-candidate-v1",
+            "source_files": self._trusted_cmake_bindings()[1],
             "client_identities": {"public-core": ref("build/v02/runtime-build/tools/session/gw_headless")},
             "compiler_identity": ref("scripts/evidence/phase6_routes.py"),
             "delivery_map_identity": {"path": map_path, "sha256": map_canonical_sha, "schema": mapping["schema"]},
@@ -495,6 +516,113 @@ class RuntimeTransferContract(unittest.TestCase):
             "observed": observed})
         return identity_refs | {stdout_path, stderr_path, cache_path, build_identity_path}
 
+    def _attach_control_field_log_bundle(self, root, *, reported_size_delta=0):
+        """Attach a synthetic but source-shaped two-repetition control field-log bundle."""
+        scenario = json.loads((ROOT / "fixtures/independent-game-v2/scenario.json").read_bytes())
+        source_sha = scenario["source"]["sha256"]
+        rom_sha = scenario["rom"]["sha256"]
+        prefix = "build/v02/runtime/core-work/canonical-core-12345678"
+
+        def write_json(name, value):
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            data = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+            path.write_bytes(data)
+            return {"path": name, "sha256": hashlib.sha256(data).hexdigest()}
+
+        def field_log(case):
+            count = case["frames"]
+            rows = []
+            for sequence in range(count):
+                rows.append({"sequence": sequence, "width": 256, "height": 224,
+                    "pitch_bytes": 1280, "end_tick": (sequence + 1) * 896040,
+                    "fnv1a64": f"{sequence:016x}"})
+            rows.append({"fields": count, "ram_fnv1a64": "a" * 16, "peek": "00000000",
+                "unsupported": 0, "stop_reason": 0, "instruction_address": 0,
+                "opcode": 0, "fault_address": 0})
+            rows.append({"audio_rate_hz": 48000, "mix_id": 1, "filter_id": 1,
+                "frames": count * 800, "lost": 0, "clipped": 0, "complete": True,
+                "fnv1a64": "b" * 16})
+            return b"".join((json.dumps(row, separators=(",", ":")) + "\n").encode() for row in rows)
+
+        case_rows = scenario["cases"]
+        control_refs = []
+        for repetition in (1, 2):
+            results, children = [], []
+            for case in case_rows:
+                case_id = case["id"]
+                data = field_log(case)
+                reported_size = len(data) + reported_size_delta
+                path = prefix + f"/controls-{repetition}/artifacts/{case_id}/headless/child.stdout.raw"
+                output = root / path
+                output.parent.mkdir(parents=True, exist_ok=True)
+                output.write_bytes(data)
+                stream = {"path": path, "sha256": hashlib.sha256(data).hexdigest(),
+                    "observed_bytes": reported_size, "retained_bytes": reported_size, "truncated": False}
+                empty_stderr = {"sha256": hashlib.sha256(b"").hexdigest(),
+                    "observed_bytes": 0, "retained_bytes": 0, "truncated": False}
+                process = {"return_code": 0, "stdout_bytes": reported_size,
+                    "stdout_sha256": stream["sha256"]}
+                results.append({"id": case_id, "fields": case["frames"], "process": process,
+                    "process_streams": {"stdout": stream, "stderr": empty_stderr}})
+                children.append({"case": case_id, "client": "gw_headless", "return_code": 0,
+                    "stdout_bytes": reported_size, "stdout_sha256": stream["sha256"],
+                    "streams": {"stdout": stream, "stderr": empty_stderr}})
+            report = {"schema": "genewhip-phase4-gameplay-v1", "version": 1,
+                "fixture_id": scenario["fixture_id"], "source_sha256": source_sha,
+                "rom_sha256": rom_sha,
+                "scenario_sha256": hashlib.sha256(
+                    (ROOT / "fixtures/independent-game-v2/scenario.json").read_bytes()).hexdigest(),
+                "results": results, "native_child_processes": children}
+            control_name = prefix + f"/controls-{repetition}/control.json"
+            control_refs.append(write_json(control_name, report))
+
+        original_candidate = root / "build/v02/runtime/core-work/canonical-core-fixture/candidate.json"
+        candidate_name = prefix + "/candidate.json"
+        candidate_ref = write_json(candidate_name, json.loads(original_candidate.read_bytes()))
+        core_report_name = "build/v02/runtime-observation/core-report.json"
+        core_report_path = root / core_report_name
+        core_report = json.loads(core_report_path.read_bytes())
+        core_report["candidate_manifest"] = candidate_ref
+        core_report["controls"] = control_refs
+        core_report_path.write_text(json.dumps(core_report, sort_keys=True), encoding="utf-8")
+        # Refresh the small fixture's ordinary path/digest edges to a fixed point.
+        # This keeps the synthetic source graph internally bound after replacing controls.
+        for _attempt in range(12):
+            json_paths = sorted((root / "build/v02").rglob("*.json"))
+            digests = {path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in json_paths}
+            changed = False
+
+            def refresh(value):
+                nonlocal changed
+                if isinstance(value, dict):
+                    relative = value.get("path")
+                    if (isinstance(relative, str) and relative in digests
+                            and value.get("sha256") != digests[relative]):
+                        value["sha256"] = digests[relative]
+                        changed = True
+                    for child in value.values():
+                        refresh(child)
+                elif isinstance(value, list):
+                    for child in value:
+                        refresh(child)
+
+            for path in json_paths:
+                if path.relative_to(root).as_posix() == TRANSFER.PUBLIC_SCHEMA_MEMBER:
+                    continue
+                raw = path.read_bytes()
+                value = json.loads(raw)
+                refresh(value)
+                updated = json.dumps(value, sort_keys=True).encode()
+                if updated != raw:
+                    path.write_bytes(updated)
+                    changed = True
+            if not changed:
+                break
+        else:
+            raise AssertionError("synthetic runtime reference graph did not settle")
+
     def test_actual_runtime_reference_shapes_export_verify_and_install_without_identities(self):
         with tempfile.TemporaryDirectory(prefix="gw-runtime-transfer-actual-shapes-") as temp:
             root = pathlib.Path(temp) / "producer"
@@ -516,6 +644,13 @@ class RuntimeTransferContract(unittest.TestCase):
                     "recursion94-full-route-attempt1/renderer-field.bin",
             }
             self.assertTrue(expected_artifacts.issubset(members))
+            _cmake_sources, cmake_bindings = self._trusted_cmake_bindings()
+            cmake_members = {TRANSFER._candidate_cmake_snapshot_path(value)
+                for value in cmake_bindings.values()}
+            self.assertEqual(cmake_members, {
+                TRANSFER._candidate_cmake_snapshot_path(cmake_bindings[name])
+                for name in TRANSFER.CMAKE_PROVENANCE_SOURCE_PATHS})
+            self.assertTrue(cmake_members.issubset(members))
             self.assertTrue(excluded.isdisjoint(members))
             self.assertLessEqual(len(members), TRANSFER.MAX_MEMBERS)
             self.assertLessEqual(inventory["total_bytes"], TRANSFER.MAX_TOTAL_BYTES)
@@ -523,6 +658,9 @@ class RuntimeTransferContract(unittest.TestCase):
                 (out / "payload/build/v02/runtime-observation.json").read_text(encoding="utf-8"))
             self.assertEqual(transferred_observation["status"], "failed")
             self.assertEqual(TRANSFER.verify(out / "payload", out / "inventory.json"), inventory)
+            for source_path, source_bytes in _cmake_sources.items():
+                snapshot_name = TRANSFER._candidate_cmake_snapshot_path(cmake_bindings[source_path])
+                self.assertEqual((out / "payload" / snapshot_name).read_bytes(), source_bytes)
 
             installed = pathlib.Path(temp) / "consumer"
             installed.mkdir()
@@ -531,6 +669,241 @@ class RuntimeTransferContract(unittest.TestCase):
             self.assertFalse((installed / "scripts/evidence/phase6_routes.py").exists())
             self.assertFalse((installed / "build/v02/runtime-build/tools/session/gw_headless").exists())
             self.assertTrue((installed / "build/v02/runtime/safety/native-api.json").is_file())
+            for source_path, source_bytes in _cmake_sources.items():
+                snapshot_name = TRANSFER._candidate_cmake_snapshot_path(cmake_bindings[source_path])
+                self.assertEqual((installed / snapshot_name).read_bytes(), source_bytes)
+
+    def test_control_field_logs_are_strictly_typed_and_round_trip_through_transfer(self):
+        with tempfile.TemporaryDirectory(prefix="gw-runtime-control-field-log-roundtrip-") as temp:
+            base = pathlib.Path(temp)
+            root = base / "producer"
+            root.mkdir()
+            self._runtime_reference_fixture(root)
+            self._attach_control_field_log_bundle(root)
+            output = root / "build/v02/runtime-transfer"
+            inventory = TRANSFER.export(root, output)
+            field_names = {name for name in inventory["members"]
+                if TRANSFER._control_field_log_name(name) is not None}
+            self.assertEqual(len(field_names), 12)
+            self.assertEqual(sum(inventory["members"][name]["size"] for name in field_names),
+                sum((root / name).stat().st_size for name in field_names))
+            self.assertFalse(any(name.endswith("child.stderr.raw") for name in inventory["members"]))
+            self.assertEqual(TRANSFER.verify(output / "payload", output / "inventory.json"), inventory)
+            receiver = base / "receiver"
+            receiver.mkdir()
+            TRANSFER.install(output / "payload", output / "inventory.json", receiver)
+            for name in field_names:
+                self.assertEqual((receiver / name).read_bytes(), (root / name).read_bytes())
+
+    def test_control_field_log_parser_rejects_untrusted_rows_and_metadata(self):
+        with tempfile.TemporaryDirectory(prefix="gw-runtime-control-field-log-mutants-") as temp:
+            root = pathlib.Path(temp) / "producer"
+            root.mkdir()
+            self._runtime_reference_fixture(root)
+            self._attach_control_field_log_bundle(root)
+            name = ("build/v02/runtime/core-work/canonical-core-12345678/controls-1/artifacts/"
+                "title-no-start/headless/child.stdout.raw")
+            valid = (root / name).read_bytes()
+            first, rest = valid.split(b"\n", 1)
+            cases = {
+                "extra-key": first.replace(b'"fnv1a64"', b'"extra":0,"fnv1a64"', 1) + b"\n" + rest,
+                "duplicate-key": first[:-1] + b',"sequence":0}\n' + rest,
+                "wrong-order": first.replace(b'{"sequence":0,"width"', b'{"width"', 1),
+                "wrong-sequence": valid.replace(b'"sequence":0', b'"sequence":1', 1),
+                "private-error-line": valid + b'{"error":"private@example.invalid"}\n',
+                "non-json-trailer": valid + b"fatal error\n",
+                "binary": valid[:-1] + b"\xff\n",
+                "missing-final-audio": b"".join(valid.splitlines(keepends=True)[:-2]),
+            }
+            for label, mutant in cases.items():
+                with self.subTest(mutant=label), self.assertRaises(ValueError):
+                    TRANSFER._validate_control_field_log(name, mutant)
+            self.assertIsNotNone(TRANSFER._control_field_log_name(name))
+            for unsafe in (
+                    name.replace("title-no-start", "unknown-case"),
+                    name.replace("12345678", "shortid"),
+                    name.replace("child.stdout.raw", "child.stderr.raw"),
+                    "outside/" + name):
+                self.assertIsNone(TRANSFER._control_field_log_name(unsafe))
+            for private_bytes in (
+                    valid + ("\n{" + '"path":"/' + "Users" + "/" + "alice/private/file" + '"}\n').encode(),
+                    valid + b'\n{"email":"person@example.invalid"}\n'):
+                with self.subTest(private_bytes=private_bytes[-60:]), self.assertRaisesRegex(
+                        ValueError, "transfer-private-path|transfer-private-email"):
+                    TRANSFER._scan(name, private_bytes)
+
+            ref = {"path": name, "sha256": hashlib.sha256(valid).hexdigest(),
+                "observed_bytes": len(valid), "retained_bytes": len(valid), "truncated": False}
+            self.assertEqual(TRANSFER._classify_reference("stdout", ref), "control-field-log")
+            for mutation in (
+                    {**ref, "truncated": True},
+                    {**ref, "retained_bytes": len(valid) - 1},
+                    {**ref, "observed_bytes": TRANSFER.CONTROL_FIELD_LOG_MAX_BYTES + 1,
+                        "retained_bytes": TRANSFER.CONTROL_FIELD_LOG_MAX_BYTES + 1},
+            ):
+                with self.subTest(metadata=mutation), self.assertRaisesRegex(
+                        ValueError, "transfer-hash-metadata-invalid:stdout"):
+                    TRANSFER._classify_reference("stdout", mutation)
+            with self.assertRaisesRegex(ValueError, "transfer-hash-metadata-invalid:stderr"):
+                TRANSFER._classify_reference("stderr", ref)
+            with self.assertRaisesRegex(ValueError, "transfer-control-field-log-report-binding-invalid"):
+                TRANSFER._validate_control_stdout_reference(
+                    "build/v02/runtime/core-work/canonical-core-87654321/controls-1/control.json", ref)
+
+    def test_control_field_log_missing_artifact_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="gw-runtime-control-field-log-missing-") as temp:
+            root = pathlib.Path(temp) / "producer"
+            root.mkdir()
+            self._runtime_reference_fixture(root)
+            self._attach_control_field_log_bundle(root)
+            name = ("build/v02/runtime/core-work/canonical-core-12345678/controls-2/artifacts/"
+                "sustained-play/headless/child.stdout.raw")
+            (root / name).unlink()
+            with self.assertRaisesRegex(ValueError, "transfer-owned-file-read-failed"):
+                TRANSFER._collect(root)
+
+    def test_control_field_log_prefix_must_join_to_core_candidate_and_repetitions(self):
+        with tempfile.TemporaryDirectory(prefix="gw-runtime-control-field-log-prefix-") as temp:
+            root = pathlib.Path(temp) / "producer"
+            root.mkdir()
+            self._runtime_reference_fixture(root)
+            self._attach_control_field_log_bundle(root)
+            captured = {}
+            members, _total = TRANSFER._collect(root, captured_bytes=captured)
+            documents = {name: json.loads(data) for name, data in captured.items()
+                if name.endswith(".json")}
+            TRANSFER._validate_control_field_log_graph(documents, members)
+
+            core_name = "build/v02/runtime-observation/core-report.json"
+            mutant = copy.deepcopy(documents)
+            mutant[core_name]["candidate_manifest"]["path"] = (
+                "build/v02/runtime/core-work/canonical-core-87654321/candidate.json")
+            with self.assertRaisesRegex(ValueError,
+                    "transfer-control-field-log-candidate-prefix-binding-invalid"):
+                TRANSFER._validate_control_field_log_graph(mutant, members)
+
+            mutant = copy.deepcopy(documents)
+            mutant[core_name]["controls"].pop()
+            with self.assertRaisesRegex(ValueError,
+                    "transfer-control-field-log-candidate-prefix-binding-invalid"):
+                TRANSFER._validate_control_field_log_graph(mutant, members)
+
+    def test_control_field_log_reported_byte_counts_must_match_snapshot_size(self):
+        with tempfile.TemporaryDirectory(prefix="gw-runtime-control-field-log-size-binding-") as temp:
+            root = pathlib.Path(temp) / "producer"
+            root.mkdir()
+            self._runtime_reference_fixture(root)
+            self._attach_control_field_log_bundle(root, reported_size_delta=1)
+            with self.assertRaisesRegex(ValueError, "transfer-control-field-log-size-binding-invalid"):
+                TRANSFER._collect(root)
+
+        with tempfile.TemporaryDirectory(prefix="gw-runtime-control-field-log-receiver-size-") as temp:
+            root = pathlib.Path(temp) / "producer"
+            root.mkdir()
+            self._runtime_reference_fixture(root)
+            self._attach_control_field_log_bundle(root)
+            captured = {}
+            members, _total = TRANSFER._collect(root, captured_bytes=captured)
+            control_name = ("build/v02/runtime/core-work/canonical-core-12345678/controls-1/control.json")
+            control = json.loads(captured[control_name])
+            for result, child in zip(control["results"], control["native_child_processes"]):
+                result["process_streams"]["stdout"]["observed_bytes"] += 1
+                result["process_streams"]["stdout"]["retained_bytes"] += 1
+                result["process"]["stdout_bytes"] += 1
+                child["streams"]["stdout"]["observed_bytes"] += 1
+                child["streams"]["stdout"]["retained_bytes"] += 1
+                child["stdout_bytes"] += 1
+            with self.assertRaisesRegex(ValueError, "transfer-control-field-log-size-binding-invalid"):
+                TRANSFER._validate_references(control, members, document_name=control_name)
+
+    def test_control_field_log_inventory_rehash_cannot_override_report_digest(self):
+        with tempfile.TemporaryDirectory(prefix="gw-runtime-control-field-log-rehash-") as temp:
+            root = pathlib.Path(temp) / "producer"
+            root.mkdir()
+            self._runtime_reference_fixture(root)
+            self._attach_control_field_log_bundle(root)
+            output = root / "build/v02/runtime-transfer"
+            inventory = TRANSFER.export(root, output)
+            name = ("build/v02/runtime/core-work/canonical-core-12345678/controls-1/artifacts/"
+                "title-no-start/headless/child.stdout.raw")
+            raw_path = output / "payload" / name
+            tampered = raw_path.read_bytes().replace(b'"fnv1a64":"0000000000000000"',
+                b'"fnv1a64":"g000000000000000"', 1)
+            self.assertEqual(len(tampered), raw_path.stat().st_size)
+            raw_path.write_bytes(tampered)
+            facts = inventory["members"][name]
+            facts["sha256"] = hashlib.sha256(tampered).hexdigest()
+            inventory_path = output / "inventory.json"
+            inventory_path.write_text(json.dumps(inventory, sort_keys=True, indent=2) + "\n",
+                encoding="utf-8")
+            with self.assertRaisesRegex(ValueError,
+                    "transfer-reference-role-or-identity-invalid:stdout|transfer-control-field-log-field-value-invalid"):
+                TRANSFER.verify(output / "payload", inventory_path)
+
+    def test_candidate_cmake_snapshot_roster_is_exact_and_bound_after_outer_rehash(self):
+        with tempfile.TemporaryDirectory(prefix="gw-runtime-cmake-snapshot-contract-") as temp:
+            root = pathlib.Path(temp) / "producer"
+            root.mkdir()
+            self._fixture(root)
+            out = root / "build/v02/runtime-transfer"
+            inventory = TRANSFER.export(root, out)
+            payload = out / "payload"
+            inventory_path = out / "inventory.json"
+            cmake_sources, bindings = self._trusted_cmake_bindings()
+            source_name, source_digest = next(iter(bindings.items()))
+            snapshot_name = TRANSFER._candidate_cmake_snapshot_path(source_digest)
+            snapshot_path = payload / snapshot_name
+            original = snapshot_path.read_bytes()
+
+            snapshot_path.unlink()
+            with self.assertRaisesRegex(ValueError, "transfer-unlisted-or-missing-member"):
+                TRANSFER.verify(payload, inventory_path)
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            snapshot_path.write_bytes(original)
+
+            changed = original + b"# outer inventory rehashed\n"
+            snapshot_path.write_bytes(changed)
+            inventory["members"][snapshot_name] = {
+                "sha256": hashlib.sha256(changed).hexdigest(), "size": len(changed)}
+            inventory["total_bytes"] += len(changed) - len(original)
+            inventory_path.write_text(json.dumps(inventory, sort_keys=True, indent=2) + "\n")
+            with self.assertRaisesRegex(ValueError, "transfer-cmake-provenance-binding-invalid"):
+                TRANSFER.verify(payload, inventory_path)
+
+            snapshot_path.write_bytes(original)
+            inventory["members"][snapshot_name] = {
+                "sha256": hashlib.sha256(original).hexdigest(), "size": len(original)}
+            inventory["total_bytes"] -= len(changed) - len(original)
+            extra_name = "build/v02/runtime-build/evidence/build-provenance/" + "f" * 64 + ".cmake"
+            extra_path = payload / extra_name
+            extra_path.write_bytes(b"unbound compiler payload")
+            inventory["members"][extra_name] = {
+                "sha256": hashlib.sha256(extra_path.read_bytes()).hexdigest(),
+                "size": extra_path.stat().st_size}
+            inventory["member_count"] = len(inventory["members"])
+            inventory["total_bytes"] += extra_path.stat().st_size
+            inventory_path.write_text(json.dumps(inventory, sort_keys=True, indent=2) + "\n")
+            with self.assertRaisesRegex(ValueError, "transfer-cmake-provenance-roster-invalid"):
+                TRANSFER.verify(payload, inventory_path)
+
+    def test_candidate_cmake_source_paths_and_digests_are_exact(self):
+        with tempfile.TemporaryDirectory(prefix="gw-runtime-cmake-source-contract-") as temp:
+            root = pathlib.Path(temp) / "producer"
+            root.mkdir()
+            self._fixture(root)
+            candidate_path = root / TRANSFER.RUNTIME_CANDIDATE_MEMBER
+            candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+            candidate["source_files"]["tools/session/CMakeLists.txt"] = "0" * 64
+            candidate_path.write_text(json.dumps(candidate), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError,
+                    "transfer-cmake-provenance-source-mismatch:tools/session/CMakeLists.txt"):
+                TRANSFER._collect(root)
+
+            candidate["source_files"].pop("tools/session/CMakeLists.txt")
+            candidate["source_files"]["tools/unreviewed/CMakeLists.txt"] = "0" * 64
+            candidate_path.write_text(json.dumps(candidate), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "transfer-cmake-provenance-candidate-invalid"):
+                TRANSFER._collect(root)
 
     def test_optional_execution_identity_requires_exact_path_and_schema(self):
         self.assertTrue(TRANSFER._runtime_member_allowed("build/v02/public/execution-identity.json"))

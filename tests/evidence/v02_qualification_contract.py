@@ -2422,7 +2422,7 @@ print(json.dumps({'parent_limit':resource.getrlimit(resource.RLIMIT_FSIZE),'stat
                     owned_roots=(owned,), timeout=30, phase="preparation")
                 failure_output = io.StringIO()
                 with contextlib.redirect_stderr(failure_output):
-                    with self.assertRaisesRegex(ValueError, "hosted-delivery-command-unavailable"):
+                    with self.assertRaisesRegex(ValueError, "hosted-delivery-command-failed"):
                         module._external(command, timeout=30, phase="preparation",
                             owned_roots=(owned,), check=False)
             self.assertEqual(result.returncode, 0)
@@ -5322,6 +5322,92 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
         with self.assertRaisesRegex(ValueError, "package-partition"):
             module._require_hosted_budget(start, "2026-10-29T22:00:01Z", scope, phase="package")
 
+    def test_external_reports_completed_failure_without_claiming_interpreter_is_missing(self):
+        from unittest import mock
+        module = load_module(self)
+        with tempfile.TemporaryDirectory(prefix="gw-external-failure-kind-") as temporary:
+            root = Path(temporary)
+            (root / "evidence").mkdir()
+            (root / "evidence/v02-execution.json").write_bytes(
+                (ROOT / "evidence/v02-execution.json").read_bytes())
+            private_detail = "PRIVATE_DETAIL /private/credential-value"
+            for error, category in ((RuntimeError(private_detail), "failed"),
+                                    (OSError(private_detail), "unavailable"),
+                                    (subprocess.TimeoutExpired("private-command", 1), "unavailable")):
+                with self.subTest(category=category, error=type(error).__name__), \
+                     mock.patch.object(module, "ROOT", root), \
+                     mock.patch.dict(os.environ, {}, clear=True), \
+                     mock.patch.object(module, "_bounded_command", side_effect=error), \
+                     mock.patch.object(module.subprocess, "Popen",
+                         side_effect=AssertionError("pure classification test must not launch")):
+                    with self.assertRaises(ValueError) as caught:
+                        module._external([sys.executable, "-I", "worker.py"], phase="package")
+                    self.assertEqual(str(caught.exception),
+                        "hosted-delivery-command-" + category + ":" + Path(sys.executable).name)
+                    self.assertNotIn(private_detail, str(caught.exception))
+
+    def test_portable_runtime_identity_requires_external_anchor_and_selected_subject(self):
+        from unittest import mock
+        from types import SimpleNamespace
+        module = load_module(self)
+        expected = {"source_sha": "a" * 40, "head_sha": "a" * 40,
+            "base_sha": "b" * 40, "run_id": "123", "run_attempt": "1"}
+        with tempfile.TemporaryDirectory(prefix="gw-runtime-external-anchor-") as temporary:
+            root = Path(temporary)
+            runtime = root / "build/v02"
+            (runtime / "runtime-observation").mkdir(parents=True)
+            raw = b'{"fixture":"separately anchored runtime bytes"}\n'
+            (runtime / "runtime-identity.json").write_bytes(raw)
+            candidate = {"source_files": {"src/core.c": "c" * 64}}
+            (runtime / "runtime-observation/candidate.json").write_text(json.dumps(candidate))
+            scope = root / "scope.json"
+            scope.write_bytes(b'{"fixture":"selected scope"}\n')
+            anchor = hashlib.sha256(raw).hexdigest()
+            calls = []
+            sentinel = object()
+            def factory(observed, **kwargs):
+                calls.append((observed, kwargs))
+                return sentinel
+            routes = SimpleNamespace(trusted_runtime_identity_from_bytes=factory)
+            source_reader = SimpleNamespace(source_identity=lambda route: {"source_sha256": "d" * 64})
+            with mock.patch.object(module, "ROOT", root), \
+                 mock.patch.object(module, "_load_runtime_module", return_value=source_reader), \
+                 mock.patch.object(module, "phase7_execution_scope_path", return_value=scope), \
+                 mock.patch.dict(os.environ, {}, clear=True):
+                with self.assertRaisesRegex(ValueError, "trusted-runtime-identity-required"):
+                    module._trusted_runtime_identity(routes, expected)
+                self.assertEqual(calls, [])
+                os.environ[module.TRUSTED_RUNTIME_IDENTITY_ENV] = "0" * 64
+                with self.assertRaisesRegex(ValueError, "runtime-identity-anchor-mismatch"):
+                    module._trusted_runtime_identity(routes, expected)
+                self.assertEqual(calls, [])
+                os.environ[module.TRUSTED_RUNTIME_IDENTITY_ENV] = anchor
+                wrong_head = {**expected, "head_sha": "f" * 40}
+                with self.assertRaisesRegex(ValueError, "subject-head-mismatch"):
+                    module._trusted_runtime_identity(routes, wrong_head)
+                self.assertIs(module._trusted_runtime_identity(routes, expected), sentinel)
+            self.assertEqual(len(calls), 1)
+            observed, arguments = calls[0]
+            self.assertEqual(observed, raw)
+            self.assertEqual(arguments["expected_sha256"], anchor)
+            self.assertEqual(arguments["expected_scope_sha256"], hashlib.sha256(scope.read_bytes()).hexdigest())
+            self.assertEqual(arguments["expected_subject"], {
+                "source_sha256": "d" * 64, "git_head": expected["source_sha"],
+                "base_sha": expected["base_sha"], "run_id": "123", "run_attempt": "1",
+                "candidate_sha256": hashlib.sha256(json.dumps(candidate, sort_keys=True,
+                    separators=(",", ":")).encode()).hexdigest()})
+
+    def test_portable_runtime_anchor_flows_from_runtime_job_to_both_consumers(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        runtime = workflow.split("  v02-runtime:\n", 1)[1].split("  v02-benchmark-control:\n", 1)[0]
+        self.assertIn("runtime_identity_sha256: ${{ steps.runtime_identity_anchor.outputs.sha256 }}", runtime)
+        self.assertIn('path = pathlib.Path("build/v02/runtime-identity.json")', runtime)
+        self.assertIn("name: v02-runtime-identity-${{ github.run_id }}-${{ github.run_attempt }}", runtime)
+        for name in ("v02-package", "v02-release-qualification"):
+            job = re.split(r"\n  [A-Za-z0-9_-]+:\n",
+                workflow.split("  " + name + ":\n", 1)[1], maxsplit=1)[0]
+            self.assertIn("GENEWHIP_QUALIFICATION_RUNTIME_IDENTITY_SHA256: ${{ needs.v02-runtime.outputs.runtime_identity_sha256 }}", job)
+
     def test_external_timeout_uses_monitored_process_group_and_retains_cleanup_receipt(self):
         require_process_context()
         import sys
@@ -5329,7 +5415,7 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
         scratch = ROOT / "build/v02/coordinator-external-attempts"
         before = set(scratch.glob("*.attempt.json")) if scratch.exists() else set()
         command = [sys.executable, "-c", "import sys,time; print('bounded-output', flush=True); time.sleep(30)"]
-        with self.assertRaisesRegex(ValueError, "hosted-delivery-command-unavailable"):
+        with self.assertRaisesRegex(ValueError, "hosted-delivery-command-failed"):
             module._external(command, timeout=1)
         after = set(scratch.glob("*.attempt.json")) - before
         self.assertEqual(len(after), 1, "timed-out process must leave one durable attempt receipt")
@@ -5588,7 +5674,7 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
                  mock.patch.dict(os.environ, {}, clear=True), \
                  mock.patch.object(module, "_bounded_command", side_effect=bounded):
                 with self.assertRaisesRegex(ValueError,
-                        "hosted-delivery-command-unavailable:git"):
+                        "hosted-delivery-command-failed:git"):
                     module._external(["git", "clone", "https://github.com/szTheory/genewhip.git",
                                       str(hosted_root)], phase="package",
                         owned_roots=(hosted_root,))
@@ -5623,7 +5709,7 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
             "f=p.open('wb'); "
             "[(f.write(b'x'*2048),f.flush(),time.sleep(.003)) for _ in range(1000)]", str(owned)]
         try:
-            with self.assertRaisesRegex(ValueError, "hosted-delivery-command-unavailable"):
+            with self.assertRaisesRegex(ValueError, "hosted-delivery-command-failed"):
                 module._external(command, timeout=10, owned_roots=(owned,), scratch_limit_bytes=8192)
             after = set(scratch.glob("*.attempt.json")) - before
             self.assertEqual(len(after), 1)
