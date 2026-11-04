@@ -291,6 +291,23 @@ jobs:
         run: python3 scripts/package_sdk.py
       - if: github.event_name != 'workflow_dispatch'
         run: python3 scripts/package_desktop.py
+      - name: Check desktop qualification memory reserve after package builds
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          python3 -I - <<'PY'
+          import importlib.util
+          import json
+          import pathlib
+          spec = importlib.util.spec_from_file_location("memory_preflight", "scripts/evidence/v02_run.py")
+          runner = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(runner)
+          required = json.loads(pathlib.Path("evidence/v02-phase7-authorized-execution-scope.json").read_text())["per_child_limits"]["max_rss_bytes"]
+          available = runner.available_memory_bytes()
+          print(json.dumps({"schema": "genewhip.memory-reserve-preflight.v1",
+              "stage": "source-ci-after-package-builds", "available_bytes": available,
+              "required_bytes": required}, sort_keys=True), flush=True)
+          runner.require_memory_reserve(available, required)
+          PY
       - if: github.event_name != 'workflow_dispatch'
         run: python3 tests/package/docs_commands.py --local-artifacts artifacts
       - name: Assemble exact qualified package inventory
