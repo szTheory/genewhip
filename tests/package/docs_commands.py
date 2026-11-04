@@ -17,6 +17,7 @@ import tarfile
 import tempfile
 import threading
 import unittest
+from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 _DELIVERY_SPEC = importlib.util.spec_from_file_location(
@@ -190,9 +191,12 @@ def verify_local_archive(artifact_dir, archive_name, role, *, version="0.2.0", e
         raise ValueError("local-receipt-identity")
     if expected_source is not None and expected_source != revision:
         raise ValueError("local-expected-source")
+    source_state = receipt.get("source_state")
+    state_matches = (source_state in ("clean", "development-only")
+                     if expected_state is None else source_state == expected_state)
     if (receipt.get("outcome") != "pass" or receipt.get("archive") != archive_name or
             receipt.get("release_version") != "0.2.0" or
-            receipt.get("source_state") != expected_state or
+            not state_matches or
             not str(receipt.get("publication", "")).startswith("not published")):
         raise ValueError("local-receipt-identity")
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
@@ -287,7 +291,7 @@ def run_package_smoke(script, archive, digest, revision, expected_fields=None):
 
 
 def _phase7_child_limits():
-    limits = json.loads((ROOT / "evidence/v02-execution.json").read_text()).get("per_child_limits")
+    limits = _DESKTOP.selected_execution_scope().get("per_child_limits")
     required = {"wall_seconds", "cleanup_grace_seconds", "max_rss_bytes",
                 "max_stdout_stderr_bytes", "max_json_bytes", "max_binary_file_bytes",
                 "max_capture_bytes", "max_scratch_bytes", "max_retained_bytes",
@@ -613,6 +617,25 @@ def run_all(artifact_dir, release_url=None):
 
 
 class DocumentationCommandContract(unittest.TestCase):
+    def test_v02_docs_children_use_the_exact_selected_scope(self):
+        profiles = (
+            ({}, 4 * 1024**3),
+            ({"GENEWHIP_QUALIFICATION_SCOPE_PATH": "evidence/v02-phase7-authorized-execution-scope.json",
+              "GENEWHIP_QUALIFICATION_SCOPE_SHA256": "c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a"}, 4 * 1024**3),
+            ({"GENEWHIP_QUALIFICATION_SCOPE_PATH": "evidence/v02-phase7-ci-memory-scope.json",
+              "GENEWHIP_QUALIFICATION_SCOPE_SHA256": "0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea"}, 2 * 1024**3),
+        )
+        for environment, expected in profiles:
+            with self.subTest(environment=environment), mock.patch.dict(os.environ, environment, clear=True):
+                limits = _phase7_child_limits()
+                self.assertEqual(limits["max_rss_bytes"], expected)
+                self.assertEqual(limits["max_scratch_bytes"], 16 * 1024**3)
+        with mock.patch.dict(os.environ, {
+                "GENEWHIP_QUALIFICATION_SCOPE_PATH": "evidence/v02-phase7-authorized-execution-scope.json",
+                "GENEWHIP_QUALIFICATION_SCOPE_SHA256": "0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea"}, clear=True):
+            with self.assertRaisesRegex(ValueError, "profile-invalid"):
+                _phase7_child_limits()
+
     def test_v02_entry_paths_link_to_stable_play_build_and_embed_contracts(self):
         readme = (ROOT / "README.md").read_text()
         required_links = (
@@ -714,6 +737,51 @@ class DocumentationCommandContract(unittest.TestCase):
             result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
             self.assertIn("REJECT: local-archive-missing", result.stderr)
+
+    def test_v02_local_cli_accepts_staged_states_without_relaxing_clean_only(self):
+        revision = "a" * 40
+        for role, prefix, inspector, method in (
+                ("sdk", "genewhip-0.2.0-sdk-diagnostic-darwin-arm64-", _SDK, "inspect_v02_archive"),
+                ("desktop", "genewhip-0.2.0-playable-preview-macos-arm64-", _DESKTOP, "validate_v02_archive")):
+            with tempfile.TemporaryDirectory(prefix="gw-doc-cli-state-") as directory:
+                root = pathlib.Path(directory)
+                name = prefix + revision[:12] + ".tar.gz"
+                archive = root / name
+                archive.write_bytes(b"synthetic member-inspection boundary")
+                digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+                (root / (name + ".sha256")).write_text(digest + "  " + name + "\n")
+                command = ["docs_commands.py", "--verify-local", "--local-artifacts", str(root),
+                           "--archive", name, "--role", role, "--version", "0.2.0"]
+                for state, clean_only, accepted in (
+                        ("clean", False, True), ("development-only", False, True),
+                        ("clean", True, True), ("development-only", True, False),
+                        (None, False, False), ("dirty", False, False),
+                        ("public-downloaded", False, False)):
+                    with self.subTest(role=role, state=state, clean_only=clean_only):
+                        receipt = {"outcome": "pass", "release_version": "0.2.0", "archive": name,
+                                   "source_revision": revision, "source_state": state,
+                                   "archive_sha256": digest, "publication": "not published; synthetic contract"}
+                        (root / (name + ".qualification.json")).write_text(json.dumps(receipt))
+                        with mock.patch.object(sys, "argv", command + (["--require-clean-local"] if clean_only else [])), \
+                             mock.patch.object(inspector, method) as check_members, \
+                             mock.patch("builtins.print") as output:
+                            if accepted:
+                                main()
+                                self.assertEqual(json.loads(output.call_args.args[0])["source_state"], state)
+                                check_members.assert_called_once()
+                            else:
+                                with self.assertRaisesRegex(ValueError, "^local-receipt-identity$"):
+                                    main()
+                                check_members.assert_not_called()
+
+    def test_v02_local_cli_does_not_accept_public_download_options(self):
+        for options in (("--public-download",), ("--publisher-packet", "unused.json")):
+            with self.subTest(options=options), \
+                 mock.patch.object(sys, "argv", ["docs_commands.py", "--verify-local", *options]), \
+                 mock.patch.object(argparse.ArgumentParser, "error", side_effect=RuntimeError("mode-conflict")) as reject:
+                with self.assertRaisesRegex(RuntimeError, "^mode-conflict$"):
+                    main()
+                self.assertIn("public-download", reject.call_args.args[0])
 
     def test_v02_local_verifier_separates_wrong_source_and_sidecar_identity(self):
         with tempfile.TemporaryDirectory(prefix="gw-doc-v02-identity-") as directory:
@@ -846,11 +914,14 @@ def main():
         print(json.dumps(run_contracts(args.version), sort_keys=True))
         return
     if args.verify_local:
+        if args.public_download or args.publisher_packet is not None:
+            parser.error("--verify-local cannot authenticate public-download inputs; use the public-download mode")
         if args.local_artifacts is None or not args.archive or args.version != "0.2.0" or not args.role:
             parser.error("--verify-local requires --local-artifacts, --archive, --role, and --version 0.2.0")
         print(json.dumps(_receipt_for_artifact(verify_local_archive(
             args.local_artifacts, args.archive, args.role, version=args.version,
-            expected_source=args.expected_source)), sort_keys=True))
+            expected_source=args.expected_source,
+            expected_state="clean" if args.require_clean_local else None)), sort_keys=True))
         return
     if args.local_artifacts is None:
         parser.error("--local-artifacts is required unless --contracts-only is selected")

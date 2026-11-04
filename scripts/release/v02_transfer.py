@@ -86,6 +86,21 @@ PACKAGE_DIMENSION_SOURCE_PATHS = {
     "rights": "artifacts/release-assets/inventory.json",
 }
 BENCHMARKS = ("control", "recursion94", "tank-battle")
+DIMENSION_SOURCE_SCHEMAS = {
+    "core": "genewhip-phase6-product-report-v1",
+    "host": "genewhip-phase6-host-v1",
+    "host-native": "genewhip-phase6-host-v1",
+    "media": "genewhip-phase6-media-v1",
+    "safety": "genewhip-phase6-safety-v1",
+    "determinism": "genewhip-phase6-chunk-v1",
+    "measurements": "genewhip-v02-measurement-summary-v1",
+    "public-matrix": "genewhip-v02-public-closure-v1",
+    "package": "genewhip.v02-package-receipt.v1",
+    "docs": "genewhip-docs-command-qualification-v2",
+    "privacy": "genewhip-v02-public-hygiene-v1",
+    "rights": "genewhip.release-inventory.v2",
+}
+RUNTIME_REFERENCE_DIMENSIONS = {"core", "host", "host-native", "media", "safety", "determinism"}
 PACKAGE_FIXED_MEMBERS = {
     "artifacts/package-receipt.json", "artifacts/qualification-docs.json",
     "artifacts/qualification-command-attempts/public-hygiene.attempt.json",
@@ -100,6 +115,8 @@ PACKAGE_FIXED_MEMBERS = {
     "build/v02/runtime-observation/safety-build-evidence/sanitize.json",
     "build/v02/runtime-observation/safety-build-evidence/hooks-off.json",
     "build/v02/runtime-observation/chunk.json", "build/v02/public/manifest.json",
+    "build/v02/semantic-mutant-receipt.json", "build/v02/evidence/core-mutants.json",
+    "build/v02/evidence/host-mutants.json",
     "artifacts/release-assets/inventory.json", "artifacts/release-assets/SHA256SUMS",
     *("artifacts/dimension-" + name + ".json" for name in DIMENSIONS),
     *("build/v02/collected/benchmark-" + name + "/benchmark-" + name + ".json" for name in BENCHMARKS),
@@ -1291,6 +1308,7 @@ def _package_closure_member_allowed(name):
 
 def expected_package_members(source_sha, closure_paths=()):
     names = set(PACKAGE_FIXED_MEMBERS)
+    names.update(DIRECT_MEMBERS)
     names.update(closure_paths)
     for name in _package_asset_names(source_sha):
         names.add("artifacts/v02/" + name)
@@ -1350,6 +1368,143 @@ def _relative_package_path(name):
         _package_closure_member_allowed(name))
 
 
+def _reviewed_sdl_license_bytes():
+    """Return the exact SDL notice bytes pinned by the reviewed dependency record."""
+    dependency_path = ROOT / "packaging/dependencies/sdl3.json"
+    if dependency_path.is_symlink() or not dependency_path.is_file():
+        raise ValueError("transfer-sdl-license-dependency-record-invalid")
+    try:
+        dependency = json.loads(dependency_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("transfer-sdl-license-dependency-record-invalid") from error
+    if (not isinstance(dependency, dict) or dependency.get("name") != "SDL" or
+            dependency.get("notice") != "packaging/notices/SDL3-LICENSE.txt" or
+            not _sha256_string(dependency.get("license_file_sha256"))):
+        raise ValueError("transfer-sdl-license-dependency-record-invalid")
+    notice_path = ROOT / dependency["notice"]
+    if notice_path.is_symlink() or not notice_path.is_file() or notice_path.stat().st_size > MAX_FILE_BYTES:
+        raise ValueError("transfer-sdl-license-notice-invalid")
+    data = notice_path.read_bytes()
+    if _sha(data) != dependency["license_file_sha256"]:
+        raise ValueError("transfer-sdl-license-notice-invalid")
+    return data
+
+
+def _collect_qualification_references(dimension_sources, read_attachment):
+    """Resolve only attachments owned by the qualification/package evidence schemas."""
+    if not isinstance(dimension_sources, dict) or set(dimension_sources) != set(DIMENSIONS):
+        raise ValueError("transfer-evidence-reference-dimension-roster")
+    documents = {}
+    direct_paths = set()
+    for dimension in DIMENSIONS:
+        row = dimension_sources[dimension]
+        expected_schema = DIMENSION_SOURCE_SCHEMAS[dimension]
+        if (not isinstance(row, dict) or set(row) != {"path", "document"} or
+                not isinstance(row.get("path"), str) or not isinstance(row.get("document"), dict) or
+                row["document"].get("schema") != expected_schema):
+            raise ValueError("transfer-evidence-reference-dimension-schema:" + dimension)
+        relative = pathlib.PurePosixPath(row["path"])
+        if (not row["path"] or relative.is_absolute() or "." in relative.parts or
+                ".." in relative.parts or "\\" in row["path"]):
+            raise ValueError("transfer-evidence-reference-dimension-path:" + dimension)
+        direct_paths.add(row["path"])
+        documents[dimension] = row["document"]
+
+    found = {}
+    visited = set(direct_paths)
+
+    def add_attachment(relative, digest, depth, *, recurse=True):
+        if not _relative_package_path(relative) or not _sha256_string(digest):
+            raise ValueError("transfer-evidence-reference-path-or-digest-invalid")
+        data = read_attachment(relative, digest)
+        if not isinstance(data, (bytes, bytearray)):
+            raise ValueError("transfer-evidence-reference-reader-invalid")
+        prior = found.get(relative)
+        if prior is not None and prior != digest:
+            raise ValueError("transfer-package-evidence-reference-conflict:" + relative)
+        found[relative] = digest
+        if recurse and relative.endswith(".json") and relative not in visited and depth < 4:
+            visited.add(relative)
+            visit(json.loads(data), depth + 1, "", relative)
+        if pathlib.PurePosixPath(relative).name == "candidate.json":
+            bindings = _candidate_cmake_source_bindings(json.loads(data))
+            for source_path, source_digest in bindings.items():
+                snapshot_path = _candidate_cmake_snapshot_path(source_digest)
+                snapshot_data = add_attachment(snapshot_path, source_digest, depth + 1,
+                    recurse=False)
+                if len(snapshot_data) > CMAKE_PROVENANCE_MAX_BYTES:
+                    raise ValueError("transfer-cmake-provenance-snapshot-size-limit:" + source_path)
+        return data
+
+    def visit(value, depth=0, role="", document_name=None):
+        if isinstance(value, dict):
+            classification = _classify_reference(role, value)
+            if classification == "artifact":
+                add_attachment(value["path"], value["sha256"], depth,
+                    recurse=True)
+            elif classification == "control-field-log":
+                _validate_control_stdout_reference(document_name, value)
+                data = add_attachment(value["path"], value["sha256"], depth, recurse=False)
+                if (type(value.get("observed_bytes")) is not int or
+                        value["observed_bytes"] != value.get("retained_bytes") or
+                        len(data) != value["observed_bytes"]):
+                    raise ValueError("transfer-control-field-log-size-binding-invalid")
+            for key, child in value.items():
+                visit(child, depth, key, document_name=document_name)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child, depth, role, document_name=document_name)
+
+    for dimension in DIMENSIONS:
+        document = documents[dimension]
+        if dimension in RUNTIME_REFERENCE_DIMENSIONS:
+            visit(document, document_name=dimension_sources[dimension]["path"])
+        elif dimension == "measurements":
+            workloads = document.get("workloads")
+            if not isinstance(workloads, dict) or set(workloads) != set(BENCHMARKS):
+                raise ValueError("transfer-evidence-reference-measurement-roster")
+            for workload in BENCHMARKS:
+                row = workloads[workload]
+                expected_path = ("build/v02/collected/benchmark-" + workload +
+                    "/benchmark-" + workload + ".json")
+                if (not isinstance(row, dict) or set(row) != {
+                        "path", "sha256", "host_identity", "process_starts"} or
+                        row.get("path") != expected_path or not isinstance(row.get("host_identity"), dict) or
+                        type(row.get("process_starts")) is not int or row["process_starts"] != 21):
+                    raise ValueError("transfer-evidence-reference-measurement-invalid:" + workload)
+                add_attachment(row["path"], row["sha256"], 0, recurse=False)
+        elif dimension == "public-matrix":
+            members = document.get("members")
+            if not isinstance(members, dict):
+                raise ValueError("transfer-evidence-reference-public-matrix-members")
+            base_members = set(PUBLIC_CLOSURE) - {"manifest.json"}
+            allowed_rosters = (base_members, base_members | {"execution-identity.json"})
+            if set(members) not in allowed_rosters:
+                raise ValueError("transfer-evidence-reference-public-matrix-roster")
+            expected_keys = {"schema", "closure_id", "members", "independently_verifiable", "verification_scope"}
+            if "execution-identity.json" in members:
+                expected_keys |= {"current_identity_policy", "current_execution_identity_sha256"}
+            if (set(document) != expected_keys or document.get("independently_verifiable") is not True or
+                    document.get("verification_scope") != {
+                        "current_observations": "independently-verifiable",
+                        "historical_dispositions": "digest-only-not-independently-verifiable",
+                        "hardware_or_whole_game_truth": "not-claimed"} or
+                    document.get("closure_id") != _sha(json.dumps(members, sort_keys=True,
+                        separators=(",", ":")).encode("utf-8"))):
+                raise ValueError("transfer-evidence-reference-public-matrix-invalid")
+            if "execution-identity.json" in members and (
+                    document.get("current_identity_policy") != "separate-current-launch-bindings-v1" or
+                    not _sha256_string(document.get("current_execution_identity_sha256"))):
+                raise ValueError("transfer-evidence-reference-public-matrix-current-identity-invalid")
+            for member, digest in members.items():
+                if not _sha256_string(digest):
+                    raise ValueError("transfer-evidence-reference-public-matrix-digest-invalid:" + member)
+                data = add_attachment("build/v02/public/" + member, digest, 0, recurse=False)
+                if member == "schema.json" and data != _canonical_public_schema_bytes():
+                    raise ValueError("transfer-public-schema-not-canonical")
+    return dict(sorted(found.items()))
+
+
 def _validate_evidence_closure(root, closure, runtime_identity, *, inventory_members=None):
     """Recompute the bounded transitive references recorded by qualification close."""
     if not isinstance(closure, dict) or closure.get("schema") != "genewhip.v02-evidence-closure.v1":
@@ -1388,59 +1543,42 @@ def _validate_evidence_closure(root, closure, runtime_identity, *, inventory_mem
         return path, data
 
     dimension_paths = set()
+    dimension_sources = {}
     for name, row in dimensions.items():
         if (name not in PACKAGE_DIMENSION_SOURCE_PATHS or not isinstance(row, dict) or
                 set(row) != {"path", "sha256", "identity"} or
                 row.get("path") != PACKAGE_DIMENSION_SOURCE_PATHS[name] or
                 row.get("identity") != identity):
             raise ValueError("transfer-package-evidence-dimension-row:" + str(name))
-        dimension_path, _ = checked_file(row.get("path"), row.get("sha256"))
+        dimension_path, dimension_bytes = checked_file(row.get("path"), row.get("sha256"))
         dimension_paths.add(row["path"])
-    observed = {}
-    visited = set()
+        try:
+            document = json.loads(dimension_bytes)
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError("transfer-package-evidence-dimension-json-invalid:" + name) from error
+        dimension_sources[name] = {"path": row["path"], "document": document}
 
-    def visit(value, depth=0, role=""):
-        if isinstance(value, dict):
-            classification = _classify_reference(role, value)
-            if classification == "artifact":
-                relative = value.get("path", value.get("retained_path"))
-                digest = value["sha256"]
-                if not _relative_package_path(relative):
-                    raise ValueError("transfer-package-evidence-reference-role:" + relative)
-                path, data = checked_file(relative, digest)
-                prior = observed.get(relative)
-                if prior is not None and prior != digest:
-                    raise ValueError("transfer-package-evidence-reference-conflict:" + relative)
-                observed[relative] = digest
-                if path.suffix == ".json" and relative not in visited and depth < 4:
-                    visited.add(relative)
-                    visit(json.loads(data), depth + 1)
-            elif classification == "stream":
-                # Child stdout/stderr bytes stay local; the retained digest and
-                # byte counts are sufficient in the transferred report.
-                pass
-            for key, child in value.items():
-                visit(child, depth, key)
-        elif isinstance(value, list):
-            for child in value:
-                visit(child, depth, role)
+    def read_attachment(name, digest):
+        return checked_file(name, digest)[1]
 
-    for name, row in dimensions.items():
-        path, data = checked_file(row["path"], row["sha256"])
-        if path.suffix == ".json":
-            visited.add(row["path"])
-            visit(json.loads(data))
+    observed = _collect_qualification_references(dimension_sources, read_attachment)
     if observed != references:
         raise ValueError("transfer-package-evidence-closure-incomplete-or-extra")
     return identity, references, dimension_paths
 
 
-def _scan_archive_members(data, *, label):
+def _scan_archive_members(data, *, label, source_sha):
     archive_spec = importlib.util.spec_from_file_location("gw_v02_transfer_archive_limits",
         ROOT / "scripts/package_archive.py")
     archive_module = importlib.util.module_from_spec(archive_spec)
     archive_spec.loader.exec_module(archive_module)
     archive_module.preflight_tar_gz(data, max_members=4096, max_expanded_bytes=MAX_TOTAL_BYTES)
+    archive_name = pathlib.PurePosixPath(label).name
+    if (not isinstance(source_sha, str) or re.fullmatch(r"[0-9a-f]{40}", source_sha) is None or
+            archive_name not in {name for name in _package_asset_names(source_sha)
+                if name.endswith(".tar.gz")}):
+        raise ValueError("transfer-package-archive-label-invalid:" + label)
+    sdl_license_member = (archive_name[:-len(".tar.gz")] + "/share/genewhip/SDL3-LICENSE.txt")
     with tarfile.open(fileobj=__import__("io").BytesIO(data), mode="r:gz") as archive:
         for member in archive.getmembers():
             path = pathlib.PurePosixPath(member.name)
@@ -1455,7 +1593,13 @@ def _scan_archive_members(data, *, label):
             content = stream.read(MAX_FILE_BYTES + 1) if stream else b""
             if len(content) != member.size:
                 raise ValueError("transfer-package-archive-member-truncated:" + label)
-            _scan_content(content, label=member.name)
+            sdl_notice_candidate = ("sdl3-license" in pathlib.PurePosixPath(member.name).name.lower() or
+                b"Sam Lantinga" in content or b"slouken@libsdl.org" in content)
+            if sdl_notice_candidate:
+                if member.name != sdl_license_member or content != _reviewed_sdl_license_bytes():
+                    raise ValueError("transfer-package-sdl-license-notice-mismatch:" + label)
+            else:
+                _scan_content(content, label=member.name)
 
 
 def _package_files(root, *, expected_git_revision, expected_product_content_sha256):
@@ -1510,7 +1654,7 @@ def prepare_package(root, out, *, expected_source_sha):
         data = path.read_bytes()
         _scan(name, data, package=True)
         if name.endswith(".tar.gz"):
-            _scan_archive_members(data, label=name)
+            _scan_archive_members(data, label=name, source_sha=git_revision)
         members[name] = {"sha256": _sha(data), "size": len(data)}
         total += len(data)
         if len(members) > MAX_MEMBERS or total > MAX_TOTAL_BYTES:
@@ -1592,7 +1736,7 @@ def verify_package(payload_root, inventory_path, *, expected_source_sha=None,
             raise ValueError("transfer-package-member-identity-invalid:" + name)
         _scan(name, data, package=True)
         if name.endswith(".tar.gz"):
-            _scan_archive_members(data, label=name)
+            _scan_archive_members(data, label=name, source_sha=source_sha)
         total += info.st_size
     if total != inventory.get("total_bytes") or total > MAX_TOTAL_BYTES:
         raise ValueError("transfer-package-total-byte-limit")

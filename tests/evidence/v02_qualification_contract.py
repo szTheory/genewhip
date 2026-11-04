@@ -173,6 +173,169 @@ def synthetic_qualified_reports(benchmark, identity, source_digest, scope_id, sc
 
 
 class QualificationCoordinatorContract(unittest.TestCase):
+    def test_public_package_attempt_keeps_digests_and_rejects_incomplete_success(self):
+        import copy
+        module = load_module(self)
+        limits = json.loads((ROOT / "evidence/v02-phase7-ci-memory-scope.json").read_text())["per_child_limits"]
+        private_path = "/" + "Users" + "/fixture/private/build"
+        text = "build completed at " + private_path + "\n"
+        count = len(text.encode())
+        stream = {"text": text, "sha256": hashlib.sha256(text.encode()).hexdigest(),
+            "observed_bytes": count, "retained_bytes": count, "truncated": False}
+        raw = {"schema": "genewhip.v02-coordinator-child-attempt.v1", "label": "package-sdk",
+            "returncode": 0, "launch_error": None, "process_group_cleanup": "confirmed",
+            "argv": [private_path], "stdout_tail": text, "stderr_tail": text,
+            "output": private_path, "diagnostic": {"path": private_path},
+            "processes": [{"status": "completed", "return_code": 0,
+                "process_group_cleanup": "confirmed", "bound_violation": False,
+                "rss_bytes_observed": 0, "rss_bytes_peak": 1024, "wall_seconds": 0.5,
+                "stdout_bytes": count, "stderr_bytes": count,
+                "private_output_dir": private_path}],
+            "streams": {"stdout": copy.deepcopy(stream), "stderr": copy.deepcopy(stream)}}
+        before = copy.deepcopy(raw)
+        projected = module._public_package_attempt(raw, limits)
+        self.assertEqual(raw, before)
+        self.assertTrue(module._public_package_attempt_valid(projected, limits))
+        self.assertEqual(projected["original_attempt_sha256"], hashlib.sha256(json.dumps(raw,
+            sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest())
+        for name in ("stdout", "stderr"):
+            self.assertEqual(projected["streams"][name]["sha256"], stream["sha256"])
+            self.assertEqual(set(projected["streams"][name]), set(module._PACKAGE_STREAM_FIELDS))
+        spec = importlib.util.spec_from_file_location("gw_projection_privacy_policy",
+            ROOT / "scripts/release/v02_transfer.py")
+        transfer = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(transfer)
+        encoded = json.dumps({"attempts": [projected]}).encode()
+        self.assertNotIn(private_path.encode(), encoded)
+        transfer._scan("artifacts/package-receipt.json", encoded, package=True)
+        def exceed_output(value):
+            amount = limits["max_stdout_stderr_bytes"] + 1
+            value["processes"][0]["stdout_bytes"] = amount
+            value["streams"]["stdout"].update(observed_bytes=amount, retained_bytes=amount)
+
+        def exceed_combined_output(value):
+            amount = limits["max_stdout_stderr_bytes"] // 2 + 1
+            for name in ("stdout", "stderr"):
+                value["processes"][0][name + "_bytes"] = amount
+                value["streams"][name].update(observed_bytes=amount, retained_bytes=amount)
+
+        mutations = (
+            ("failed", lambda v: v.update(returncode=1)),
+            ("missing-launch-result", lambda v: v.pop("launch_error")),
+            ("cleanup-unknown", lambda v: v.update(process_group_cleanup="unknown")),
+            ("bound-hit", lambda v: v["processes"][0].update(bound_violation=True)),
+            ("process-failed", lambda v: v["processes"][0].update(return_code=1)),
+            ("bool-success", lambda v: v["processes"][0].update(return_code=False)),
+            ("missing-rss", lambda v: v["processes"][0].pop("rss_bytes_peak")),
+            ("over-cap-rss", lambda v: v["processes"][0].update(rss_bytes_peak=limits["max_rss_bytes"] + 1)),
+            ("unobserved-rss", lambda v: v["processes"][0].update(rss_bytes_peak=0)),
+            ("over-cap-time", lambda v: v["processes"][0].update(wall_seconds=limits["wall_seconds"] + limits["cleanup_grace_seconds"] + 1)),
+            ("over-cap-output", exceed_output),
+            ("over-combined-output", exceed_combined_output),
+            ("negative-rss", lambda v: v["processes"][0].update(rss_bytes_peak=-1)),
+            ("nonfinite-time", lambda v: v["processes"][0].update(wall_seconds=float("inf"))),
+            ("huge-time", lambda v: v["processes"][0].update(wall_seconds=10 ** 400)),
+            ("stream-size", lambda v: v["streams"]["stdout"].update(observed_bytes=count + 1)),
+        )
+        for name, mutate in mutations:
+            with self.subTest(case=name):
+                changed = copy.deepcopy(raw)
+                mutate(changed)
+                with self.assertRaises(ValueError):
+                    module._public_package_attempt(changed, limits)
+        inventory = copy.deepcopy(raw)
+        inventory["label"] = "package-inventory"
+        inventory["processes"][0]["wall_seconds"] = 301 + limits["cleanup_grace_seconds"]
+        with self.assertRaises(ValueError):
+            module._public_package_attempt(inventory, {**limits, "wall_seconds": 14400})
+        changed = copy.deepcopy(projected)
+        changed["streams"]["stdout"]["text"] = text
+        self.assertFalse(module._public_package_attempt_valid(changed, limits))
+
+    def test_privacy_dimension_requires_exact_public_hygiene_self_test_stdout(self):
+        from unittest import mock
+        import shutil
+
+        module = load_module(self)
+        expected_stdout = ("hygiene controls: 4/4 intended rejections; original upstream notices preserved\n"
+                           "public hygiene: PASS\n")
+        identity = {"source_sha": "a" * 40, "head_sha": "a" * 40, "base_sha": "b" * 40,
+            "run_id": "123", "run_attempt": "1"}
+        runtime = type("Runtime", (), {"_module": staticmethod(lambda *_args: object())})()
+
+        with tempfile.TemporaryDirectory(prefix="gw-privacy-dimension-") as temporary:
+            root = Path(temporary)
+            for relative in ("LICENSE", "scripts/ci/public-hygiene.sh", "scripts/ci/public_hygiene.py",
+                             "tests/vectors/manifest.json"):
+                source = ROOT / relative
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source, target)
+            vector_manifest = json.loads((root / "tests/vectors/manifest.json").read_text(encoding="utf-8"))
+            for row in vector_manifest["retained_files"]:
+                relative = Path("tests/vectors") / row["path"]
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ROOT / relative, target)
+            import contextlib
+            import io
+            spec = importlib.util.spec_from_file_location("gw_real_hygiene_self_test",
+                root / "scripts/ci/public_hygiene.py")
+            hygiene = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(hygiene)
+            output = io.StringIO()
+            # Exercise the real self-test and filesystem controls; only Git enumeration is mocked.
+            with mock.patch.object(hygiene.subprocess, "check_output", return_value=b"") as git_files, \
+                    mock.patch.object(sys, "argv", ["public_hygiene.py", "--self-test"]), \
+                    contextlib.redirect_stdout(output):
+                self.assertEqual(hygiene.main(), 0)
+            git_files.assert_called_once_with(
+                ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd=hygiene.ROOT)
+            actual_stdout = output.getvalue()
+            self.assertEqual(actual_stdout, expected_stdout)
+
+            module.ROOT = root
+            report_path = root / "build/v02/public-hygiene.json"
+            attempt_path = root / "artifacts/qualification-command-attempts/public-hygiene.attempt.json"
+            attempt_path.parent.mkdir(parents=True)
+
+            def validate(stdout, *, reported_stdout_sha=None):
+                stdout_bytes = stdout.encode("utf-8")
+                stdout_sha = hashlib.sha256(stdout_bytes).hexdigest()
+                attempt = {"schema": "genewhip.v02-coordinator-child-attempt.v1",
+                    "label": "public-hygiene",
+                    "argv": ["bash", "scripts/ci/public-hygiene.sh", "--self-test"],
+                    "returncode": 0, "process_group_cleanup": "confirmed",
+                    "stdout_tail": stdout,
+                    "processes": [{"status": "completed", "return_code": 0,
+                        "process_group_cleanup": "confirmed", "bound_violation": False,
+                        "stdout_bytes": len(stdout_bytes)}],
+                    "streams": {"stdout": {"text": stdout, "sha256": stdout_sha,
+                        "observed_bytes": len(stdout_bytes), "retained_bytes": len(stdout_bytes),
+                        "truncated": False}}}
+                attempt_bytes = (json.dumps(attempt, sort_keys=True, indent=2) + "\n").encode("utf-8")
+                attempt_path.write_bytes(attempt_bytes)
+                report = {"schema": "genewhip-v02-public-hygiene-v1", "status": "pass",
+                    "identity": identity,
+                    "attempt_sha256": hashlib.sha256(attempt_bytes).hexdigest(),
+                    "stdout_sha256": reported_stdout_sha or stdout_sha}
+                report_path.parent.mkdir(parents=True, exist_ok=True)
+                report_path.write_text(json.dumps(report), encoding="utf-8")
+                with mock.patch.object(module, "_load_runtime_module", return_value=runtime):
+                    return module._dimension_semantic_errors("privacy", report_path, identity)
+
+            self.assertEqual(validate(actual_stdout), [])
+            cases = (
+                ("missing-control-line", "public hygiene: PASS\n"),
+                ("added-output", expected_stdout + "unexpected output\n"),
+                ("digest-mismatch", expected_stdout),
+            )
+            for name, stdout in cases:
+                with self.subTest(case=name):
+                    mismatch = "0" * 64 if name == "digest-mismatch" else None
+                    problems = validate(stdout, reported_stdout_sha=mismatch)
+                    self.assertIn("proof-privacy-attempt-invalid", problems)
+
     def test_hosted_artifact_download_uses_scope_binary_cap(self):
         from unittest import mock
         module = load_module(self)
@@ -6316,6 +6479,8 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
             def semantic(name, path, identity):
                 return [] if json.loads(path.read_text()).get("valid") is True else ["semantic-mutant:" + name]
             module._dimension_semantic_errors = semantic
+            # This test isolates semantic dispatch; real reference schemas have separate contracts.
+            module._referenced_evidence_files = lambda sources: {}
             evidence, closure_dimensions = {}, {}
             for name in module.REQUIRED_DIMENSIONS:
                 raw = root / ("raw-" + name + ".json")

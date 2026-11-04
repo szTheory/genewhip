@@ -22,6 +22,170 @@ SPEC.loader.exec_module(TRANSFER)
 
 
 class RuntimeTransferContract(unittest.TestCase):
+    def test_archive_scan_allows_only_exact_dependency_pinned_sdl_license_notice(self):
+        notice_path = ROOT / "packaging/notices/SDL3-LICENSE.txt"
+        dependency = json.loads((ROOT / "packaging/dependencies/sdl3.json").read_text(encoding="utf-8"))
+        notice = notice_path.read_bytes()
+        self.assertEqual(hashlib.sha256(notice).hexdigest(), dependency["license_file_sha256"])
+        source_sha = "a" * 40
+        archive_root = "genewhip-0.2.0-playable-preview-macos-arm64-" + source_sha[:12]
+        license_member = archive_root + "/share/genewhip/SDL3-LICENSE.txt"
+
+        def archive(entries):
+            output = io.BytesIO()
+            with tarfile.open(fileobj=output, mode="w:gz") as bundle:
+                for name, content in entries:
+                    member = tarfile.TarInfo(name)
+                    member.size = len(content)
+                    bundle.addfile(member, io.BytesIO(content))
+            return output.getvalue()
+
+        label = archive_root + ".tar.gz"
+        TRANSFER._scan_archive_members(archive([(license_member, notice)]),
+            label=label, source_sha=source_sha)
+        with self.assertRaisesRegex(ValueError, "transfer-package-sdl-license-notice-mismatch"):
+            TRANSFER._scan_archive_members(archive([(license_member, notice + b"altered\n")]),
+                label=label, source_sha=source_sha)
+        renamed = archive_root + "/share/genewhip/renamed-SDL3-LICENSE.txt"
+        with self.assertRaisesRegex(ValueError, "transfer-package-sdl-license-notice-mismatch"):
+            TRANSFER._scan_archive_members(archive([(renamed, notice)]),
+                label=label, source_sha=source_sha)
+        lookalike = notice.replace(b"slouken@libsdl.org", b"redacted@example.invalid")
+        with self.assertRaisesRegex(ValueError, "transfer-package-sdl-license-notice-mismatch"):
+            TRANSFER._scan_archive_members(archive([(license_member, lookalike)]),
+                label=label, source_sha=source_sha)
+        with self.assertRaisesRegex(ValueError, "transfer-private-email:" + archive_root + "/share/genewhip/other.txt"):
+            TRANSFER._scan_archive_members(archive([
+                (license_member, notice),
+                (archive_root + "/share/genewhip/other.txt", b"contact someone@example.invalid\n")]),
+                label=label, source_sha=source_sha)
+
+    def test_shared_qualification_reference_resolver_is_schema_aware_and_keeps_control_logs(self):
+        with tempfile.TemporaryDirectory(prefix="gw-evidence-reference-policy-") as temp:
+            root = pathlib.Path(temp)
+            transfer = TRANSFER
+            direct = {}
+            for name, schema in transfer.DIMENSION_SOURCE_SCHEMAS.items():
+                direct[name] = {"path": "artifacts/dimension-source/" + name + ".json",
+                    "document": {"schema": schema}}
+
+            def put(relative, data):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+                return hashlib.sha256(data).hexdigest()
+
+            canonical_candidate_path = "build/v02/runtime-observation/candidate.json"
+            candidate_path = "build/v02/runtime/core-work/canonical-core-abcdefgh/candidate.json"
+            cmake_sources = {name: (ROOT / name).read_bytes()
+                for name in transfer.CMAKE_PROVENANCE_SOURCE_PATHS}
+            cmake_bindings = {name: hashlib.sha256(data).hexdigest()
+                for name, data in cmake_sources.items()}
+            candidate_bytes = json.dumps({"schema": "genewhip-phase6-candidate-v1",
+                "source_files": cmake_bindings}, sort_keys=True).encode()
+            candidate_sha = put(candidate_path, candidate_bytes)
+            self.assertEqual(put(canonical_candidate_path, candidate_bytes), candidate_sha)
+            cmake_snapshots = {}
+            for source_name, digest in cmake_bindings.items():
+                snapshot = transfer._candidate_cmake_snapshot_path(digest)
+                cmake_snapshots[snapshot] = (digest, put(snapshot, cmake_sources[source_name]))
+            control_path = ("build/v02/runtime/core-work/canonical-core-abcdefgh/controls-1/"
+                "control.json")
+            field_log_path = ("build/v02/runtime/core-work/canonical-core-abcdefgh/controls-1/"
+                "artifacts/title-no-start/headless/child.stdout.raw")
+            field_log_bytes = b"bounded output\n"
+            field_log_sha = put(field_log_path, field_log_bytes)
+            control_bytes = json.dumps({"schema": "control", "results": [{"process_streams": {
+                "stdout": {"path": field_log_path, "sha256": field_log_sha,
+                    "observed_bytes": len(field_log_bytes), "retained_bytes": len(field_log_bytes),
+                    "truncated": False}}}]}).encode()
+            control_sha = put(control_path, control_bytes)
+            direct["core"]["document"].update({
+                "candidate_manifest": {"path": candidate_path, "sha256": candidate_sha},
+                "public-core": {"path": transfer.IDENTITY_REFERENCE_PATHS["public-core"],
+                    "sha256": "a" * 64},
+                "stages": [{"evidence": {"path": control_path, "sha256": control_sha}}]})
+
+            benchmark_names = {}
+            for workload in transfer.BENCHMARKS:
+                relative = "build/v02/collected/benchmark-" + workload + "/benchmark-" + workload + ".json"
+                report = {"schema": "genewhip.v02-workload-benchmark-v1",
+                    "video_fields": [{"sha256": "f" * 64}],
+                    "source_locator": {"path": "build/v02/unknown/local-source", "sha256": "e" * 64}}
+                data = json.dumps(report).encode()
+                benchmark_names[workload] = (relative, put(relative, data))
+            direct["measurements"]["document"]["workloads"] = {
+                workload: {"path": relative, "sha256": digest, "host_identity": {}, "process_starts": 21}
+                for workload, (relative, digest) in benchmark_names.items()}
+
+            public_members = {}
+            for leaf in sorted(set(transfer.PUBLIC_CLOSURE) - {"manifest.json"}):
+                if leaf == "schema.json":
+                    data = transfer._canonical_public_schema_bytes()
+                elif leaf == "observations.json":
+                    data = b"[]\n"
+                elif leaf.endswith(".json"):
+                    data = b"{}\n"
+                else:
+                    data = ("public member " + leaf + "\n").encode()
+                public_members[leaf] = put("build/v02/public/" + leaf, data)
+            public_doc = {"schema": transfer.DIMENSION_SOURCE_SCHEMAS["public-matrix"],
+                "closure_id": hashlib.sha256(json.dumps(public_members, sort_keys=True,
+                    separators=(",", ":")).encode()).hexdigest(),
+                "members": public_members, "independently_verifiable": True,
+                "verification_scope": {"current_observations": "independently-verifiable",
+                    "historical_dispositions": "digest-only-not-independently-verifiable",
+                    "hardware_or_whole_game_truth": "not-claimed"}}
+            direct["public-matrix"]["document"] = public_doc
+
+            reads = []
+            def read_attachment(relative, digest):
+                reads.append(relative)
+                path = root / relative
+                if path.is_symlink() or not path.is_file() or path.stat().st_size > transfer.MAX_FILE_BYTES:
+                    raise ValueError("test-attachment-missing-or-oversize")
+                data = path.read_bytes()
+                if transfer._sha(data) != digest:
+                    raise ValueError("test-attachment-digest-mismatch")
+                return data
+
+            references = transfer._collect_qualification_references(direct, read_attachment)
+            expected = {candidate_path: candidate_sha, control_path: control_sha,
+                field_log_path: field_log_sha, **{path: digest for path, digest in benchmark_names.values()},
+                **{path: digest for path, (digest, _stored_digest) in cmake_snapshots.items()},
+                **{"build/v02/public/" + name: digest for name, digest in public_members.items()}}
+            self.assertEqual(len(cmake_snapshots), len(transfer.CMAKE_PROVENANCE_SOURCE_PATHS))
+            self.assertTrue(set(cmake_snapshots).issubset(reads))
+            self.assertEqual(references, dict(sorted(expected.items())))
+            self.assertNotIn(transfer.IDENTITY_REFERENCE_PATHS["public-core"], references)
+            self.assertNotIn(transfer.IDENTITY_REFERENCE_PATHS["public-core"], reads)
+            self.assertTrue(all(not path.endswith("unknown/local-source") for path in reads),
+                "benchmark JSON metadata is not recursively treated as attachments")
+
+            malformed = copy.deepcopy(direct)
+            malformed["core"]["document"]["public-core"]["path"] = "build/v02/runtime-build/other"
+            with self.assertRaisesRegex(ValueError, "transfer-identity-role-or-reference-invalid:public-core"):
+                transfer._collect_qualification_references(malformed, read_attachment)
+            unknown = copy.deepcopy(direct)
+            unknown["core"]["document"]["unknown-identity"] = {
+                "path": transfer.IDENTITY_REFERENCE_PATHS["public-core"], "sha256": "a" * 64}
+            with self.assertRaisesRegex(ValueError, "transfer-reference-role-or-identity-invalid:unknown-identity"):
+                transfer._collect_qualification_references(unknown, read_attachment)
+
+            noncanonical = copy.deepcopy(direct)
+            bad_schema = b'{"not":"canonical"}\n'
+            noncanonical_members = noncanonical["public-matrix"]["document"]["members"]
+            noncanonical_members["schema.json"] = put("build/v02/public/schema.json", bad_schema)
+            noncanonical["public-matrix"]["document"]["closure_id"] = hashlib.sha256(
+                json.dumps(noncanonical_members, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            with self.assertRaisesRegex(ValueError, "transfer-public-schema-not-canonical"):
+                transfer._collect_qualification_references(noncanonical, read_attachment)
+
+            changed = copy.deepcopy(direct)
+            changed["core"]["document"]["candidate_manifest"]["sha256"] = "0" * 64
+            with self.assertRaisesRegex(ValueError, "test-attachment-digest-mismatch"):
+                transfer._collect_qualification_references(changed, read_attachment)
+
     def _valid_benchmark_workload_report(self, scope_path, scope_sha256):
         fixture_spec = importlib.util.spec_from_file_location(
             "gw_benchmark_report_fixtures", ROOT / "tests/evidence/benchmark_contract.py")
@@ -1528,12 +1692,71 @@ class RuntimeTransferContract(unittest.TestCase):
                     ("cmake_cache_sha256", "configuration_sha256", "headless_sha256", "desktop_sha256")}}
             identity = {"source_sha": source_sha, "head_sha": source_sha, "base_sha": "c" * 40,
                 "run_id": "123", "run_attempt": "2"}
-            candidate_name = "build/v02/runtime-observation/candidate.json"
-            candidate_bytes = json.dumps({"schema": "genewhip-phase6-candidate-v1"}).encode()
-            closure_paths = {candidate_name}
+            canonical_candidate_name = "build/v02/runtime-observation/candidate.json"
+            candidate_name = ("build/v02/runtime/core-work/canonical-core-abcdefgh/candidate.json")
+            cmake_sources, cmake_bindings = self._trusted_cmake_bindings()
+            candidate_bytes = json.dumps({"schema": "genewhip-phase6-candidate-v1",
+                "source_files": cmake_bindings}, sort_keys=True).encode()
+            candidate_digest = hashlib.sha256(candidate_bytes).hexdigest()
+            cmake_snapshots = {TRANSFER._candidate_cmake_snapshot_path(digest): data
+                for source_name, digest in cmake_bindings.items()
+                for data in (cmake_sources[source_name],)}
+            self.assertEqual(len(cmake_snapshots), len(TRANSFER.CMAKE_PROVENANCE_SOURCE_PATHS))
+            control_name = ("build/v02/runtime/core-work/canonical-core-abcdefgh/controls-1/"
+                "control.json")
+            field_log_name = ("build/v02/runtime/core-work/canonical-core-abcdefgh/controls-1/"
+                "artifacts/title-no-start/headless/child.stdout.raw")
+            field_log_bytes = b"field log retained\n"
+            field_log_digest = hashlib.sha256(field_log_bytes).hexdigest()
+            control_bytes = json.dumps({"results": [{"process_streams": {"stdout": {
+                "path": field_log_name, "sha256": field_log_digest,
+                "observed_bytes": len(field_log_bytes), "retained_bytes": len(field_log_bytes),
+                "truncated": False}}}]}).encode()
+            control_digest = hashlib.sha256(control_bytes).hexdigest()
+            benchmark_documents = {}
+            benchmark_paths = {}
+            for workload in TRANSFER.BENCHMARKS:
+                report_path = ("build/v02/collected/benchmark-" + workload +
+                    "/benchmark-" + workload + ".json")
+                report_bytes = json.dumps({"schema": "genewhip.v02-workload-benchmark-v1",
+                    "workload": workload}).encode()
+                benchmark_documents[workload] = report_bytes
+                benchmark_paths[workload] = (report_path, hashlib.sha256(report_bytes).hexdigest())
+            public_member_contents = {name: (TRANSFER._canonical_public_schema_bytes()
+                if name == "schema.json" else b"[]\n" if name == "observations.json" else
+                b"{}\n" if name.endswith(".json") else ("public member " + name + "\n").encode())
+                for name in sorted(set(TRANSFER.PUBLIC_CLOSURE) - {"manifest.json"})}
+            public_members = {name: hashlib.sha256(data).hexdigest()
+                for name, data in public_member_contents.items()}
+            public_member_paths = {"build/v02/public/" + name: data
+                for name, data in public_member_contents.items()}
+            public_manifest = {"schema": TRANSFER.DIMENSION_SOURCE_SCHEMAS["public-matrix"],
+                "closure_id": hashlib.sha256(json.dumps(public_members, sort_keys=True,
+                    separators=(",", ":")).encode()).hexdigest(),
+                "members": public_members, "independently_verifiable": True,
+                "verification_scope": {"current_observations": "independently-verifiable",
+                    "historical_dispositions": "digest-only-not-independently-verifiable",
+                    "hardware_or_whole_game_truth": "not-claimed"}}
+            measurement_document = {"schema": TRANSFER.DIMENSION_SOURCE_SCHEMAS["measurements"],
+                "workloads": {workload: {"path": report_path, "sha256": digest,
+                    "host_identity": {}, "process_starts": 21}
+                    for workload, (report_path, digest) in benchmark_paths.items()}}
+            dimension_documents = {TRANSFER.PACKAGE_DIMENSION_SOURCE_PATHS[name]:
+                {"schema": schema} for name, schema in TRANSFER.DIMENSION_SOURCE_SCHEMAS.items()}
+            dimension_documents[TRANSFER.PACKAGE_DIMENSION_SOURCE_PATHS["core"]] = {
+                "schema": TRANSFER.DIMENSION_SOURCE_SCHEMAS["core"],
+                "candidate_manifest": {"path": candidate_name, "sha256": candidate_digest},
+                "stages": [{"evidence": {"path": control_name, "sha256": control_digest}}]}
+            dimension_documents[TRANSFER.PACKAGE_DIMENSION_SOURCE_PATHS["measurements"]] = measurement_document
+            dimension_documents[TRANSFER.PACKAGE_DIMENSION_SOURCE_PATHS["public-matrix"]] = public_manifest
+            closure_paths = {candidate_name, control_name, field_log_name,
+                *cmake_snapshots,
+                *(row[0] for row in benchmark_paths.values()),
+                *("build/v02/public/" + name for name in public_members)}
             payload = pathlib.Path(temp) / "producer/build/v02/package-transfer/payload"
             payload.mkdir(parents=True)
             names = TRANSFER.expected_package_members(source_sha, closure_paths)
+            self.assertTrue(set(TRANSFER.DIRECT_MEMBERS).issubset(names))
             members = {}
             archive_bytes = io.BytesIO()
             with tarfile.open(fileobj=archive_bytes, mode="w:gz") as archive:
@@ -1546,26 +1769,26 @@ class RuntimeTransferContract(unittest.TestCase):
                 if name.endswith(".tar.gz"):
                     data = archive_bytes.getvalue()
                 elif name == "artifacts/release-assets/inventory.json":
-                    data = json.dumps({"source_revision": source_sha,
+                    data = json.dumps({"schema": TRANSFER.DIMENSION_SOURCE_SCHEMAS["rights"],
+                        "source_revision": source_sha,
                         "assets": {item: {} for item in TRANSFER._package_asset_names(source_sha)}}).encode()
                 elif name == "build/v02/runtime-identity.json":
                     data = json.dumps(runtime_identity).encode()
-                elif name == candidate_name:
+                elif name in {candidate_name, canonical_candidate_name}:
                     data = candidate_bytes
-                elif name == TRANSFER.PACKAGE_DIMENSION_SOURCE_PATHS["core"]:
-                    data = json.dumps({"schema": "genewhip-phase6-product-report-v1",
-                        "candidate_manifest": {"path": candidate_name,
-                            "sha256": hashlib.sha256(candidate_bytes).hexdigest()}}).encode()
-                elif name == TRANSFER.PACKAGE_DIMENSION_SOURCE_PATHS["host"]:
-                    data = json.dumps({"schema": "genewhip-phase6-host-v1"}).encode()
-                elif name == TRANSFER.PACKAGE_DIMENSION_SOURCE_PATHS["host-native"]:
-                    data = json.dumps({"schema": "genewhip-phase6-host-v1"}).encode()
-                elif name == TRANSFER.PACKAGE_DIMENSION_SOURCE_PATHS["media"]:
-                    data = json.dumps({"schema": "genewhip-phase6-media-v1"}).encode()
-                elif name == TRANSFER.PACKAGE_DIMENSION_SOURCE_PATHS["safety"]:
-                    data = json.dumps({"schema": "genewhip-phase6-safety-v1"}).encode()
-                elif name == TRANSFER.PACKAGE_DIMENSION_SOURCE_PATHS["determinism"]:
-                    data = json.dumps({"schema": "genewhip-phase6-chunk-v1"}).encode()
+                elif name == control_name:
+                    data = control_bytes
+                elif name == field_log_name:
+                    data = field_log_bytes
+                elif name in cmake_snapshots:
+                    data = cmake_snapshots[name]
+                elif name in dimension_documents:
+                    data = json.dumps(dimension_documents[name]).encode()
+                elif name in public_member_paths:
+                    data = public_member_paths[name]
+                elif name in {path for path, _ in benchmark_paths.values()}:
+                    data = benchmark_documents[next(workload for workload, row in benchmark_paths.items()
+                        if row[0] == name)]
                 else:
                     data = b"{}"
                 path.write_bytes(data)
@@ -1574,7 +1797,12 @@ class RuntimeTransferContract(unittest.TestCase):
                 "dimensions": {name: {"path": TRANSFER.PACKAGE_DIMENSION_SOURCE_PATHS[name],
                     "sha256": members[TRANSFER.PACKAGE_DIMENSION_SOURCE_PATHS[name]]["sha256"], "identity": identity}
                     for name in TRANSFER.DIMENSIONS},
-                "referenced_files": {candidate_name: hashlib.sha256(candidate_bytes).hexdigest()}}
+                "referenced_files": {candidate_name: candidate_digest,
+                    control_name: control_digest, field_log_name: field_log_digest,
+                    **{path: hashlib.sha256(data).hexdigest()
+                        for path, data in cmake_snapshots.items()},
+                    **{path: digest for path, digest in benchmark_paths.values()},
+                    **{"build/v02/public/" + name: digest for name, digest in public_members.items()}}}
             closure_bytes = json.dumps(closure).encode()
             closure_path = payload / "build/v02/qualification-evidence-closure.json"
             closure_path.write_bytes(closure_bytes)
@@ -1584,6 +1812,7 @@ class RuntimeTransferContract(unittest.TestCase):
                 expected_git_revision=source_sha, expected_product_content_sha256=content_sha)
             self.assertEqual((produced_git, produced_content), (source_sha, content_sha))
             self.assertIn(candidate_name, produced_names)
+            self.assertIn(field_log_name, produced_names)
             inventory = {"schema": "genewhip.v02-package-transfer.v1", "source_sha": source_sha,
                 "product_content_sha256": content_sha,
                 "members": members, "member_count": len(members),
@@ -1602,7 +1831,15 @@ class RuntimeTransferContract(unittest.TestCase):
             TRANSFER.install_package(extracted / "payload", extracted / "inventory.json", consumer,
                 expected_source_sha=source_sha, expected_product_content_sha256=content_sha)
             self.assertTrue((consumer / "artifacts/release-assets/inventory.json").is_file())
+            for name in TRANSFER.DIRECT_MEMBERS:
+                self.assertEqual((consumer / name).read_bytes(), (payload / name).read_bytes(), name)
+            for name, data in cmake_snapshots.items():
+                self.assertEqual((consumer / name).read_bytes(), data, name)
+            for name in ("build/v02/semantic-mutant-receipt.json",
+                    "build/v02/evidence/core-mutants.json", "build/v02/evidence/host-mutants.json"):
+                self.assertEqual((consumer / name).read_bytes(), (payload / name).read_bytes(), name)
             self.assertEqual((consumer / candidate_name).read_bytes(), candidate_bytes)
+            self.assertEqual((consumer / field_log_name).read_bytes(), field_log_bytes)
 
             for field, wrong in (("source_sha", content_sha), ("product_content_sha256", "9" * 64)):
                 changed_identity = json.loads(json.dumps(inventory))
