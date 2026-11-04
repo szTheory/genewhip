@@ -10,6 +10,8 @@ import stat
 
 LEGACY_SCOPE_SHA256 = "05eb7f5fa91d759fbef8fb86bbc9db402dc41812261235bcf5085a0e2aa9b1a5"
 LEGACY_SCOPE_REL = Path("evidence/v02-execution.json")
+PHASE7_CI_MEMORY_SCOPE_SHA256 = "0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea"
+PHASE7_CI_MEMORY_SCOPE_REL = Path("evidence/v02-phase7-ci-memory-scope.json")
 SCOPE_PROFILES = {
     LEGACY_SCOPE_SHA256: LEGACY_SCOPE_REL,
     "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4":
@@ -20,6 +22,7 @@ SCOPE_PROFILES = {
         Path("evidence/v02-phase7-renewed-two-hour-execution-scope.json"),
     "c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a":
         Path("evidence/v02-phase7-authorized-execution-scope.json"),
+    PHASE7_CI_MEMORY_SCOPE_SHA256: PHASE7_CI_MEMORY_SCOPE_REL,
 }
 SCOPE_READ_LIMIT_BYTES = 1024 * 1024
 

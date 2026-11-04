@@ -20,6 +20,21 @@ SCOPE_SHA256 = "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4
 LEGACY_SCOPE_PATH = Path("evidence/v02-execution.json")
 LEGACY_SCOPE_SHA256 = "05eb7f5fa91d759fbef8fb86bbc9db402dc41812261235bcf5085a0e2aa9b1a5"
 AUTHORIZED_SCOPE_PATH = Path("evidence/v02-phase7-authorized-execution-scope.json")
+AUTHORIZED_SCOPE_SHA256 = "c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a"
+CI_MEMORY_SCOPE_PATH = Path("evidence/v02-phase7-ci-memory-scope.json")
+CI_MEMORY_SCOPE_SHA256 = "0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea"
+AUTHORIZED_SCOPE_PROFILES = {
+    AUTHORIZED_SCOPE_PATH: {
+        "scope_sha256": AUTHORIZED_SCOPE_SHA256,
+        "scope_content_sha256": "334f95fa3d9bfbe7c5b457099c44327cead593004450667b4b955d1f84be7f41",
+        "max_rss_bytes": 4 * 1024**3,
+    },
+    CI_MEMORY_SCOPE_PATH: {
+        "scope_sha256": CI_MEMORY_SCOPE_SHA256,
+        "scope_content_sha256": "761deaa3f2bceec3610a6c9d9fb6770821a8b164e6098784e41478aea6c22048",
+        "max_rss_bytes": 2 * 1024**3,
+    },
+}
 AUTHORIZED_RUN_SCHEMA = "genewhip.phase7-execution-window.v1"
 SCHEMA = "genewhip.phase7-four-hour-authorization.v1"
 REPOSITORY = "szTheory/genewhip"
@@ -174,6 +189,27 @@ def _profile_for_identity(*, authority_path: Path | None = None,
             value is not None for value in supplied[2:]):
         raise ValueError("phase7-window-public-scope-pin-invalid")
     raise ValueError("phase7-window-authority-or-scope-pin-invalid")
+
+
+def _authorized_scope_profile(scope_path: Path | str,
+        scope_sha256: str) -> dict[str, Any]:
+    """Resolve only the two exact public scope identities for authorized runs."""
+    path = Path(scope_path)
+    profile = AUTHORIZED_SCOPE_PROFILES.get(path)
+    if profile is None:
+        raise ValueError("phase7-window-public-scope-pin-invalid")
+    if scope_sha256 != profile["scope_sha256"]:
+        raise ValueError("phase7-window-public-scope-pin-invalid")
+    return profile
+
+
+def _authorized_scope_content_matches(scope: dict[str, Any],
+        profile: dict[str, Any]) -> bool:
+    try:
+        raw = json.dumps(scope, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    except (TypeError, ValueError):
+        return False
+    return _sha(raw) == profile["scope_content_sha256"]
 
 
 def _sha(data: bytes) -> str:
@@ -371,8 +407,9 @@ def load_authorized_window(root: Path, *, authority_path: Path,
     scope_path = Path(scope_path)
     if (authority_path.is_absolute() or any(part in ("", ".", "..")
             for part in authority_path.parts) or authority_path.parts[:2] != ("build", "v02")
-            or scope_path != AUTHORIZED_SCOPE_PATH):
+            or scope_path not in AUTHORIZED_SCOPE_PROFILES):
         raise ValueError("phase7-window-authority-or-scope-path-invalid")
+    _authorized_scope_profile(scope_path, scope_sha256)
     authority_raw = _read_regular(root, authority_path, cap=256 * 1024)
     if _sha(authority_raw) != authority_sha256:
         raise ValueError("phase7-window-authority-stale")
@@ -459,19 +496,22 @@ def check_window(window: dict[str, Any], *, phase: str,
         raise ValueError("phase7-window-context-invalid")
     profile_id = window.get("profile_id")
     if profile_id == "authorized-run":
-        if (window.get("scope_path") != AUTHORIZED_SCOPE_PATH.as_posix()
-                or not re.fullmatch(r"[0-9a-f]{64}", str(window.get("scope_sha256", "")))):
+        try:
+            scope_profile = _authorized_scope_profile(
+                window.get("scope_path", ""), window.get("scope_sha256", ""))
+        except ValueError:
             raise ValueError("phase7-window-context-invalid")
         budget = window.get("budget")
         scope = window.get("scope")
         if (not isinstance(budget, dict) or not isinstance(scope, dict)
-                or _authorized_scope_budget(scope) != budget):
+                or _authorized_scope_budget(scope) != budget
+                or not _authorized_scope_content_matches(scope, scope_profile)):
             raise ValueError("phase7-window-context-invalid")
         cutoffs = _authorized_cutoffs(window.get("started_at"), budget)
         if any(window.get(key) != value for key, value in cutoffs.items()):
             raise ValueError("phase7-window-context-invalid")
         profile = {"started_at": window["started_at"],
-            "scope_path": AUTHORIZED_SCOPE_PATH,
+            "scope_path": Path(window["scope_path"]),
             "scope_sha256": window["scope_sha256"],
             "runtime_cutoff": cutoffs["runtime_cutoff"],
             "package_cutoff": cutoffs["package_cutoff"],
@@ -529,7 +569,7 @@ def validate_public_clock(root: Path, *, scope_path: str, scope_sha256: str,
     root = supplied_root.resolve(strict=True)
     if supplied_root != root:
         raise ValueError("phase7-window-root-invalid")
-    if Path(scope_path) == AUTHORIZED_SCOPE_PATH:
+    if Path(scope_path) in AUTHORIZED_SCOPE_PROFILES:
         scope = load_public_scope(root, scope_path=scope_path, scope_sha256=scope_sha256)
         budget = _authorized_scope_budget(scope)
         cutoffs = _authorized_cutoffs(started_at, budget)
@@ -595,22 +635,24 @@ def select_public_event_window(root: Path, *, workflow_created_at: str,
 def load_public_scope(root: Path, *, scope_path: str = SCOPE_PATH.as_posix(),
         scope_sha256: str = SCOPE_SHA256) -> dict[str, Any]:
     """Load one of the exact public scopes on runners without private authority."""
-    if Path(scope_path) == AUTHORIZED_SCOPE_PATH:
+    authorized_path = Path(scope_path)
+    if authorized_path in AUTHORIZED_SCOPE_PROFILES:
         supplied_root = Path(os.path.abspath(root))
         root = supplied_root.resolve(strict=True)
         if supplied_root != root:
             raise ValueError("phase7-window-root-invalid")
-        if not re.fullmatch(r"[0-9a-f]{64}", scope_sha256):
-            raise ValueError("phase7-window-public-scope-pin-invalid")
-        raw = _read_regular(root, AUTHORIZED_SCOPE_PATH)
-        if _sha(raw) != scope_sha256:
+        profile = _authorized_scope_profile(authorized_path, scope_sha256)
+        raw = _read_regular(root, authorized_path)
+        if _sha(raw) != profile["scope_sha256"]:
             raise ValueError("phase7-window-scope-stale")
         scope = _json(raw, "phase7-window-scope-invalid")
         baseline_raw = _read_regular(root, SCOPE_PATH)
         if _sha(baseline_raw) != SCOPE_SHA256:
             raise ValueError("phase7-window-legacy-four-hour-scope-stale")
         baseline = _json(baseline_raw, "phase7-window-scope-invalid")
-        if scope != baseline:
+        expected = json.loads(json.dumps(baseline))
+        expected["per_child_limits"]["max_rss_bytes"] = profile["max_rss_bytes"]
+        if scope != expected:
             raise ValueError("phase7-window-scope-content-invalid")
         _authorized_scope_budget(scope)
         return scope

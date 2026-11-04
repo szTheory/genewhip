@@ -26,6 +26,12 @@ if _ARCHIVE_SPEC is None or _ARCHIVE_SPEC.loader is None:
     raise RuntimeError("shared package archive validator is unavailable")
 _ARCHIVE = importlib.util.module_from_spec(_ARCHIVE_SPEC)
 _ARCHIVE_SPEC.loader.exec_module(_ARCHIVE)
+_SCOPE_SPEC = importlib.util.spec_from_file_location(
+    "genewhip_desktop_smoke_scope", ROOT / "scripts/evidence/v02_scope.py")
+if _SCOPE_SPEC is None or _SCOPE_SPEC.loader is None:
+    raise RuntimeError("v0.2 execution scope resolver is unavailable")
+_SCOPE = importlib.util.module_from_spec(_SCOPE_SPEC)
+_SCOPE_SPEC.loader.exec_module(_SCOPE)
 EXPECTED_SHARE = {
     "README.md", "LICENSE", "SDL3-LICENSE.txt", "THIRD-PARTY-ymfm.txt", "sdl3.json", "manifest.json",
     "independent-game-v2.bin", "independent-game-v2.s", "independent-game-v2-NOTICES.md",
@@ -517,6 +523,16 @@ def live_package_smoke(prefix, share, scenario, temp):
     return {"outcome": "pass", "backend": "native SDL video/audio", "clients": rows}
 
 
+def selected_execution_scope():
+    """Read a hash-pinned selected Phase 7 scope, defaulting to the legacy scope."""
+    scope_selection_path = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH", "")
+    scope_selection_sha = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", "")
+    _scope_path, scope_bytes = _SCOPE.read_scope(ROOT,
+        explicit=scope_selection_path or None,
+        scope_path=scope_selection_path, scope_sha256=scope_selection_sha)
+    return json.loads(scope_bytes)
+
+
 def run_v02_smoke(archive, digest, revision, roster_path, scratch):
     roster, files, root = validate_v02_archive(archive, digest, revision, roster_path)
     with tarfile.open(archive, "r:*") as tar:
@@ -562,7 +578,7 @@ def run_v02_smoke(archive, digest, revision, roster_path, scratch):
                           ("tank-battle", "tank-battle"), ("recursion94", "recursion94")):
         if hashlib.sha256((share / (stem + ".bin")).read_bytes()).hexdigest() != titles[fixture]["rom_sha256"]:
             raise ValueError("package-fixture-rom")
-    scope = json.loads((ROOT / "evidence/v02-execution.json").read_text())
+    scope = selected_execution_scope()
     limits = scope["per_child_limits"]
     route_contract_spec = importlib.util.spec_from_file_location(
         "gw_v02_shared_child_boundary", ROOT / "tests/session/phase6_route_contract.py")
@@ -598,6 +614,11 @@ def run_v02_smoke(archive, digest, revision, roster_path, scratch):
             else:
                 env.pop("SDL_VIDEODRIVER", None)
             available = v02_run.available_memory_bytes()
+            print(json.dumps({"schema": "genewhip.memory-reserve-preflight.v1",
+                "stage": "desktop-archive-smoke", "fixture": fixture,
+                "backend": backend, "available_bytes": available,
+                "required_bytes": limits["max_rss_bytes"]}, sort_keys=True),
+                file=sys.stderr, flush=True)
             v02_run.require_memory_reserve(available, limits["max_rss_bytes"])
             if shutil.disk_usage(scratch).free < limits["max_scratch_bytes"]:
                 raise ValueError("package-objective-route-scratch-reserve")
@@ -677,6 +698,24 @@ class DesktopArchiveContract(unittest.TestCase):
         archive = self.make_archive(members)
         with self.assertRaisesRegex(ValueError, "^" + re.escape(reason) + "$"):
             validate_archive(archive, hashlib.sha256(archive.read_bytes()).hexdigest(), "0" * 40)
+
+    def test_live_smoke_uses_exact_selected_scope_and_unscoped_legacy_default(self):
+        from unittest.mock import patch
+        with patch.dict(os.environ, {}, clear=True):
+            legacy = selected_execution_scope()
+        self.assertEqual(legacy["per_child_limits"]["max_rss_bytes"], 4 * 1024**3)
+        selected_path = "evidence/v02-phase7-ci-memory-scope.json"
+        selected_sha = "0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea"
+        with patch.dict(os.environ, {
+                "GENEWHIP_QUALIFICATION_SCOPE_PATH": selected_path,
+                "GENEWHIP_QUALIFICATION_SCOPE_SHA256": selected_sha}, clear=True):
+            selected = selected_execution_scope()
+        self.assertEqual(selected["per_child_limits"]["max_rss_bytes"], 2 * 1024**3)
+        with patch.dict(os.environ, {
+                "GENEWHIP_QUALIFICATION_SCOPE_PATH": "evidence/v02-phase7-authorized-execution-scope.json",
+                "GENEWHIP_QUALIFICATION_SCOPE_SHA256": selected_sha}, clear=True):
+            with self.assertRaisesRegex(ValueError, "profile-invalid"):
+                selected_execution_scope()
 
     def test_duplicate_archive_member_is_rejected_before_payload_use(self):
         self.assert_reason([("root/a", b"a"), ("root/a", b"b")], "archive-duplicate-member")
@@ -774,12 +813,13 @@ def main():
         if truncated.returncode == 0 or not truncated.stderr.startswith("REJECT: invalid-rom"):
             raise ValueError("package-truncated-cartridge-not-rejected")
         script = scratch / "drop-reload.script"
-        script.write_text("1 drop " + str(share / "raster-toy.bin") + "\n"
-                          "15 drop " + str(share / "independent-game-v2.bin") + "\n"
+        script.write_text("1 drop raster-toy.bin\n"
+                          "15 drop independent-game-v2.bin\n"
                           "30 quit\n")
         dropped = subprocess.run([str(moved / "bin/genewhip-desktop"), "--fields", "30", "--host-script", str(script),
                                   str(share / "independent-game-v2.bin")], capture_output=True, text=True,
-                                env=dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy"), timeout=60)
+                                env=dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy"),
+                                cwd=share, timeout=60)
         if dropped.returncode or "fields=30" not in dropped.stdout or "REJECT:" in dropped.stderr:
             raise ValueError("package-drop-reload: " + dropped.stderr[-1000:])
         live = live_package_smoke(moved, share, scenario, scratch) if os.environ.get("GENEWHIP_PACKAGE_LIVE") == "1" else None

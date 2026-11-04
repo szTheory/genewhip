@@ -26,6 +26,8 @@ SCENARIO_SHA = "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2
 ORACLE_SHA = "1a9d99cb01496f26fe3dc33d0c1bcb0cf22bd9178088fa183e5bba37a8600f42"
 SOURCE_SHA = "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe"
 ROM_SHA = "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb"
+PHASE7_CI_MEMORY_SCOPE_SHA256 = "0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea"
+PHASE7_CI_MEMORY_SCOPE_RELATIVE = "evidence/v02-phase7-ci-memory-scope.json"
 
 
 def sha(path: pathlib.Path) -> str:
@@ -59,15 +61,29 @@ def workflow_base_sha(head: str) -> str:
     return value or head
 
 
+def _darwin_available_memory(output: str, page_size: int) -> int | None:
+    """Count disjoint reclaimable page buckets, using the producer's units."""
+    headers = re.findall(r"page size of ([0-9]+) bytes", output)
+    if (len(output) > 16384 or len(headers) != 1 or type(page_size) is not int
+            or page_size <= 0 or int(headers[0]) != page_size):
+        return None
+    rows = re.findall(r"^Pages (free|inactive|speculative|purgeable):\s+([0-9]+)\.$",
+                      output, re.MULTILINE)
+    if len(rows) != 4 or {name for name, _ in rows} != {
+            "free", "inactive", "speculative", "purgeable"}:
+        return None
+    values = {name: int(count) for name, count in rows}
+    # XNU includes speculative pages in free_count. Purgeable pages also overlap
+    # other categories, so adding either field would count pages twice.
+    return (values["free"] + values["inactive"]) * page_size
+
+
 def available_memory_bytes() -> int | None:
     if sys.platform == "darwin":
         try:
             result = subprocess.run(["/usr/bin/vm_stat"], text=True, capture_output=True,
                                     timeout=5, check=True)
-            values = {name: int(count.replace(".", "")) for name, count in
-                      re.findall(r"^Pages ([a-z]+):\s+([0-9.]+)", result.stdout, re.MULTILINE)}
-            reclaimable = sum(values.get(name, 0) for name in ("free", "inactive", "speculative", "purgeable"))
-            return reclaimable * os.sysconf("SC_PAGE_SIZE")
+            return _darwin_available_memory(result.stdout, os.sysconf("SC_PAGE_SIZE"))
         except (OSError, subprocess.SubprocessError, ValueError):
             return None
     if sys.platform.startswith("linux"):
@@ -192,25 +208,39 @@ def validate_execution_scope(scope_path: pathlib.Path, mode: str) -> tuple[dict,
     selected_profile = window_profiles.get(selected_sha) if selected_sha else None
     authorized_relative = "evidence/v02-phase7-authorized-execution-scope.json"
     authorized_path = ROOT / authorized_relative
+    ci_memory_path = ROOT / PHASE7_CI_MEMORY_SCOPE_RELATIVE
     selected_authorized = selected_path == authorized_relative
     path_is_authorized = path == authorized_path
-    if selected_sha not in ("", legacy_scope_sha, *window_profiles) and not selected_authorized:
+    selected_ci_memory = selected_path == PHASE7_CI_MEMORY_SCOPE_RELATIVE
+    path_is_ci_memory = path == ci_memory_path
+    if selected_sha not in ("", legacy_scope_sha, *window_profiles,
+                            PHASE7_CI_MEMORY_SCOPE_SHA256) and not selected_authorized and not selected_ci_memory:
         raise ValueError("phase7-window-scope-profile-invalid")
-    if selected_authorized or path_is_authorized:
+    if selected_authorized or path_is_authorized or selected_ci_memory or path_is_ci_memory:
         # The private authority selects the start time. Hosted jobs receive only
-        # the same reviewed public policy, its exact byte digest, and that start.
+        # a reviewed public policy, its exact byte digest, and that start.
         # Historical dated identities below remain available for archived reads.
-        if (selected_path != authorized_relative or not selected_sha
-                or path != authorized_path or actual_sha != selected_sha):
+        expected_relative = (PHASE7_CI_MEMORY_SCOPE_RELATIVE if
+                             selected_ci_memory or path_is_ci_memory else authorized_relative)
+        expected_path = ci_memory_path if expected_relative == PHASE7_CI_MEMORY_SCOPE_RELATIVE else authorized_path
+        expected_sha = (PHASE7_CI_MEMORY_SCOPE_SHA256 if
+                        expected_relative == PHASE7_CI_MEMORY_SCOPE_RELATIVE else
+                        "c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a")
+        if (selected_path != expected_relative or selected_sha != expected_sha
+                or path != expected_path or actual_sha != selected_sha):
             raise ValueError("phase7-window-scope-profile-invalid")
-        baseline_path = ROOT / "evidence/v02-phase7-full-execution-scope.json"
-        if (hashlib.sha256(baseline_path.read_bytes()).hexdigest()
-                != "6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4"):
+        baseline_path = authorized_path
+        baseline_sha = "c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a"
+        if hashlib.sha256(baseline_path.read_bytes()).hexdigest() != baseline_sha:
             raise ValueError("phase7-window-scope-profile-invalid")
         baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
-        if scope != baseline:
+        expected_scope = baseline
+        if expected_relative == PHASE7_CI_MEMORY_SCOPE_RELATIVE:
+            expected_scope = json.loads(json.dumps(baseline))
+            expected_scope["per_child_limits"]["max_rss_bytes"] = 2 * 1024**3
+        if scope != expected_scope:
             raise ValueError("phase7-window-scope-profile-invalid")
-        selected_profile = {"path": authorized_path, "relative": authorized_relative,
+        selected_profile = {"path": expected_path, "relative": expected_relative,
             "budget": {key: scope["qualification_batch"][key] for key in (
                 "wall_seconds", "runtime_wall_seconds", "package_wall_seconds",
                 "close_wall_seconds")}}

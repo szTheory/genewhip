@@ -86,21 +86,22 @@ class SettledAttemptFixture:
         self.source_pins = {"README.md": "6" * 64}
         self.prior_auth = Path("build/v02/prior-batch/authorization.json")
         self.prior_scope = BATCH._phase7_window_module().AUTHORIZED_SCOPE_PATH
-        self.prior_auth_sha = ""
-        self.prior_scope_sha = ""
+        self.prior_scope_raw = (ROOT / self.prior_scope).read_bytes()
+        self.prior_scope_sha = digest(self.prior_scope_raw)
+        self.scope_value = json.loads(self.prior_scope_raw)
         self.current_auth = Path("build/v02/standing/batches/batch-0001/authorization.json")
         self.current_auth_sha = "9" * 64
-        self.current_scope = BATCH._phase7_window_module().AUTHORIZED_SCOPE_PATH
-        self.current_scope_sha = "a" * 64
+        self.current_scope = self.prior_scope
+        self.current_scope_sha = self.prior_scope_sha
         self.current_namespace = Path("build/v02/standing/batches/batch-0001/attempts")
         self.bundle_path = Path("build/v02/standing/operator/settled-attempt2-predecessor.json")
 
         prior_auth_ref, _ = write_json(self.root, self.prior_auth,
             {"schema": "fixture-authorization"})
-        prior_scope_ref, _ = write_json(self.root, self.prior_scope,
-            {"schema": "fixture-scope"})
+        prior_scope_path = self.root / self.prior_scope
+        prior_scope_path.parent.mkdir(parents=True, exist_ok=True)
+        prior_scope_path.write_bytes(self.prior_scope_raw)
         self.prior_auth_sha = prior_auth_ref["sha256"]
-        self.prior_scope_sha = prior_scope_ref["sha256"]
         write_json(self.root, self.current_auth, {"schema": "fixture-current-authorization"})
 
         self.prior = self._window(self.prior_auth, self.prior_auth_sha,
@@ -127,7 +128,8 @@ class SettledAttemptFixture:
             namespace, started_at):
         return {"profile_id": "authorized-run", "authority_path": authority_path.as_posix(),
             "authority_sha256": authority_sha, "scope_path": scope_path.as_posix(),
-            "scope_sha256": scope_sha, "attempt_namespace": namespace.as_posix(),
+            "scope_sha256": scope_sha, "scope": copy.deepcopy(self.scope_value),
+            "attempt_namespace": namespace.as_posix(),
             "started_at": started_at, "runtime_cutoff": "2026-10-30T01:00:00+00:00",
             "global_cutoff": "2026-10-30T02:00:00+00:00", "source_ancestor": "b" * 40,
             "authority": {"schema": "genewhip.phase7-execution-window.v1",
@@ -330,7 +332,8 @@ class SettledAttemptFixture:
                 owner = 23
             process = {"pid": child_pid, "pgid": child_pid, "status": "completed",
                 "return_code": 0, "process_group_cleanup": "confirmed",
-                "bound_violation": False}
+                "bound_violation": False, "rss_bytes_observed": 0,
+                "rss_bytes_peak": 1024 * 1024}
             receipt = {"schema": "genewhip.v02-coordinator-child-attempt.v1",
                 "label": f"external-{owner}-{child_pid}", "returncode": 0,
                 "launch_error": None, "process_group_cleanup": "confirmed",

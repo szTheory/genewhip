@@ -19,6 +19,7 @@ import types
 import datetime
 import email.utils
 import functools
+import math
 import urllib.parse
 import uuid
 import shutil
@@ -43,6 +44,13 @@ PHASE7_RENEWED_TWO_HOUR_SCOPE_PATH = pathlib.Path("evidence/v02-phase7-renewed-t
 PHASE7_RENEWED_TWO_HOUR_SCOPE_SHA256 = "bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c"
 PHASE7_RENEWED_TWO_HOUR_ATTEMPT_NAMESPACE = pathlib.Path("build/v02/phase7-qualification-20261103T000225Z/attempts")
 PHASE7_AUTHORIZED_SCOPE_PATH = pathlib.Path("evidence/v02-phase7-authorized-execution-scope.json")
+PHASE7_AUTHORIZED_SCOPE_SHA256 = "c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a"
+PHASE7_CI_MEMORY_SCOPE_PATH = pathlib.Path("evidence/v02-phase7-ci-memory-scope.json")
+PHASE7_CI_MEMORY_SCOPE_SHA256 = "0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea"
+PHASE7_AUTHORIZED_RUN_SCOPE_PAIRS = (
+    (PHASE7_AUTHORIZED_SCOPE_PATH, PHASE7_AUTHORIZED_SCOPE_SHA256),
+    (PHASE7_CI_MEMORY_SCOPE_PATH, PHASE7_CI_MEMORY_SCOPE_SHA256),
+)
 LEGACY_SCOPE_SHA256 = "05eb7f5fa91d759fbef8fb86bbc9db402dc41812261235bcf5085a0e2aa9b1a5"
 PHASE7_WINDOW_PROFILES = (
     {"profile_id": "four-hour", "authority_path": PHASE7_WINDOW_AUTH_PATH,
@@ -121,12 +129,17 @@ def _phase7_window_profile(*, scope_sha256: str | None = None,
                 and (supplied[2] is None or supplied[2] == profile["authority_path"])
                 and (supplied[3] is None or supplied[3] == profile["authority_sha256"])):
             return profile
-    if (supplied[0] == pathlib.Path("evidence/v02-phase7-authorized-execution-scope.json")
-            and supplied[1] is not None and supplied[2] is not None and supplied[3] is not None):
+    authorized_scope_profiles = {
+        (PHASE7_AUTHORIZED_SCOPE_PATH, PHASE7_AUTHORIZED_SCOPE_SHA256): "authorized-run",
+        (PHASE7_CI_MEMORY_SCOPE_PATH, PHASE7_CI_MEMORY_SCOPE_SHA256): "authorized-run",
+    }
+    authorized_profile_id = authorized_scope_profiles.get((supplied[0], supplied[1]))
+    if (authorized_profile_id is not None and supplied[2] is not None
+            and supplied[3] is not None):
         window = _load_phase7_window_module().load_authorized_window(ROOT,
             authority_path=supplied[2], authority_sha256=supplied[3],
             scope_path=supplied[0], scope_sha256=supplied[1])
-        return {"profile_id": "authorized-run",
+        return {"profile_id": authorized_profile_id,
             "authority_path": pathlib.Path(window["authority_path"]),
             "authority_sha256": window["authority_sha256"],
             "scope_path": pathlib.Path(window["scope_path"]),
@@ -136,6 +149,31 @@ def _phase7_window_profile(*, scope_sha256: str | None = None,
             "source_ancestor": window["source_ancestor"],
             "budget": dict(window["budget"])}
     raise ValueError("phase7-window-scope-or-authority-profile-invalid")
+
+
+def _authorized_run_scope_pair(scope_path: str | pathlib.Path | None,
+        scope_sha256: str | None) -> pathlib.Path | None:
+    """Recognize only the exact authorized-run scope pairs; reject cross-pair selectors."""
+    if scope_path in (None, ""):
+        supplied_path = None
+    else:
+        candidate = pathlib.Path(scope_path)
+        if not candidate.is_absolute():
+            candidate = ROOT / candidate
+        candidate = pathlib.Path(os.path.abspath(candidate))
+        try:
+            supplied_path = candidate.relative_to(ROOT)
+        except ValueError:
+            supplied_path = None
+    expected = dict(PHASE7_AUTHORIZED_RUN_SCOPE_PAIRS)
+    selected = expected.get(supplied_path) if supplied_path is not None else None
+    if selected is not None:
+        if scope_sha256 != selected:
+            raise ValueError("phase7-window-scope-or-authority-profile-invalid")
+        return supplied_path
+    if scope_sha256 in {digest for _path, digest in PHASE7_AUTHORIZED_RUN_SCOPE_PAIRS}:
+        raise ValueError("phase7-window-scope-or-authority-profile-invalid")
+    return None
 
 
 def _phase7_public_window_profile(*, scope_sha256: str | None = None,
@@ -164,9 +202,13 @@ def _phase7_public_window_profile(*, scope_sha256: str | None = None,
         # process has a partial or conflicting private-authority selector.
         auth_path = os.environ.get("GENEWHIP_QUALIFICATION_WINDOW_AUTH_PATH")
         auth_sha = os.environ.get("GENEWHIP_QUALIFICATION_WINDOW_AUTH_SHA256")
-        if (selected_path != PHASE7_AUTHORIZED_SCOPE_PATH
-                or not isinstance(scope_sha256, str)
-                or not re.fullmatch(r"[0-9a-f]{64}", scope_sha256)
+        public_authorized_profiles = {
+            PHASE7_AUTHORIZED_SCOPE_PATH: PHASE7_AUTHORIZED_SCOPE_SHA256,
+            PHASE7_CI_MEMORY_SCOPE_PATH: PHASE7_CI_MEMORY_SCOPE_SHA256,
+        }
+        public_profile = public_authorized_profiles.get(selected_path)
+        if (public_profile is None
+                or scope_sha256 != public_profile
                 or auth_path not in (None, "") or auth_sha not in (None, "")):
             raise
         module = _load_phase7_window_module()
@@ -346,10 +388,31 @@ def _fresh_batch_guard(*, batch_authorization: pathlib.Path | None,
         + tuple((ROOT / relative).resolve(strict=False) for relative in RETIRED_SINGLE_NATIVE_POLICY_ROOTS)
         + tuple((ROOT / profile["attempt_namespace"]).resolve(strict=False)
             for profile in PHASE7_WINDOW_PROFILES))
-    if os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH") == PHASE7_AUTHORIZED_SCOPE_PATH.as_posix():
-        dynamic_profile = _phase7_window_profile()
+    environment_scope_path = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH", "")
+    environment_scope_sha = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", "")
+    environment_authorized_scope = _authorized_run_scope_pair(
+        environment_scope_path, environment_scope_sha)
+    authorized_scope = _authorized_run_scope_pair(scope_path, environment_scope_sha)
+    if (environment_authorized_scope is not None
+            and authorized_scope != environment_authorized_scope):
+        raise ValueError("phase7-window-scope-or-authority-profile-invalid")
+    selected_authorized_scope = authorized_scope or environment_authorized_scope
+    if selected_authorized_scope is not None:
+        selected_authority_path = (batch_authorization
+            if batch_authorization is not None else os.environ.get(
+                "GENEWHIP_QUALIFICATION_WINDOW_AUTH_PATH"))
+        selected_authority_sha = (batch_authorization_sha256
+            if batch_authorization_sha256 is not None else os.environ.get(
+                "GENEWHIP_QUALIFICATION_WINDOW_AUTH_SHA256"))
+        dynamic_profile = _phase7_window_profile(
+            scope_path=selected_authorized_scope,
+            scope_sha256=environment_scope_sha,
+            authorization_path=selected_authority_path,
+            authorization_sha256=selected_authority_sha)
         if dynamic_profile is None:
             raise ValueError("phase7-window-profile-unavailable")
+        if dynamic_profile["scope_path"] != selected_authorized_scope:
+            raise ValueError("phase7-window-scope-or-authority-profile-invalid")
         resolved_batch_roots += ((ROOT / dynamic_profile["attempt_namespace"]).resolve(strict=False),)
     resolved_single_root = (ROOT / SINGLE_NATIVE_POLICY_ROOT).resolve(strict=False)
     mutable_inputs = (journal_path, publication_copy, preflight_path, output_path)
@@ -388,13 +451,12 @@ def _fresh_batch_guard(*, batch_authorization: pathlib.Path | None,
                     == ROOT / candidate_profile["scope_path"]):
             selected_profile = candidate_profile
             break
-    authorized_scope_path = pathlib.Path("evidence/v02-phase7-authorized-execution-scope.json")
-    if selected_profile is None and rooted(scope_path).resolve(strict=False) == ROOT / authorized_scope_path:
+    if selected_profile is None and authorized_scope is not None:
         if (batch_authorization is None or batch_authorization_sha256 is None
                 or batch_admission is None or batch_admission_sha256 is None):
             raise ValueError("phase7-window-authority-and-admission-required")
         selected_profile = _phase7_window_profile(
-            scope_path=authorized_scope_path,
+            scope_path=authorized_scope,
             scope_sha256=os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256"),
             authorization_path=batch_authorization,
             authorization_sha256=batch_authorization_sha256)
@@ -403,7 +465,7 @@ def _fresh_batch_guard(*, batch_authorization: pathlib.Path | None,
         or batch_authorization_sha256 == candidate_profile["authority_sha256"]
         or rooted(scope_path).resolve(strict=False) == ROOT / candidate_profile["scope_path"]
         for candidate_profile in PHASE7_WINDOW_PROFILES) or (
-            rooted(scope_path).resolve(strict=False) == ROOT / authorized_scope_path)
+            authorized_scope is not None)
     if window_auth_partial and selected_profile is None:
         raise ValueError("phase7-window-authority-and-admission-required")
     if selected_profile is not None:
@@ -1347,6 +1409,183 @@ def ci_desktop_setup_step(step: str) -> subprocess.CompletedProcess[str]:
         step="ci-desktop-" + step, owned_roots=owned_roots, timeout=600, phase="preparation")
 
 
+def _write_ci_package_boundary_summary(*, attempt_root: pathlib.Path, role: str,
+        scope_path: str, scope_sha256: str, scope: dict[str, Any],
+        limits: dict[str, Any], environment: dict[str, str],
+        outcome: str) -> pathlib.Path:
+    """Project one private external receipt into a bounded, privacy-safe CI summary."""
+    if outcome not in {"passed", "failed"}:
+        raise ValueError("ci-package-summary-outcome-invalid")
+    scratch = attempt_root / "external-attempts"
+    attempts = sorted(scratch.glob("external-*.attempt.json"))
+    if len(attempts) != 1:
+        raise ValueError("ci-package-summary-receipt-missing")
+    receipt_path = attempts[0]
+    try:
+        info = receipt_path.lstat()
+        receipt_limit = limits.get("max_json_bytes")
+        if (not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode)
+                or info.st_uid != os.getuid() or info.st_nlink != 1
+                or type(receipt_limit) is not int or info.st_size < 0
+                or info.st_size > receipt_limit):
+            raise ValueError("ci-package-summary-receipt-invalid")
+        raw = receipt_path.read_bytes()
+        receipt = json.loads(raw)
+    except (OSError, ValueError, UnicodeError):
+        raise ValueError("ci-package-summary-receipt-invalid") from None
+    if not isinstance(receipt, dict):
+        raise ValueError("ci-package-summary-receipt-invalid")
+    processes = receipt.get("processes")
+    if not isinstance(processes, list) or len(processes) != 1 or not isinstance(processes[0], dict):
+        raise ValueError("ci-package-summary-process-receipt-invalid")
+    process = processes[0]
+    rss_peak = process.get("rss_bytes_peak")
+    if rss_peak is not None and (type(rss_peak) is not int or rss_peak < 0):
+        raise ValueError("ci-package-summary-rss-invalid")
+    if rss_peak is not None and rss_peak > limits["max_rss_bytes"]:
+        raise ValueError("ci-package-summary-rss-invalid")
+    wall_seconds = process.get("wall_seconds")
+    if (wall_seconds is not None and (type(wall_seconds) not in (int, float)
+            or not math.isfinite(wall_seconds) or wall_seconds < 0)):
+        raise ValueError("ci-package-summary-wall-invalid")
+    cleanup = process.get("process_group_cleanup", receipt.get("process_group_cleanup", "missing"))
+    if cleanup not in {"confirmed", "unconfirmed", "not-launched", "missing"}:
+        cleanup = "missing"
+    returncode = receipt.get("returncode")
+    if type(returncode) is not int:
+        returncode = None
+    bound_violation = process.get("bound_violation") is True
+    if (outcome == "passed" and (returncode != 0 or cleanup != "confirmed"
+            or bound_violation or rss_peak is None or rss_peak <= 0
+            or wall_seconds is None)):
+        raise ValueError("ci-package-summary-success-receipt-invalid")
+    scope_id = scope.get("scope_id")
+    if not isinstance(scope_id, str) or not scope_id:
+        raise ValueError("ci-package-summary-scope-identity-invalid")
+
+    summary: dict[str, Any] = {
+        "schema": "genewhip.phase7-ci-package-boundary.v1",
+        "role": role,
+        "outcome": outcome,
+        "scope_path": scope_path,
+        "scope_sha256": scope_sha256,
+        "scope_id": scope_id,
+        "max_rss_bytes": limits["max_rss_bytes"],
+        "rss_bytes_peak": rss_peak,
+        "max_binary_file_bytes": limits["max_binary_file_bytes"],
+        "max_scratch_bytes": limits["max_scratch_bytes"],
+        "max_stdout_stderr_bytes": limits["max_stdout_stderr_bytes"],
+        "max_capture_bytes": limits["max_capture_bytes"],
+        "max_retained_bytes": limits["max_retained_bytes"],
+        "wall_limit_seconds": limits["wall_seconds"],
+        "wall_seconds": wall_seconds,
+        "returncode": returncode,
+        "process_group_cleanup": cleanup,
+        "bound_violation": bound_violation,
+        "receipt_sha256": hashlib.sha256(raw).hexdigest(),
+    }
+    source_sha = environment.get("GITHUB_SHA", "")
+    run_id = environment.get("GITHUB_RUN_ID", "")
+    run_attempt = environment.get("GITHUB_RUN_ATTEMPT", "")
+    workflow_identity = (source_sha, run_id, run_attempt)
+    if any(workflow_identity):
+        if (not re.fullmatch(r"[0-9a-f]{40}", source_sha)
+                or not re.fullmatch(r"[0-9]+", run_id)
+                or not re.fullmatch(r"[1-9][0-9]*", run_attempt)):
+            raise ValueError("ci-package-summary-workflow-identity-invalid")
+        summary.update({"source_sha": source_sha, "run_id": run_id,
+            "run_attempt": run_attempt})
+
+    summary_path = attempt_root / "summary.json"
+    _write_json(summary_path, summary)
+    try:
+        summary_info = summary_path.lstat()
+    except OSError:
+        raise ValueError("ci-package-summary-write-invalid") from None
+    if (not stat.S_ISREG(summary_info.st_mode) or stat.S_ISLNK(summary_info.st_mode)
+            or summary_info.st_uid != os.getuid() or summary_info.st_nlink != 1
+            or summary_info.st_size > 8192):
+        raise ValueError("ci-package-summary-size-invalid")
+    print(json.dumps(summary, sort_keys=True, separators=(",", ":")), flush=True)
+    return summary_path
+
+
+def ci_package_step(role: str) -> subprocess.CompletedProcess[str]:
+    """Run one fixed legacy package builder inside the selected Phase 7 PGID boundary."""
+    if type(role) is not str or role not in {"sdk", "desktop"}:
+        raise ValueError("ci-package-step-invalid")
+
+    child_env = os.environ.copy()
+    selected_path = child_env.get("GENEWHIP_QUALIFICATION_SCOPE_PATH", "")
+    selected_sha = child_env.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", "")
+    authority_path = child_env.get("GENEWHIP_QUALIFICATION_WINDOW_AUTH_PATH", "")
+    authority_sha = child_env.get("GENEWHIP_QUALIFICATION_WINDOW_AUTH_SHA256", "")
+    legacy_path = pathlib.Path("evidence/v02-execution.json").as_posix()
+    no_dispatch_scope = (selected_path in ("", legacy_path)
+        and selected_sha in ("", LEGACY_SCOPE_SHA256))
+    active_window = bool(child_env.get("GENEWHIP_QUALIFICATION_STARTED_AT")
+        or authority_path or authority_sha or not no_dispatch_scope)
+    if not active_window:
+        selected_path = PHASE7_CI_MEMORY_SCOPE_PATH.as_posix()
+        selected_sha = PHASE7_CI_MEMORY_SCOPE_SHA256
+    if not selected_path or not selected_sha:
+        raise ValueError("ci-package-phase7-scope-required")
+
+    profile = _phase7_public_window_profile(scope_path=selected_path,
+        scope_sha256=selected_sha)
+    if profile is None:
+        raise ValueError("ci-package-phase7-scope-required")
+    scope_path = profile["scope_path"].as_posix()
+    scope_sha = profile["scope_sha256"]
+    window_module = _load_phase7_window_module()
+    scope = window_module.load_public_scope(ROOT, scope_path=scope_path,
+        scope_sha256=scope_sha)
+    limits = scope.get("per_child_limits") if isinstance(scope, dict) else None
+    timeout = limits.get("wall_seconds") if isinstance(limits, dict) else None
+    file_size_limit = limits.get("max_binary_file_bytes") if isinstance(limits, dict) else None
+    if (type(timeout) is not int or timeout <= 0
+            or type(file_size_limit) is not int or file_size_limit <= 0
+            or type(limits.get("max_rss_bytes")) is not int
+            or limits["max_rss_bytes"] <= 0):
+        raise ValueError("ci-package-phase7-limits-invalid")
+
+    child_env["GENEWHIP_QUALIFICATION_SCOPE_PATH"] = scope_path
+    child_env["GENEWHIP_QUALIFICATION_SCOPE_SHA256"] = scope_sha
+    child_env["GENEWHIP_CI_PACKAGE_OUTER_GROUP"] = "1"
+    boundary_parent = ROOT / "build/v02/ci-package-boundaries"
+    _prepare_native_setup_roots((boundary_parent,))
+    attempt_root = boundary_parent / (role + "-" + uuid.uuid4().hex)
+    if attempt_root.exists() or attempt_root.is_symlink():
+        raise ValueError("ci-package-boundary-collision")
+    attempt_root.mkdir(mode=0o700)
+    info = attempt_root.lstat()
+    if (not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode)
+            or info.st_uid != os.getuid()):
+        raise ValueError("ci-package-boundary-invalid")
+
+    command = [sys.executable, "-I", str(ROOT / ("scripts/package_" + role + ".py"))]
+    # If the monitored command fails, leave its private attempt tree for
+    # attribution and cleanup review; the next invocation gets a fresh root.
+    try:
+        result = _external(command, cwd=ROOT, timeout=timeout, phase="package",
+            env=child_env, fresh_batch_scratch=attempt_root / "external-attempts",
+            file_size_limit_bytes=file_size_limit, allow_build_file_links=True)
+    except BaseException:
+        # A completed or failed process receipt is projected when available;
+        # full private streams stay local and the original failure is retained.
+        try:
+            _write_ci_package_boundary_summary(attempt_root=attempt_root, role=role,
+                scope_path=scope_path, scope_sha256=scope_sha, scope=scope,
+                limits=limits, environment=child_env, outcome="failed")
+        except (OSError, ValueError, TypeError):
+            pass
+        raise
+    _write_ci_package_boundary_summary(attempt_root=attempt_root, role=role,
+        scope_path=scope_path, scope_sha256=scope_sha, scope=scope,
+        limits=limits, environment=child_env, outcome="passed")
+    return result
+
+
 def native_prefix_setup_step(step: str) -> None:
     """Run one fixed setup operation under the receipt's immutable setup cutoff."""
     if step not in {"dependencies", "configure", "build"}:
@@ -1579,7 +1818,8 @@ def phase7_execution_scope_path(*, root: pathlib.Path = ROOT,
     except ValueError:
         known = {item["scope_sha256"]: item["scope_path"].as_posix()
             for item in PHASE7_WINDOW_PROFILES}
-        known["authorized-public"] = PHASE7_AUTHORIZED_SCOPE_PATH.as_posix()
+        known[PHASE7_AUTHORIZED_SCOPE_SHA256] = PHASE7_AUTHORIZED_SCOPE_PATH.as_posix()
+        known[PHASE7_CI_MEMORY_SCOPE_SHA256] = PHASE7_CI_MEMORY_SCOPE_PATH.as_posix()
         if selected_sha in known and selected_path != known[selected_sha]:
             raise ValueError("qualification-scope-path-invalid") from None
         if selected_sha not in ("", *known):
@@ -8819,7 +9059,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", required=True, choices=("plan", "runtime", "native-diagnostic", "native-diagnostic-hosted", "native-prefix-diagnostic", "native-prefix-diagnostic-hosted", "package", "validate", "semantic-mutants", "semantic-mutants-worker", "stage-public", "retry-source", "successor-source", "failed-hosted-successor-source", "hosted", "close", "bounded-command"))
     parser.add_argument("--build", type=pathlib.Path, default=ROOT / "build/phase6")
-    parser.add_argument("--scope", type=pathlib.Path, default=ROOT / "evidence/v02-execution.json")
+    parser.add_argument("--scope", type=pathlib.Path)
     parser.add_argument("--out", type=pathlib.Path)
     parser.add_argument("--command-phase", choices=("preparation", "runtime", "package"))
     parser.add_argument("--command-timeout", type=int)
@@ -8871,6 +9111,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--run-id")
     parser.add_argument("--run-attempt")
     args = parser.parse_args(argv)
+    if args.scope is None:
+        selected_scope_path = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH")
+        args.scope = (pathlib.Path(selected_scope_path) if selected_scope_path
+            else ROOT / "evidence/v02-execution.json")
+    selected_scope_input = args.scope
     batch_failure_stage: str | None = None
     try:
         if args.mode == "bounded-command":
@@ -8954,6 +9199,14 @@ def main(argv: list[str] | None = None) -> int:
         routed_paths = (args.journal, args.preflight, args.publication_copy, args.out,
                         args.diagnostic_readiness, args.authorization,
                         args.single_native_admission, args.single_native_authority)
+        selected_scope_sha = os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256", "")
+        authorized_scope_pair = _authorized_run_scope_pair(
+            selected_scope_input, selected_scope_sha)
+        environment_authorized_scope = _authorized_run_scope_pair(
+            os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_PATH", ""), selected_scope_sha)
+        if (environment_authorized_scope is not None
+                and authorized_scope_pair != environment_authorized_scope):
+            raise ValueError("phase7-window-scope-or-authority-profile-invalid")
         uses_new_root = any(value is not None and any(
             (value if value.is_absolute() else ROOT / value).resolve(strict=False) == protected_root
             or protected_root in (value if value.is_absolute() else ROOT / value).resolve(strict=False).parents
@@ -8962,21 +9215,24 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("single-native-authorization-required")
         window_roots = tuple((ROOT / profile["attempt_namespace"]).resolve(strict=False)
             for profile in PHASE7_WINDOW_PROFILES)
-        if args.scope is not None and (args.scope if args.scope.is_absolute()
-                else ROOT / args.scope).resolve(strict=False) == ROOT / PHASE7_AUTHORIZED_SCOPE_PATH:
+        if authorized_scope_pair is not None:
             if batch_requested:
                 authorized_profile = _phase7_window_profile(
-                    scope_path=PHASE7_AUTHORIZED_SCOPE_PATH,
-                    scope_sha256=os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256"),
+                    scope_path=authorized_scope_pair,
+                    scope_sha256=selected_scope_sha,
                     authorization_path=args.batch_authorization,
                     authorization_sha256=args.batch_authorization_sha256)
+                if authorized_profile is None:
+                    raise ValueError("phase7-window-public-scope-required")
                 window_roots += ((ROOT / authorized_profile["attempt_namespace"]).resolve(strict=False),)
             else:
                 public_profile = _phase7_public_window_profile(
-                    scope_path=PHASE7_AUTHORIZED_SCOPE_PATH,
-                    scope_sha256=os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256"))
+                    scope_path=authorized_scope_pair,
+                    scope_sha256=selected_scope_sha)
                 if public_profile is None:
                     raise ValueError("phase7-window-public-scope-required")
+                if public_profile.get("attempt_namespace") is not None:
+                    window_roots += ((ROOT / public_profile["attempt_namespace"]).resolve(strict=False),)
         uses_window_root = any(value is not None and any(
             (value if value.is_absolute() else ROOT / value).resolve(strict=False) == window_root
             or window_root in (value if value.is_absolute() else ROOT / value).resolve(strict=False).parents
@@ -8985,19 +9241,35 @@ def main(argv: list[str] | None = None) -> int:
             and args.batch_authorization.is_absolute() else ROOT / args.batch_authorization
             if args.batch_authorization is not None else None)
         selected_auth_path = auth_routed.resolve(strict=False) if auth_routed is not None else None
-        selected_scope_path = args.scope.resolve(strict=False) if args.scope is not None else None
+        selected_scope_path = (selected_scope_input if selected_scope_input.is_absolute()
+            else ROOT / selected_scope_input).resolve(strict=False)
         window_authorized = batch_requested and any(
             selected_auth_path == ROOT / profile["authority_path"]
             and args.batch_authorization_sha256 == profile["authority_sha256"]
             and selected_scope_path == ROOT / profile["scope_path"]
             for profile in PHASE7_WINDOW_PROFILES)
-        if (batch_requested and selected_scope_path == ROOT / PHASE7_AUTHORIZED_SCOPE_PATH
-                and not window_authorized):
+        if batch_requested and authorized_scope_pair is not None and not window_authorized:
             window_authorized = _phase7_window_profile(
-                scope_path=PHASE7_AUTHORIZED_SCOPE_PATH,
-                scope_sha256=os.environ.get("GENEWHIP_QUALIFICATION_SCOPE_SHA256"),
+                scope_path=authorized_scope_pair,
+                scope_sha256=selected_scope_sha,
                 authorization_path=args.batch_authorization,
                 authorization_sha256=args.batch_authorization_sha256) is not None
+        def under_phase7_attempt_tree(value: pathlib.Path | None) -> bool:
+            if value is None:
+                return False
+            candidate = (value if value.is_absolute() else ROOT / value).resolve(strict=False)
+            try:
+                relative = candidate.relative_to(ROOT)
+            except ValueError:
+                return False
+            return (len(relative.parts) >= 3 and relative.parts[:2] == ("build", "v02")
+                and relative.parts[2].startswith("phase7-"))
+
+        uses_unadmitted_authorized_run_root = any(
+            under_phase7_attempt_tree(value) for value in routed_paths)
+        if (authorized_scope_pair is not None and uses_unadmitted_authorized_run_root
+                and not window_authorized):
+            raise ValueError("phase7-window-authorization-required")
         if uses_window_root and not window_authorized:
             raise ValueError("phase7-window-authorization-required")
         if single_requested and (args.single_native_authority_sha256 not in (
