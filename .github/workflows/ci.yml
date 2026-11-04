@@ -960,7 +960,27 @@ jobs:
           --source-sha "$GITHUB_SHA" --head-sha "$GITHUB_SHA" --base-sha "$GITHUB_BASE_SHA"
           --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
           --out build/v02/semantic-mutant-receipt.json
+      - name: Acquire the pinned SDL archive for offline package builds
+        timeout-minutes: 3
+        env:
+          GENEWHIP_SDL3_ARCHIVE: ${{ runner.temp }}/genewhip-package-SDL3.tar.gz
+        run: |
+          python3 -I - <<'PY'
+          import hashlib, json, os, pathlib, urllib.request
+          record = json.loads(pathlib.Path("packaging/dependencies/sdl3.json").read_text())
+          expected = record["bytes"]
+          if type(expected) is not int or not 0 < expected <= 32 * 1024 * 1024:
+              raise SystemExit("invalid SDL archive size pin")
+          with urllib.request.urlopen(record["url"], timeout=120) as response:
+              raw = response.read(expected + 1)
+          if len(raw) != expected or hashlib.sha256(raw).hexdigest() != record["sha256"]:
+              raise SystemExit("SDL archive does not match the committed size and digest")
+          with pathlib.Path(os.environ["GENEWHIP_SDL3_ARCHIVE"]).open("xb") as output:
+              output.write(raw)
+          PY
       - name: Build and verify exact v0.2 archives and local documentation
+        env:
+          GENEWHIP_SDL3_ARCHIVE: ${{ runner.temp }}/genewhip-package-SDL3.tar.gz
         run: >-
           python3 -I scripts/release/v02_qualification.py --mode package
           --scope "$GENEWHIP_QUALIFICATION_SCOPE_PATH"

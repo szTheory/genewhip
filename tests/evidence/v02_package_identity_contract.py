@@ -164,5 +164,60 @@ class PackagePerformanceIdentityContract(unittest.TestCase):
                 self.revision, expected_identity=self.identity)
 
 
+class PackageMatrixInputContract(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="gw-package-matrix-contract-")
+        self.addCleanup(self.temp.cleanup)
+        self.root = pathlib.Path(self.temp.name)
+        self.sdk = load_module("gw_package_matrix_sdk", ROOT / "scripts/package_sdk.py")
+        self.matrix, self.closure = self.sdk._unknown_public_closure(
+            self.root / "no-current-evidence", self.root / "generated")
+        self.scratch = self.root / "verify"
+        self.scratch.mkdir()
+
+    def test_exact_matrix_input_keeps_strict_verifier(self):
+        original = {p.name: p.read_bytes() for p in self.closure.iterdir()}
+        module, selected = self.sdk._unknown_public_closure(self.closure, self.scratch)
+        self.assertNotEqual(selected, self.closure.resolve())
+        self.assertEqual({p.name: p.read_bytes() for p in selected.iterdir()}, original)
+        (self.closure / "observations.json").write_text("[]\n")
+        module.verify_public_closure(selected, ROOT / "evidence/v02-roster.json")
+
+    def test_separate_performance_report_does_not_enter_matrix_roster(self):
+        original = {p.name: p.read_bytes() for p in self.closure.iterdir()}
+        # This test exercises matrix selection only. The performance consumer
+        # separately enforces the report schema, source, run and sample policy.
+        (self.closure / "performance.json").write_text("{}\n")
+        module, selected = self.sdk._unknown_public_closure(self.closure, self.scratch)
+        self.assertNotEqual(selected, self.closure)
+        self.assertEqual({p.name: p.read_bytes() for p in selected.iterdir()}, original)
+        module.verify_public_closure(selected, ROOT / "evidence/v02-roster.json")
+        self.assertEqual((self.closure / "performance.json").read_text(), "{}\n")
+        self.assertEqual((self.scratch / "performance.json").read_text(), "{}\n")
+        (self.closure / "performance.json").write_text("{\"replaced\": true}\n")
+        self.assertEqual((self.scratch / "performance.json").read_text(), "{}\n")
+
+    def test_unknown_extra_and_symlink_report_are_rejected(self):
+        performance = self.closure / "performance.json"
+        performance.write_text("{}\n")
+        extra = self.closure / "private.bin"
+        extra.write_bytes(b"unlisted")
+        with self.assertRaisesRegex(ValueError, "package-evidence-unexpected-member"):
+            self.sdk._unknown_public_closure(self.closure, self.scratch)
+        extra.unlink()
+        performance.unlink()
+        target = self.root / "outside.json"
+        target.write_text("{}\n")
+        performance.symlink_to(target)
+        with self.assertRaises(ValueError):
+            self.sdk._unknown_public_closure(self.closure, self.scratch)
+
+    def test_tampered_matrix_still_rejects_with_separate_report(self):
+        (self.closure / "performance.json").write_text("{}\n")
+        (self.closure / "observations.json").write_text("[]\n")
+        with self.assertRaises(ValueError):
+            self.sdk._unknown_public_closure(self.closure, self.scratch)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

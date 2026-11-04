@@ -8574,7 +8574,7 @@ def run_package(public_evidence: pathlib.Path, out: pathlib.Path) -> dict[str, A
         benchmark_documents, {name: _sha(path) for name, path in benchmark_reports.items()},
         identity=expected, source_identity_sha256=benchmark_module.source_identity(),
         scope_id=scope["scope_id"], scope_sha256=_sha(scope_path))
-    _write_json(public_evidence / "performance.json", performance_projection)
+    _write_json(public_evidence.parent / "performance.json", performance_projection)
 
     def package_budget():
         remaining = min(4 * 60 * 60, int((package_deadline - datetime.datetime.now(datetime.timezone.utc)).total_seconds()))
@@ -8616,7 +8616,7 @@ def run_package(public_evidence: pathlib.Path, out: pathlib.Path) -> dict[str, A
     attempts.append(run_package_child(command, "package-inventory", cap=300))
     value = {"schema": "genewhip.v02-package-receipt.v1", "identity": expected,
         "source_sha": source, "archives": sorted(p.name for p in out.glob("*.tar.gz")),
-        "performance_projection_sha256": _sha(public_evidence / "performance.json"),
+        "performance_projection_sha256": _sha(public_evidence.parent / "performance.json"),
         "inventory": (inventory / "inventory.json").relative_to(ROOT).as_posix(), "inventory_sha256": _sha(inventory / "inventory.json"),
         "docs_receipt": docs.relative_to(ROOT).as_posix(), "docs_sha256": _sha(docs),
         "rights_and_members_checked_by": "scripts/release/promote.py prepare --release-version 0.2.0",

@@ -79,12 +79,15 @@ def _v02_sdl_route():
     return ["-DGENEWHIP_SDL3_ARCHIVE=" + str(archive.resolve())], "verified local SHA-256 archive; offline"
 
 
-def _build_v02_archive(revision, scratch, name, development_only, public_evidence):
+def _build_v02_archive(revision, scratch, name, development_only, public_evidence, *,
+                       expected_performance_identity=None):
     """Build the reviewed v0.2 desktop member set from a committed source snapshot."""
     spec = __import__("importlib.util", fromlist=["spec_from_file_location"])
-    loader = spec.spec_from_file_location("gw_v02_sdk_roster", ROOT / "scripts/package_sdk.py")
+    loader = spec.spec_from_file_location("gw_v02_sdk_roster",
+        pathlib.Path(__file__).resolve().parent / "package_sdk.py")
     package_sdk = spec.module_from_spec(loader)
     loader.loader.exec_module(package_sdk)
+    package_sdk.ROOT = ROOT
     roster = package_sdk._load_v02_roster()
     source, build, stage = scratch / "source", scratch / "source/.package-build", scratch / name
     source.mkdir()
@@ -110,10 +113,11 @@ def _build_v02_archive(revision, scratch, name, development_only, public_evidenc
     module.verify_public_closure(closure, source / "evidence/v02-roster.json", current_identity)
     closure_map = {"share/genewhip/evidence/" + p: closure / p
         for p in package_sdk._closure_members(closure)}
-    performance = pathlib.Path(public_evidence).resolve() / "performance.json"
+    performance = package_sdk._package_performance_input(public_evidence, scratch)
     if not performance.is_file():
         raise ValueError("public-performance-evidence-missing")
-    performance_digest = package_sdk._validate_performance_evidence(performance, revision)
+    performance_digest = package_sdk._validate_performance_evidence(performance, revision,
+        expected_identity=expected_performance_identity)
     for row in roster["desktop"]["members"]:
         target_name = row["path"]
         source_name = row["source"]
@@ -199,7 +203,7 @@ def _validate_v02_desktop_members(stage, roster):
                          " extra=" + ",".join(sorted(actual - expected)))
 
 
-def _v02_package(args):
+def _v02_package(args, *, expected_performance_identity=None):
     if platform.system() != "Darwin" or platform.machine() != "arm64":
         raise ValueError("unsupported-build-host: native macOS arm64 required")
     if args.development_only:
@@ -221,10 +225,12 @@ def _v02_package(args):
     name = "genewhip-0.2.0-playable-preview-macos-arm64-" + revision[:12]
     with tempfile.TemporaryDirectory(prefix="gw-desktop-v02-") as tmp:
         pending, digest = _build_v02_archive(revision, pathlib.Path(tmp), name, state == "development-only",
-                                             args.public_evidence)
+                                             args.public_evidence,
+                                             expected_performance_identity=expected_performance_identity)
         with tempfile.TemporaryDirectory(prefix="gw-desktop-v02-repeat-") as repeat_tmp:
             repeated, repeated_digest = _build_v02_archive(revision, pathlib.Path(repeat_tmp), name,
-                                                            state == "development-only", args.public_evidence)
+                state == "development-only", args.public_evidence,
+                expected_performance_identity=expected_performance_identity)
             if digest != repeated_digest or members(pending) != members(repeated):
                 raise ValueError("desktop-v02-archive-not-repeatable")
         smoke = subprocess.run([sys.executable, str(ROOT / "tests/package/desktop_smoke.py"), "--v02",
@@ -247,7 +253,7 @@ def _v02_package(args):
             "archive_sha256": digest, "inventory_sha256": inventory_digest,
             "runtime_content_identity": metadata["runtime_content_identity"],
             "public_evidence_digest": metadata["public_evidence_digest"],
-            "performance_evidence_digest": performance_digest, "api_version": metadata["api_version"],
+            "performance_evidence_digest": metadata["performance_evidence_digest"], "api_version": metadata["api_version"],
             "input_log_version": metadata["input_log_version"], "smoke": smoke_result,
             "publication": "not published; external local exact-byte development qualification"}
         receipt_path = archive.with_suffix(archive.suffix + ".qualification.json")

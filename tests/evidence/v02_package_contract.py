@@ -251,8 +251,8 @@ class V02PackageContract(unittest.TestCase):
             authorized_path.write_bytes(authorized_bytes)
             report_root = root / "build/v02/collected"
             report_root.mkdir(parents=True)
-            performance_path = root / "build/v02/public/performance.json"
-            performance_path.parent.mkdir(parents=True)
+            performance_path = root / "build/v02/performance.json"
+            performance_path.parent.mkdir(parents=True, exist_ok=True)
 
             def write_projection(scope_path, scope_sha):
                 scope = json.loads(scope_path.read_text())
@@ -392,7 +392,7 @@ class V02PackageContract(unittest.TestCase):
             projection = benchmark.build_public_performance_projection(reports, raw_digests,
                 identity=identity, source_identity_sha256=source_identity_sha,
                 scope_id=scope["scope_id"], scope_sha256=authorized_sha)
-            performance_path = source / "build/v02/public/performance.json"
+            performance_path = source / "build/v02/performance.json"
             performance_path.parent.mkdir(parents=True, exist_ok=True)
             performance_path.write_text(json.dumps(projection, sort_keys=True, indent=2) + "\n")
 
