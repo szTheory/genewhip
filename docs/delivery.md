@@ -2,12 +2,7 @@
 
 ## v0.2.0 exact-byte adoption status
 
-The currently staged v0.2.0 SDK and desktop archives are local development-only
-qualification outputs. Their adjacent receipts bind local source-snapshot SHAs,
-exact archive SHA-256 values, inventory identities, and extracted-byte smoke
-results; they do not establish trusted publication provenance. The public source,
-hosted qualification, protected promotion, and post-publication download-adoption
-steps remain pending. Public v0.1.0 remains immutable.
+The v0.2.0 prerelease is published at [the release page](https://github.com/szTheory/genewhip/releases/tag/v0.2.0). Its immutable assets are bound to source commit [`d9619a86d21b884439e492604774b688bc95ae9c`](https://github.com/szTheory/genewhip/commit/d9619a86d21b884439e492604774b688bc95ae9c), qualified by [CI run 41885290640, attempt 1](https://github.com/szTheory/genewhip/actions/runs/41885290640/attempts/1), and published by [release run 41910221696, attempt 2](https://github.com/szTheory/genewhip/actions/runs/41910221696/attempts/2). The external final close passed the required release checks against all eight published asset digests. Downloaded-byte adoption passed five documented commands, six bounded objective routes, and three Cocoa/CoreAudio clients on macOS 26.6.2 arm64. The prerelease is unsigned and unnotarized; physical display/acoustic output, latency, and whole-game compatibility remain unknown. Public v0.1.0 remains immutable. This page records the post-publication result; it does not change the source-bound release archives.
 
 For an actual download, the protected publisher validates the exact source,
 workflow, ref, run and attempt, inventory, signed attestation invocation, and
@@ -25,13 +20,14 @@ open audio continues video-only, but that outcome cannot qualify an audio row.
 Pull requests, default-branch pushes, merge-queue (`merge_group`) events, and
 manual runs use the same `required-ci` aggregate. The required fast lanes include
 privacy, rights, package, documentation, schema, matrix, and delivery contracts,
-plus a bounded current-source smoke through both public title paths. Expensive
-v0.2 runtime and three-workload qualification lanes run only on a default-branch
-push or explicit manual dispatch. Their source, head, base, run, and attempt
-identities are joined before attestation; the three workload jobs are ordered
-serially and keep separate host identities. A schedule runs the informational
-extended workflow. Performance thresholds remain informational; measurement
-and output contracts are required. Fork pull requests have read-only workflow
+plus a bounded current-source smoke through both public title paths. The v0.2
+runtime, benchmark, package, and full qualification-close lanes run only on
+explicit `workflow_dispatch`. The three workload benchmarks run serially; only
+the control benchmark overlaps the runtime job, and each workload keeps a
+separate host identity. Their source, head, base, run, and attempt identities
+are joined before attestation. A schedule runs the informational extended
+workflow. Performance thresholds remain informational; measurement and output
+contracts are required. Fork pull requests have read-only workflow
 permissions, no secrets, and checkout credentials disabled. The trusted
 merge-group lane builds the merge-group commit itself; successful PR artifacts
 do not qualify a later integration SHA. A passing plan-only receipt does not
@@ -40,8 +36,9 @@ establish compatibility, native capability, or publication provenance.
 The package job emits an attempt-scoped evidence closure that retains bounded
 dimension inputs and referenced child reports. The final qualification job
 reopens those bytes and calls the same semantic validators as the producer; it
-does not rerun guest workloads. This is prepublication readiness only. Final
-release credit still requires authenticated downloaded-byte adoption.
+does not rerun guest workloads. That job establishes prepublication readiness;
+the protected publication and separate exact-download adoption subsequently
+passed as recorded above.
 
 ## Local repository preflight
 
@@ -241,10 +238,10 @@ endpoint references:
 - [Repository rulesets REST API](https://docs.github.com/en/rest/repos/rules)
 - [Get a repository](https://docs.github.com/en/rest/repos/repos#get-a-repository)
 
-Repository settings and the sanitized publication copy are recorded by the
-authorized preflight command above. Hosted qualification, merge, release and
-download evidence remain pending until `qualify_delivery.py --run` and
-`--verify` record actual results; local contracts are not hosted evidence.
+This paragraph records the Phase 4 preflight state: at that point, hosted
+qualification, merge, release, and download evidence were still pending. The
+current v0.2.0 source, hosted run, publication, and exact-download results are
+recorded at the top of this page. Local contracts alone are not hosted evidence.
 
 ## Trusted release promotion
 
@@ -322,10 +319,11 @@ Actions artifact. Its `GITHUB_TOKEN` has `actions: read`, `attestations: read`,
 and `contents: write`; no PAT, Git push, package install, or build permission is
 used. GitHub currently offers artifact attestations on Free/Pro/Team plans only
 for public repositories; private/internal repositories require Enterprise
-Cloud. The actual destination's plan, rules, token behavior, hosted macOS lane,
-run, source merge, and publication still require the plan 04-14 preflight and
-explicit release packet. Local synthetic contracts and package receipts do not
-close REL-03.
+Cloud. The initial delivery plan required the destination's plan, rules, token
+behavior, hosted macOS lane, run, source merge, and publication to be established
+through the plan 04-14 preflight and explicit release packet. The actual v0.2.0
+publication and exact-download outcome are recorded at the top of this page;
+local synthetic contracts and package receipts alone do not close REL-03.
 
 The trigger uses the `workflow_dispatch` event rather than automatically
 publishing every successful main push. GitHub documents that `workflow_run`
