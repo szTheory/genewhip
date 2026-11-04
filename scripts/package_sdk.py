@@ -186,8 +186,37 @@ def _unknown_public_closure(input_path, temp_root):
     if (candidate / "manifest.json").is_file():
         identity_path = candidate.parent / "runtime-identity.json"
         expected_identity = _json(identity_path) if identity_path.is_file() else None
-        module.verify_public_closure(candidate, ROOT / "evidence/v02-roster.json", expected_identity)
         closure = candidate
+        # The package input contains two independently checked reports. Keep
+        # the matrix verifier's exact member roster and reject all other extras.
+        names = _closure_members(candidate)
+        spec = importlib.util.spec_from_file_location("gw_package_matrix_capture",
+            ROOT / "scripts/release/v02_transfer.py")
+        transfer = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(transfer)
+        root_path, root_fd = transfer._open_trusted_root(candidate, "package-matrix-input")
+        try:
+            expected_names = set(names)
+            if "performance.json" in os.listdir(root_fd):
+                expected_names.add("performance.json")
+            if set(os.listdir(root_fd)) != expected_names:
+                raise ValueError("package-evidence-unexpected-member")
+            captured = {name: transfer._read_owned_file_snapshot(root_path, name,
+                label="package-matrix-input:" + name, root_fd=root_fd,
+                max_bytes=8 * 1024 * 1024) for name in expected_names}
+            transfer._check_root_binding(root_path, root_fd, "package-matrix-input")
+            if set(os.listdir(root_fd)) != expected_names:
+                raise ValueError("package-evidence-member-set-changed")
+        finally:
+            os.close(root_fd)
+        closure = pathlib.Path(temp_root) / "public-closure"
+        closure.mkdir()
+        for name in names:
+            (closure / name).write_bytes(captured[name])
+        if "performance.json" in captured:
+            with (pathlib.Path(temp_root) / "performance.json").open("xb") as stream:
+                stream.write(captured["performance.json"])
+        module.verify_public_closure(closure, ROOT / "evidence/v02-roster.json", expected_identity)
     else:
         closure = pathlib.Path(temp_root) / "public-closure"
         rows = [dict(expected, outcome="unknown", reason="no current package-source qualification proof supplied",
@@ -204,6 +233,23 @@ def _closure_members(closure):
     return names
 
 
+def _package_performance_input(public_evidence, temp_root):
+    """Validate and package one owned snapshot of the separate report."""
+    snapshot = pathlib.Path(temp_root) / "performance.json"
+    if snapshot.is_file():
+        return snapshot
+    original = pathlib.Path(public_evidence).resolve().parent / "performance.json"
+    spec = importlib.util.spec_from_file_location("gw_package_performance_capture",
+        ROOT / "scripts/release/v02_transfer.py")
+    transfer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(transfer)
+    raw = transfer._read_owned_file_snapshot(original.parent, original.name,
+        label="package-performance-input", max_bytes=8 * 1024 * 1024)
+    with snapshot.open("xb") as stream:
+        stream.write(raw)
+    return snapshot
+
+
 def _sandbox_run(command, *, cwd, env, timeout=600, capture=True):
     """Run extracted SDK checks with macOS network access denied and fresh caches."""
     sandbox = shutil.which("sandbox-exec")
@@ -216,13 +262,16 @@ def _sandbox_run(command, *, cwd, env, timeout=600, capture=True):
                           stderr=subprocess.STDOUT if capture else None, text=True)
 
 
-def _build_v02(args):
+def _build_v02(args, *, expected_performance_identity=None):
     roster = _load_v02_roster()
     if args.release_version != "0.2.0":
         raise ValueError("release-version-not-supported")
     revision = identity()
     if not re.fullmatch(r"[0-9a-f]{40}", args.source_sha) or args.source_sha != revision:
         raise ValueError("source-sha-must-match-actual-clean-head")
+    if expected_performance_identity is not None:
+        expected_performance_identity = _validate_performance_identity(
+            expected_performance_identity, revision)
     if not args.development_only:
         subprocess.run(["bash", "scripts/ci/public-hygiene.sh"], cwd=ROOT, check=True)
     api_version, input_version = _api_and_input_versions()
@@ -267,17 +316,6 @@ def _build_v02(args):
             else:
                 shutil.copyfile(ROOT / source, destination)
         _stage_consumer(ROOT / "tests/consumer", share / "consumer", "0.2.0")
-        consumer_main = share / "consumer/main.c"
-        consumer_source = consumer_main.read_text()
-        old_mulu = "variant[0x200] = 0xc0; variant[0x201] = 0xc0; /* legal MULU.W D0,D0, unsupported */"
-        old_opcode = "result.opcode == 0xc0c0"
-        if old_mulu not in consumer_source or old_opcode not in consumer_source:
-            raise ValueError("sdk-consumer-obsolete-opcode-control-not-found")
-        # Phase 6 added documented MULU.W behavior. Keep the public unsupported-opcode
-        # contract exercised with an as-yet-unimplemented legal DIVU.W encoding.
-        consumer_main.write_text(consumer_source.replace(old_mulu,
-            "variant[0x200] = 0x4a; variant[0x201] = 0xc0; /* legal TAS D0, not in the selected CPU subset */")
-            .replace(old_opcode, "result.opcode == 0x4ac0"))
         shutil.copyfile(build / "diagnostic.bin", share / "diagnostic.bin")
         report = subprocess.check_output([str(stage / "bin/gw_diagnostic_runner"), str(share / "diagnostic.bin")],
                                          cwd=scratch, text=True, timeout=30)
@@ -297,10 +335,11 @@ def _build_v02(args):
         evidence_dir.mkdir()
         for item in _closure_members(closure):
             shutil.copyfile(closure / item, evidence_dir / item)
-        performance = pathlib.Path(args.public_evidence).resolve() / "performance.json"
+        performance = _package_performance_input(args.public_evidence, scratch)
         if not performance.is_file():
             raise ValueError("public-performance-evidence-missing")
-        performance_digest = _validate_performance_evidence(performance, revision)
+        performance_digest = _validate_performance_evidence(performance, revision,
+            expected_identity=expected_performance_identity)
         shutil.copyfile(performance, evidence_dir / "performance.json")
         (share / "README.md").write_text(
             "# Genewhip v0.2.0 SDK package\n\n"

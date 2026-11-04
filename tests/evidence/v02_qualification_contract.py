@@ -6639,7 +6639,9 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
                                  file_size_limit_bytes):
                 self.assertEqual(label, "package-sdk")
                 self.assertEqual(file_size_limit_bytes, scope["per_child_limits"]["max_binary_file_bytes"])
-                projection_path = public / "performance.json"
+                projection_path = public.parent / "performance.json"
+                self.assertFalse((public / "performance.json").exists(),
+                    "performance must not enter the strict matrix member roster")
                 self.assertTrue(projection_path.is_file(), "projection must exist before SDK builder invocation")
                 projection = json.loads(projection_path.read_text())
                 errors = benchmark.validate_public_performance_projection(projection,

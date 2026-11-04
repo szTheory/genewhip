@@ -91,7 +91,7 @@ PACKAGE_FIXED_MEMBERS = {
     "artifacts/qualification-command-attempts/public-hygiene.attempt.json",
     "build/v02/qualification-dimensions.json", "build/v02/qualification-evidence-closure.json",
     "build/v02/measurements.json",
-    "build/v02/public/performance.json", "build/v02/public-hygiene.json",
+    "build/v02/performance.json", "build/v02/public-hygiene.json",
     "build/v02/runtime-identity.json", "build/v02/runtime-observation.json",
     "build/v02/runtime-observation/core-report.json", "build/v02/runtime-observation/host-software.json",
     "build/v02/runtime-observation/host-native.json", "build/v02/runtime-observation/media-report.json",
