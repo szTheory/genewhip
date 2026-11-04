@@ -443,6 +443,201 @@ class V02PackageContract(unittest.TestCase):
                 cwd=second, text=True), "")
 
 
+class DesktopBuildScratchContract(unittest.TestCase):
+    def test_legacy_package_guest_checks_inherit_monitored_builder_group(self):
+        package = self.package
+        empty = io.BytesIO()
+        with tarfile.open(fileobj=empty, mode="w"):
+            pass
+        class ReachedGuestCheck(Exception):
+            pass
+        for marker in ("", "1"):
+            with self.subTest(marker=marker), tempfile.TemporaryDirectory() as directory:
+                observed = []
+                def capture(command, **kwargs):
+                    observed.append(command)
+                    raise ReachedGuestCheck()
+                with patch.dict(os.environ, {"GENEWHIP_CI_PACKAGE_OUTER_GROUP": marker}), \
+                        patch.object(package.subprocess, "check_output", return_value=empty.getvalue()), \
+                        patch.object(package, "configure_build"), \
+                        patch.object(package, "sdl_route", return_value=([], "test")), \
+                        patch.object(package.platform, "system", return_value="Darwin"), \
+                        patch.object(package.platform, "machine", return_value="arm64"), \
+                        patch.object(package.subprocess, "run", side_effect=capture):
+                    with self.assertRaises(ReachedGuestCheck):
+                        package.build_archive("a" * 40, pathlib.Path(directory), "test")
+                self.assertEqual(len(observed), 1)
+                self.assertIn("phase4_game.py", observed[0][1])
+                self.assertEqual("--outer-process-group" in observed[0], marker == "1")
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location(
+            "gw_desktop_build_scratch_contract", ROOT / "scripts/package_desktop.py")
+        cls.package = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.package)
+
+    @staticmethod
+    def _archive_bytes(name, *, extra_member=False):
+        metadata = {"runtime_content_identity": "runtime", "public_evidence_digest": "public",
+                    "performance_evidence_digest": "performance", "api_version": 4,
+                    "input_log_version": 1}
+        members = {"checksums.json": b"{}",
+                   "metadata.json": json.dumps(metadata, sort_keys=True).encode()}
+        if extra_member:
+            members["repeat-only.txt"] = b"different repeat output"
+        output = io.BytesIO()
+        with gzip.GzipFile(filename="", mode="wb", fileobj=output, mtime=0) as compressed:
+            with tarfile.open(fileobj=compressed, mode="w", format=tarfile.USTAR_FORMAT) as tar:
+                for path, body in sorted(members.items()):
+                    info = tarfile.TarInfo(name + "/" + path)
+                    info.size, info.mtime, info.mode = len(body), 0, 0o644
+                    tar.addfile(info, io.BytesIO(body))
+        return output.getvalue()
+
+    @staticmethod
+    def _make_intermediates(scratch):
+        for relative in ("source/.package-build/CMakeCache.txt", "stage/bin/app",
+                         "public-closure/manifest.json", "performance.json"):
+            path = pathlib.Path(scratch) / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("owned build input")
+
+    def test_release_preserves_sealed_archive_and_removes_owned_intermediates(self):
+        package = self.package
+        with tempfile.TemporaryDirectory(prefix="gw-v02-build-cleanup-") as directory:
+            root = pathlib.Path(directory)
+            scratch = root / "owned-scratch"
+            scratch.mkdir()
+            archive = scratch / "desktop.tar.gz"
+            archive.write_bytes(self._archive_bytes("package-root"))
+            digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+            self._make_intermediates(scratch)
+            outside = root / "outside"
+            outside.mkdir()
+            external_payload = outside / "keep.txt"
+            external_payload.write_text("must remain untouched")
+            link = scratch / "owned-link"
+            link.symlink_to(outside, target_is_directory=True)
+
+            package._release_v02_build_scratch(scratch, archive, digest)
+
+            self.assertEqual(hashlib.sha256(archive.read_bytes()).hexdigest(), digest)
+            self.assertEqual(list(scratch.iterdir()), [archive])
+            self.assertFalse(os.path.lexists(link))
+            self.assertEqual(external_payload.read_text(), "must remain untouched")
+
+    def test_release_rejects_unsealed_or_unowned_archive_before_deleting(self):
+        package = self.package
+        for failure in ("wrong-digest", "symlink-archive", "outside-archive"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory(
+                    prefix="gw-v02-build-cleanup-reject-") as directory:
+                root = pathlib.Path(directory)
+                scratch = root / "owned-scratch"
+                scratch.mkdir()
+                self._make_intermediates(scratch)
+                owned_marker = scratch / "source/.package-build/CMakeCache.txt"
+                archive_bytes = self._archive_bytes("package-root")
+                if failure == "wrong-digest":
+                    archive = scratch / "desktop.tar.gz"
+                    archive.write_bytes(archive_bytes)
+                    digest = "0" * 64
+                else:
+                    outside = root / "outside"
+                    outside.mkdir()
+                    archive = outside / "desktop.tar.gz"
+                    archive.write_bytes(archive_bytes)
+                    digest = hashlib.sha256(archive_bytes).hexdigest()
+                    if failure == "symlink-archive":
+                        link = scratch / "desktop.tar.gz"
+                        link.symlink_to(archive)
+                        archive = link
+
+                with self.assertRaisesRegex(ValueError, "desktop-build-cleanup-archive-not-sealed"):
+                    package._release_v02_build_scratch(scratch, archive, digest)
+
+                self.assertEqual(owned_marker.read_text(), "owned build input")
+                if failure == "wrong-digest":
+                    self.assertEqual((scratch / "desktop.tar.gz").read_bytes(), archive_bytes)
+                elif failure == "symlink-archive":
+                    self.assertTrue((scratch / "desktop.tar.gz").is_symlink())
+                    self.assertEqual(archive.resolve().read_bytes(), archive_bytes)
+                else:
+                    self.assertEqual(archive.read_bytes(), archive_bytes)
+
+    def _run_mocked_package(self, root, *, repeat_mismatch=False):
+        package = self.package
+        revision = "a" * 40
+        args = argparse.Namespace(development_only=True, source_sha=revision,
+            output_dir=pathlib.Path(root) / "output", public_evidence=pathlib.Path(root) / "evidence")
+        state = {"events": [], "builds": [], "smoke_calls": 0}
+
+        def build_archive(_revision, scratch, name, _development_only, _public_evidence,
+                          *, expected_performance_identity=None):
+            self.assertIsNone(expected_performance_identity)
+            index = len(state["builds"])
+            self._make_intermediates(scratch)
+            archive = pathlib.Path(scratch) / "desktop.tar.gz"
+            archive.write_bytes(self._archive_bytes(name, extra_member=(repeat_mismatch and index == 1)))
+            digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+            state["builds"].append((pathlib.Path(scratch), archive, digest))
+            state["events"].append("build-" + str(index + 1))
+            if index == 1:
+                first_scratch, first_archive, first_digest = state["builds"][0]
+                self.assertEqual(list(first_scratch.iterdir()), [first_archive])
+                self.assertEqual(hashlib.sha256(first_archive.read_bytes()).hexdigest(), first_digest)
+            return archive, digest
+
+        def smoke(command, **_kwargs):
+            state["smoke_calls"] += 1
+            state["events"].append("smoke")
+            self.assertEqual(state["events"][:-1], ["build-1", "build-2"])
+            first_scratch, first_archive, first_digest = state["builds"][0]
+            repeat_scratch = state["builds"][1][0]
+            self.assertEqual(list(first_scratch.iterdir()), [first_archive])
+            self.assertFalse(repeat_scratch.exists())
+            self.assertEqual(hashlib.sha256(first_archive.read_bytes()).hexdigest(), first_digest)
+            self.assertEqual(pathlib.Path(command[3]), first_archive)
+            return subprocess.CompletedProcess(command, 0, json.dumps({"outcome": "pass"}) + "\n", "")
+
+        patchers = (
+            patch.object(package.platform, "system", return_value="Darwin"),
+            patch.object(package.platform, "machine", return_value="arm64"),
+            patch.object(package.subprocess, "check_output", return_value=""),
+            patch.object(package, "run", return_value=revision),
+            patch.object(package, "_build_v02_archive", side_effect=build_archive),
+            patch.object(package.subprocess, "run", side_effect=smoke),
+            patch("builtins.print"),
+        )
+        return args, state, patchers
+
+    def test_v02_package_releases_first_build_before_repeat_and_smoke(self):
+        with tempfile.TemporaryDirectory(prefix="gw-v02-package-order-") as directory:
+            args, state, patchers = self._run_mocked_package(directory)
+            with patchers[0], patchers[1], patchers[2], patchers[3], patchers[4], patchers[5], patchers[6]:
+                self.package._v02_package(args)
+
+            self.assertEqual(state["events"], ["build-1", "build-2", "smoke"])
+            self.assertEqual(state["smoke_calls"], 1)
+            first_digest = state["builds"][0][2]
+            output_archive = args.output_dir / ("genewhip-0.2.0-playable-preview-macos-arm64-" +
+                                               args.source_sha[:12] + ".tar.gz")
+            self.assertEqual(hashlib.sha256(output_archive.read_bytes()).hexdigest(), first_digest)
+            receipt = json.loads(output_archive.with_suffix(output_archive.suffix + ".qualification.json").read_text())
+            self.assertEqual(receipt["smoke"]["outcome"], "pass")
+
+    def test_v02_package_keeps_repeat_mismatch_rejection_before_smoke(self):
+        with tempfile.TemporaryDirectory(prefix="gw-v02-package-repeat-mismatch-") as directory:
+            args, state, patchers = self._run_mocked_package(directory, repeat_mismatch=True)
+            with patchers[0], patchers[1], patchers[2], patchers[3], patchers[4], patchers[5], patchers[6]:
+                with self.assertRaisesRegex(ValueError, "desktop-v02-archive-not-repeatable"):
+                    self.package._v02_package(args)
+
+            self.assertEqual(state["events"], ["build-1", "build-2"])
+            self.assertEqual(state["smoke_calls"], 0)
+            self.assertEqual(list(args.output_dir.iterdir()), [])
+
+
 def stage_source_snapshot(destination, *, commit=True):
     """Build an isolated development-only Git snapshot from HEAD plus declared task inputs."""
     destination = pathlib.Path(destination).resolve()

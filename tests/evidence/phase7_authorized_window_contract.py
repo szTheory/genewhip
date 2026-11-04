@@ -104,29 +104,39 @@ class AuthorizedWindowContract(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="gw-authorized-window-")
         self.root = Path(self.temporary.name).resolve()
-        # The authorized public scope is pinned against the reviewed four-hour
-        # policy. Copy that immutable baseline into the isolated repository root.
+        # Both authorized-run scopes are exact public identities. The full
+        # execution scope remains the byte-pinned baseline for each projection.
         baseline = ROOT / WINDOW.SCOPE_PATH
         destination = self.root / WINDOW.SCOPE_PATH
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(baseline, destination)
-        self.base_scope = json.loads(destination.read_bytes())
+        self.scope_profiles = {
+            "four-gib": (WINDOW.AUTHORIZED_SCOPE_PATH, WINDOW.AUTHORIZED_SCOPE_SHA256),
+            "two-gib": (WINDOW.CI_MEMORY_SCOPE_PATH, WINDOW.CI_MEMORY_SCOPE_SHA256),
+        }
+        for relative, expected_sha256 in self.scope_profiles.values():
+            raw = (ROOT / relative).read_bytes()
+            self.assertEqual(digest(raw), expected_sha256)
+            put(self.root, relative.as_posix(), raw)
+        self.base_scope = json.loads((ROOT / WINDOW.AUTHORIZED_SCOPE_PATH).read_bytes())
         self.scope = copy.deepcopy(self.base_scope)
-        # Retain exact policy content while making this dedicated public scope's
-        # byte pin distinct from the historical profile.
-        scope_raw = json_bytes(self.scope)
-        self.scope_sha = put(self.root, WINDOW.AUTHORIZED_SCOPE_PATH.as_posix(), scope_raw)
-        self.assertNotEqual(self.scope_sha, WINDOW.SCOPE_SHA256)
 
     def tearDown(self):
         self.temporary.cleanup()
 
     def bundle(self, *, start="2026-11-03T02:32:57+00:00", name="fixture-a",
-            scope=None, scope_raw=None):
-        if scope is None:
-            scope = copy.deepcopy(self.scope)
-        raw_scope = json_bytes(scope) if scope_raw is None else scope_raw
-        scope_sha = put(self.root, WINDOW.AUTHORIZED_SCOPE_PATH.as_posix(), raw_scope)
+            scope=None, scope_raw=None, profile="four-gib"):
+        scope_path, expected_scope_sha = self.scope_profiles[profile]
+        if scope is None and scope_raw is None:
+            raw_scope = (ROOT / scope_path).read_bytes()
+            scope = json.loads(raw_scope)
+        else:
+            if scope is None:
+                scope = json.loads(scope_raw)
+            raw_scope = json_bytes(scope) if scope_raw is None else scope_raw
+        scope_sha = put(self.root, scope_path.as_posix(), raw_scope)
+        if raw_scope == (ROOT / scope_path).read_bytes():
+            self.assertEqual(scope_sha, expected_scope_sha)
         batch = scope["qualification_batch"]
         budget = {key: batch[key] for key in (
             "wall_seconds", "runtime_wall_seconds", "package_wall_seconds",
@@ -159,7 +169,7 @@ class AuthorizedWindowContract(unittest.TestCase):
             "started_at": start,
             **cutoffs,
             "budget": budget,
-            "scope_path": WINDOW.AUTHORIZED_SCOPE_PATH.as_posix(),
+            "scope_path": scope_path.as_posix(),
             "scope_sha256": scope_sha,
             "attempt_namespace": f"{directory}/attempts",
             "ordinary_ci_retries_approved": True,
@@ -180,13 +190,13 @@ class AuthorizedWindowContract(unittest.TestCase):
         authority_sha = put(self.root, authority_path.as_posix(), json_bytes(authority))
         return {"authority": authority, "authority_path": authority_path,
             "authority_sha": authority_sha, "selection_path": Path(selection_path),
-            "selection": selection, "scope_sha": scope_sha}
+            "selection": selection, "scope_path": scope_path, "scope_sha": scope_sha}
 
     def load(self, bundle):
         return WINDOW.load_authorized_window(self.root,
             authority_path=bundle["authority_path"],
             authority_sha256=bundle["authority_sha"],
-            scope_path=WINDOW.AUTHORIZED_SCOPE_PATH,
+            scope_path=bundle["scope_path"],
             scope_sha256=bundle["scope_sha"])
 
     def rewrite_authority(self, bundle):
@@ -229,6 +239,73 @@ class AuthorizedWindowContract(unittest.TestCase):
         self.assertFalse(auto["selected"])
         self.assertEqual(auto["scope_path"], WINDOW.LEGACY_SCOPE_PATH.as_posix())
 
+    def test_both_scope_hash_pairs_bind_their_exact_child_memory_limit(self):
+        original = self.bundle(name="scope-four-gib", profile="four-gib")
+        reduced = self.bundle(name="scope-two-gib", profile="two-gib")
+        original_window = self.load(original)
+        reduced_window = self.load(reduced)
+
+        original_limits = original_window["scope"]["per_child_limits"]
+        reduced_limits = reduced_window["scope"]["per_child_limits"]
+        self.assertEqual(original_window["scope_path"], WINDOW.AUTHORIZED_SCOPE_PATH.as_posix())
+        self.assertEqual(original_window["scope_sha256"], WINDOW.AUTHORIZED_SCOPE_SHA256)
+        self.assertEqual(reduced_window["scope_path"], WINDOW.CI_MEMORY_SCOPE_PATH.as_posix())
+        self.assertEqual(reduced_window["scope_sha256"], WINDOW.CI_MEMORY_SCOPE_SHA256)
+        self.assertEqual(original_limits["max_rss_bytes"], 4 * 1024**3)
+        self.assertEqual(reduced_limits["max_rss_bytes"], 2 * 1024**3)
+        self.assertEqual({key: value for key, value in original_limits.items()
+            if key != "max_rss_bytes"}, {key: value for key, value in reduced_limits.items()
+            if key != "max_rss_bytes"})
+        expected_reduced_scope = copy.deepcopy(original_window["scope"])
+        expected_reduced_scope["per_child_limits"]["max_rss_bytes"] = 2 * 1024**3
+        self.assertEqual(reduced_window["scope"], expected_reduced_scope)
+        self.assertEqual(original_window["budget"], reduced_window["budget"])
+
+        for window, expected_rss in ((original_window, 4 * 1024**3),
+                (reduced_window, 2 * 1024**3)):
+            profile_id, profile = BATCH._phase7_window_profile(window)
+            self.assertEqual(profile_id, "authorized-run")
+            self.assertEqual(profile["max_rss_bytes"], expected_rss)
+            checked = WINDOW.check_window(window, phase="runtime",
+                now=window["started_at"])
+            self.assertEqual(checked["scope_sha256"], window["scope_sha256"])
+
+        forged = dict(reduced_window)
+        forged["scope"] = copy.deepcopy(reduced_window["scope"])
+        forged["scope"]["per_child_limits"]["max_rss_bytes"] = 4 * 1024**3
+        with self.assertRaisesRegex(ValueError, "phase7-window-context-invalid"):
+            WINDOW.check_window(forged, phase="runtime", now=reduced_window["started_at"])
+        forged["scope"]["per_child_limits"]["max_rss_bytes"] = 2 * 1024**3
+        forged["scope"]["per_child_limits"]["max_retained_bytes"] += 1
+        with self.assertRaisesRegex(ValueError, "phase7-window-context-invalid"):
+            BATCH._phase7_window_profile(forged)
+        with self.assertRaisesRegex(ValueError, "phase7-window-context-invalid"):
+            BATCH._phase7_window_profile({**reduced_window,
+                "scope_sha256": WINDOW.AUTHORIZED_SCOPE_SHA256})
+
+        process = {"rss_bytes_observed": 0, "rss_bytes_peak": 2 * 1024**3}
+        self.assertTrue(BATCH._phase7_window_process_rss_valid(
+            process, BATCH._phase7_window_profile(reduced_window)[1]["max_rss_bytes"]))
+        process["rss_bytes_peak"] += 1
+        self.assertFalse(BATCH._phase7_window_process_rss_valid(
+            process, BATCH._phase7_window_profile(reduced_window)[1]["max_rss_bytes"]))
+        self.assertTrue(BATCH._phase7_window_process_rss_valid(
+            process, BATCH._phase7_window_profile(original_window)[1]["max_rss_bytes"]))
+
+    def test_authorized_scope_path_and_digest_must_be_a_matching_pair(self):
+        for path, wrong_sha in (
+                (WINDOW.AUTHORIZED_SCOPE_PATH, WINDOW.CI_MEMORY_SCOPE_SHA256),
+                (WINDOW.CI_MEMORY_SCOPE_PATH, WINDOW.AUTHORIZED_SCOPE_SHA256)):
+            with self.subTest(path=path):
+                with self.assertRaisesRegex(ValueError, "phase7-window-public-scope-pin-invalid"):
+                    WINDOW.load_public_scope(self.root, scope_path=path.as_posix(),
+                        scope_sha256=wrong_sha)
+                with self.assertRaisesRegex(ValueError,
+                        "phase7-window-public-scope-pin-invalid"):
+                    WINDOW.load_authorized_window(self.root,
+                        authority_path=Path("build/v02/unused/authorization.json"),
+                        authority_sha256="a" * 64, scope_path=path, scope_sha256=wrong_sha)
+
     def test_wrong_authority_pin_and_changed_public_scope_are_rejected(self):
         bundle = self.bundle()
         with self.assertRaisesRegex(ValueError, "phase7-window-authority-stale"):
@@ -236,7 +313,7 @@ class AuthorizedWindowContract(unittest.TestCase):
                 authority_path=bundle["authority_path"], authority_sha256="0" * 64,
                 scope_path=WINDOW.AUTHORIZED_SCOPE_PATH, scope_sha256=bundle["scope_sha"])
 
-        path = self.root / WINDOW.AUTHORIZED_SCOPE_PATH
+        path = self.root / bundle["scope_path"]
         path.write_bytes(path.read_bytes() + b" ")
         with self.assertRaisesRegex(ValueError, "phase7-window-scope-stale"):
             self.load(bundle)
@@ -270,13 +347,13 @@ class AuthorizedWindowContract(unittest.TestCase):
         over_budget["qualification_batch"]["wall_seconds"] += 1
         over_budget["qualification_batch"]["runtime_wall_seconds"] += 1
         bundle = self.bundle(name="over-budget", scope=over_budget)
-        with self.assertRaisesRegex(ValueError, "phase7-window-scope-content-invalid"):
+        with self.assertRaisesRegex(ValueError, "phase7-window-public-scope-pin-invalid"):
             self.load(bundle)
 
         over_limit = copy.deepcopy(self.scope)
         over_limit["qualification_batch"]["benchmark_sub_batch_seconds"] += 1
         bundle = self.bundle(name="over-limit", scope=over_limit)
-        with self.assertRaisesRegex(ValueError, "phase7-window-scope-content-invalid"):
+        with self.assertRaisesRegex(ValueError, "phase7-window-public-scope-pin-invalid"):
             self.load(bundle)
 
     def test_future_clocks_and_retry_clock_reset_are_rejected(self):
@@ -626,7 +703,8 @@ class AuthorizedHostedProfileContract(unittest.TestCase):
         stale = dict(self.public_env)
         stale["GENEWHIP_QUALIFICATION_SCOPE_SHA256"] = "0" * 64
         with mock.patch.dict(os.environ, stale, clear=True):
-            with self.assertRaisesRegex(ValueError, "phase7-window-scope-stale"):
+            with self.assertRaisesRegex(ValueError,
+                    "phase7-window-scope-or-authority-profile-invalid"):
                 self.module._phase7_public_window_profile()
 
         private_mixed = dict(self.public_env)
@@ -910,12 +988,15 @@ class AuthorizedHostedProfileContract(unittest.TestCase):
 
     def test_workflow_maps_the_public_scope_hash_and_all_cmake_guards(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-        mapping = ("inputs.qualification_scope_sha256 == '" + AUTHORIZED_RUN_SCOPE_SHA256
-            + "' && '" + WINDOW.AUTHORIZED_SCOPE_PATH.as_posix() + "'")
-        self.assertIn(mapping, workflow)
-        guard = ("[ \"${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}\" = '"
-            + AUTHORIZED_RUN_SCOPE_SHA256 + "' ]")
-        self.assertEqual(workflow.count(guard), 10)
+        for scope_path, scope_sha256 in (
+                (WINDOW.AUTHORIZED_SCOPE_PATH, AUTHORIZED_RUN_SCOPE_SHA256),
+                (WINDOW.CI_MEMORY_SCOPE_PATH, WINDOW.CI_MEMORY_SCOPE_SHA256)):
+            mapping = ("inputs.qualification_scope_sha256 == '" + scope_sha256
+                + "' && '" + scope_path.as_posix() + "'")
+            self.assertIn(mapping, workflow)
+            guard = ("[ \"${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}\" = '"
+                + scope_sha256 + "' ]")
+            self.assertEqual(workflow.count(guard), 10)
 
 
 if __name__ == "__main__":

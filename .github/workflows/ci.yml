@@ -60,7 +60,7 @@ env:
   GENEWHIP_QUALIFICATION_STARTED_AT: ${{ inputs.qualification_started_at }}
   GENEWHIP_QUALIFICATION_NONCE: ${{ inputs.qualification_nonce }}
   GENEWHIP_QUALIFICATION_SCOPE_SHA256: ${{ inputs.qualification_scope_sha256 }}
-  GENEWHIP_QUALIFICATION_SCOPE_PATH: ${{ inputs.qualification_scope_sha256 == '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' && 'evidence/v02-phase7-full-execution-scope.json' || inputs.qualification_scope_sha256 == 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' && 'evidence/v02-phase7-two-hour-execution-scope.json' || inputs.qualification_scope_sha256 == 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' && 'evidence/v02-phase7-renewed-two-hour-execution-scope.json' || inputs.qualification_scope_sha256 == 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' && 'evidence/v02-phase7-authorized-execution-scope.json' || 'evidence/v02-execution.json' }}
+  GENEWHIP_QUALIFICATION_SCOPE_PATH: ${{ inputs.qualification_scope_sha256 == '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' && 'evidence/v02-phase7-full-execution-scope.json' || inputs.qualification_scope_sha256 == 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' && 'evidence/v02-phase7-two-hour-execution-scope.json' || inputs.qualification_scope_sha256 == 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' && 'evidence/v02-phase7-renewed-two-hour-execution-scope.json' || inputs.qualification_scope_sha256 == 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' && 'evidence/v02-phase7-authorized-execution-scope.json' || inputs.qualification_scope_sha256 == '0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea' && 'evidence/v02-phase7-ci-memory-scope.json' || 'evidence/v02-execution.json' }}
   GENEWHIP_QUALIFICATION_PHASE: preparation
   GENEWHIP_NATIVE_DIAGNOSTIC_CASE: ${{ inputs.native_diagnostic_case }}
   GENEWHIP_CONTROL_DIAGNOSTIC_STARTED_AT: ${{ inputs.native_diagnostic_case == 'original-control' && inputs.qualification_started_at || '' }}
@@ -135,7 +135,7 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Build current public clients
         run: |
-          if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ]; then
+          if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea' ]; then
             run_cmake() { python3 -I scripts/release/v02_qualification.py --mode bounded-command --command-phase "$GENEWHIP_QUALIFICATION_PHASE" --command-timeout 600 --command cmake "$@"; }
           else
             run_cmake() { cmake "$@"; }
@@ -178,7 +178,7 @@ jobs:
         run: bash scripts/ci/prepare_evidence_dependencies.sh
       - name: Build current public clients
         run: |
-          if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ]; then
+          if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea' ]; then
             run_cmake() { python3 -I scripts/release/v02_qualification.py --mode bounded-command --command-phase "$GENEWHIP_QUALIFICATION_PHASE" --command-timeout 600 --command cmake "$@"; }
           else
             run_cmake() { cmake "$@"; }
@@ -267,7 +267,7 @@ jobs:
           retention-days: 30
   package:
     if: github.event_name != 'schedule' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 45
     permissions:
       contents: read
@@ -287,10 +287,72 @@ jobs:
         with: {phase: package}
       - name: Verify event integration checkout
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Check desktop qualification memory reserve before package builds
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          python3 -I - <<'PY'
+          import importlib.util
+          import json
+          import pathlib
+          import shutil
+          import tempfile
+          spec = importlib.util.spec_from_file_location("memory_preflight", "scripts/evidence/v02_run.py")
+          runner = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(runner)
+          limits = json.loads(pathlib.Path("evidence/v02-phase7-ci-memory-scope.json").read_text())["per_child_limits"]
+          required = limits["max_rss_bytes"]
+          available = runner.available_memory_bytes()
+          scratch_free = shutil.disk_usage(tempfile.gettempdir()).free
+          print(json.dumps({"schema": "genewhip.memory-reserve-preflight.v1",
+              "stage": "source-ci-before-package-builds", "available_bytes": available,
+              "required_bytes": required, "scratch_available_bytes": scratch_free,
+              "scratch_required_bytes": limits["max_scratch_bytes"]}, sort_keys=True), flush=True)
+          runner.require_memory_reserve(available, required)
+          if scratch_free < limits["max_scratch_bytes"]:
+              raise ValueError("package-objective-route-scratch-reserve")
+          PY
       - if: github.event_name != 'workflow_dispatch'
-        run: python3 scripts/package_sdk.py
+        run: >-
+          python3 -I -c 'import os,sys;sys.path.insert(0,os.getcwd());
+          from scripts.release.v02_qualification import ci_package_step;
+          ci_package_step("sdk")'
       - if: github.event_name != 'workflow_dispatch'
-        run: python3 scripts/package_desktop.py
+        run: >-
+          python3 -I -c 'import os,sys;sys.path.insert(0,os.getcwd());
+          from scripts.release.v02_qualification import ci_package_step;
+          ci_package_step("desktop")'
+      - name: Check desktop qualification memory reserve after package builds
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          python3 -I - <<'PY'
+          import importlib.util
+          import json
+          import pathlib
+          import shutil
+          import tempfile
+          spec = importlib.util.spec_from_file_location("memory_preflight", "scripts/evidence/v02_run.py")
+          runner = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(runner)
+          limits = json.loads(pathlib.Path("evidence/v02-phase7-ci-memory-scope.json").read_text())["per_child_limits"]
+          required = limits["max_rss_bytes"]
+          available = runner.available_memory_bytes()
+          scratch_free = shutil.disk_usage(tempfile.gettempdir()).free
+          print(json.dumps({"schema": "genewhip.memory-reserve-preflight.v1",
+              "stage": "source-ci-after-package-builds", "available_bytes": available,
+              "required_bytes": required, "scratch_available_bytes": scratch_free,
+              "scratch_required_bytes": limits["max_scratch_bytes"]}, sort_keys=True), flush=True)
+          runner.require_memory_reserve(available, required)
+          if scratch_free < limits["max_scratch_bytes"]:
+              raise ValueError("package-objective-route-scratch-reserve")
+          PY
+      - name: Export bounded SDK and Desktop package summaries
+        if: ${{ always() && github.event_name != 'workflow_dispatch' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ci-package-memory-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/v02/ci-package-boundaries/*/summary.json
+          if-no-files-found: warn
+          retention-days: 30
       - if: github.event_name != 'workflow_dispatch'
         run: python3 tests/package/docs_commands.py --local-artifacts artifacts
       - name: Assemble exact qualified package inventory
@@ -396,7 +458,7 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Build optimized benchmark with private accounting hooks
         run: |
-          if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ]; then
+          if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea' ]; then
             run_cmake() { python3 -I scripts/release/v02_qualification.py --mode bounded-command --command-phase "$GENEWHIP_QUALIFICATION_PHASE" --command-timeout 600 --command cmake "$@"; }
           else
             run_cmake() { cmake "$@"; }
@@ -411,7 +473,7 @@ jobs:
           --out build/performance/ci-quick-report.json --quick
   v02-runtime:
     if: github.event_name == 'workflow_dispatch'
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: ${{ (inputs.native_diagnostic_case == 'recursion94-withhold-first-plate' || inputs.native_diagnostic_case == 'recursion94-native-prefix' || inputs.native_diagnostic_case == 'original-control') && 45 || 180 }}
     permissions:
       actions: read
@@ -659,7 +721,7 @@ jobs:
         if: inputs.native_diagnostic_clock_profile != 'native-prefix-queue-v1'
         run: |
           mkdir -p build/v02
-          if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ]; then
+          if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea' ]; then
             run_cmake() { python3 -I scripts/release/v02_qualification.py --mode bounded-command --command-phase "$GENEWHIP_QUALIFICATION_PHASE" --command-timeout 600 --command cmake "$@"; }
           else
             run_cmake() { cmake "$@"; }
@@ -771,7 +833,7 @@ jobs:
   v02-benchmark-control:
     # Explicit needs chain below keeps all three workload benchmarks serial (max-parallel: 1).
     if: github.event_name == 'workflow_dispatch' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 180
     env:
       GENEWHIP_QUALIFICATION_PHASE: runtime
@@ -785,14 +847,14 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Configure benchmark under the prospective child and phase cutoff
         run: |
-          if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ]; then
+          if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea' ]; then
             python3 -I scripts/release/v02_qualification.py --mode bounded-command --command-phase "$GENEWHIP_QUALIFICATION_PHASE" --command-timeout 600 --command cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=OFF -DGENEWHIP_TEST_HOOKS=ON
           else
             cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=OFF -DGENEWHIP_TEST_HOOKS=ON
           fi
       - name: Build benchmark under the prospective child and phase cutoff
         run: |
-          if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ]; then
+          if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea' ]; then
             python3 -I scripts/release/v02_qualification.py --mode bounded-command --command-phase "$GENEWHIP_QUALIFICATION_PHASE" --command-timeout 600 --command cmake --build build/v02/benchmark --target gw_core_benchmark --parallel 2
           else
             cmake --build build/v02/benchmark --target gw_core_benchmark --parallel 2
@@ -809,7 +871,7 @@ jobs:
   v02-benchmark-recursion94:
     if: github.event_name == 'workflow_dispatch' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     needs: [v02-benchmark-control]
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 180
     env:
       GENEWHIP_QUALIFICATION_PHASE: runtime
@@ -823,14 +885,14 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Configure benchmark under the prospective child and phase cutoff
         run: |
-          if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ]; then
+          if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea' ]; then
             python3 -I scripts/release/v02_qualification.py --mode bounded-command --command-phase "$GENEWHIP_QUALIFICATION_PHASE" --command-timeout 600 --command cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=OFF -DGENEWHIP_TEST_HOOKS=ON
           else
             cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=OFF -DGENEWHIP_TEST_HOOKS=ON
           fi
       - name: Build benchmark under the prospective child and phase cutoff
         run: |
-          if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ]; then
+          if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea' ]; then
             python3 -I scripts/release/v02_qualification.py --mode bounded-command --command-phase "$GENEWHIP_QUALIFICATION_PHASE" --command-timeout 600 --command cmake --build build/v02/benchmark --target gw_core_benchmark --parallel 2
           else
             cmake --build build/v02/benchmark --target gw_core_benchmark --parallel 2
@@ -847,7 +909,7 @@ jobs:
   v02-benchmark-tank-battle:
     if: github.event_name == 'workflow_dispatch' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     needs: [v02-benchmark-recursion94]
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 180
     env:
       GENEWHIP_QUALIFICATION_PHASE: runtime
@@ -861,14 +923,14 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Configure benchmark under the prospective child and phase cutoff
         run: |
-          if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ]; then
+          if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea' ]; then
             python3 -I scripts/release/v02_qualification.py --mode bounded-command --command-phase "$GENEWHIP_QUALIFICATION_PHASE" --command-timeout 600 --command cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=OFF -DGENEWHIP_TEST_HOOKS=ON
           else
             cmake -S . -B build/v02/benchmark -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGENEWHIP_BUILD_TOOLS=ON -DGENEWHIP_BUILD_DESKTOP=OFF -DGENEWHIP_TEST_HOOKS=ON
           fi
       - name: Build benchmark under the prospective child and phase cutoff
         run: |
-          if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ]; then
+          if [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '6deaf18aab75f45ac412a141caf9e089158f5c39d3971d49cb9bb7bb1be58df4' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = 'c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a' ] || [ "${GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}" = '0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea' ]; then
             python3 -I scripts/release/v02_qualification.py --mode bounded-command --command-phase "$GENEWHIP_QUALIFICATION_PHASE" --command-timeout 600 --command cmake --build build/v02/benchmark --target gw_core_benchmark --parallel 2
           else
             cmake --build build/v02/benchmark --target gw_core_benchmark --parallel 2
@@ -885,7 +947,7 @@ jobs:
   v02-package:
     if: github.event_name == 'workflow_dispatch' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     needs: [v02-runtime, v02-benchmark-control, v02-benchmark-recursion94, v02-benchmark-tank-battle]
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 45
     env:
       GENEWHIP_QUALIFICATION_PHASE: package
@@ -1027,7 +1089,7 @@ jobs:
   v02-release-qualification:
     if: github.event_name == 'workflow_dispatch' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     needs: [v02-runtime, v02-benchmark-control, v02-benchmark-recursion94, v02-benchmark-tank-battle, v02-package]
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 15
     env:
       GENEWHIP_QUALIFICATION_PHASE: package

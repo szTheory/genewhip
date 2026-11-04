@@ -284,6 +284,16 @@ RENEWED_TWO_HOUR_AUTH_PATH = Path("build/v02/phase7-qualification-20261103T00022
 RENEWED_TWO_HOUR_AUTH_SHA256 = "c4e65420cca6bab3754702e12026610bf4e266175f7f2b6023e11acac0aaedbc"
 RENEWED_TWO_HOUR_SCOPE_PATH = Path("evidence/v02-phase7-renewed-two-hour-execution-scope.json")
 RENEWED_TWO_HOUR_SCOPE_SHA256 = "bda5c36ded9c6e1389e43eb089fd8c804e193917850d5a014b625ff3bbb0757c"
+AUTHORIZED_RUN_SCOPE_PROFILES = {
+    Path("evidence/v02-phase7-authorized-execution-scope.json"):
+        {"scope_sha256": "c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a",
+         "scope_content_sha256": "334f95fa3d9bfbe7c5b457099c44327cead593004450667b4b955d1f84be7f41",
+         "max_rss_bytes": 4 * 1024**3},
+    Path("evidence/v02-phase7-ci-memory-scope.json"):
+        {"scope_sha256": "0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea",
+         "scope_content_sha256": "761deaa3f2bceec3610a6c9d9fb6770821a8b164e6098784e41478aea6c22048",
+         "max_rss_bytes": 2 * 1024**3},
+}
 RENEWED_TWO_HOUR_PREDECESSOR_REF = {"path":
     "build/v02/phase7-qualification-20261103T000225Z/operator/predecessor-observation.json",
     "sha256": "6bd1a5ba9ae45b2f7420efb1b7ddff928d09fa30a6838479bce8d2b4d81e0191"}
@@ -369,11 +379,13 @@ TWO_HOUR_JOB_RESULTS = {
 WINDOW_PROFILES = {
     "four-hour": {"authority_path": WINDOW_AUTH_PATH, "authority_sha256": WINDOW_AUTH_SHA256,
         "scope_path": WINDOW_SCOPE_PATH, "scope_sha256": WINDOW_SCOPE_SHA256,
+        "max_rss_bytes": 4 * 1024**3,
         "attempt_namespace": WINDOW_ATTEMPT_NAMESPACE, "started_at": WINDOW_STARTED_AT,
         "claim_schema": "genewhip.phase7-four-hour-dispatch-claim.v1",
         "failure_schema": "genewhip.phase7-four-hour-attempt-failure.v1"},
     "two-hour": {"authority_path": TWO_HOUR_AUTH_PATH, "authority_sha256": TWO_HOUR_AUTH_SHA256,
         "scope_path": TWO_HOUR_SCOPE_PATH, "scope_sha256": TWO_HOUR_SCOPE_SHA256,
+        "max_rss_bytes": 4 * 1024**3,
         "attempt_namespace": TWO_HOUR_ATTEMPT_NAMESPACE, "started_at": TWO_HOUR_STARTED_AT,
         "claim_schema": "genewhip.phase7-two-hour-dispatch-claim.v1",
         "failure_schema": "genewhip.phase7-two-hour-attempt-failure.v1"},
@@ -381,6 +393,7 @@ WINDOW_PROFILES = {
         "authority_sha256": RENEWED_TWO_HOUR_AUTH_SHA256,
         "scope_path": RENEWED_TWO_HOUR_SCOPE_PATH,
         "scope_sha256": RENEWED_TWO_HOUR_SCOPE_SHA256,
+        "max_rss_bytes": 4 * 1024**3,
         "attempt_namespace": RENEWED_TWO_HOUR_ATTEMPT_NAMESPACE,
         "started_at": RENEWED_TWO_HOUR_STARTED_AT,
         "claim_schema": "genewhip.phase7-renewed-two-hour-dispatch-claim.v1",
@@ -389,6 +402,17 @@ WINDOW_PROFILES = {
 SETTLED_FULL_FAILURE_BUNDLE_SCHEMA = (
     "genewhip.phase7-settled-full-failure-predecessor.v2")
 _WINDOW_MODULE = None
+
+
+def _phase7_window_process_rss_valid(process: dict[str, Any],
+        max_rss_bytes: int) -> bool:
+    """Check a settled child receipt against its authenticated scope limit."""
+    observed = process.get("rss_bytes_observed")
+    peak = process.get("rss_bytes_peak")
+    return (type(max_rss_bytes) is int and max_rss_bytes > 0
+        and type(observed) is int and observed >= 0
+        and type(peak) is int and 0 < peak <= max_rss_bytes
+        and observed <= peak)
 
 
 def _phase7_window_profile(window: dict[str, Any] | None = None) -> tuple[str, dict[str, Any]]:
@@ -400,10 +424,11 @@ def _phase7_window_profile(window: dict[str, Any] | None = None) -> tuple[str, d
         authority_path = Path(window.get("authority_path", ""))
         scope_path = Path(window.get("scope_path", ""))
         attempt_namespace = Path(window.get("attempt_namespace", ""))
+        scope_profile = AUTHORIZED_RUN_SCOPE_PROFILES.get(scope_path)
         if (authority_path.is_absolute() or authority_path.parts[:2] != ("build", "v02")
                 or not re.fullmatch(r"[0-9a-f]{64}", str(window.get("authority_sha256", "")))
-                or scope_path != Path("evidence/v02-phase7-authorized-execution-scope.json")
-                or not re.fullmatch(r"[0-9a-f]{64}", str(window.get("scope_sha256", "")))
+                or scope_profile is None
+                or window.get("scope_sha256") != scope_profile["scope_sha256"]
                 or attempt_namespace.is_absolute()
                 or attempt_namespace.parts[:2] != ("build", "v02")
                 or any(part in ("", ".", "..") for part in attempt_namespace.parts)
@@ -412,11 +437,18 @@ def _phase7_window_profile(window: dict[str, Any] | None = None) -> tuple[str, d
         profile = {"authority_path": authority_path,
             "authority_sha256": window["authority_sha256"],
             "scope_path": scope_path, "scope_sha256": window["scope_sha256"],
+            "max_rss_bytes": scope_profile["max_rss_bytes"],
             "attempt_namespace": attempt_namespace, "started_at": window.get("started_at"),
             "source_ancestor": window.get("source_ancestor"),
             "claim_schema": "genewhip.phase7-execution-window-dispatch-claim.v1",
             "failure_schema": "genewhip.phase7-execution-window-attempt-failure.v1"}
-        if (not isinstance(profile["started_at"], str)
+        limits = window.get("scope", {}).get("per_child_limits") \
+            if isinstance(window.get("scope"), dict) else None
+        if (not isinstance(limits, dict)
+                or limits.get("max_rss_bytes") != profile["max_rss_bytes"]
+                or _digest(_canonical(window["scope"]))
+                    != scope_profile["scope_content_sha256"]
+                or not isinstance(profile["started_at"], str)
                 or not re.fullmatch(r"[0-9a-f]{40}", str(profile["source_ancestor"]))):
             raise ValueError("phase7-window-context-invalid")
         return profile_id, profile
@@ -3720,7 +3752,8 @@ def _phase7_window_settled_attempt_location(root: Path, value: Any, *,
 
 
 def _phase7_window_validate_settled_external_roster(root: Path, attempt_root: Path,
-        close: dict[str, Any], *, label: str) -> dict[int, list[tuple[list[str], dict[str, Any]]]]:
+        close: dict[str, Any], *, max_rss_bytes: int,
+        label: str) -> dict[int, list[tuple[list[str], dict[str, Any]]]]:
     receipt_refs = close.get("external_receipts")
     sidecar_refs = close.get("external_sidecars")
     if (not isinstance(receipt_refs, list) or not receipt_refs
@@ -3772,7 +3805,8 @@ def _phase7_window_validate_settled_external_roster(root: Path, attempt_root: Pa
                     or process.get("status") != "completed"
                     or process.get("return_code") != 0
                     or process.get("process_group_cleanup") != "confirmed"
-                    or process.get("bound_violation") is not False):
+                    or process.get("bound_violation") is not False
+                    or not _phase7_window_process_rss_valid(process, max_rss_bytes)):
                 raise ValueError(label)
             process_rows.append(process)
         receipt_names.append(relative.as_posix())
@@ -4328,7 +4362,8 @@ def phase7_window_settled_predecessor(root: Path,
     if _utc(terminal.get("observed_at")) < _utc(run.get("updated_at")):
         raise ValueError(label)
     owner_commands = _phase7_window_validate_settled_external_roster(
-        root, attempt_rel, close, label=label)
+        root, attempt_rel, close, max_rss_bytes=prior_profile["max_rss_bytes"],
+        label=label)
     _phase7_window_validate_settled_commands(root, attempt_rel, prior_window,
         source_head, public, journal, claim, run, run_raw, jobs_doc, jobs_raw,
         owner_commands, prepare_pid, hosted_pid, label=label)

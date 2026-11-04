@@ -938,6 +938,173 @@ class SchemaClosureContract(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "phase7-memory-reserve-unobservable"):
             runner.require_memory_reserve(None, 1)
 
+    def test_exact_ci_memory_profile_is_a_hash_bound_copy_of_immutable_four_gib_scope(self) -> None:
+        scope_spec = importlib.util.spec_from_file_location(
+            "v02_scope_profiles", ROOT / "scripts/evidence/v02_scope.py")
+        scope_reader = importlib.util.module_from_spec(scope_spec)
+        scope_spec.loader.exec_module(scope_reader)
+        old_relative = "evidence/v02-phase7-authorized-execution-scope.json"
+        new_relative = "evidence/v02-phase7-ci-memory-scope.json"
+        old_sha = "c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a"
+        new_sha = "0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea"
+        old_path, old_raw = scope_reader.read_scope(ROOT, old_relative,
+            scope_path=old_relative, scope_sha256=old_sha)
+        new_path, new_raw = scope_reader.read_scope(ROOT, new_relative,
+            scope_path=new_relative, scope_sha256=new_sha)
+        self.assertEqual(old_path.relative_to(ROOT).as_posix(), old_relative)
+        self.assertEqual(new_path.relative_to(ROOT).as_posix(), new_relative)
+        self.assertEqual(hashlib.sha256(old_raw).hexdigest(), old_sha)
+        self.assertEqual(hashlib.sha256(new_raw).hexdigest(), new_sha)
+        old_scope, new_scope = json.loads(old_raw), json.loads(new_raw)
+        self.assertEqual(old_scope["per_child_limits"]["max_rss_bytes"], 4 * 1024**3)
+        self.assertEqual(new_scope["per_child_limits"]["max_rss_bytes"], 2 * 1024**3)
+        expected = json.loads(old_raw)
+        expected["per_child_limits"]["max_rss_bytes"] = 2 * 1024**3
+        self.assertEqual(new_scope, expected)
+        self.assertEqual(new_scope["per_child_limits"]["max_scratch_bytes"], 16 * 1024**3)
+        with self.assertRaisesRegex(ValueError, "profile-invalid"):
+            scope_reader.read_scope(ROOT, old_relative,
+                scope_path=old_relative, scope_sha256=new_sha)
+        with self.assertRaisesRegex(ValueError, "profile-invalid"):
+            scope_reader.read_scope(ROOT, new_relative,
+                scope_path=new_relative, scope_sha256=old_sha)
+
+    def test_bounded_runner_accepts_new_two_gib_profile_without_changing_old_four_gib_cap(self) -> None:
+        from types import SimpleNamespace
+        from unittest.mock import Mock, patch
+        spec = importlib.util.spec_from_file_location(
+            "v02_scope_runner_profiles", ROOT / "scripts/evidence/v02_run.py")
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        clock_check = Mock()
+        class Loader:
+            @staticmethod
+            def exec_module(_module):
+                return None
+        clock_spec = SimpleNamespace(loader=Loader())
+        window_module = SimpleNamespace(validate_public_clock=clock_check)
+        profiles = (
+            ("evidence/v02-phase7-authorized-execution-scope.json",
+             "c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a", 4),
+            ("evidence/v02-phase7-ci-memory-scope.json",
+             "0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea", 2),
+        )
+        for relative, digest, gib in profiles:
+            clock_check.reset_mock()
+            env = {"GENEWHIP_QUALIFICATION_SCOPE_PATH": relative,
+                   "GENEWHIP_QUALIFICATION_SCOPE_SHA256": digest,
+                   "GENEWHIP_QUALIFICATION_STARTED_AT": "2026-11-02T16:56:30+00:00",
+                   "GENEWHIP_QUALIFICATION_PHASE": "runtime"}
+            with self.subTest(profile=relative), patch.dict(os.environ, env, clear=True), \
+                    patch.object(runner, "resolve_owned_output_roots", return_value=()), \
+                    patch.object(runner.importlib.util, "spec_from_file_location", return_value=clock_spec), \
+                    patch.object(runner.importlib.util, "module_from_spec", return_value=window_module):
+                scope, limits = runner.validate_execution_scope(ROOT / relative, "full")
+            self.assertEqual(limits["max_rss_bytes"], gib * 1024**3)
+            self.assertEqual(scope["per_child_limits"]["max_scratch_bytes"], 16 * 1024**3)
+            clock_check.assert_called_once_with(ROOT, scope_path=relative,
+                scope_sha256=digest, started_at=env["GENEWHIP_QUALIFICATION_STARTED_AT"],
+                phase="runtime")
+
+    def test_workflow_selectors_and_clock_reserve_cover_exact_new_profile(self) -> None:
+        digest = "0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea"
+        relative = "evidence/v02-phase7-ci-memory-scope.json"
+        for path in (".github/workflows/ci.yml", ".github/workflows/release.yml"):
+            text = (ROOT / path).read_text()
+            self.assertIn(f"inputs.qualification_scope_sha256 == '{digest}' && '{relative}'", text)
+            self.assertIn("c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a", text)
+        clock_action = (ROOT / ".github/actions/qualification-clock/action.yml").read_text()
+        self.assertIn(f"env.GENEWHIP_QUALIFICATION_SCOPE_PATH == '{relative}'", clock_action)
+        self.assertIn(f"env.GENEWHIP_QUALIFICATION_SCOPE_SHA256 == '{digest}'", clock_action)
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        self.assertEqual(workflow.count(f"[ \"${{GENEWHIP_QUALIFICATION_SCOPE_SHA256:-}}\" = '{digest}' ]"), 10)
+
+    def test_darwin_memory_uses_disjoint_buckets_and_validates_units(self) -> None:
+        spec = importlib.util.spec_from_file_location("v02_memory_accounting", ROOT / "scripts/evidence/v02_run.py")
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        for page_size in (4096, 16384):
+            sample = (f"Mach Virtual Memory Statistics: (page size of {page_size} bytes)\n"
+                "Pages free:                               100.\n"
+                "Pages active:                             900.\n"
+                "Pages inactive:                           200.\n"
+                "Pages speculative:                         30.\n"
+                "Pages purgeable:                           40.\n")
+            with self.subTest(page_size=page_size):
+                self.assertEqual(runner._darwin_available_memory(sample, page_size), 300 * page_size)
+                self.assertEqual(runner.require_memory_reserve(300 * page_size, 300 * page_size),
+                                 300 * page_size)
+                for invalid in (sample.replace("Pages inactive:", "Pages absent:"),
+                        sample + "Pages free: 1.\n", sample.replace("200.", "-200."),
+                        sample.replace("100.", "100x"), sample + sample,
+                        sample + "x" * 16385):
+                    self.assertIsNone(runner._darwin_available_memory(invalid, page_size))
+                for invalid_size in (page_size * 2, 0, -1, True, None):
+                    self.assertIsNone(runner._darwin_available_memory(sample, invalid_size))
+
+    def test_source_ci_memory_preflight_logs_and_preserves_reserve(self) -> None:
+        from unittest.mock import patch
+        import contextlib
+        import io
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        limits = json.loads((ROOT / "evidence/v02-phase7-ci-memory-scope.json").read_text())["per_child_limits"]
+        required, scratch_required = limits["max_rss_bytes"], limits["max_scratch_bytes"]
+        self.assertEqual(required, 2 * 1024**3)
+        self.assertEqual(scratch_required, 16 * 1024**3)
+        self.assertEqual(hashlib.sha256((ROOT / "evidence/v02-phase7-ci-memory-scope.json").read_bytes()).hexdigest(),
+                         "0aa84e06d689fba4593c6d52b3819c8954b941c3433c7f0ee502db0feda9efea")
+        self.assertEqual(hashlib.sha256((ROOT / "evidence/v02-phase7-authorized-execution-scope.json").read_bytes()).hexdigest(),
+                         "c77556022454459deb731ea1d50f7f1a1ba0d20370c540a101e2144175c3986a")
+        self.assertEqual(workflow.count("ci_package_step(\"sdk\")"), 1)
+        self.assertEqual(workflow.count("ci_package_step(\"desktop\")"), 1)
+        package = workflow.split("  package:\n", 1)[1].split("  attestation:\n", 1)[0]
+        self.assertNotIn("run: python3 scripts/package_sdk.py", package)
+        self.assertNotIn("run: python3 scripts/package_desktop.py", package)
+        self.assertLess(workflow.index("memory reserve before package builds"),
+                        workflow.index('ci_package_step("sdk")'))
+        self.assertLess(workflow.index('ci_package_step("sdk")'),
+                        workflow.index('ci_package_step("desktop")'))
+        self.assertLess(workflow.index('ci_package_step("desktop")'),
+                        workflow.index("memory reserve after package builds"))
+        upload_step = workflow.split("      - name: Export bounded SDK and Desktop package summaries\n", 1)[1].split("\n      - if: github.event_name != 'workflow_dispatch'", 1)[0]
+        self.assertIn("always() && github.event_name != 'workflow_dispatch'", upload_step)
+        self.assertIn("path: build/v02/ci-package-boundaries/*/summary.json", upload_step)
+        self.assertNotIn("stdout", upload_step)
+        self.assertNotIn("stderr", upload_step)
+        self.assertIn("if-no-files-found: warn", upload_step)
+        original = importlib.util.module_from_spec
+        def memory_module(spec):
+            module = original(spec)
+            loader = spec.loader.exec_module
+            def load(target):
+                loader(target)
+                target.available_memory_bytes = lambda: available
+            spec.loader.exec_module = load
+            return module
+        from types import SimpleNamespace
+        import shutil
+        for position in ("before", "after"):
+            block = workflow.split(f"      - name: Check desktop qualification memory reserve {position} package builds\n", 1)[1]
+            script = block.split("          python3 -I - <<'PY'\n", 1)[1].split("          PY\n", 1)[0]
+            script = "\n".join(line[10:] for line in script.splitlines())
+            for available in (None, required - 1, required):
+                for scratch_free in (scratch_required - 1, scratch_required):
+                    output = io.StringIO()
+                    with self.subTest(position=position, available=available, scratch=scratch_free), \
+                            patch.object(importlib.util, "module_from_spec", memory_module), \
+                            patch.object(shutil, "disk_usage", return_value=SimpleNamespace(free=scratch_free)), \
+                            contextlib.redirect_stdout(output):
+                        if available == required and scratch_free == scratch_required:
+                            exec(compile(script, "source-ci-resource-preflight", "exec"), {})
+                        else:
+                            reason = "phase7-memory-reserve-" if available != required else "package-objective-route-scratch-reserve"
+                            with self.assertRaisesRegex(ValueError, reason):
+                                exec(compile(script, "source-ci-resource-preflight", "exec"), {})
+                    self.assertEqual(json.loads(output.getvalue()), {
+                        "schema": "genewhip.memory-reserve-preflight.v1", "stage": f"source-ci-{position}-package-builds",
+                        "available_bytes": available, "required_bytes": required,
+                        "scratch_available_bytes": scratch_free, "scratch_required_bytes": scratch_required})
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
