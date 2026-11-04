@@ -203,6 +203,25 @@ def _validate_v02_desktop_members(stage, roster):
                          " extra=" + ",".join(sorted(actual - expected)))
 
 
+def _release_v02_build_scratch(scratch, archive, digest):
+    """Keep the sealed archive; discard only this owned build's intermediates."""
+    scratch = pathlib.Path(scratch).resolve(strict=True)
+    archive = pathlib.Path(archive)
+    if (archive.parent.resolve(strict=True) != scratch or archive.is_symlink()
+            or not archive.is_file() or archive.name != "desktop.tar.gz"
+            or hashlib.sha256(archive.read_bytes()).hexdigest() != digest):
+        raise ValueError("desktop-build-cleanup-archive-not-sealed")
+    for child in scratch.iterdir():
+        if child.name == archive.name:
+            continue
+        if child.is_symlink() or not child.is_dir():
+            child.unlink()
+        else:
+            shutil.rmtree(child)
+    if hashlib.sha256(archive.read_bytes()).hexdigest() != digest:
+        raise ValueError("desktop-build-cleanup-archive-changed")
+
+
 def _v02_package(args, *, expected_performance_identity=None):
     if platform.system() != "Darwin" or platform.machine() != "arm64":
         raise ValueError("unsupported-build-host: native macOS arm64 required")
@@ -227,6 +246,7 @@ def _v02_package(args, *, expected_performance_identity=None):
         pending, digest = _build_v02_archive(revision, pathlib.Path(tmp), name, state == "development-only",
                                              args.public_evidence,
                                              expected_performance_identity=expected_performance_identity)
+        _release_v02_build_scratch(pathlib.Path(tmp), pending, digest)
         with tempfile.TemporaryDirectory(prefix="gw-desktop-v02-repeat-") as repeat_tmp:
             repeated, repeated_digest = _build_v02_archive(revision, pathlib.Path(repeat_tmp), name,
                 state == "development-only", args.public_evidence,
