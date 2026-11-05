@@ -1,9 +1,9 @@
-"""Prove a public fixture source revision after a sanitized squash import.
+"""Prove a public fixture source revision by its committed source bytes.
 
-The historical manifest validator is digest-bound by admitted evidence, so this
-adapter leaves it untouched. It accepts the immutable source tag only after
-checking the tag target and both current and tagged source bytes, then scopes a
-Git-log identity projection to that validator invocation.
+The admitted record preserves the source's original revision even when later
+commits keep the same bytes. Verify the commit object and its source content,
+then scope compatibility projections to the validator invocation that needs
+them.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ def _git(root, *args, text=True):
 
 
 def proven_revision(row, root):
-    """Return the declared source SHA only when its exact source is proven."""
+    """Return a recorded source revision only when that commit has exact source bytes."""
     revision = row.get("revision")
     if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision):
         return None
@@ -38,21 +38,14 @@ def proven_revision(row, root):
     try:
         if hashlib.sha256((root / source).read_bytes()).hexdigest() != row["source_sha256"]:
             return None
-        head = _git(root, "log", "--follow", "--format=%H", "-1", "--", source).strip()
-        if head == revision:
-            return revision
-        tag = f"refs/tags/genewhip-fixture-source-v2-{revision}"
-        target = _git(root, "rev-parse", "--verify", f"{tag}^{{commit}}").strip()
-        if target != revision:
-            return None
-        tagged_source = _git(root, "show", f"{revision}:{source}", text=False)
-        if hashlib.sha256(tagged_source).hexdigest() != row["source_sha256"]:
+        source_at_revision = _git(root, "show", f"{revision}:{source}", text=False)
+        if hashlib.sha256(source_at_revision).hexdigest() != row["source_sha256"]:
             return None
         return revision
     except (OSError, ValueError, KeyError, subprocess.SubprocessError):
-        # Sanitized snapshots preserve an already-public fixture record while
-        # removing refs. Accept that identity only when HEAD^ contains the exact
-        # prior manifest/evidence binding and the current source/ROM bytes match.
+        # Sanitized snapshots may omit the original object. Accept that case
+        # only when the prior tree binds the same admitted row and evidence,
+        # and current source and ROM bytes still match that row.
         try:
             previous_manifest = json.loads(_git(root, "show", "HEAD^:fixtures/manifest.json"))
             prior = next(item for item in previous_manifest["fixtures"]
@@ -76,12 +69,15 @@ def proven_revision(row, root):
 
 @contextmanager
 def source_identity_context(validator, row, root):
-    """Run the unchanged validator with only its proven source-log query bound."""
+    """Prove the recorded source; project its exact bytes only for sanitized history."""
     revision = proven_revision(row, root)
     if revision is None:
-        raise ValueError("fixture source revision is not proven by ancestor or immutable tag")
-    head = _git(root, "log", "--follow", "--format=%H", "-1", "--", SOURCE).strip()
-    if head == revision:
+        raise ValueError("fixture-source-revision-unproven")
+    try:
+        exact_source = _git(root, "show", f"{revision}:{SOURCE}", text=False)
+    except (OSError, subprocess.SubprocessError):
+        exact_source = None
+    if exact_source is not None:
         yield
         return
 
@@ -92,11 +88,11 @@ def source_identity_context(validator, row, root):
 
     def proxy(real_module):
         def run(command, *args, **kwargs):
-            if (isinstance(command, (list, tuple)) and len(command) == 9
-                    and command[:4] == ["git", "-C", str(root), "log"]
-                    and command[4:8] == ["--follow", "--format=%H", "-1", "--"]
-                    and command[8] == SOURCE):
-                return subprocess.CompletedProcess(command, 0, stdout=revision + "\n", stderr="")
+            if (isinstance(command, (list, tuple)) and len(command) == 5
+                    and command[:4] == ["git", "-C", str(root), "show"]
+                    and command[4] == f"{revision}:{SOURCE}"):
+                return subprocess.CompletedProcess(command, 0,
+                    stdout=(root / SOURCE).read_bytes(), stderr=b"")
             return real_module.run(command, *args, **kwargs)
         return SimpleNamespace(run=run,
                                CalledProcessError=real_module.CalledProcessError,

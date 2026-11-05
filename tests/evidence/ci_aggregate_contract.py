@@ -16,6 +16,7 @@ WORKFLOW = ROOT / ".github/workflows/ci.yml"
 AGGREGATE = ROOT / "scripts/ci/aggregate.py"
 ATTESTATION_INPUTS = ROOT / "scripts/ci/verify_attestation_inputs.py"
 LANES = ("safety", "gameplay", "desktop", "package", "performance", "product-smoke", "phase7-fast")
+LIBRETRO_LANE = "libretro"
 SOURCE_SHA = "1" * 40
 HEAD_SHA = "2" * 40
 BASE_SHA = "3" * 40
@@ -34,6 +35,9 @@ def passing_needs(attestation_result="skipped"):
     needs = {name: {"result": "success", "outputs": {
         "source_sha": SOURCE_SHA, "head_sha": HEAD_SHA, "base_sha": BASE_SHA}}
         for name in LANES}
+    needs[LIBRETRO_LANE] = {"result": "success", "outputs": {
+        "source_sha": SOURCE_SHA, "head_sha": HEAD_SHA, "base_sha": BASE_SHA,
+        "run_id": "123", "run_attempt": "2", "event_name": "pull_request"}}
     needs["v02-release-qualification"] = {"result":"skipped", "outputs": {
         "source_sha":SOURCE_SHA,"head_sha":HEAD_SHA,"base_sha":BASE_SHA,
         "run_id":"123","run_attempt":"2","event_name":"pull_request"}}
@@ -79,8 +83,9 @@ class AggregateContract(unittest.TestCase):
                       module.validate_lanes(needs, "pull_request", SOURCE_SHA, HEAD_SHA, BASE_SHA,
                                             "refs/pull/7/merge"))
         trusted = passing_needs("success")
-        for lane in LANES:
+        for lane in LANES + (LIBRETRO_LANE,):
             trusted[lane]["outputs"]["head_sha"] = SOURCE_SHA
+        trusted[LIBRETRO_LANE]["outputs"]["event_name"] = "push"
         trusted["attestation"]["outputs"] = {"source_sha": SOURCE_SHA, "head_sha": SOURCE_SHA,
                                                "base_sha": BASE_SHA}
         self.assertEqual(module.validate_lanes(trusted, "push", SOURCE_SHA, SOURCE_SHA, BASE_SHA,
@@ -102,6 +107,7 @@ class AggregateContract(unittest.TestCase):
             skipped_package, "push", SOURCE_SHA, SOURCE_SHA, BASE_SHA, "refs/heads/main"))
 
         dispatched = passing_needs("success")
+        dispatched[LIBRETRO_LANE]["result"] = "skipped"
         for lane in LANES:
             dispatched[lane]["outputs"].update(head_sha=SOURCE_SHA,
                 run_id="123", run_attempt="2", event_name="workflow_dispatch")
@@ -121,8 +127,9 @@ class AggregateContract(unittest.TestCase):
         with mock.patch.dict(os.environ, values):
             self.assertEqual(module.main(), 0)
         trusted = passing_needs("success")
-        for lane in LANES:
+        for lane in LANES + (LIBRETRO_LANE,):
             trusted[lane]["outputs"]["head_sha"] = SOURCE_SHA
+        trusted[LIBRETRO_LANE]["outputs"]["event_name"] = "push"
         values.update(NEEDS_JSON=json.dumps(trusted), EVENT_NAME="push", EVENT_REF="refs/heads/main",
                       EXPECTED_HEAD_SHA=SOURCE_SHA)
         with mock.patch.dict(os.environ, values):
@@ -147,7 +154,8 @@ class AggregateContract(unittest.TestCase):
         module = load_aggregate(self)
         needs = passing_needs()
         for lane in ("product-smoke", "phase7-fast"):
-            needs[lane]["outputs"].update(run_id="123", run_attempt="2", event_name="pull_request")
+            needs[lane]["outputs"].update(run_id="123", run_attempt="2",
+                                           event_name="pull_request")
         self.assertEqual(module.validate_lanes(needs, "pull_request", SOURCE_SHA, HEAD_SHA, BASE_SHA,
                                                "refs/pull/7/merge", "123", "2"), [])
         for field, value in (("run_id", "124"), ("run_attempt", "1"), ("event_name", "push")):
@@ -157,14 +165,88 @@ class AggregateContract(unittest.TestCase):
                 changed, "pull_request", SOURCE_SHA, HEAD_SHA, BASE_SHA,
                 "refs/pull/7/merge", "123", "2"))
 
+    def test_libretro_is_required_on_normal_events_and_binds_all_identities(self):
+        module = load_aggregate(self)
+        needs = passing_needs()
+        for lane in ("product-smoke", "phase7-fast"):
+            needs[lane]["outputs"].update(run_id="123", run_attempt="2",
+                                           event_name="pull_request")
+        self.assertEqual(module.validate_lanes(needs, "pull_request", SOURCE_SHA, HEAD_SHA, BASE_SHA,
+                                               "refs/pull/7/merge", "123", "2"), [])
+        merge_group = json.loads(json.dumps(needs))
+        for lane in ("product-smoke", "phase7-fast"):
+            merge_group[lane]["outputs"]["event_name"] = "merge_group"
+        merge_group[LIBRETRO_LANE]["outputs"]["event_name"] = "merge_group"
+        self.assertEqual(module.validate_lanes(merge_group, "merge_group", SOURCE_SHA, HEAD_SHA,
+                                               BASE_SHA, "refs/heads/main", "123", "2"), [])
+        main_push = json.loads(json.dumps(needs))
+        for lane in LANES + (LIBRETRO_LANE,):
+            main_push[lane]["outputs"]["head_sha"] = SOURCE_SHA
+        for lane in ("product-smoke", "phase7-fast"):
+            main_push[lane]["outputs"]["event_name"] = "push"
+        main_push[LIBRETRO_LANE]["outputs"]["event_name"] = "push"
+        main_push["attestation"]["result"] = "success"
+        main_push["attestation"]["outputs"] = {"source_sha": SOURCE_SHA,
+            "head_sha": SOURCE_SHA, "base_sha": BASE_SHA}
+        self.assertEqual(module.validate_lanes(main_push, "push", SOURCE_SHA, SOURCE_SHA,
+                                               BASE_SHA, "refs/heads/main", "123", "2"), [])
+        for result in ("failure", "cancelled", "skipped"):
+            mutated = json.loads(json.dumps(needs))
+            mutated[LIBRETRO_LANE]["result"] = result
+            self.assertIn(f"required-lane-{result}:libretro", module.validate_lanes(
+                mutated, "pull_request", SOURCE_SHA, HEAD_SHA, BASE_SHA,
+                "refs/pull/7/merge", "123", "2"))
+        missing = json.loads(json.dumps(needs))
+        del missing[LIBRETRO_LANE]
+        self.assertIn("required-lane-missing:libretro", module.validate_lanes(
+            missing, "pull_request", SOURCE_SHA, HEAD_SHA, BASE_SHA,
+            "refs/pull/7/merge", "123", "2"))
+        for field, value in (("source_sha", "4" * 40), ("head_sha", "5" * 40),
+                             ("base_sha", "6" * 40), ("run_id", "124"),
+                             ("run_attempt", "1"), ("event_name", "push")):
+            mutated = json.loads(json.dumps(needs))
+            mutated[LIBRETRO_LANE]["outputs"][field] = value
+            reasons = module.validate_lanes(mutated, "pull_request", SOURCE_SHA, HEAD_SHA,
+                                            BASE_SHA, "refs/pull/7/merge", "123", "2")
+            if field in ("source_sha", "head_sha", "base_sha"):
+                reason = {"source_sha": "stale-source", "head_sha": "stale-head",
+                          "base_sha": "stale-base"}[field]
+                self.assertIn(f"{reason}:libretro", reasons)
+            else:
+                self.assertIn(f"lane-event-identity-mismatch:libretro:{field}", reasons)
+
+    def test_manual_qualification_keeps_libretro_skipped_and_schedule_policy_unchanged(self):
+        module = load_aggregate(self)
+        dispatched = passing_needs("success")
+        for lane in LANES:
+            dispatched[lane]["outputs"].update(head_sha=SOURCE_SHA,
+                run_id="123", run_attempt="2", event_name="workflow_dispatch")
+        dispatched[LIBRETRO_LANE]["result"] = "skipped"
+        dispatched["v02-release-qualification"]["result"] = "success"
+        dispatched["v02-release-qualification"]["outputs"].update(
+            head_sha=SOURCE_SHA, event_name="workflow_dispatch")
+        dispatched["attestation"]["result"] = "success"
+        dispatched["attestation"]["outputs"] = {"source_sha": SOURCE_SHA,
+            "head_sha": SOURCE_SHA, "base_sha": BASE_SHA}
+        self.assertEqual(module.validate_lanes(dispatched, "workflow_dispatch", SOURCE_SHA,
+            SOURCE_SHA, BASE_SHA, "refs/heads/main", "123", "2"), [])
+        self.assertIn("unsupported-event", module.validate_lanes(
+            dispatched, "schedule", SOURCE_SHA, SOURCE_SHA, BASE_SHA))
+
     def test_workflow_runs_all_required_lanes_and_always_aggregates_the_current_event(self):
         text = WORKFLOW.read_text()
         for lane in LANES:
             self.assertRegex(text, rf"(?m)^  {lane}:\s*$", f"required-lane-job-missing:{lane}")
         self.assertRegex(text, r"(?ms)^  required-aggregate:\n(?:(?!^  [a-z0-9_-]+:\n).)*?if: always\(\)",
                          "aggregate-must-run-after-failures")
-        self.assertIn("needs: [safety, gameplay, desktop, package, performance, product-smoke, phase7-fast, v02-release-qualification, attestation]", text,
+        self.assertIn("needs: [safety, gameplay, desktop, package, performance, product-smoke, phase7-fast, v02-release-qualification, attestation, libretro]", text,
                       "aggregate-required-roster-mismatch")
+        self.assertRegex(text, r"(?ms)^  libretro:\n(?:(?!^  [a-z0-9_-]+:\n).)*?if: github\.event_name == 'pull_request' \|\| github\.event_name == 'merge_group' \|\| \(github\.event_name == 'push' && github\.ref == 'refs/heads/main'\)",
+                         "libretro-normal-event-only-policy-mismatch")
+        libretro = re.search(r"(?ms)^  libretro:\n(?P<body>.*?)(?=^  [a-z0-9_-]+:\n|\Z)", text)
+        self.assertIsNotNone(libretro, "libretro-job-missing")
+        self.assertNotIn("github.event_name == 'schedule'", libretro["body"],
+                         "libretro-scheduled-qualification-enabled")
         for identity in ("source_sha", "head_sha", "base_sha"):
             self.assertGreaterEqual(text.count(identity), len(LANES),
                                     f"per-lane-{identity}-binding-missing")
@@ -173,6 +255,11 @@ class AggregateContract(unittest.TestCase):
         self.assertIn("EXPECTED_BASE_SHA", text, "aggregate-base-identity-missing")
         self.assertGreaterEqual(text.count('test "$(git rev-parse HEAD)" = "$GITHUB_SHA"'),
                                 len(LANES) + 1, "event-integration-source-checkout-missing")
+        self.assertIn("run_id: ${{ github.run_id }}", text, "libretro-run-id-output-missing")
+        self.assertIn("run_attempt: ${{ github.run_attempt }}", text,
+                      "libretro-run-attempt-output-missing")
+        self.assertIn("event_name: ${{ github.event_name }}", text,
+                      "libretro-event-output-missing")
         self.assertRegex(text, r"(?m)^  merge_group:\s*$", "merge-group-trigger-missing")
         self.assertRegex(text, r"(?m)^  pull_request:\s*$", "pull-request-trigger-missing")
 
@@ -216,8 +303,12 @@ class AggregateContract(unittest.TestCase):
                       "attestation-input-identity-not-verified")
         self.assertIn("actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6", attest_body,
                       "attestation-action-missing-from-trusted-job")
-        self.assertIn("needs: [safety, gameplay, desktop, package, performance, product-smoke, phase7-fast, v02-release-qualification, attestation]", aggregate_body,
+        self.assertIn("needs: [safety, gameplay, desktop, package, performance, product-smoke, phase7-fast, v02-release-qualification, attestation, libretro]", aggregate_body,
                       "required-aggregate-does-not-wait-for-attestation")
+        self.assertIn("libretro", aggregate_body,
+                      "required-aggregate-does-not-wait-for-libretro")
+        self.assertIn("github.event_name != 'schedule'", aggregate_body,
+                      "scheduled-aggregate-policy-changed")
         self.assertIn("EVENT_REF", aggregate_body, "aggregate-does-not-type-attestation-policy-by-ref")
 
     def test_dispatch_jobs_share_validated_journal_clock_and_exact_nonce(self):

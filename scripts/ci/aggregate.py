@@ -9,8 +9,22 @@ import sys
 REQUIRED_LANES = ("safety", "gameplay", "desktop", "package", "performance",
                   "product-smoke", "phase7-fast")
 FULL_V02_LANE = "v02-release-qualification"
+LIBRETRO_LANE = "libretro"
+RUN_BOUND_LANES = ("product-smoke", "phase7-fast", FULL_V02_LANE, LIBRETRO_LANE)
 SUPPORTED_EVENTS = ("pull_request", "merge_group", "push", "workflow_dispatch")
 SHA = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _is_normal_source_check(event_name, event_ref=None):
+    return event_name in {"pull_request", "merge_group"} or \
+        event_name == "push" and event_ref == "refs/heads/main"
+
+
+def required_lanes_for(event_name, event_ref=None):
+    """Return the unchanged base roster plus event-specific qualification lanes."""
+    normal_source_check = _is_normal_source_check(event_name, event_ref)
+    return REQUIRED_LANES + ((LIBRETRO_LANE,) if normal_source_check else ()) + \
+        ((FULL_V02_LANE,) if event_name == "workflow_dispatch" else ())
 
 
 def validate_lanes(needs, event_name, source_sha, head_sha, base_sha, event_ref=None,
@@ -26,7 +40,8 @@ def validate_lanes(needs, event_name, source_sha, head_sha, base_sha, event_ref=
         return ["needs-not-object"]
 
     full_v02_required = event_name == "workflow_dispatch"
-    required_lanes = REQUIRED_LANES + ((FULL_V02_LANE,) if full_v02_required else ())
+    normal_source_check = _is_normal_source_check(event_name, event_ref)
+    required_lanes = required_lanes_for(event_name, event_ref)
     expected = set(required_lanes)
     actual = set(needs) - {"attestation"}
     if not full_v02_required:
@@ -34,6 +49,13 @@ def validate_lanes(needs, event_name, source_sha, head_sha, base_sha, event_ref=
         if optional is not None and (not isinstance(optional, dict) or optional.get("result") != "skipped"):
             problems.append("full-v02-lane-must-skip-unselected-event")
         actual.discard(FULL_V02_LANE)
+    if not normal_source_check:
+        optional_libretro = needs.get(LIBRETRO_LANE)
+        if optional_libretro is not None and (
+                not isinstance(optional_libretro, dict) or
+                optional_libretro.get("result") != "skipped"):
+            problems.append("libretro-lane-must-skip-unselected-event")
+        actual.discard(LIBRETRO_LANE)
     for lane in required_lanes:
         if lane not in actual:
             problems.append(f"required-lane-missing:{lane}")
@@ -62,7 +84,7 @@ def validate_lanes(needs, event_name, source_sha, head_sha, base_sha, event_ref=
                       "base_sha": "stale-base"}[field]
             if value != expected_value:
                 problems.append(f"{reason}:{lane}")
-        if lane in ("product-smoke", "phase7-fast", FULL_V02_LANE) and expected_run_id is not None:
+        if lane in RUN_BOUND_LANES and expected_run_id is not None:
             for field, expected_value in (("run_id", str(expected_run_id)),
                                           ("run_attempt", str(expected_run_attempt)),
                                           ("event_name", event_name)):
@@ -106,8 +128,7 @@ def main():
         for problem in problems:
             print("REJECT: " + problem, file=sys.stderr)
         return 1
-    full_v02_required = event_name == "workflow_dispatch"
-    required_lanes = REQUIRED_LANES + ((FULL_V02_LANE,) if full_v02_required else ())
+    required_lanes = required_lanes_for(event_name, event_ref)
     print(f"required-aggregate: PASS ({len(required_lanes)}/{len(required_lanes)} current, successful lanes; " + event_name + ")")
     return 0
 

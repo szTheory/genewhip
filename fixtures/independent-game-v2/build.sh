@@ -7,17 +7,21 @@ LOCK=${GENEWHIP_TOOLCHAIN_LOCK:-$FIXTURE/toolchain.lock}
 OUTPUT=${GENEWHIP_CANDIDATE_PATH:-$FIXTURE/game.bin}
 
 case "${1:-}" in
-  --validate-only) exec python3 "$VALIDATOR" --validate-lock "$LOCK" ;;
+  --validate-only)
+    python3 -I "$ROOT/tests/fixtures/libretro_admission.py" --admission-only
+    exec python3 -I "$VALIDATOR" --validate-lock "$LOCK"
+    ;;
   --verify-reproducible) ;;
   *) printf 'BLOCKED: usage: %s --verify-reproducible|--validate-only\n' "$0" >&2; exit 2 ;;
 esac
 
-python3 "$VALIDATOR" --validate-lock "$LOCK"
+python3 -I "$ROOT/tests/fixtures/libretro_admission.py" --admission-only
+python3 -I "$VALIDATOR" --validate-lock "$LOCK"
 [ -f "$FIXTURE/src/game.s" ] || { echo 'BLOCKED: authored game source is missing' >&2; exit 1; }
 grep -q 'solely authored for Genewhip' "$FIXTURE/NOTICES.md" || { echo 'BLOCKED: authorship notice missing' >&2; exit 1; }
 grep -q 'repository MIT license' "$FIXTURE/NOTICES.md" || { echo 'BLOCKED: MIT grant missing' >&2; exit 1; }
 grep -iq 'no bundled assets' "$FIXTURE/NOTICES.md" || { echo 'BLOCKED: asset inventory missing' >&2; exit 1; }
-grep -q 'candidate; not admitted' "$FIXTURE/NOTICES.md" || { echo 'BLOCKED: candidate disposition missing' >&2; exit 1; }
+grep -q 'Status: admitted' "$FIXTURE/NOTICES.md" || { echo 'BLOCKED: admitted fixture notice missing' >&2; exit 1; }
 
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/genewhip-independent-game-v2.XXXXXX")
 trap 'rm -rf "$TMP"' EXIT
@@ -66,9 +70,9 @@ PY
 mkdir -p "$(dirname "$OUTPUT")"
 cp "$TMP/one/game.bin" "$OUTPUT"
 [ "$(shasum -a 256 "$OUTPUT" | awk '{print $1}')" = "$(shasum -a 256 "$TMP/one/game.bin" | awk '{print $1}')" ] || { echo 'BLOCKED: canonical ROM changed during write' >&2; exit 1; }
-python3 - "$FIXTURE/src/game.s" "$FIXTURE/build.sh" "$FIXTURE/NOTICES.md" "$LOCK" "$AS" "$OUTPUT" <<'PY'
+python3 - "$FIXTURE/src/game.s" "$FIXTURE/build.sh" "$FIXTURE/NOTICES.md" "$LOCK" "$AS" "$OUTPUT" "$ROOT/evidence/independent-game-v2.json" <<'PY'
 import hashlib, json, pathlib, sys
-source, build, notices, lock, assembler, rom = map(pathlib.Path, sys.argv[1:])
+source, build, notices, lock, assembler, rom, evidence = map(pathlib.Path, sys.argv[1:])
 digest = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
 tool = json.loads(lock.read_text())["assembler"]
 print(json.dumps({"rights":"pass: original authored source, repository MIT, no assets",
@@ -77,5 +81,5 @@ print(json.dumps({"rights":"pass: original authored source, repository MIT, no a
  "assembler_sha256":digest(assembler),"archive_sha256":tool["source_archive_sha256"],
  "rom_sha256":digest(rom),"rom_bytes":rom.stat().st_size,
  "clean_builds":"pass: two clean builds are byte-identical",
- "disposition":"candidate; not admitted"},sort_keys=True))
+ "disposition":"admitted","admission_evidence_sha256":digest(evidence)},sort_keys=True))
 PY

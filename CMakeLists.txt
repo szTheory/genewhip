@@ -7,6 +7,7 @@ include(CTest)
 option(GENEWHIP_TEST_HOOKS "Compile private allocation test hook (not public API)" ${BUILD_TESTING})
 option(GENEWHIP_BUILD_TOOLS "Build original diagnostic and evidence tools" ON)
 option(GENEWHIP_BUILD_DESKTOP "Build the SDL3 desktop runner (fetches a pinned SDL3 source archive)" OFF)
+option(GENEWHIP_BUILD_LIBRETRO "Build the private Libretro shared core" OFF)
 set(GENEWHIP_INSTALL_PACKAGE_VERSION "${PROJECT_VERSION}" CACHE STRING
   "Version advertised by the installed Genewhip CMake package")
 
@@ -22,6 +23,24 @@ if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
 endif()
 if(GENEWHIP_TEST_HOOKS)
   target_compile_definitions(genewhip_core PRIVATE GW_TEST_HOOKS)
+endif()
+
+if(GENEWHIP_BUILD_LIBRETRO)
+  set_target_properties(genewhip_core PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    C_VISIBILITY_PRESET hidden)
+  add_library(genewhip_libretro SHARED src/libretro/adapter.c)
+  target_include_directories(genewhip_libretro PRIVATE src/libretro/vendor)
+  target_link_libraries(genewhip_libretro PRIVATE Genewhip::core)
+  set_target_properties(genewhip_libretro PROPERTIES
+    OUTPUT_NAME genewhip_libretro
+    PREFIX ""
+    C_STANDARD 17 C_STANDARD_REQUIRED YES C_EXTENSIONS NO
+    C_VISIBILITY_PRESET hidden)
+  if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+    target_compile_options(genewhip_libretro PRIVATE
+      -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+  endif()
 endif()
 
 install(TARGETS genewhip_core EXPORT GenewhipTargets ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
@@ -147,6 +166,10 @@ if(BUILD_TESTING)
   target_link_libraries(gw_bounded_fuzz PRIVATE Genewhip::core)
   set_target_properties(gw_bounded_fuzz PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
   find_package(Python3 3.8 REQUIRED COMPONENTS Interpreter)
+  add_test(NAME ci_baseline_contract COMMAND ${Python3_EXECUTABLE} -I
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/evidence/ci_baseline_contract.py)
+  set_tests_properties(ci_baseline_contract PROPERTIES TIMEOUT 30
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
   if(APPLE AND GENEWHIP_BUILD_TOOLS)
     add_test(NAME benchmark_contract COMMAND ${Python3_EXECUTABLE} -I
       ${CMAKE_CURRENT_SOURCE_DIR}/tests/evidence/benchmark_contract.py
@@ -158,6 +181,60 @@ if(BUILD_TESTING)
   add_subdirectory(tests/devices)
   add_subdirectory(tests/desktop)
   add_subdirectory(tests/audio)
+  if(GENEWHIP_BUILD_LIBRETRO)
+    add_executable(libretro_host tests/libretro/host.c)
+    target_include_directories(libretro_host PRIVATE
+      src/libretro/vendor ${PROJECT_SOURCE_DIR}/include)
+    target_link_libraries(libretro_host PRIVATE Genewhip::core ${CMAKE_DL_LIBS})
+    set_target_properties(libretro_host PROPERTIES
+      C_STANDARD 17 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
+    if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+      target_compile_options(libretro_host PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+    endif()
+    add_dependencies(libretro_host gw_diagnostic)
+    add_test(NAME libretro_host_smoke COMMAND libretro_host
+      smoke
+      "$<TARGET_FILE:genewhip_libretro>"
+      "${CMAKE_CURRENT_BINARY_DIR}/diagnostic.bin")
+    set_tests_properties(libretro_host_smoke PROPERTIES TIMEOUT 30)
+    add_test(NAME libretro_host_contract COMMAND libretro_host
+      contract
+      "$<TARGET_FILE:genewhip_libretro>"
+      "${CMAKE_CURRENT_BINARY_DIR}/diagnostic.bin")
+    set_tests_properties(libretro_host_contract PROPERTIES TIMEOUT 30)
+    add_test(NAME libretro_callbacks COMMAND libretro_host
+      callbacks
+      "$<TARGET_FILE:genewhip_libretro>"
+      "${CMAKE_CURRENT_BINARY_DIR}/diagnostic.bin")
+    set_tests_properties(libretro_callbacks PROPERTIES TIMEOUT 30)
+    add_test(NAME libretro_pixels_stop COMMAND libretro_host
+      pixels-stop
+      "$<TARGET_FILE:genewhip_libretro>"
+      "${CMAKE_CURRENT_BINARY_DIR}/diagnostic.bin")
+    set_tests_properties(libretro_pixels_stop PROPERTIES TIMEOUT 30)
+    add_test(NAME libretro_admission COMMAND ${Python3_EXECUTABLE} -I
+      ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/libretro_admission.py)
+    set_tests_properties(libretro_admission PROPERTIES TIMEOUT 30
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+      ENVIRONMENT "GENEWHIP_DIAGNOSTIC_ROM=${CMAKE_CURRENT_BINARY_DIR}/diagnostic.bin")
+    add_test(NAME libretro_fixture_route COMMAND ${Python3_EXECUTABLE} -I
+      ${CMAKE_CURRENT_SOURCE_DIR}/scripts/evidence/libretro_route.py
+      --host $<TARGET_FILE:libretro_host>
+      --library $<TARGET_FILE:genewhip_libretro>
+      --output ${CMAKE_CURRENT_BINARY_DIR}/libretro-route.json)
+    set_tests_properties(libretro_fixture_route PROPERTIES TIMEOUT 30
+      DEPENDS libretro_admission
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+      ENVIRONMENT "GENEWHIP_DIAGNOSTIC_ROM=${CMAKE_CURRENT_BINARY_DIR}/diagnostic.bin")
+    add_test(NAME libretro_route_contract COMMAND ${Python3_EXECUTABLE} -I
+      ${CMAKE_CURRENT_SOURCE_DIR}/tests/evidence/libretro_route_contract.py
+      --report ${CMAKE_CURRENT_BINARY_DIR}/libretro-route.json
+      --library $<TARGET_FILE:genewhip_libretro>)
+    set_tests_properties(libretro_route_contract PROPERTIES TIMEOUT 30
+      DEPENDS libretro_fixture_route
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+  endif()
   if(GENEWHIP_BUILD_TOOLS AND GENEWHIP_TEST_HOOKS)
     add_subdirectory(tools/evidence/fm_compare)
   endif()

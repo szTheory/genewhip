@@ -549,7 +549,7 @@
       "assets": [],
       "build": {
         "command": "fixtures/independent-game-v2/build.sh --verify-reproducible",
-        "sha256": "15f321b986db3c2f7df6a6d55ff5b49d9415399bccd0a241f518351ead7356f4",
+        "sha256": "700094df411c2a1d4952ea04c13316bc39620085528ec70bb896a5e5ffcf487f",
         "source": "fixtures/independent-game-v2/build.sh",
         "toolchain": "GNU Binutils 2.47 source-built m68k-elf-as"
       },

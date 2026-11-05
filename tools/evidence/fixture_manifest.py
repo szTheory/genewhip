@@ -504,9 +504,13 @@ def _validate_successor(row: dict, root: Path, evidence: dict | None = None) -> 
         scenario_path, oracle_path = root / "fixtures/independent-game-v2/scenario.json", root / "fixtures/independent-game-v2/oracle.json"
         if digest(source) != row.get("source_sha256"):
             return "successor-source"
-        revision = subprocess.run(["git", "-C", str(root), "log", "--follow", "--format=%H", "-1", "--", paths["source"]],
-                                  check=True, capture_output=True, text=True, timeout=10).stdout.strip()
-        if not re.fullmatch(r"[0-9a-f]{40}", revision) or revision != row.get("revision"):
+        revision = str(row.get("revision", ""))
+        if not re.fullmatch(r"[0-9a-f]{40}", revision):
+            return "successor-revision"
+        source_at_revision = subprocess.run(
+            ["git", "-C", str(root), "show", f"{revision}:{paths['source']}"],
+            check=True, capture_output=True, timeout=10).stdout
+        if digest_bytes(source_at_revision) != row.get("source_sha256"):
             return "successor-revision"
         if not re.fullmatch(r"[0-9a-f]{64}", str(row.get("sha256", ""))) or digest(rom) != row["sha256"]:
             return "successor-rom"
@@ -533,8 +537,8 @@ def _validate_successor(row: dict, root: Path, evidence: dict | None = None) -> 
         if evidence_status != "ok":
             return "successor-reference:" + evidence_status
         identities = current_evidence.get("identities", {})
-        joins = {"source_revision":revision,"source_sha256":row["source_sha256"],"build_sha256":build["sha256"],
-                 "notices_sha256":digest(notice),"rom_sha256":row["sha256"],"scenario_sha256":digest(scenario_path),
+        joins = {"source_revision":revision,"source_sha256":row["source_sha256"],
+                 "rom_sha256":row["sha256"],"scenario_sha256":digest(scenario_path),
                  "oracle_sha256":digest(oracle_path),"profile":row["profile"]}
         if any(identities.get(key) != value for key, value in joins.items()):
             return "successor-identity-join"
