@@ -98,59 +98,61 @@ with tempfile.TemporaryDirectory(prefix="gw-public-hygiene-") as temporary:
     successor_row = next(row for row in manifest["fixtures"]
                          if row.get("id") == "genewhip-independent-game-v2")
 
-    def fake_git_revision(*, tag_target=None, source_bytes=None):
-        log_calls = 0
+    def fake_git_revision(*, source_bytes=None, missing_revision=False):
         def run(command, **_kwargs):
-            nonlocal log_calls
-            if (len(command) >= 5 and command[:2] == ["git", "-C"]
-                    and Path(command[2]).resolve() == root.resolve()
-                    and command[3:5] == ["log", "--follow"]):
-                log_calls += 1
-                # Model a squash-imported source: HEAD differs, but the evidence's
-                # own historical source join still observes the admitted SHA.
-                revision = "f" * 40 if log_calls == 1 else successor_row["revision"]
-                return SimpleNamespace(stdout=revision + "\n")
-            if (len(command) >= 5 and command[:2] == ["git", "-C"]
-                    and Path(command[2]).resolve() == root.resolve()
-                    and command[3] == "rev-parse"):
-                return SimpleNamespace(stdout=(tag_target or successor_row["revision"]) + "\n")
             if (len(command) >= 5 and command[:2] == ["git", "-C"]
                     and Path(command[2]).resolve() == root.resolve()
                     and command[3] == "show"):
-                return SimpleNamespace(stdout=(source_bytes if source_bytes is not None
-                                               else (root / successor_row["source"]).read_bytes()))
+                if command[4] == f"{successor_row['revision']}:{successor_row['source']}":
+                    if missing_revision:
+                        raise subprocess.CalledProcessError(1, command)
+                    return SimpleNamespace(stdout=(source_bytes if source_bytes is not None
+                                                   else (root / successor_row["source"]).read_bytes()))
+                if command[4] == "HEAD^:fixtures/manifest.json":
+                    return SimpleNamespace(stdout=manifest_bytes)
+                if command[4] == "HEAD^:evidence/independent-game-v2.json":
+                    return SimpleNamespace(stdout=(root / "evidence/independent-game-v2.json").read_bytes())
             raise AssertionError(f"unexpected process in offline public-fixture validation: {command!r}")
         return run
 
     with patch("subprocess.run", side_effect=fake_git_revision()):
         observed = hygiene.inspect(root, [successor])
         assert observed == [], (
-            f"the exact admitted v2 successor with its pinned source tag and complete production evidence must be public: {observed}"
+            f"the exact admitted v2 successor with its committed source bytes and complete production evidence must be public: {observed}"
         )
-        print("PASS: admitted v2 ROM validates via its immutable source tag and current rights/build/reference identities")
+        print("PASS: admitted v2 ROM validates via its recorded commit bytes and current rights/build/reference identities")
 
-        with patch("subprocess.run", side_effect=fake_git_revision(tag_target="e" * 40)):
+        successor_row["revision"] = "e" * 40
+        manifest_path.write_text(json.dumps(manifest))
+        with patch("subprocess.run", side_effect=fake_git_revision(
+                source_bytes=b"different committed source")):
             assert hygiene.inspect(root, [successor]) == [(successor, "unverified-public-binary")], (
-                "a source tag that resolves to a different commit must not qualify the binary"
+                "a recorded revision that differs from the previously admitted source revision must not qualify the binary"
             )
-        print("PASS: mismatched immutable source tag is rejected")
+        manifest_path.write_bytes(manifest_bytes)
+        manifest = json.loads(manifest_bytes)
+        successor_row = next(row for row in manifest["fixtures"]
+                             if row.get("id") == "genewhip-independent-game-v2")
+        print("PASS: recorded revision with mismatched source bytes is rejected")
 
-        def fake_missing_tag(command, **kwargs):
-            if len(command) >= 5 and command[3] == "rev-parse":
-                raise subprocess.CalledProcessError(1, command)
-            return fake_git_revision()(command, **kwargs)
-        with patch("subprocess.run", side_effect=fake_missing_tag):
+        successor_row["revision"] = "e" * 40
+        manifest_path.write_text(json.dumps(manifest))
+        with patch("subprocess.run", side_effect=fake_git_revision(missing_revision=True)):
             assert hygiene.inspect(root, [successor]) == [(successor, "unverified-public-binary")], (
-                "a missing source tag must reject the binary without crashing the hygiene scan"
+                "a missing recorded source commit must reject the binary without crashing the hygiene scan"
             )
-        print("PASS: missing immutable source tag is rejected")
+        manifest_path.write_bytes(manifest_bytes)
+        manifest = json.loads(manifest_bytes)
+        successor_row = next(row for row in manifest["fixtures"]
+                             if row.get("id") == "genewhip-independent-game-v2")
+        print("PASS: missing recorded source commit is rejected")
 
         with patch("subprocess.run", side_effect=fake_git_revision(
                 source_bytes=b"different source revision")):
             assert hygiene.inspect(root, [successor]) == [(successor, "unverified-public-binary")], (
-                "a tagged revision whose source bytes differ from the admitted source digest must be rejected"
+                "a recorded revision whose source bytes differ from the admitted source digest must be rejected"
             )
-        print("PASS: mismatched tagged source bytes are rejected")
+        print("PASS: mismatched committed source bytes are rejected")
 
         # Each control passes through inspect(), which is also used by the actual
         # public-hygiene command. No path-prefix exception or fixture allowlist is used.
