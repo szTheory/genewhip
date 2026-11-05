@@ -105,7 +105,9 @@ observed runner time must not be read as an estimated charge.
 
 ## Current evidence status
 
-The retained Phase 8 observation is PR #87 run 42118267359, attempt 1, on
+The retained Phase 8 observation is [PR #87](https://github.com/szTheory/genewhip/pull/87),
+[run 42118267359](https://github.com/szTheory/genewhip/actions/runs/42118267359),
+attempt 1, on
 execution checkout `79efa8c5c82ca36e3bbf1fa6c8a3c71fd5f11bf0`. Its PR head is
 `8160ee3d10c0e529ead479bc56b3292661b8ddcd`, base is
 `6d96c913a7e5c4e5fdd6f2dd01301587ff22038f`, and event ref is
