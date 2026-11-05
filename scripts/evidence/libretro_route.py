@@ -480,6 +480,22 @@ def validate_report(report: dict, *, root: Path = ROOT,
         return "report-size"
     if not isinstance(report, dict) or set(report) != TOP_KEYS:
         return "report-fields"
+    # Reject private or malformed identity fields before classifying hosted status;
+    # callers should get the privacy violation regardless of runner provenance.
+    for key in ("event", "ref", "runner"):
+        value = report.get(key)
+        if value is not None and (not isinstance(value, str) or
+                not re.fullmatch(r"[A-Za-z0-9_./@+-]{1,160}", value) or
+                value.startswith("/") or ".." in value.split("/") or
+                "\\" in value or "\n" in value):
+            return "report-private-field"
+    report_ref = report.get("ref")
+    if report_ref is not None and not report_ref.startswith(
+            ("refs/heads/", "refs/pull/", "refs/tags/")):
+        return "report-private-field"
+    if report.get("run_id") is not None and not re.fullmatch(
+            r"[0-9]{1,20}", str(report["run_id"])):
+        return "report-private-field"
     if require_source is not None:
         if not re.fullmatch(r"[0-9a-f]{40}", require_source):
             return "required-source-invalid"
@@ -647,16 +663,6 @@ def validate_report(report: dict, *, root: Path = ROOT,
     if not isinstance(geometry.get("pitch"), int) or geometry["pitch"] < geometry["width"] * 4 or \
             report.get("pixel_format") != "XRGB8888":
         return "route-geometry"
-    if any(not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_./@+-]{1,160}", value)
-           for value in (report.get("event"), report.get("ref"), report.get("runner"))
-           if value is not None):
-        return "report-private-field"
-    report_ref = report.get("ref")
-    if report_ref is not None and (report_ref.startswith("/") or ".." in report_ref.split("/") or
-            not report_ref.startswith(("refs/heads/", "refs/pull/", "refs/tags/"))):
-        return "report-private-field"
-    if report.get("run_id") is not None and not re.fullmatch(r"[0-9]{1,20}", str(report["run_id"])):
-        return "report-private-field"
     expected_fields = 2 * sum(case["fields"] for case in expected_schedule)
     callback = report.get("callback_counts")
     if not isinstance(callback, dict) or set(callback) != CALLBACK_KEYS or \

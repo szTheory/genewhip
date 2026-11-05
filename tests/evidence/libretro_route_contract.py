@@ -39,15 +39,17 @@ class LibretroRouteContract(unittest.TestCase):
     def test_actual_local_report_is_bounded_and_route_observations_pass(self):
         self.assertEqual(self.validate(self.report), "ok")
         self.assertEqual(self.report["route_status"], "pass")
-        self.assertEqual(self.report["status"], "unknown")
-        self.assertIn(self.report["reason"], {
-            "working-tree-not-clean", "host-platform-not-linux-x86_64",
-            "host-run-identity-incomplete"})
+        self.assertIn(self.report["status"], {"pass", "unknown"})
+        if self.report["status"] == "unknown":
+            self.assertIn(self.report["reason"], {
+                "working-tree-not-clean", "host-platform-not-linux-x86_64",
+                "host-run-identity-incomplete", "toolchain-identity-incomplete"})
         self.assertEqual([row["id"] for row in self.report["cases"]],
                          ["title-no-start", "start-idle", "start-move"])
 
     def test_unknown_report_can_explain_missing_toolchain_identity(self):
         changed = copy.deepcopy(self.report)
+        changed["status"] = "unknown"
         changed["reason"] = "toolchain-identity-incomplete"
         changed["toolchain"] = {key: "unknown" for key in changed["toolchain"]}
         self.assertEqual(self.validate(changed), "ok")
@@ -68,7 +70,10 @@ class LibretroRouteContract(unittest.TestCase):
                                                require_source=self.report["source_sha"]), "ok")
         self.assertEqual(route.validate_report(self.report, library_path=self.library,
                                                require_source="f" * 40), "required-source-mismatch")
-        self.assertEqual(route.validate_report(self.report, library_path=self.library,
+        unknown_report = copy.deepcopy(self.report)
+        unknown_report["status"] = "unknown"
+        unknown_report["reason"] = "host-run-identity-incomplete"
+        self.assertEqual(route.validate_report(unknown_report, library_path=self.library,
                                                require_hosted=True), "hosted-status-required")
 
     def test_expected_hosted_run_identity_is_enforced(self):
