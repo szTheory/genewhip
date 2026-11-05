@@ -166,6 +166,10 @@ if(BUILD_TESTING)
   target_link_libraries(gw_bounded_fuzz PRIVATE Genewhip::core)
   set_target_properties(gw_bounded_fuzz PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
   find_package(Python3 3.8 REQUIRED COMPONENTS Interpreter)
+  add_test(NAME libretro_header_provenance_contract COMMAND ${Python3_EXECUTABLE} -I
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/evidence/libretro_header_provenance_contract.py)
+  set_tests_properties(libretro_header_provenance_contract PROPERTIES TIMEOUT 10
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
   add_test(NAME ci_baseline_contract COMMAND ${Python3_EXECUTABLE} -I
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/evidence/ci_baseline_contract.py)
   set_tests_properties(ci_baseline_contract PROPERTIES TIMEOUT 30

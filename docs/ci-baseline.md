@@ -14,13 +14,16 @@ it does not write it to the report. Public repository collection can use the
 unauthenticated API subject to GitHub's rate limits.
 
 For an exact measured source, set `PHASE8_SOURCE_SHA` to the full SHA of the
-workflow execution checkout, then run:
+workflow execution checkout. For a pull request, also set `PHASE8_HEAD_SHA` and
+`PHASE8_BASE_SHA` to the API head and base SHAs, then run:
 
 ```sh
 python3 -I scripts/evidence/ci_baseline.py collect \
   --repo szTheory/genewhip \
   --workflow .github/workflows/ci.yml \
   --source-sha "$PHASE8_SOURCE_SHA" \
+  --head-sha "$PHASE8_HEAD_SHA" \
+  --base-sha "$PHASE8_BASE_SHA" \
   --max-runs 3 \
   --max-attempts 3 \
   --output evidence/phase8-ci-baseline.json
