@@ -86,6 +86,7 @@ def attempt(run_attempt, *, conclusion="success", source=SOURCE, status="complet
         "head_sha": source,
         "path": ".github/workflows/ci.yml@refs/pull/7/merge",
         "ref": "refs/pull/7/merge",
+        "pull_requests": [{"number": 7}],
         "created_at": "2026-11-05T10:00:00Z",
         "run_started_at": "2026-11-05T10:01:00Z",
         "completed_at": "2026-11-05T10:06:00Z",
@@ -114,13 +115,17 @@ def jobs_for_attempt(number):
 
 class FakeApi:
     def __init__(self, *, run_pages=None, attempts=None, jobs=None, repository=None,
-                 workflow=WORKFLOW):
+                 workflow=WORKFLOW, pull_requests=None):
         self.run_pages = run_pages or {1: [run_summary()]}
         self.attempts = attempts or {1: attempt(1, conclusion="failure"),
                                      2: attempt(2, conclusion="success")}
         self.jobs = jobs or {1: jobs_for_attempt(1), 2: jobs_for_attempt(2)}
         self.repository = repository or {"private": False, "visibility": "public"}
         self.workflow = workflow
+        self.pull_requests = pull_requests or {7: {
+            "number": 7, "merge_commit_sha": SOURCE,
+            "head": {"sha": SOURCE}, "base": {"sha": SOURCE},
+        }}
         self.workflow_blob_sha = hashlib.sha1(
             b"blob " + str(len(workflow)).encode("ascii") + b"\0" + workflow).hexdigest()
         self.requests = []
@@ -137,6 +142,9 @@ class FakeApi:
         path = parsed.path
         if path == "/repos/example/project":
             body = self.repository
+        elif path.startswith("/repos/example/project/pulls/"):
+            number = int(path.rsplit("/", 1)[1])
+            body = self.pull_requests.get(number, {})
         elif path == "/repos/example/project/actions/workflows/ci.yml/runs":
             page = int(query.get("page", ["1"])[0])
             body = {"total_count": sum(len(items) for items in self.run_pages.values()),
@@ -166,10 +174,11 @@ class FakeApi:
 
 
 class BaselineCollectorContract(unittest.TestCase):
-    def collect(self, module, directory, api, *, source=SOURCE, extra=(), env=None):
+    def collect(self, module, directory, api, *, source=SOURCE, head=SOURCE, extra=(), env=None):
         output = Path(directory) / "baseline.json"
         argv = ["collect", "--repo", "example/project", "--workflow",
                 ".github/workflows/ci.yml", "--source-sha", source,
+                "--head-sha", head,
                 "--max-runs", "3", "--max-attempts", "3", "--output", str(output), *extra]
         code = module.main(argv, environ=env or {}, opener=api)
         return code, output
@@ -219,6 +228,85 @@ class BaselineCollectorContract(unittest.TestCase):
         self.assertTrue(all(item["authorization"] == "Bearer secret-test-token"
                             for item in api.requests), "explicit-token-used-without-reporting")
         self.assertLess(report_size, 1024 * 1024, "report-size-under-one-MiB")
+
+    def test_merge_checkout_source_is_separate_from_pr_head_and_base(self):
+        module = load_module(self)
+        merge_sha, head_sha, base_sha = "3" * 40, "4" * 40, "5" * 40
+        summary = run_summary(123, 1, source=head_sha)
+        details = {**attempt(1, source=head_sha), "pull_requests": [{"number": 7}]}
+        pull = {"number": 7, "merge_commit_sha": merge_sha,
+                "head": {"sha": head_sha}, "base": {"sha": base_sha}}
+        api = FakeApi(run_pages={1: [summary]}, attempts={1: details},
+                      jobs={1: jobs_for_attempt(2)},
+                      pull_requests={7: pull})
+        with tempfile.TemporaryDirectory() as directory:
+            code, output = self.collect(module, directory, api, source=merge_sha,
+                head=head_sha, extra=("--base-sha", base_sha, "--run-id", "123",
+                                      "--run-attempt", "1"))
+            report = json.loads(output.read_text())
+            validation = module.validate_report(report, require_source=merge_sha)
+        self.assertEqual(code, 0)
+        self.assertEqual(validation["errors"], [])
+        self.assertEqual(report["source_sha"], merge_sha)
+        self.assertEqual(report["head_sha"], head_sha)
+        self.assertEqual(report["base_sha"], base_sha)
+        self.assertEqual(report["runs"][0]["workflow_source_sha"], merge_sha)
+        self.assertEqual(report["runs"][0]["head_sha"], head_sha)
+        self.assertEqual(report["runs"][0]["ref"], "refs/pull/7/merge")
+        self.assertTrue(any(item["url"].endswith("/pulls/7") for item in api.requests))
+
+        for identity_change in (
+                {"merge_commit_sha": "6" * 40},
+                {"head": {"sha": "7" * 40}},
+                {"base": {"sha": "8" * 40}}):
+            with self.subTest(identity_change=identity_change):
+                api.pull_requests[7] = {**pull, **identity_change}
+                with tempfile.TemporaryDirectory() as directory:
+                    code, output = self.collect(module, directory, api, source=merge_sha,
+                        head=head_sha, extra=("--base-sha", base_sha, "--run-id", "123",
+                                              "--run-attempt", "1"))
+                    rejected = json.loads(output.read_text())
+                self.assertNotEqual(code, 0)
+                self.assertTrue(any(error.startswith("pull-request-source-identity-mismatch")
+                                    for error in rejected["errors"]))
+
+        api.pull_requests[7] = pull
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "baseline.json"
+            code = module.main(["collect", "--repo", "example/project", "--workflow",
+                ".github/workflows/ci.yml", "--head-sha", head_sha, "--base-sha", base_sha,
+                "--run-id", "123", "--run-attempt", "1", "--output", str(output)],
+                environ={}, opener=api)
+            missing_source = json.loads(output.read_text())
+        self.assertNotEqual(code, 0)
+        self.assertTrue(any(error.startswith("execution-source-sha-required")
+                            for error in missing_source["errors"]))
+
+        push_summary = {**run_summary(123, 1, event="push", source=head_sha),
+                        "path": ".github/workflows/ci.yml@refs/heads/main"}
+        push_detail = {**attempt(1, source=head_sha), "event": "push",
+                       "path": ".github/workflows/ci.yml@refs/heads/main",
+                       "ref": "refs/heads/main"}
+        with tempfile.TemporaryDirectory() as directory:
+            code, output = self.collect(module, directory,
+                FakeApi(run_pages={1: [push_summary]}, attempts={1: push_detail},
+                        jobs={1: jobs_for_attempt(1)}), source=merge_sha,
+                head=head_sha)
+            mismatch = json.loads(output.read_text())
+        self.assertNotEqual(code, 0)
+        self.assertIn("non-pr-source-head-mismatch:123:1", mismatch["errors"])
+
+    def test_requested_latest_attempt_retains_all_prior_attempts(self):
+        module = load_module(self)
+        with tempfile.TemporaryDirectory() as directory:
+            code, output = self.collect(module, directory, FakeApi(),
+                extra=("--run-id", "123", "--run-attempt", "2"))
+            report = json.loads(output.read_text())
+        self.assertEqual(code, 0)
+        self.assertEqual(report["requested_run_attempt"], 2)
+        self.assertEqual([row["run_attempt"] for row in report["runs"]], [1, 2])
+        self.assertEqual([row["conclusion"] for row in report["runs"]], ["failure", "success"])
+        self.assertEqual(module.validate_report(report)["errors"], [])
 
     def test_run_pagination_stops_at_requested_limit_and_events_remain_separate(self):
         module = load_module(self)
@@ -272,7 +360,8 @@ class BaselineCollectorContract(unittest.TestCase):
         rows[0]["conclusion"] = "failure"
         rows[1]["conclusion"] = "cancelled"
         rows[1]["labels"] = ["macos-26", "arm64"]
-        rows[2].update(conclusion="skipped", started_at=None, completed_at=None,
+        rows[2].update(conclusion="skipped", started_at="2026-11-05T10:04:50Z",
+                       completed_at="2026-11-05T10:04:49Z",
                        labels=[])
         api = FakeApi(run_pages={1: [run_summary(attempt_count=1)]},
                       attempts={1: attempt(1, conclusion="failure")},
@@ -285,6 +374,7 @@ class BaselineCollectorContract(unittest.TestCase):
         self.assertEqual(run["runner_seconds_by_os"], {"linux": 100, "macos": 200})
         self.assertEqual(run["critical_path"]["path"], ["right", "join"])
         self.assertEqual(run["billing"]["status"], "not_applicable")
+        self.assertIsNone(next(row for row in run["jobs"] if row["name"] == "join")["elapsed_seconds"])
 
     def test_unknown_terminal_time_is_not_replaced_by_updated_at(self):
         module = load_module(self)
@@ -299,6 +389,7 @@ class BaselineCollectorContract(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIsNone(report["runs"][0]["completed_at"])
         self.assertIsNone(report["runs"][0]["wall_seconds"])
+        self.assertEqual(report["runs"][0]["observed_job_span"]["elapsed_seconds"], 270)
         self.assertIn("workflow-terminal-time-unavailable", report["unknowns"])
 
     def test_private_or_self_hosted_runner_billing_remains_unknown(self):
@@ -538,10 +629,10 @@ class BaselineCollectorContract(unittest.TestCase):
                 {"number": 1, "name": "Load actual module", "status": "completed",
                  "conclusion": "success", "started_at": "2026-11-05T10:01:00Z",
                  "completed_at": "2026-11-05T10:01:30Z"},
-                {"number": 2, "name": "Run Address Sanitizer", "status": "completed",
+                {"number": 2, "name": "Configure address and undefined sanitizer build", "status": "completed",
                  "conclusion": "success", "started_at": "2026-11-05T10:01:30Z",
                  "completed_at": "2026-11-05T10:02:00Z"},
-                {"number": 3, "name": "Run Undefined Sanitizer", "status": "completed",
+                {"number": 3, "name": "Run actual-module lifecycle and route tests with AddressSanitizer and UndefinedBehaviorSanitizer", "status": "completed",
                  "conclusion": "success", "started_at": "2026-11-05T10:02:00Z",
                  "completed_at": "2026-11-05T10:02:30Z"},
             ]),

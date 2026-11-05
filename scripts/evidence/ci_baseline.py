@@ -187,6 +187,27 @@ def _duration(start, end):
     return round(end_value - start_value, 3)
 
 
+def _observed_job_span(jobs):
+    """Return the span of measured completed job intervals, not workflow-run time."""
+    intervals = []
+    for job_value in jobs:
+        if job_value.get("status") != "completed" or job_value.get("conclusion") == "skipped":
+            continue
+        start = _timestamp(job_value.get("started_at"))
+        end = _timestamp(job_value.get("completed_at"))
+        if start is not None and end is not None and end >= start:
+            intervals.append((start, end, job_value.get("started_at"),
+                              job_value.get("completed_at")))
+    if not intervals:
+        return {"started_at": None, "completed_at": None, "elapsed_seconds": None}
+    start = min(item[0] for item in intervals)
+    end = max(item[1] for item in intervals)
+    first = min(intervals, key=lambda item: item[0])
+    last = max(intervals, key=lambda item: item[1])
+    return {"started_at": first[2], "completed_at": last[3],
+            "elapsed_seconds": round(end - start, 3)}
+
+
 def _time_fields(start, end):
     return {"started_at": start if _timestamp(start) is not None else None,
             "completed_at": end if _timestamp(end) is not None else None,
@@ -404,6 +425,24 @@ def _safe_ref(value, event):
     return "other"
 
 
+def _pull_request_identity(api, repo, detail, expected_source, expected_head, expected_base):
+    pull_requests = detail.get("pull_requests")
+    if not isinstance(pull_requests, list) or len(pull_requests) != 1 or \
+            not isinstance(pull_requests[0], dict):
+        raise CollectionError("pull-request-identity-missing")
+    number = pull_requests[0].get("number")
+    if type(number) is not int or not 1 <= number <= 10**12:
+        raise CollectionError("pull-request-number-invalid")
+    pull = api.get_json(f"/repos/{repo}/pulls/{number}")
+    head = pull.get("head") if isinstance(pull.get("head"), dict) else {}
+    base = pull.get("base") if isinstance(pull.get("base"), dict) else {}
+    if (pull.get("number") != number or pull.get("merge_commit_sha") != expected_source or
+            head.get("sha") != expected_head or
+            expected_base is not None and base.get("sha") != expected_base):
+        raise CollectionError("pull-request-source-identity-mismatch")
+    return f"refs/pull/{number}/merge", number, base.get("sha")
+
+
 def _workflow_path_from_api(value):
     if not isinstance(value, str):
         return None
@@ -466,8 +505,11 @@ def _classify_step(name):
         category = "other"
     evidence = {
         "actual_module": "actual module" in lower or "actual-module" in lower,
-        "address_sanitizer": "address sanitizer" in lower or "address-sanitizer" in lower or "asan" in lower,
-        "undefined_sanitizer": "undefined sanitizer" in lower or "undefined-sanitizer" in lower or "ubsan" in lower,
+        "address_sanitizer": "address sanitizer" in lower or "address-sanitizer" in lower or
+                             "addresssanitizer" in lower or "asan" in lower,
+        "undefined_sanitizer": "undefined sanitizer" in lower or "undefined-sanitizer" in lower or
+                               "undefinedsanitizer" in lower or "undefinedbehavior sanitizer" in lower or
+                               "undefinedbehaviorsanitizer" in lower or "ubsan" in lower,
         "linux_x86_64_runner": "linux x86_64" in lower or "linux-x86_64" in lower,
     }
     return category, evidence
@@ -506,6 +548,10 @@ def _normalize_job(raw, graph, visibility):
     status = _safe_status(raw.get("status"))
     conclusion = _safe_conclusion(raw.get("conclusion"))
     fields = _time_fields(raw.get("started_at"), raw.get("completed_at"))
+    if conclusion == "skipped":
+        # GitHub may attach zero-length or reversed timestamps to a skipped job.
+        # Preserve those observations, but never report them as elapsed time.
+        fields["elapsed_seconds"] = None
     steps_raw = raw.get("steps", [])
     steps = [_safe_step(step) for step in steps_raw[:MAX_STEPS]
              if isinstance(step, dict)] if isinstance(steps_raw, list) else []
@@ -668,15 +714,15 @@ def _content_version(api, repo, workflow_path, source_sha):
     }
 
 
-def _fetch_runs(api, repo, workflow_path, source_sha, max_runs, errors):
+def _fetch_runs(api, repo, workflow_path, head_sha, max_runs, errors):
     filename = urllib.parse.quote(Path(workflow_path).name, safe="")
     selected = []
     total_count = None
     page = 1
     while page <= MAX_RUN_PAGES and len(selected) < max_runs:
         query_values = {"per_page": 100, "page": page}
-        if source_sha:
-            query_values["head_sha"] = source_sha
+        if head_sha:
+            query_values["head_sha"] = head_sha
         query = urllib.parse.urlencode(query_values)
         try:
             body = api.get_json(f"/repos/{repo}/actions/workflows/{filename}/runs?{query}")
@@ -747,7 +793,8 @@ def _fetch_jobs(api, repo, run_id, attempt_number, errors, unknowns):
 
 
 def _attempt_record(api, repo, run_summary, attempt_number, workflow_path,
-                    visibility, versions, requested_source, errors, unknowns):
+                    visibility, versions, requested_source, requested_head,
+                    requested_base, errors, unknowns):
     run_id = run_summary.get("id")
     if not isinstance(run_id, int) or run_id <= 0:
         _safe_collection_error(errors, "run-id-invalid")
@@ -761,10 +808,15 @@ def _attempt_record(api, repo, run_summary, attempt_number, workflow_path,
         attempt_errors.append(exc.code)
 
     event = _safe_event(detail.get("event"))
-    source = detail.get("head_sha")
+    head_sha = detail.get("head_sha")
+    source = requested_source or head_sha
+    if event == "pull_request" and requested_source is None:
+        source = None
     status = _safe_status(detail.get("status"))
     conclusion = _safe_conclusion(detail.get("conclusion"))
-    ref = _safe_ref(detail.get("head_branch") or detail.get("ref"), event)
+    ref = _safe_ref(detail.get("ref"), event)
+    pull_request_number = None
+    observed_base_sha = None
     created_at = detail.get("created_at")
     started_at = detail.get("run_started_at")
     completed_at = detail.get("completed_at")
@@ -773,10 +825,31 @@ def _attempt_record(api, repo, run_summary, attempt_number, workflow_path,
 
     if detail.get("id") != run_id or detail.get("run_attempt") != attempt_number:
         attempt_errors.append("run-attempt-identity-mismatch")
+    if not _valid_sha(head_sha):
+        attempt_errors.append("run-head-sha-invalid")
+    elif requested_head and head_sha != requested_head:
+        attempt_errors.append("run-head-sha-mismatch")
     if not _valid_sha(source):
         attempt_errors.append("run-source-sha-invalid")
-    elif requested_source and source != requested_source:
-        attempt_errors.append("run-source-mismatch")
+    if event == "pull_request" and requested_source is None:
+        attempt_errors.append("execution-source-sha-required")
+    if event == "pull_request" and not attempt_errors:
+        try:
+            ref, pull_request_number, observed_base_sha = _pull_request_identity(
+                api, repo, detail, source, head_sha, requested_base)
+        except CollectionError as exc:
+            attempt_errors.append(exc.code)
+    elif event == "pull_request":
+        ref = _safe_ref(detail.get("ref"), event)
+    elif event != "pull_request":
+        if source != head_sha:
+            attempt_errors.append("non-pr-source-head-mismatch")
+        ref_value = detail.get("ref")
+        if ref_value is None and isinstance(detail.get("head_branch"), str) and \
+                re.fullmatch(r"[A-Za-z0-9._/-]{1,160}", detail["head_branch"]):
+            if event in ("push", "schedule", "workflow_dispatch"):
+                ref_value = "refs/heads/" + detail["head_branch"]
+        ref = _safe_ref(ref_value, event)
     if observed_path != workflow_path:
         attempt_errors.append("run-workflow-path-mismatch")
     if status != "completed":
@@ -826,7 +899,9 @@ def _attempt_record(api, repo, run_summary, attempt_number, workflow_path,
         "run_attempt": attempt_number,
         "event": event,
         "ref": ref,
-        "head_sha": source if _valid_sha(source) else None,
+        "head_sha": head_sha if _valid_sha(head_sha) else None,
+        "base_sha": observed_base_sha,
+        "pull_request_number": pull_request_number,
         "workflow_source_sha": source if _valid_sha(source) else None,
         "status": status,
         "conclusion": conclusion,
@@ -835,6 +910,7 @@ def _attempt_record(api, repo, run_summary, attempt_number, workflow_path,
         "completed_at": completed_at if _timestamp(completed_at) is not None else None,
         "queue_seconds": queue_seconds,
         "wall_seconds": wall_seconds,
+        "observed_job_span": _observed_job_span(jobs),
         "workflow_blob_sha": version.get("workflow_blob_sha") if version else None,
         "workflow_sha256": version.get("workflow_sha256") if version else None,
         "graph_sha256": version.get("graph_sha256") if version else None,
@@ -849,7 +925,8 @@ def _attempt_record(api, repo, run_summary, attempt_number, workflow_path,
     return run
 
 
-def collect_report(*, repo, workflow_path, source_sha=None, max_runs=3,
+def collect_report(*, repo, workflow_path, source_sha=None, head_sha=None,
+                   base_sha=None, run_id=None, run_attempt=None, max_runs=3,
                    max_attempts=3, token=None, opener=None):
     errors = []
     unknowns = []
@@ -860,6 +937,15 @@ def collect_report(*, repo, workflow_path, source_sha=None, max_runs=3,
         raise CollectionError("workflow-path-invalid")
     if source_sha is not None and not _valid_sha(source_sha):
         raise CollectionError("source-sha-invalid")
+    if head_sha is not None and not _valid_sha(head_sha):
+        raise CollectionError("head-sha-invalid")
+    if base_sha is not None and not _valid_sha(base_sha):
+        raise CollectionError("base-sha-invalid")
+    head_sha = head_sha or source_sha
+    if run_id is not None and (not isinstance(run_id, int) or run_id <= 0):
+        raise CollectionError("run-id-invalid")
+    if run_attempt is not None and (not isinstance(run_attempt, int) or run_attempt < 1):
+        raise CollectionError("run-attempt-invalid")
     if not isinstance(max_runs, int) or not 1 <= max_runs <= MAX_RUNS:
         raise CollectionError("max-runs-out-of-range")
     if not isinstance(max_attempts, int) or not 1 <= max_attempts <= MAX_ATTEMPTS:
@@ -881,18 +967,23 @@ def collect_report(*, repo, workflow_path, source_sha=None, max_runs=3,
     except CollectionError as exc:
         _safe_collection_error(errors, exc.code)
 
-    run_summaries = _fetch_runs(api, repo, workflow_path, source_sha, max_runs, errors)
+    run_summaries = _fetch_runs(api, repo, workflow_path, head_sha, max_runs, errors)
+    if run_id is not None:
+        run_summaries = [item for item in run_summaries if item.get("id") == run_id]
     if not run_summaries:
-        _safe_collection_error(errors, "workflow-runs-not-found-for-source" if source_sha else "workflow-runs-not-found")
+        _safe_collection_error(errors, "workflow-runs-not-found-for-source" if head_sha else "workflow-runs-not-found")
 
     runs = []
     for summary in run_summaries:
-        if source_sha and summary.get("head_sha") != source_sha:
+        if head_sha and summary.get("head_sha") != head_sha:
             _safe_collection_error(errors, "run-source-mismatch", summary.get("id"))
             continue
         latest_attempt = summary.get("run_attempt", 1)
         if not isinstance(latest_attempt, int) or latest_attempt < 1:
             _safe_collection_error(errors, "run-attempt-count-invalid", summary.get("id"))
+            continue
+        if run_attempt is not None and latest_attempt != run_attempt:
+            _safe_collection_error(errors, "run-attempt-mismatch", summary.get("id"))
             continue
         if latest_attempt > max_attempts:
             _safe_collection_error(errors, "attempts-truncated", summary.get("id"))
@@ -900,7 +991,8 @@ def collect_report(*, repo, workflow_path, source_sha=None, max_runs=3,
         attempt_limit = min(latest_attempt, max_attempts)
         for number in range(1, attempt_limit + 1):
             record = _attempt_record(api, repo, summary, number, workflow_path,
-                                     visibility, versions, source_sha, errors, unknowns)
+                                     visibility, versions, source_sha, head_sha,
+                                     base_sha, errors, unknowns)
             if record is not None:
                 runs.append(record)
 
@@ -928,6 +1020,10 @@ def collect_report(*, repo, workflow_path, source_sha=None, max_runs=3,
         "visibility": visibility,
         "source_sha": report_source,
         "requested_source_sha": source_sha,
+        "head_sha": head_sha,
+        "base_sha": base_sha,
+        "requested_run_id": run_id,
+        "requested_run_attempt": run_attempt,
         "collection_time": _now_utc(),
         "workflow_path": workflow_path,
         "workflow_blob_sha": next(iter(unique_blob)) if len(unique_blob) == 1 else None,
@@ -1051,6 +1147,7 @@ def _validate_report(report, *, require_source=None, require_libretro=False):
         reject("schema-version-unsupported")
     if not _only_fields(report, {
         "schema_version", "repository", "visibility", "source_sha", "requested_source_sha",
+        "head_sha", "base_sha", "requested_run_id", "requested_run_attempt",
         "collection_time", "workflow_path", "workflow_blob_sha", "workflow_sha256", "graph",
         "cohorts", "runs", "unknowns", "observations", "errors", "collection_status", "limits",
     }):
@@ -1075,6 +1172,18 @@ def _validate_report(report, *, require_source=None, require_libretro=False):
     requested = report.get("requested_source_sha")
     if requested is not None and not _valid_sha(requested):
         reject("requested-source-invalid")
+    expected_head = report.get("head_sha")
+    expected_base = report.get("base_sha")
+    expected_run_id = report.get("requested_run_id")
+    expected_attempt = report.get("requested_run_attempt")
+    if expected_head is not None and not _valid_sha(expected_head):
+        reject("report-head-sha-invalid")
+    if expected_base is not None and not _valid_sha(expected_base):
+        reject("report-base-sha-invalid")
+    if expected_run_id is not None and (type(expected_run_id) is not int or expected_run_id <= 0):
+        reject("report-run-id-invalid")
+    if expected_attempt is not None and (type(expected_attempt) is not int or expected_attempt < 1):
+        reject("report-run-attempt-invalid")
 
     graph = report.get("graph")
     graph_versions = graph.get("versions", []) if isinstance(graph, dict) else []
@@ -1137,9 +1246,11 @@ def _validate_report(report, *, require_source=None, require_libretro=False):
             reject("run-invalid")
             continue
         if not _only_fields(run, {
-            "run_id", "run_attempt", "event", "ref", "head_sha", "workflow_source_sha",
+            "run_id", "run_attempt", "event", "ref", "head_sha", "base_sha",
+            "pull_request_number", "workflow_source_sha",
             "status", "conclusion", "created_at", "run_started_at", "completed_at",
-            "queue_seconds", "wall_seconds", "workflow_blob_sha", "workflow_sha256",
+            "queue_seconds", "wall_seconds", "observed_job_span",
+            "workflow_blob_sha", "workflow_sha256",
             "graph_sha256", "jobs", "critical_path", "runner_seconds_by_os", "billing", "errors",
         }):
             reject("run-field-unrecognized")
@@ -1161,11 +1272,38 @@ def _validate_report(report, *, require_source=None, require_libretro=False):
             reject("run-not-completed")
         if run.get("conclusion") not in CONCLUSIONS or run.get("conclusion") == "unknown":
             reject("run-conclusion-invalid")
+        observed_span = run.get("observed_job_span")
+        if not _only_fields(observed_span, {"started_at", "completed_at", "elapsed_seconds"}):
+            reject("observed-job-span-invalid")
+        else:
+            span = _duration(observed_span.get("started_at"), observed_span.get("completed_at"))
+            if span != observed_span.get("elapsed_seconds"):
+                reject("observed-job-span-invalid")
         source = run.get("workflow_source_sha")
-        if not _valid_sha(source) or run.get("head_sha") != source:
+        if not _valid_sha(source):
             reject("run-source-invalid")
         else:
             run_sources.add(source)
+        if not _valid_sha(run.get("head_sha")):
+            reject("run-head-sha-invalid")
+        if expected_head is not None and run.get("head_sha") != expected_head:
+            reject("run-head-sha-mismatch")
+        if event != "pull_request" and source != run.get("head_sha"):
+            reject("non-pr-source-head-mismatch")
+        if event == "pull_request":
+            pr_number = run.get("pull_request_number")
+            if type(pr_number) is not int or not 1 <= pr_number <= 10**12:
+                reject("pull-request-number-invalid")
+            if run.get("ref") != f"refs/pull/{pr_number}/merge":
+                reject("pull-request-ref-mismatch")
+            if not _valid_sha(run.get("base_sha")):
+                reject("pull-request-base-sha-invalid")
+            if expected_base is not None and run.get("base_sha") != expected_base:
+                reject("pull-request-base-sha-mismatch")
+        elif run.get("pull_request_number") is not None or run.get("base_sha") is not None:
+            reject("non-pr-pull-request-fields")
+        if expected_run_id is not None and run_id != expected_run_id:
+            reject("run-id-mismatch")
         if require_source is not None and source != require_source:
             reject("required-source-mismatch")
         if requested is not None and source != requested:
@@ -1298,6 +1436,9 @@ def _validate_report(report, *, require_source=None, require_libretro=False):
         ordered = sorted(attempts)
         if ordered != list(range(1, max(ordered) + 1)):
             reject("attempt-history-incomplete")
+        if expected_run_id == run_id and expected_attempt is not None and \
+                max(ordered) != expected_attempt:
+            reject("run-attempt-mismatch")
     if report.get("cohorts") != expected_cohorts:
         reject("cohort-event-mismatch")
     if require_source is not None:
@@ -1357,6 +1498,10 @@ def _parser():
     collect.add_argument("--repo", required=True)
     collect.add_argument("--workflow", default=".github/workflows/ci.yml")
     collect.add_argument("--source-sha")
+    collect.add_argument("--head-sha", help="API head SHA, separate from the execution checkout SHA")
+    collect.add_argument("--base-sha", help="expected pull-request base SHA")
+    collect.add_argument("--run-id", type=int, help="retain this exact workflow run")
+    collect.add_argument("--run-attempt", type=int, help="require this latest workflow attempt")
     collect.add_argument("--max-runs", type=int, default=3)
     collect.add_argument("--max-attempts", type=int, default=3)
     collect.add_argument("--output", required=True)
@@ -1374,7 +1519,9 @@ def main(argv=None, *, environ=None, opener=None):
             env = os.environ if environ is None else environ
             token = env.get("GH_TOKEN") or env.get("GITHUB_TOKEN")
             report = collect_report(repo=args.repo, workflow_path=args.workflow,
-                source_sha=args.source_sha, max_runs=args.max_runs,
+                source_sha=args.source_sha, head_sha=args.head_sha,
+                base_sha=args.base_sha, run_id=args.run_id, run_attempt=args.run_attempt,
+                max_runs=args.max_runs,
                 max_attempts=args.max_attempts, token=token, opener=opener)
             _write_report(args.output, report)
             result = validate_report(report)
