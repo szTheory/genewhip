@@ -50,12 +50,14 @@ remain visible and make the collection incomplete.
 
 Every attempt is bound to its run ID and attempt number, event, `head_sha`,
 workflow path, and workflow bytes fetched from the repository at that exact
-source SHA. The report retains both the Git blob SHA and SHA-256 of those bytes,
-plus a digest of the parsed job dependency graph. It does not read the local
-checkout to stand in for the measured workflow. A pull request's source means
-the execution SHA reported by the workflow run; the collector does not replace
-it with a guessed PR head commit. A source filter never falls back to an older
-revision.
+source SHA. The execution source SHA is distinct from the API's PR head and base
+SHAs. For pull requests, collection requires the exact execution source SHA and
+checks it against the PR's merge SHA; it also checks the API head and base
+identities and derives `refs/pull/<number>/merge` from the API PR association.
+The report retains the Git blob SHA and SHA-256 of the workflow bytes plus a
+digest of the parsed job dependency graph. It does not read the local checkout
+to stand in for the measured workflow. A source filter never falls back to an
+older revision.
 
 All observed terminal attempts are retained, including failures, cancellations,
 and skips. `--require-libretro` accepts only the latest attempt of a completed,
@@ -92,11 +94,34 @@ required-check trend. Public standard GitHub-hosted runners have billing marked
 unless an authoritative account-level amount is supplied by another system.
 This collector does not estimate or claim actual charges.
 
+GitHub's [job execution time guidance](https://docs.github.com/en/actions/how-tos/monitor-workflows/view-job-execution-time)
+describes displayed job execution time; these are wall-time observations, not
+cost measurements. GitHub documents that public repositories using standard
+GitHub-hosted runners have no billable minutes; private-repository hosted job
+minutes round up per job, with published standard Linux x64 2-core and macOS
+3/4-core rates in its [runner pricing reference](https://docs.github.com/en/billing/reference/actions-runner-pricing).
+Accordingly, this public run's billing status is `not_applicable`, and its
+observed runner time must not be read as an estimated charge.
+
 ## Current evidence status
 
-The contract tests use a fake API transport and make no GitHub requests. They
-prove the collector and validator's limits and semantics, not hosted runtime
-performance. Phase 8's source-bound hosted collection is performed in Plan
-08-05 after the Libretro CI lane is integrated. Until then, there is no Phase 8
-CI baseline claim. A single available run is one observation, not a stable
-trend; missing event cohorts and unavailable metrics stay visible.
+The retained Phase 8 observation is PR #87 run 42118267359, attempt 1, on
+execution checkout `79efa8c5c82ca36e3bbf1fa6c8a3c71fd5f11bf0`. Its PR head is
+`8160ee3d10c0e529ead479bc56b3292661b8ddcd`, base is
+`6d96c913a7e5c4e5fdd6f2dd01301587ff22038f`, and event ref is
+`refs/pull/87/merge`. The run completed successfully: all required jobs and the
+`required-ci` aggregate passed, while extended, v0.2 continuation, and
+attestation jobs were skipped under PR event policy. The Linux `libretro` job
+passed and its run/attempt-scoped route artifact validates against that same
+execution checkout and workflow SHA-256
+`ea68c685060506d5dd140908cd22ba6e9b2a1ba07b8a694217290eb1c83532b3`.
+
+The observed job span is 905 seconds from 22:04:18Z to 22:19:23Z. The measured
+dependency path was safety to required aggregate, with a 903-second wall span,
+901 weighted job seconds, and a 2-second observed gap. The workflow run API
+returned no `completed_at`, so workflow-level `wall_seconds` remains unknown;
+the observed job span is a separate metric. Public standard-runner billing is
+not applicable. The baseline contains one PR attempt, zero observations in the
+other event cohorts, and is not a stable trend. Unknown and skipped outcomes
+remain in [the machine-readable baseline](../evidence/phase8-ci-baseline.json)
+and [route report](../evidence/phase8-libretro-route.json).
