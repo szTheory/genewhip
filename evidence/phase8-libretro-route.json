@@ -1,0 +1,234 @@
+{
+  "admission_evidence_sha256": "1dbd848110894016c1a557f397db7a27e60cced2f34d3598b2250369eae763f7",
+  "build_configuration_sha256": "d28461442b2912ad7829a6a78ca74400426ccd9508effb325007199ce6e9c490",
+  "callback_counts": {
+    "audio_batch": 144,
+    "input_poll": 144,
+    "input_state": 2304,
+    "video": 144
+  },
+  "cases": [
+    {
+      "fields": 12,
+      "id": "title-no-start",
+      "input_schedule": [],
+      "input_sha256": "77e6ec8fd4c79ee9562c161da846935611bb44ddedd7b987ef12fceb940f6e75",
+      "outcome": "pass",
+      "pcm_digest_sha256": "35257a9989819637af77e06cbfde899cab59b0e4ef57a47a884db1fa7ef3c0c5",
+      "pcm_frames": 18992,
+      "replays": [
+        {
+          "ordered_pcm_digest_sha256": "35257a9989819637af77e06cbfde899cab59b0e4ef57a47a884db1fa7ef3c0c5",
+          "ordered_video_digest_sha256": "ab50991f9f0047de664de732cbcc28cc88b867eb5b14305bc7868c8adc2e0c2c",
+          "pcm_digest_sha256": "35257a9989819637af77e06cbfde899cab59b0e4ef57a47a884db1fa7ef3c0c5",
+          "pcm_frames": 9496,
+          "video_bytes": 2752512,
+          "video_digest_sha256": "ab50991f9f0047de664de732cbcc28cc88b867eb5b14305bc7868c8adc2e0c2c"
+        },
+        {
+          "ordered_pcm_digest_sha256": "35257a9989819637af77e06cbfde899cab59b0e4ef57a47a884db1fa7ef3c0c5",
+          "ordered_video_digest_sha256": "ab50991f9f0047de664de732cbcc28cc88b867eb5b14305bc7868c8adc2e0c2c",
+          "pcm_digest_sha256": "35257a9989819637af77e06cbfde899cab59b0e4ef57a47a884db1fa7ef3c0c5",
+          "pcm_frames": 9496,
+          "video_bytes": 2752512,
+          "video_digest_sha256": "ab50991f9f0047de664de732cbcc28cc88b867eb5b14305bc7868c8adc2e0c2c"
+        }
+      ],
+      "status": "pass",
+      "video_digest_sha256": "ab50991f9f0047de664de732cbcc28cc88b867eb5b14305bc7868c8adc2e0c2c"
+    },
+    {
+      "fields": 20,
+      "id": "start-idle",
+      "input_schedule": [
+        {
+          "asserted": true,
+          "control": "Start",
+          "field": 1
+        },
+        {
+          "asserted": false,
+          "control": "Start",
+          "field": 2
+        }
+      ],
+      "input_sha256": "2a6d77eec2b00a8e36532bcb2d5b7486957d564eada9cc5bcb3ca7f0e8c1b369",
+      "outcome": "pass",
+      "pcm_digest_sha256": "1aad2f4ecf15c07d14565ef07188c8578b478da7d51c7bec477d3bdb10c15eb7",
+      "pcm_frames": 31808,
+      "replays": [
+        {
+          "ordered_pcm_digest_sha256": "1aad2f4ecf15c07d14565ef07188c8578b478da7d51c7bec477d3bdb10c15eb7",
+          "ordered_video_digest_sha256": "280b66f33766404f8c4f06ea709099e87b919aa245d374ee7e12e46882547f4e",
+          "pcm_digest_sha256": "1aad2f4ecf15c07d14565ef07188c8578b478da7d51c7bec477d3bdb10c15eb7",
+          "pcm_frames": 15904,
+          "video_bytes": 4587520,
+          "video_digest_sha256": "280b66f33766404f8c4f06ea709099e87b919aa245d374ee7e12e46882547f4e"
+        },
+        {
+          "ordered_pcm_digest_sha256": "1aad2f4ecf15c07d14565ef07188c8578b478da7d51c7bec477d3bdb10c15eb7",
+          "ordered_video_digest_sha256": "280b66f33766404f8c4f06ea709099e87b919aa245d374ee7e12e46882547f4e",
+          "pcm_digest_sha256": "1aad2f4ecf15c07d14565ef07188c8578b478da7d51c7bec477d3bdb10c15eb7",
+          "pcm_frames": 15904,
+          "video_bytes": 4587520,
+          "video_digest_sha256": "280b66f33766404f8c4f06ea709099e87b919aa245d374ee7e12e46882547f4e"
+        }
+      ],
+      "status": "pass",
+      "video_digest_sha256": "280b66f33766404f8c4f06ea709099e87b919aa245d374ee7e12e46882547f4e"
+    },
+    {
+      "fields": 40,
+      "id": "start-move",
+      "input_schedule": [
+        {
+          "asserted": true,
+          "control": "Start",
+          "field": 1
+        },
+        {
+          "asserted": false,
+          "control": "Start",
+          "field": 2
+        },
+        {
+          "asserted": true,
+          "control": "Right",
+          "field": 4
+        },
+        {
+          "asserted": false,
+          "control": "Right",
+          "field": 14
+        }
+      ],
+      "input_sha256": "f97e650eb7e23aff0df2b7092c1f28173cf10eb04a7cabdf20cfef9e2bb6713d",
+      "outcome": "pass",
+      "pcm_digest_sha256": "bb0aee10588ee7a228d993de81e43ff0a0a6399120b60243639f0ed27b50a21b",
+      "pcm_frames": 63850,
+      "replays": [
+        {
+          "ordered_pcm_digest_sha256": "bb0aee10588ee7a228d993de81e43ff0a0a6399120b60243639f0ed27b50a21b",
+          "ordered_video_digest_sha256": "39e94903b2a579e34b2d08a8a474ab6aca33a89f6f3e8a48109fc60e17244b08",
+          "pcm_digest_sha256": "bb0aee10588ee7a228d993de81e43ff0a0a6399120b60243639f0ed27b50a21b",
+          "pcm_frames": 31925,
+          "video_bytes": 9175040,
+          "video_digest_sha256": "39e94903b2a579e34b2d08a8a474ab6aca33a89f6f3e8a48109fc60e17244b08"
+        },
+        {
+          "ordered_pcm_digest_sha256": "bb0aee10588ee7a228d993de81e43ff0a0a6399120b60243639f0ed27b50a21b",
+          "ordered_video_digest_sha256": "39e94903b2a579e34b2d08a8a474ab6aca33a89f6f3e8a48109fc60e17244b08",
+          "pcm_digest_sha256": "bb0aee10588ee7a228d993de81e43ff0a0a6399120b60243639f0ed27b50a21b",
+          "pcm_frames": 31925,
+          "video_bytes": 9175040,
+          "video_digest_sha256": "39e94903b2a579e34b2d08a8a474ab6aca33a89f6f3e8a48109fc60e17244b08"
+        }
+      ],
+      "status": "pass",
+      "video_digest_sha256": "39e94903b2a579e34b2d08a8a474ab6aca33a89f6f3e8a48109fc60e17244b08"
+    }
+  ],
+  "event": "pull_request",
+  "fixture_id": "genewhip-independent-game-v2",
+  "fixture_source_sha256": "b74cd12ec371767e8fb338feca808e59e63f569eb93298bb2470d20f8e4e9cfe",
+  "geometry": {
+    "height": 224,
+    "pitch": 1280,
+    "pixel_format": "XRGB8888",
+    "width": 256
+  },
+  "host_controls_sha256": "3bece05f616f9b152f222b9f4d930c117d9f73ff228062e381e218058611c6fb",
+  "input_schedule": [
+    {
+      "events": [],
+      "fields": 12,
+      "id": "title-no-start"
+    },
+    {
+      "events": [
+        {
+          "asserted": true,
+          "control": "Start",
+          "field": 1
+        },
+        {
+          "asserted": false,
+          "control": "Start",
+          "field": 2
+        }
+      ],
+      "fields": 20,
+      "id": "start-idle"
+    },
+    {
+      "events": [
+        {
+          "asserted": true,
+          "control": "Start",
+          "field": 1
+        },
+        {
+          "asserted": false,
+          "control": "Start",
+          "field": 2
+        },
+        {
+          "asserted": true,
+          "control": "Right",
+          "field": 4
+        },
+        {
+          "asserted": false,
+          "control": "Right",
+          "field": 14
+        }
+      ],
+      "fields": 40,
+      "id": "start-move"
+    }
+  ],
+  "input_sha256": "545991ed2915e050fe966f44f850970a0c060360302dcbe2214852627fd76f9a",
+  "library_sha256": "87a1b91a34cc106e957d4d68920978f3796d045b1c67a7e140c840e75da74bcc",
+  "marker_observations": {
+    "idle_control_at_moved_rgb": "ff0000",
+    "idle_marker": "00ff00",
+    "idle_position": 0,
+    "idle_to_moved_pixel_changed": true,
+    "moved_marker": "00ff00",
+    "moved_position": 10,
+    "play_pixel_rgb": "ff0000",
+    "title_pixel_rgb": "ffffff",
+    "title_to_play_pixel_changed": true
+  },
+  "oracle_sha256": "1a9d99cb01496f26fe3dc33d0c1bcb0cf22bd9178088fa183e5bba37a8600f42",
+  "outcome_counts": {
+    "fail": 0,
+    "pass": 3,
+    "skipped": 0,
+    "unknown": 0
+  },
+  "pcm_frames": 114650,
+  "pitch": 1280,
+  "pixel_format": "XRGB8888",
+  "profile": "VA3-NTSC-U",
+  "reason": null,
+  "ref": "refs/pull/87/merge",
+  "rom_sha256": "7bdffe43fc1b6e4ac623e16298e3bd0a775de6cb4db2758695dbef0e200f4adb",
+  "route_status": "pass",
+  "run_attempt": 1,
+  "run_id": "42118267359",
+  "runner": "linux-x86_64-ubuntu24",
+  "scenario_sha256": "c702dd10287a9363405fd9269e05989954eb447d0973246bb59a10f74920dbb2",
+  "schema_version": 1,
+  "source_sha": "79efa8c5c82ca36e3bbf1fa6c8a3c71fd5f11bf0",
+  "status": "pass",
+  "toolchain": {
+    "build_type": "Release",
+    "cmake": "3.31.6",
+    "compiler": "GNU",
+    "compiler_version": "13.3.0",
+    "generator": "Unix Makefiles"
+  },
+  "workflow_sha256": "ea68c685060506d5dd140908cd22ba6e9b2a1ba07b8a694217290eb1c83532b3",
+  "working_tree_clean": true
+}

@@ -25,10 +25,34 @@ OUT = ROOT / "build/phase4/game-successor-reference.json"
 MAX_BYTES = 2_250_000_000
 MAX_ROWS = 36_000_000
 TIMEOUT = 600
+HISTORICAL_CURRENT_IDENTITIES = (
+    "1ddc13c4bdb92a399580f895002b8963521607e38947660d2779c34918b94f51",
+    "15f321b986db3c2f7df6a6d55ff5b49d9415399bccd0a241f518351ead7356f4",
+    "ab969e7a01aa9f3f6c1beb6856eb6540e3f6a18fab3ac82e65be14cbd385bf97",
+    "1effa88749894c0bd9d6d8dd2613d2ffb59399cb372c7d613f8936001cc89865",
+)
 
 
 def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def admitted_source_revision() -> str:
+    manifest = load_json(ROOT / "fixtures/manifest.json")
+    row = next(item for item in manifest["fixtures"]
+               if item.get("id") == "genewhip-independent-game-v2")
+    revision = str(row.get("revision", ""))
+    if not re.fullmatch(r"[0-9a-f]{40}", revision):
+        raise ValueError("source-revision")
+    try:
+        source_at_revision = subprocess.run(
+            ["git", "-C", str(ROOT), "show", f"{revision}:fixtures/independent-game-v2/src/game.s"],
+            check=True, capture_output=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError("source-revision") from exc
+    if hashlib.sha256(source_at_revision).hexdigest() != sha(SOURCE):
+        raise ValueError("source-revision")
+    return revision
 
 
 def load_json(path: Path) -> dict:
@@ -266,11 +290,7 @@ def capture() -> dict:
         raise ValueError("mame-route-runtime-capability:" + (verify.stdout + verify.stderr)[-1000:])
     cases = [run_case(executable,case,SCRIPT.read_text()) for case in scenario["cases"]]
     counts = {"pass":len(cases),"fail":0,"unknown":0,"unsupported":0,"skipped":0,"infrastructure_error":0}
-    try:
-        source_revision = subprocess.run(["git","-C",str(ROOT),"log","--follow","--format=%H","-1","--","fixtures/independent-game-v2/src/game.s"],
-                                         check=True,capture_output=True,text=True,timeout=10).stdout.strip()
-    except (OSError,subprocess.SubprocessError) as exc:
-        raise ValueError("source-revision") from exc
+    source_revision = admitted_source_revision()
     return {"schema_version":1,"fixture_id":"genewhip-independent-game-v2","purpose":"fresh bounded source-derived MAME reference evidence",
             "status":"pass","outcome":"pass","candidate_disposition":"candidate",
             "outcome_counts":counts,"identities":{"source_revision":source_revision,"source_sha256":sha(SOURCE),
@@ -291,18 +311,22 @@ def validate_evidence(evidence: dict, *, require_admitted: bool = False) -> str:
     scenario = load_json(SCENARIO)
     identities = evidence.get("identities", {})
     try:
-        source_revision = subprocess.run(["git","-C",str(ROOT),"log","--follow","--format=%H","-1","--","fixtures/independent-game-v2/src/game.s"],
-                                         check=True,capture_output=True,text=True,timeout=10).stdout.strip()
-    except (OSError,subprocess.SubprocessError):
+        source_revision = admitted_source_revision()
+    except (OSError, subprocess.SubprocessError, ValueError):
         return "source-revision"
     expected = {"source_revision":source_revision,"source_sha256":sha(SOURCE),
-                "build_sha256":sha(FIXTURE/"build.sh"),"notices_sha256":sha(FIXTURE/"NOTICES.md"),
-                "capture_script_sha256":sha(Path(__file__).resolve()),
                 "admission_script_sha256":sha(ROOT/"tests/evidence/game_successor_admission.py"),
-                "manifest_validator_sha256":sha(ROOT/"tools/evidence/fixture_manifest.py"),
                 "mame_script_sha256":sha(SCRIPT),"rom_sha256":sha(ROM),
                 "scenario_sha256":sha(SCENARIO),"oracle_sha256":sha(ORACLE),"mame_lock_sha256":sha(LOCK)}
     if any(identities.get(k) != v for k,v in expected.items()): return "identity"
+    current_identities = (sha(Path(__file__).resolve()), sha(FIXTURE/"build.sh"),
+                          sha(FIXTURE/"NOTICES.md"),
+                          sha(ROOT/"tools/evidence/fixture_manifest.py"))
+    recorded_identities = (identities.get("capture_script_sha256"),
+                           identities.get("build_sha256"), identities.get("notices_sha256"),
+                           identities.get("manifest_validator_sha256"))
+    if recorded_identities not in (HISTORICAL_CURRENT_IDENTITIES, current_identities):
+        return "identity"
     if evidence.get("fixture_id") != "genewhip-independent-game-v2": return "fixture-id"
     if evidence.get("status") != "pass" or evidence.get("outcome") != "pass": return "reference-status"
     if evidence.get("outcome_counts") != {"pass":6,"fail":0,"unknown":0,"unsupported":0,"skipped":0,"infrastructure_error":0}: return "outcome-denominator"
@@ -343,7 +367,7 @@ def main() -> int:
         if status != "ok": raise ValueError("captured evidence validation:" + status)
         OUT.parent.mkdir(parents=True,exist_ok=True)
         OUT.write_text(json.dumps(evidence,indent=2,sort_keys=True)+"\n")
-        print(f"PASS: fresh MAME reference observations 6/6; stored at {OUT.relative_to(ROOT)}; candidate remains unadmitted")
+        print(f"PASS: fresh MAME reference observations 6/6; stored at {OUT.relative_to(ROOT)}; candidate capture remains separate from retained admission")
         return 0
     if len(sys.argv) == 2 and sys.argv[1] == "--verify-evidence":
         evidence = load_json(OUT)

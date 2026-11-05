@@ -154,6 +154,78 @@ jobs:
           --report build/gameplay/evidence/phase4-gameplay.json
       - name: Check report and named gameplay mutations
         run: python3 tests/evidence/phase4_report_contract.py
+  libretro:
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      source_sha: ${{ github.sha }}
+      head_sha: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+      base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || github.sha }}
+      run_id: ${{ github.run_id }}
+      run_attempt: ${{ github.run_attempt }}
+      event_name: ${{ github.event_name }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify event integration checkout
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Confirm Linux x86_64 runner
+        run: test "$(uname -m)" = x86_64
+      - name: Configure actual Libretro module and host
+        run: >-
+          cmake -S . -B build/libretro
+          -DBUILD_TESTING=ON
+          -DGENEWHIP_BUILD_LIBRETRO=ON
+          -DGENEWHIP_BUILD_DESKTOP=OFF
+          -DCMAKE_BUILD_TYPE=Release
+      - name: Build release shared core and loader host
+        run: cmake --build build/libretro --target genewhip_libretro libretro_host --parallel 2
+      - name: Run aggregate and actual module contracts
+        run: python3 -I tests/evidence/ci_aggregate_contract.py
+      - name: Run release actual-module and evidence tests
+        run: ctest --test-dir build/libretro -R '^(libretro_.*|ci_baseline_contract)$' --output-on-failure --no-tests=error
+      - name: Validate source-bound Linux callback report
+        run: >-
+          python3 -I scripts/evidence/libretro_route.py
+          --validate build/libretro/libretro-route.json
+          --library build/libretro/genewhip_libretro.so
+          --source-sha "$GITHUB_SHA"
+          --run-id "$GITHUB_RUN_ID"
+          --run-attempt "$GITHUB_RUN_ATTEMPT"
+          --event "$GITHUB_EVENT_NAME"
+          --ref "$GITHUB_REF"
+          --require-hosted
+      - name: Configure address and undefined sanitizer build
+        run: >-
+          cmake -S . -B build/libretro-sanitized
+          -DBUILD_TESTING=ON
+          -DGENEWHIP_BUILD_LIBRETRO=ON
+          -DGENEWHIP_TEST_HOOKS=OFF
+          -DGENEWHIP_BUILD_DESKTOP=OFF
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          '-DCMAKE_C_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer'
+          -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined
+          -DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=address,undefined
+      - name: Build instrumented shared core, module and loader host
+        run: cmake --build build/libretro-sanitized --target genewhip_libretro libretro_host --parallel 2
+      - name: Run actual-module lifecycle and route tests with AddressSanitizer and UndefinedBehaviorSanitizer
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: >-
+          ctest --test-dir build/libretro-sanitized
+          -R '^libretro_(host_smoke|host_contract|callbacks|pixels_stop|admission|fixture_route|route_contract)$'
+          --output-on-failure --no-tests=error
+      - name: Retain bounded source-bound callback route
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: libretro-route-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/libretro/libretro-route.json
+          if-no-files-found: error
+          retention-days: 30
   product-smoke:
     if: github.event_name != 'schedule' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     runs-on: macos-26
@@ -1135,7 +1207,7 @@ jobs:
   required-aggregate:
     name: required-ci
     if: always() && github.event_name != 'schedule' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
-    needs: [safety, gameplay, desktop, package, performance, product-smoke, phase7-fast, v02-release-qualification, attestation]
+    needs: [safety, gameplay, desktop, package, performance, product-smoke, phase7-fast, v02-release-qualification, attestation, libretro]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

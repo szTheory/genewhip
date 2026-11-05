@@ -2759,11 +2759,13 @@ print(json.dumps({'parent_limit':resource.getrlimit(resource.RLIMIT_FSIZE),'stat
                 current = match.group(1); jobs[current] = []
             elif current:
                 jobs[current].append(line)
-        self.assertEqual(len(jobs), 16)
-        ordinary = {"safety", "gameplay", "product-smoke", "phase7-fast", "desktop", "package", "performance", "required-aggregate"}
+        self.assertEqual(len(jobs), 17)
+        ordinary = {"safety", "gameplay", "libretro", "product-smoke", "phase7-fast", "desktop", "package", "performance", "required-aggregate"}
         scenarios = [("pull_request", "refs/pull/1/merge", "", ordinary),
+            ("merge_group", "refs/heads/main", "", ordinary),
             ("push", "refs/heads/main", "", ordinary | {"attestation"}),
-            ("workflow_dispatch", "refs/heads/main", "none", set(jobs) - {"extended"}),
+            ("workflow_dispatch", "refs/heads/main", "none", set(jobs) - {"extended", "libretro"}),
+            ("schedule", "refs/heads/main", "", {"extended"}),
             ("workflow_dispatch", "refs/heads/reviewed", "recursion94-withhold-first-plate", {"v02-runtime"}),
             ("workflow_dispatch", "refs/heads/reviewed", "recursion94-native-prefix", {"v02-runtime"}),
             ("workflow_dispatch", "refs/heads/main", "recursion94-withhold-first-plate", {"v02-runtime"}),
@@ -6740,7 +6742,7 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
         self.assertIn("needs: [v02-runtime, v02-benchmark-control, v02-benchmark-recursion94, v02-benchmark-tank-battle, v02-package]",
             sections["v02-release-qualification"])
         self.assertIn("max-parallel: 1", workflow)
-        self.assertEqual(len(headers), 16,
+        self.assertEqual(len(headers), 17,
             "removing the dependency edge must preserve the exact job roster")
 
     def test_runtime_transfer_download_layout_matches_extracted_artifact_root(self):
