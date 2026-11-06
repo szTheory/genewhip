@@ -304,6 +304,42 @@ def publisher_display_title(source_sha: str, qualification_run_id: str,
             f"attempt {qualification_attempt}; dispatch {correlation_id})")
 
 
+def select_v03_publisher_run(publishers: Any, source_sha: str, run_id: str,
+                             attempt: int) -> tuple[dict[str, Any], str]:
+    """Select the unique successful publisher, tolerating failed recovery dispatches.
+
+    A publisher may create a draft before a transient API read fails. Retrying then
+    creates another dispatch for the same qualified source and run. Failed completed
+    dispatches cannot prove publication, but they should not make the later successful
+    dispatch ambiguous. Any active matching publisher remains a blocker because it
+    could still be changing the release.
+    """
+    rows = publishers.get("workflow_runs") if isinstance(publishers, dict) else None
+    if not isinstance(rows, list):
+        raise DeliveryError("libretro-publisher-runs-unavailable")
+    prefix = (f"Preview release for {source_sha} (qualification {run_id} "
+              f"attempt {attempt}; dispatch ")
+    matching: list[tuple[dict[str, Any], str]] = []
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get("display_title"), str):
+            continue
+        title = row["display_title"]
+        if not title.startswith(prefix) or not title.endswith(")"):
+            continue
+        correlation = title[len(prefix):-1]
+        if not re.fullmatch(r"[A-Za-z0-9._-]{8,128}", correlation):
+            raise DeliveryError("libretro-publisher-correlation-invalid")
+        matching.append((row, correlation))
+
+    if any(row.get("status") != "completed" for row, _ in matching):
+        raise DeliveryError("libretro-publisher-run-active")
+    successful = [(row, correlation) for row, correlation in matching
+                  if row.get("conclusion") == "success"]
+    if len(successful) != 1:
+        raise DeliveryError("libretro-publisher-run-missing-or-ambiguous")
+    return successful[0]
+
+
 def validate_publisher_run(run: Any, expected_sha: str, qualification_run_id: str,
                            qualification_attempt: int, correlation_id: str,
                            *, qualified_source_sha: str | None = None) -> list[str]:
@@ -999,19 +1035,8 @@ def verify_v03_download(args: argparse.Namespace) -> dict[str, Any]:
     release = _gh_json(["api", f"repos/{args.repository}/releases/tags/{args.release_tag}"])
     preflight_v03_release_assets(release, args.repository, args.release_tag, args.version)
     publishers = _gh_json(["api", f"repos/{args.repository}/actions/workflows/release.yml/runs?event=workflow_dispatch&branch=main&per_page=100"])
-    matching = []
-    rows = publishers.get("workflow_runs") if isinstance(publishers, dict) else None
-    if isinstance(rows, list):
-        prefix = f"Preview release for {args.source_sha} (qualification {args.run_id} attempt {args.run_attempt}; dispatch "
-        for row in rows:
-            if isinstance(row, dict) and isinstance(row.get("display_title"), str) \
-                    and row["display_title"].startswith(prefix) and row["display_title"].endswith(")"):
-                correlation = row["display_title"][len(prefix):-1]
-                if correlation and re.fullmatch(r"[A-Za-z0-9._-]{8,128}", correlation):
-                    matching.append((row, correlation))
-    if len(matching) != 1:
-        raise DeliveryError("libretro-publisher-run-missing-or-ambiguous")
-    publisher, correlation = matching[0]
+    publisher, correlation = select_v03_publisher_run(
+        publishers, args.source_sha, str(args.run_id), args.run_attempt)
     if (publisher.get("status") != "completed" or publisher.get("conclusion") != "success"
             or publisher.get("head_branch") != "main" or publisher.get("path") != ".github/workflows/release.yml"):
         raise DeliveryError("libretro-publisher-run-identity-invalid")
@@ -1097,8 +1122,11 @@ def verify_v03_download(args: argparse.Namespace) -> dict[str, Any]:
                 or row.get("size") != info.st_size):
             raise DeliveryError("release-asset-digest-mismatch")
         digest_rows[name] = digest
-    asset_paths = [directory / name for name in sorted(digest_rows)] + [inventory_path]
-    for path in asset_paths:
+    # The signed provenance covers the compiled archive and the inventory. The
+    # signed inventory, in turn, binds the exact sidecar and qualification receipt
+    # bytes; those files do not need separate Sigstore subjects.
+    attested_paths = [directory / expected_archive, inventory_path]
+    for path in attested_paths:
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         try:
             promote.verify_attestation(path, args.repository, args.source_sha,

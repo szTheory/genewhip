@@ -96,6 +96,48 @@ class LibretroDeliveryContract(unittest.TestCase):
             self.assertEqual(parsed.run_id, "12345")
             self.assertEqual(parsed.run_attempt, 2)
 
+    def test_v03_download_selects_one_success_after_failed_publisher_retry(self):
+        def publisher(correlation, *, status="completed", conclusion="success", run_id=77):
+            return {"display_title": qualify_delivery.publisher_display_title(
+                        SOURCE, "12345", 2, correlation),
+                    "status": status, "conclusion": conclusion,
+                    "head_branch": "main", "path": ".github/workflows/release.yml",
+                    "id": run_id, "run_attempt": 1, "head_sha": SOURCE}
+
+        failed = publisher("first-dispatch-123", conclusion="failure", run_id=76)
+        successful = publisher("recovery-dispatch-456", run_id=77)
+        selected, correlation = qualify_delivery.select_v03_publisher_run(
+            {"workflow_runs": [failed, successful]}, SOURCE, "12345", 2)
+        self.assertIs(selected, successful)
+        self.assertEqual(correlation, "recovery-dispatch-456")
+
+    def test_v03_download_keeps_ambiguous_or_active_publishers_blocked(self):
+        def publisher(correlation, *, status="completed", conclusion="success", run_id=77):
+            return {"display_title": qualify_delivery.publisher_display_title(
+                        SOURCE, "12345", 2, correlation),
+                    "status": status, "conclusion": conclusion,
+                    "head_branch": "main", "path": ".github/workflows/release.yml",
+                    "id": run_id, "run_attempt": 1, "head_sha": SOURCE}
+
+        with self.assertRaisesRegex(qualify_delivery.DeliveryError,
+                                    "libretro-publisher-run-missing-or-ambiguous"):
+            qualify_delivery.select_v03_publisher_run(
+                {"workflow_runs": [publisher("first-success-123", run_id=77),
+                                   publisher("second-success-456", run_id=78)]},
+                SOURCE, "12345", 2)
+        with self.assertRaisesRegex(qualify_delivery.DeliveryError,
+                                    "libretro-publisher-run-active"):
+            qualify_delivery.select_v03_publisher_run(
+                {"workflow_runs": [publisher("completed-success-123"),
+                                   publisher("active-dispatch-456", status="in_progress",
+                                             conclusion=None, run_id=78)]},
+                SOURCE, "12345", 2)
+        with self.assertRaisesRegex(qualify_delivery.DeliveryError,
+                                    "libretro-publisher-run-missing-or-ambiguous"):
+            qualify_delivery.select_v03_publisher_run(
+                {"workflow_runs": [publisher("failed-dispatch-123", conclusion="failure")]},
+                SOURCE, "12345", 2)
+
     def test_v03_adoption_subprocesses_do_not_receive_github_token(self):
         import argparse
         import io
@@ -266,7 +308,8 @@ class LibretroDeliveryContract(unittest.TestCase):
                         {"object": {"sha": SOURCE}}]), \
                     mock.patch.object(qualify_delivery, "_gh", side_effect=download), \
                     mock.patch.object(qualify_delivery.promote, "verify_attestation",
-                                      side_effect=lambda *a, **k: order.append("attestation") or {}), \
+                                      side_effect=lambda path, *a, **k: order.append(
+                                          ("attestation", path.name)) or {}), \
                     mock.patch.object(qualify_delivery.promote, "validate_v03_libretro_inventory",
                                       side_effect=lambda *a: order.append("archive-parser") or []), \
                     mock.patch.object(qualify_delivery, "validate_release", return_value={"tag": "v0.3.0",
@@ -275,7 +318,8 @@ class LibretroDeliveryContract(unittest.TestCase):
                     mock.patch.object(qualify_delivery, "_write_json"):
                 qualify_delivery.verify_v03_download(args)
             self.assertEqual(order[-1], "archive-parser")
-            self.assertTrue(all(value == "attestation" for value in order[:-1]))
+            self.assertEqual(order[:-1], [("attestation", archive.name),
+                                          ("attestation", "inventory.json")])
 
     def test_complete_delivery_record_has_exact_release_and_adoption_identities(self):
         evidence = qualified_delivery_record()
