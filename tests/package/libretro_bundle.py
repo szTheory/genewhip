@@ -53,7 +53,15 @@ class LibretroBundleContract(unittest.TestCase):
 
     def build(self, version="0.3.0", name="release"):
         output = self.root / name
-        package_libretro.build(self.library, output, SOURCE, version, RUN_ID, ATTEMPT)
+        def structural_module_check(path):
+            if not package_libretro._elf_x86_64(path):
+                raise ValueError("libretro-module-invalid")
+
+        # These bundle contracts use a structural ELF fixture. The actual Linux
+        # module is dynamically loaded by the Linux CI integration and tracer.
+        with mock.patch.object(package_libretro, "_validate_module_contract",
+                               side_effect=structural_module_check):
+            package_libretro.build(self.library, output, SOURCE, version, RUN_ID, ATTEMPT)
         return output
 
     def test_truncated_elf_header_is_rejected_as_a_module(self):
