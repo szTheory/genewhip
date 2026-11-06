@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<!-- Copy this one custom system entry into ES-DE's custom_systems/es_systems.xml. -->
+<systemList>
+  <system>
+    <name>genewhip</name>
+    <fullname>Genewhip (custom)</fullname>
+    <path>%ROMPATH%/genewhip</path>
+    <extension>.bin .BIN .gen .GEN</extension>
+    <command label="Genewhip RetroArch">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/genewhip_libretro.so %ROM%</command>
+    <platform>genesis</platform>
+    <theme>genesis</theme>
+  </system>
+</systemList>

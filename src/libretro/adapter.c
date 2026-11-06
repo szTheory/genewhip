@@ -298,7 +298,7 @@ RETRO_API void retro_get_system_info(struct retro_system_info *info)
     if (info == NULL)
         return;
     info->library_name = "Genewhip";
-    info->library_version = "0.2.0";
+    info->library_version = "0.3.0";
     info->valid_extensions = "bin|gen";
     info->need_fullpath = false;
     info->block_extract = false;

@@ -150,7 +150,7 @@ class AggregateContract(unittest.TestCase):
                 reasons = module.validate_lanes(needs, "pull_request", SOURCE_SHA, HEAD_SHA, BASE_SHA)
                 self.assertIn(f"{reason}:desktop", reasons)
 
-    def test_new_required_lanes_reject_wrong_event_run_and_attempt(self):
+    def test_new_required_lanes_reject_wrong_event_run_and_future_or_invalid_attempt(self):
         module = load_aggregate(self)
         needs = passing_needs()
         for lane in ("product-smoke", "phase7-fast"):
@@ -158,12 +158,28 @@ class AggregateContract(unittest.TestCase):
                                            event_name="pull_request")
         self.assertEqual(module.validate_lanes(needs, "pull_request", SOURCE_SHA, HEAD_SHA, BASE_SHA,
                                                "refs/pull/7/merge", "123", "2"), [])
-        for field, value in (("run_id", "124"), ("run_attempt", "1"), ("event_name", "push")):
+        for field, value in (("run_id", "124"), ("run_attempt", "3"),
+                             ("run_attempt", "0"), ("run_attempt", "invalid"),
+                             ("event_name", "push")):
             changed = json.loads(json.dumps(needs))
             changed["product-smoke"]["outputs"][field] = value
             self.assertIn(f"lane-event-identity-mismatch:product-smoke:{field}", module.validate_lanes(
                 changed, "pull_request", SOURCE_SHA, HEAD_SHA, BASE_SHA,
                 "refs/pull/7/merge", "123", "2"))
+
+    def test_successful_run_bound_lanes_reuse_earlier_attempts_only_within_same_run(self):
+        module = load_aggregate(self)
+        needs = passing_needs()
+        for lane in ("product-smoke", "phase7-fast", LIBRETRO_LANE):
+            needs[lane]["outputs"].update(run_id="123", run_attempt="1",
+                                           event_name="pull_request")
+        self.assertEqual(module.validate_lanes(needs, "pull_request", SOURCE_SHA, HEAD_SHA, BASE_SHA,
+                                               "refs/pull/7/merge", "123", "2"), [])
+        changed = json.loads(json.dumps(needs))
+        changed["libretro"]["outputs"]["run_id"] = "124"
+        self.assertIn("lane-event-identity-mismatch:libretro:run_id", module.validate_lanes(
+            changed, "pull_request", SOURCE_SHA, HEAD_SHA, BASE_SHA,
+            "refs/pull/7/merge", "123", "2"))
 
     def test_libretro_is_required_on_normal_events_and_binds_all_identities(self):
         module = load_aggregate(self)
@@ -203,7 +219,7 @@ class AggregateContract(unittest.TestCase):
             "refs/pull/7/merge", "123", "2"))
         for field, value in (("source_sha", "4" * 40), ("head_sha", "5" * 40),
                              ("base_sha", "6" * 40), ("run_id", "124"),
-                             ("run_attempt", "1"), ("event_name", "push")):
+                             ("run_attempt", "3"), ("event_name", "push")):
             mutated = json.loads(json.dumps(needs))
             mutated[LIBRETRO_LANE]["outputs"][field] = value
             reasons = module.validate_lanes(mutated, "pull_request", SOURCE_SHA, HEAD_SHA,
@@ -263,6 +279,47 @@ class AggregateContract(unittest.TestCase):
         self.assertRegex(text, r"(?m)^  merge_group:\s*$", "merge-group-trigger-missing")
         self.assertRegex(text, r"(?m)^  pull_request:\s*$", "pull-request-trigger-missing")
 
+    def test_linux_delivery_contracts_remain_in_required_lane_and_read_only_adoption_is_pinned(self):
+        text = WORKFLOW.read_text()
+        libretro = re.search(r"(?ms)^  libretro:\n(?P<body>.*?)(?=^  [a-z0-9_-]+:\n|\Z)", text)
+        self.assertIsNotNone(libretro)
+        self.assertIn("python3 -I tests/evidence/delivery_contract.py", libretro["body"])
+        self.assertIn("python3 -I tests/evidence/libretro_delivery_contract.py", libretro["body"])
+        self.assertIn("python3 -I tests/evidence/promotion_contract.py", libretro["body"])
+        adoption_path = ROOT / ".github/workflows/libretro-adoption.yml"
+        self.assertTrue(adoption_path.is_file(), "downloaded-linux-adoption-workflow-missing")
+        adoption = adoption_path.read_text()
+        self.assertIn("workflow_dispatch:", adoption)
+        self.assertRegex(adoption, r"(?m)^permissions:\n  contents: read\n  actions: read\n  attestations: read\s*$")
+        self.assertRegex(adoption, r"(?ms)^jobs:\n  adopt:\n    if: github\.ref == 'refs/heads/main'.*?timeout-minutes: 10")
+        self.assertIn("persist-credentials: false", adoption)
+        checkout_steps = adoption.split("      - uses: actions/checkout@")
+        self.assertEqual(len(checkout_steps), 3,
+                         "adoption-needs-trusted-verifier-and-exact-source-checkouts")
+        verifier_checkout = checkout_steps[1].split("      - name: Verify exact downloaded release bytes", 1)[0]
+        source_checkout = checkout_steps[2].split("      - name: Run downloaded module ABI smoke without credentials", 1)[0]
+        self.assertIn("ref: ${{ github.sha }}", verifier_checkout)
+        self.assertNotIn("inputs.source_sha", verifier_checkout,
+                         "untrusted-source-selected-adoption-verifier")
+        self.assertIn("ref: ${{ inputs.source_sha }}", source_checkout)
+        self.assertIn("path: build/phase9/source", source_checkout)
+        self.assertLess(adoption.index("--verify --download-only"), adoption.index("ref: ${{ inputs.source_sha }}"),
+                        "candidate-source-fetched-before-release-verification")
+        self.assertIn("--source-tree build/phase9/source", adoption)
+        verify_step = adoption.split("- name: Verify exact downloaded release bytes", 1)[1].split(
+            "- uses: actions/checkout@", 1)[0]
+        adopt_step = adoption.split("- name: Run downloaded module ABI smoke without credentials", 1)[1].split(
+            "- name: Upload bounded sanitized adoption receipt", 1)[0]
+        self.assertIn("GH_TOKEN:", verify_step)
+        self.assertNotIn("GH_TOKEN", adopt_step, "adoption-step-receives-github-token")
+        self.assertIn("--adopt-verified", adopt_step)
+        self.assertNotIn("--linux-adoption", adoption,
+                         "credentialed-download-mode-must-not-launch-native-code")
+        self.assertIn("--download-only", adoption)
+        self.assertNotRegex(adoption, r"(?m)^\s+(?:contents|actions|attestations): write\s*$")
+        for action in re.findall(r"uses:\s*([^\s]+)", adoption):
+            self.assertRegex(action, r"@[0-9a-f]{40}(?:\s|$)", f"adoption-action-not-pinned:{action}")
+
     def test_untrusted_workflow_has_read_only_token_and_pinned_actions(self):
         text = WORKFLOW.read_text()
         self.assertNotIn("pull_request_target", text, "privileged-fork-event-present")
@@ -295,8 +352,8 @@ class AggregateContract(unittest.TestCase):
                       "attestation-not-main-push-bound")
         self.assertIn("github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'", attest_body,
                       "attestation-not-main-dispatch-bound")
-        self.assertIn("needs: [package, v02-package, v02-release-qualification]", attest_body,
-                      "attestation-does-not-depend-on-qualified-v02-producer")
+        self.assertIn("needs: [package, v02-package, v02-release-qualification, libretro]", attest_body,
+                      "attestation-does-not-depend-on-qualified-package-producers")
         self.assertIn("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093", attest_body,
                       "attestation-does-not-download-producer-artifact")
         self.assertIn("verify_attestation_inputs.py verify", attest_body,

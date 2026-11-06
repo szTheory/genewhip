@@ -173,6 +173,17 @@ def synthetic_qualified_reports(benchmark, identity, source_digest, scope_id, sc
 
 
 class QualificationCoordinatorContract(unittest.TestCase):
+    def test_direntry_stat_nofollow_supports_symlink_inventory(self):
+        module = load_module(self)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "payload").write_text("qualified", encoding="utf-8")
+            (root / "link").symlink_to(root / "payload")
+            with os.scandir(root) as entries:
+                by_name = {entry.name: entry for entry in entries}
+            self.assertTrue(stat.S_ISREG(module._direntry_stat_nofollow(by_name["payload"]).st_mode))
+            self.assertTrue(stat.S_ISLNK(module._direntry_stat_nofollow(by_name["link"]).st_mode))
+
     def test_public_package_attempt_keeps_digests_and_rejects_incomplete_success(self):
         import copy
         module = load_module(self)
@@ -3831,7 +3842,9 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
         self.assertIn("name: release-input-${{ github.run_id }}-${{ github.run_attempt }}", v02_package)
         self.assertIn("path: build/v02/package-transfer/payload/artifacts/release-assets/*", v02_package)
         attestation = workflow.split("  attestation:\n", 1)[1].split("  performance:\n", 1)[0]
-        self.assertIn("needs: [package, v02-package, v02-release-qualification]", attestation)
+        self.assertIn("needs: [package, v02-package, v02-release-qualification, libretro]", attestation)
+        self.assertIn("needs.libretro.result == 'success'", attestation)
+        self.assertIn("needs.v02-release-qualification.result == 'success'", attestation)
         self.assertIn("name: release-input-${{ github.run_id }}-${{ github.run_attempt }}", attestation)
         self.assertIn("name: release-identity-${{ github.run_id }}-${{ github.run_attempt }}", attestation)
         self.assertIn("verify_attestation_inputs.py verify", attestation)

@@ -1,0 +1,7 @@
+display_name = "Genewhip"
+corename = "genewhip_libretro"
+version = "0.3.0"
+supported_extensions = "bin|gen"
+need_fullpath = "false"
+block_extract = "false"
+supports_no_game = "false"

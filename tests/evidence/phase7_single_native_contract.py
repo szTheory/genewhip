@@ -1738,7 +1738,7 @@ class SingleNativeAuthorityContract(unittest.TestCase):
                     if (not replaced and path == anchor["leaf"]
                             and dir_fd == anchor["parent_fd"]):
                         os.rename(path, backup_name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
-                        os.mkfifo(path, 0o600, dir_fd=dir_fd)
+                        os.mkfifo(root / MOD.CLAIM_REL, 0o600)
                         replaced = True
                         if not flags & getattr(os, "O_NONBLOCK", 0):
                             raise AssertionError("claim reader opened a substituted FIFO in blocking mode")
@@ -1799,7 +1799,7 @@ class SingleNativeAuthorityContract(unittest.TestCase):
             (root / "link.json").symlink_to(outside)
             with self.assertRaisesRegex(ValueError, "single-native-path-symlink"):
                 MOD._safe_file(root, "link.json")
-            (root / "hard.json").hardlink_to(outside)
+            os.link(outside, root / "hard.json")
             with self.assertRaisesRegex(ValueError, "single-native-file-invalid"):
                 MOD._safe_file(root, "hard.json")
 
@@ -1911,7 +1911,7 @@ class SingleNativeAuthorityContract(unittest.TestCase):
             first = attempt / "input.json"
             first.write_text("{}")
             second = attempt / "output.json"
-            second.hardlink_to(first)
+            os.link(first, second)
             with self.assertRaisesRegex(ValueError, "single-native-route-file-alias"):
                 MOD.validate_route_paths(root, [first, second])
 

@@ -121,7 +121,7 @@ def _prepare_output(argument: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]
     if work.exists() or not _safe_tree(work, base):
         raise DiagnosticError("output-work-root-invalid")
     work.mkdir(mode=0o700)
-    if not stat.S_ISDIR(work.stat(follow_symlinks=False).st_mode):
+    if not stat.S_ISDIR(work.lstat().st_mode):
         raise DiagnosticError("output-work-root-unsafe")
     return out, work
 

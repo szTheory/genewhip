@@ -30,6 +30,8 @@ API = "https://api.github.com"
 API_VERSION = "2026-03-10"
 RELEASE_BODY = "Qualified Genewhip preview artifacts; see the attached package inventory and checksums."
 MAX_RELEASE_ASSET_BYTES = 2 * 1024 * 1024 * 1024
+MAX_LIBRETRO_ARCHIVE_BYTES = 128 * 1024 * 1024
+MAX_LIBRETRO_RECEIPT_BYTES = 1024 * 1024
 _ARCHIVE_SPEC = importlib.util.spec_from_file_location(
     "genewhip_package_archive", pathlib.Path(__file__).resolve().parents[1] / "package_archive.py")
 _ARCHIVE_LIMITS = importlib.util.module_from_spec(_ARCHIVE_SPEC)
@@ -37,6 +39,7 @@ _ARCHIVE_SPEC.loader.exec_module(_ARCHIVE_LIMITS)
 WORKFLOW_PATH = ".github/workflows/ci.yml"
 RELEASE_TAG_PREFIX = "v"
 V02_RELEASE_VERSION = "0.2.0"
+V03_RELEASE_VERSIONS = ("0.3.0", "0.3.1")
 V02_INVENTORY_SCHEMA = "genewhip.release-inventory.v2"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 HEX_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -149,7 +152,11 @@ def validate_release_inventory(
             info = path.lstat()
         except OSError:
             return {}, ["inventory-incomplete"]
-        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_RELEASE_ASSET_BYTES:
+        max_asset = MAX_RELEASE_ASSET_BYTES
+        if inventory.get("version") in V03_RELEASE_VERSIONS:
+            max_asset = (MAX_LIBRETRO_ARCHIVE_BYTES if name.endswith(".tar.gz") else
+                         MAX_LIBRETRO_RECEIPT_BYTES if name.endswith(".qualification.json") else 4096)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > max_asset:
             return {}, ["inventory-file-type-or-size-invalid"]
         data = path.read_bytes()
         digest = sha256_bytes(data)
@@ -198,6 +205,8 @@ def validate_qualified_inventory(directory: pathlib.Path, inventory: dict[str, A
     """Bind both fixed package archives to their source-matched smoke receipts."""
     if inventory.get("version") == V02_RELEASE_VERSION:
         return validate_v02_inventory(directory, inventory, source_sha)
+    if inventory.get("version") in V03_RELEASE_VERSIONS:
+        return validate_v03_libretro_inventory(directory, inventory, source_sha)
     if inventory.get("source_revision") != source_sha or inventory.get("version") != "0.1.0":
         return ["inventory-source-mismatch"]
     prefix = f"genewhip-0.1.0-"
@@ -260,6 +269,86 @@ def validate_qualified_inventory(directory: pathlib.Path, inventory: dict[str, A
     return [] if observed_kinds == set(packages) else ["inventory-package-roster-incomplete"]
 
 
+def validate_v03_libretro_inventory(directory: pathlib.Path, inventory: dict[str, Any],
+                                    source_sha: str) -> list[str]:
+    """Validate the exact bounded Linux core bundle and its separate run receipt."""
+    version = inventory.get("version")
+    if (inventory.get("schema") != "genewhip.release-inventory.v3"
+            or version not in V03_RELEASE_VERSIONS
+            or inventory.get("source_revision") != source_sha
+            or inventory.get("module_version") != "0.3.0"
+            or not RUN_ID_RE.fullmatch(str(inventory.get("run_id", "")))
+            or not re.fullmatch(r"[1-9][0-9]*", str(inventory.get("run_attempt", "")))):
+        return ["inventory-source-mismatch"]
+    archive_name = f"genewhip-{version}-linux-x86_64-libretro.tar.gz"
+    expected = {archive_name, archive_name + ".sha256", archive_name + ".qualification.json"}
+    assets = inventory.get("assets")
+    if not isinstance(assets, dict) or set(assets) != expected:
+        return ["inventory-package-roster-incomplete"]
+    try:
+        qualification_path = directory / (archive_name + ".qualification.json")
+        if qualification_path.stat().st_size > MAX_LIBRETRO_RECEIPT_BYTES:
+            return ["inventory-package-receipt-invalid"]
+        archive_path = directory / archive_name
+        if archive_path.stat().st_size > MAX_LIBRETRO_ARCHIVE_BYTES:
+            return ["inventory-package-archive-invalid"]
+        qualification = json.loads(qualification_path.read_text(encoding="utf-8"))
+        archive_data = archive_path.read_bytes()
+        checksum = (directory / (archive_name + ".sha256")).read_text(encoding="utf-8")
+        _ARCHIVE_LIMITS.preflight_tar_gz(archive_data, max_members=16, max_expanded_bytes=64 * 1024 * 1024)
+        with tarfile.open(fileobj=io.BytesIO(archive_data), mode="r:gz") as package:
+            rows = package.getmembers()
+            names = [row.name for row in rows]
+            if (names != ["LIBRETRO-HEADER-LICENSE.txt", "LICENSE", "genewhip_libretro.info", "genewhip_libretro.so"]
+                    or any(not row.isfile() or row.size > 64 * 1024 * 1024 for row in rows)):
+                return ["inventory-package-archive-invalid"]
+            members = {row.name: package.extractfile(row).read(row.size + 1) for row in rows}
+            if any(len(members[row.name]) != row.size for row in rows):
+                return ["inventory-package-archive-invalid"]
+            module = members["genewhip_libretro.so"]
+            info = members["genewhip_libretro.info"].decode("utf-8")
+            if (len(module) < 20 or module[:6] != b"\x7fELF\x02\x01"
+                    or int.from_bytes(module[18:20], "little") != 62):
+                return ["inventory-package-module-invalid"]
+            values = {}
+            for line in info.splitlines():
+                key, sep, value = line.partition(" = ")
+                if sep:
+                    if key in values:
+                        return ["inventory-package-info-invalid"]
+                    values[key] = value.strip().strip('"')
+            if (set(values) != {"display_name", "corename", "version", "supported_extensions",
+                                "need_fullpath", "block_extract", "supports_no_game"}
+                    or any(values.get(key) != value for key, value in {
+                        "display_name": "Genewhip", "corename": "genewhip_libretro",
+                        "version": "0.3.0", "supported_extensions": "bin|gen",
+                        "need_fullpath": "false", "block_extract": "false",
+                        "supports_no_game": "false"}.items())):
+                return ["inventory-package-info-invalid"]
+    except (OSError, ValueError, json.JSONDecodeError, tarfile.TarError):
+        return ["inventory-package-archive-invalid"]
+    digest = sha256_bytes(archive_data)
+    receipt_row = assets.get(archive_name + ".qualification.json")
+    archive_row = assets.get(archive_name)
+    if (not isinstance(qualification, dict)
+            or qualification.get("schema") != "genewhip-libretro-qualification-v1"
+            or qualification.get("outcome") != "pass"
+            or qualification.get("source_revision") != source_sha
+            or qualification.get("run_id") != inventory.get("run_id")
+            or qualification.get("run_attempt") != inventory.get("run_attempt")
+            or qualification.get("version") != version or qualification.get("module_version") != "0.3.0"
+            or qualification.get("archive") != archive_name or qualification.get("archive_sha256") != digest
+            or qualification.get("members") != [
+                {"name": name, "size": len(data), "sha256": sha256_bytes(data)}
+                for name, data in sorted(members.items())]
+            or checksum != f"{digest}  {archive_name}\n"
+            or not isinstance(archive_row, dict) or archive_row.get("sha256") != digest
+            or not isinstance(receipt_row, dict)
+            or receipt_row.get("sha256") != sha256_bytes(qualification_path.read_bytes())):
+        return ["inventory-package-receipt-invalid"]
+    return []
+
+
 def validate_recovery_version(version: str, authorized_recovery_release_id: int) -> list[str]:
     """Keep the one-time v0.1 draft recovery authority out of v0.2 publication."""
     if type(authorized_recovery_release_id) is not int:
@@ -268,7 +357,7 @@ def validate_recovery_version(version: str, authorized_recovery_release_id: int)
         return ["release-draft-recovery-version-forbidden"]
     if version == "0.1.0" and authorized_recovery_release_id < 1:
         return ["release-draft-recovery-id-invalid"]
-    if version not in ("0.1.0", V02_RELEASE_VERSION):
+    if version not in ("0.1.0", V02_RELEASE_VERSION, *V03_RELEASE_VERSIONS):
         return ["release-version-not-allowed"]
     return []
 
@@ -576,7 +665,7 @@ def prepare_assets(input_dir: pathlib.Path, output_dir: pathlib.Path, source_sha
     """Collect exactly the two already-smoked archives and create a deterministic inventory."""
     if not SHA_RE.fullmatch(source_sha):
         raise PromotionError("source-sha-invalid")
-    if release_version not in ("0.1.0", V02_RELEASE_VERSION):
+    if release_version not in ("0.1.0", V02_RELEASE_VERSION, *V03_RELEASE_VERSIONS):
         raise PromotionError("release-version-not-allowed")
     receipts = sorted(input_dir.glob("*.tar.gz.qualification.json"))
     selected: list[tuple[pathlib.Path, pathlib.Path, pathlib.Path, dict[str, Any]]] = []
@@ -887,6 +976,11 @@ class GitHub:
             if (len(qualified) != 1 or qualified[0].get("status") != "completed"
                     or qualified[0].get("conclusion") != "success"):
                 raise PromotionError("v02-qualification-job-not-success")
+        if release_version in V03_RELEASE_VERSIONS:
+            libretro = [row for row in rows or [] if isinstance(row, dict) and row.get("name") == "libretro"]
+            if (len(libretro) != 1 or libretro[0].get("status") != "completed"
+                    or libretro[0].get("conclusion") != "success"):
+                raise PromotionError("libretro-qualification-job-not-success")
         attestation = [row for row in rows or [] if isinstance(row, dict) and row.get("name") == "attestation"]
         if (len(attestation) != 1 or attestation[0].get("status") != "completed"
                 or attestation[0].get("conclusion") != "success"):
@@ -1097,7 +1191,9 @@ def publish(repository: str, source_sha: str, run_id: str, attempt: int,
     if event_blockers:
         raise PromotionError(event_blockers[0])
     inventory = json.loads((asset_dir / "inventory.json").read_text(encoding="utf-8"))
-    expected_schema = V02_INVENTORY_SCHEMA if release_version == V02_RELEASE_VERSION else "genewhip.release-inventory.v1"
+    expected_schema = (V02_INVENTORY_SCHEMA if release_version == V02_RELEASE_VERSION else
+        "genewhip.release-inventory.v3" if release_version in V03_RELEASE_VERSIONS else
+        "genewhip.release-inventory.v1")
     if (inventory.get("schema") != expected_schema or inventory.get("version") != release_version
             or inventory.get("source_revision") != source_sha):
         raise PromotionError("inventory-source-mismatch")
@@ -1243,7 +1339,7 @@ def main(argv: list[str] | None = None) -> int:
     prepare.add_argument("--input-dir", type=pathlib.Path, required=True)
     prepare.add_argument("--output-dir", type=pathlib.Path, required=True)
     prepare.add_argument("--source-sha", required=True)
-    prepare.add_argument("--release-version", choices=("0.1.0", V02_RELEASE_VERSION), default="0.1.0")
+    prepare.add_argument("--release-version", choices=("0.1.0", V02_RELEASE_VERSION, *V03_RELEASE_VERSIONS), default="0.1.0")
     publish_parser = sub.add_parser("publish", help="publish a trusted workflow-dispatch artifact")
     publish_parser.add_argument("--repository", required=True)
     publish_parser.add_argument("--source-sha", required=True)
@@ -1252,7 +1348,7 @@ def main(argv: list[str] | None = None) -> int:
     publish_parser.add_argument("--event", type=pathlib.Path, required=True)
     publish_parser.add_argument("--asset-dir", type=pathlib.Path, required=True)
     publish_parser.add_argument("--authorized-recovery-release-id", type=int, required=True)
-    publish_parser.add_argument("--release-version", choices=("0.1.0", V02_RELEASE_VERSION), default="0.1.0")
+    publish_parser.add_argument("--release-version", choices=("0.1.0", V02_RELEASE_VERSION, *V03_RELEASE_VERSIONS), default="0.1.0")
     args = parser.parse_args(argv)
     try:
         if args.mode == "prepare":

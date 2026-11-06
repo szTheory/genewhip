@@ -116,7 +116,9 @@ class V02PublisherContract(unittest.TestCase):
             "  required-aggregate:\n", 1)[0]
         self.assertIn("needs: [v02-runtime, v02-benchmark-control, v02-benchmark-recursion94, v02-benchmark-tank-battle, v02-package]", qualification)
         attestation = workflow.split("  attestation:\n", 1)[1].split("  performance:\n", 1)[0]
-        self.assertIn("needs: [package, v02-package, v02-release-qualification]", attestation)
+        self.assertIn("needs: [package, v02-package, v02-release-qualification, libretro]", attestation)
+        self.assertIn("needs.libretro.result == 'success'", attestation)
+        self.assertIn("needs.v02-release-qualification.result == 'success'", attestation)
         self.assertIn("github.event_name == 'workflow_dispatch'", attestation)
         self.assertIn("name: release-input-${{ github.run_id }}-${{ github.run_attempt }}", attestation)
         self.assertIn("verify_attestation_inputs.py verify", attestation)
@@ -216,7 +218,7 @@ class V02PublisherContract(unittest.TestCase):
     def test_release_dispatch_is_typed_and_download_pins_exact_run_attempt(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text()
         self.assertRegex(workflow, r"(?ms)^      release_version:\n.*?type: choice\n.*?0\.2\.0")
-        self.assertIn("name: release-input-${{ inputs.run_id }}-${{ inputs.run_attempt }}", workflow)
+        self.assertIn("name: ${{ startsWith(inputs.release_version, '0.3.') && format('libretro-input-{0}-{1}', inputs.run_id, inputs.run_attempt) || format('release-input-{0}-{1}', inputs.run_id, inputs.run_attempt) }}", workflow)
         self.assertIn("run-id: ${{ inputs.run_id }}", workflow)
         self.assertNotRegex(workflow, r"(?im)^\s+artifact-id:")
         self.assertIn("fa0a91b85d4f404e444e00e005971372dc801d16", workflow)
@@ -478,10 +480,12 @@ class V02DownloadContract(unittest.TestCase):
     def test_window_adoption_uses_owned_group_and_reserves_cleanup(self):
         from scripts.release import v02_qualification as coordinator
         command = ["python3", "docs_commands.py"]
-        self.enterContext(mock.patch.dict(os.environ, {
+        environment = mock.patch.dict(os.environ, {
             "GENEWHIP_QUALIFICATION_SCOPE_PATH": "evidence/v02-phase7-two-hour-execution-scope.json",
             "GENEWHIP_QUALIFICATION_SCOPE_SHA256": "a72453ee43bceeb16f03a5b023c6f94def38196e5ff23f36c7f2e4a35a99136c",
-        }))
+        })
+        environment.start()
+        self.addCleanup(environment.stop)
         with mock.patch.object(qualify_delivery.promote, "execution_window_active", return_value=True), \
                 mock.patch.object(qualify_delivery.promote, "execution_window_timeout", return_value=120), \
                 mock.patch.object(coordinator, "_external") as launch:

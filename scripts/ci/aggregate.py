@@ -86,10 +86,20 @@ def validate_lanes(needs, event_name, source_sha, head_sha, base_sha, event_ref=
                 problems.append(f"{reason}:{lane}")
         if lane in RUN_BOUND_LANES and expected_run_id is not None:
             for field, expected_value in (("run_id", str(expected_run_id)),
-                                          ("run_attempt", str(expected_run_attempt)),
                                           ("event_name", event_name)):
                 if outputs.get(field) != expected_value:
                     problems.append(f"lane-event-identity-mismatch:{lane}:{field}")
+            # GitHub reuses successful jobs when only failed jobs are rerun.
+            # Their outputs keep the attempt that produced them, while needs.result
+            # remains success for the current attempt. Accept that provenance only
+            # within this exact workflow run; a future or malformed attempt is stale.
+            actual_attempt = outputs.get("run_attempt")
+            expected_attempt = str(expected_run_attempt)
+            if (not isinstance(actual_attempt, str)
+                    or not re.fullmatch(r"[1-9][0-9]*", actual_attempt)
+                    or not re.fullmatch(r"[1-9][0-9]*", expected_attempt)
+                    or int(actual_attempt) > int(expected_attempt)):
+                problems.append(f"lane-event-identity-mismatch:{lane}:run_attempt")
 
     attestation = needs.get("attestation")
     if not isinstance(attestation, dict):

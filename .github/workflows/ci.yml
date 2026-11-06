@@ -184,7 +184,13 @@ jobs:
       - name: Build release shared core and loader host
         run: cmake --build build/libretro --target genewhip_libretro libretro_host --parallel 2
       - name: Run aggregate and actual module contracts
-        run: python3 -I tests/evidence/ci_aggregate_contract.py
+        run: |
+          python3 -I tests/evidence/ci_aggregate_contract.py
+          python3 -I tests/evidence/delivery_contract.py
+          python3 -I tests/evidence/libretro_delivery_contract.py
+          python3 -I tests/evidence/promotion_contract.py
+          python3 -I tests/package/steam_deck_docs.py
+          python3 -I tests/evidence/deck_route_contract.py
       - name: Run release actual-module and evidence tests
         run: ctest --test-dir build/libretro -R '^(libretro_.*|ci_baseline_contract)$' --output-on-failure --no-tests=error
       - name: Validate source-bound Linux callback report
@@ -219,6 +225,45 @@ jobs:
           ctest --test-dir build/libretro-sanitized
           -R '^libretro_(host_smoke|host_contract|callbacks|pixels_stop|admission|fixture_route|route_contract)$'
           --output-on-failure --no-tests=error
+      - name: Run Libretro package and container-runner contracts
+        run: |
+          python3 -I tests/package/libretro_bundle.py
+          python3 -I tests/package/libretro_tracer_container.py
+      - name: Run production package tracer against tested module
+        run: >-
+          python3 -I scripts/package_libretro.py
+          --self-test --tracer
+          --library build/libretro/genewhip_libretro.so
+      - name: Package tested Linux x86_64 core
+        if: github.event_name != 'workflow_dispatch'
+        run: >-
+          python3 -I scripts/package_libretro.py
+          --library build/libretro/genewhip_libretro.so
+          --source-sha "$GITHUB_SHA"
+          --version 0.3.0
+          --output-dir build/libretro-release
+          --run-id "$GITHUB_RUN_ID"
+          --run-attempt "$GITHUB_RUN_ATTEMPT"
+      - name: Export immutable Linux core package for this run attempt
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: libretro-input-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/libretro-release/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Bind Libretro package input to the exact run attempt
+        if: github.event_name != 'workflow_dispatch'
+        run: python3 scripts/ci/verify_attestation_inputs.py write-identity --directory build/libretro-identity
+      - name: Export separate Libretro run identity
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: libretro-identity-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/libretro-identity/_ci-identity.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Retain bounded source-bound callback route
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -460,8 +505,8 @@ jobs:
         run: test -n "$GITHUB_SHA"
   attestation:
     name: attestation
-    if: always() && ((github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.package.result == 'success') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.package.result == 'success' && needs.v02-release-qualification.result == 'success')) && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
-    needs: [package, v02-package, v02-release-qualification]
+    if: always() && ((github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.package.result == 'success' && needs.libretro.result == 'success') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.package.result == 'success' && needs.v02-release-qualification.result == 'success')) && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
+    needs: [package, v02-package, v02-release-qualification, libretro]
     runs-on: macos-26
     timeout-minutes: 15
     permissions:
@@ -509,6 +554,32 @@ jobs:
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: 'build/release-assets/*.tar.gz,build/release-assets/inventory.json'
+      - name: Download immutable Linux Libretro package from this run attempt
+        if: github.event_name == 'push'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        timeout-minutes: 5
+        with:
+          name: libretro-input-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/libretro-release-assets
+      - name: Download separate Linux Libretro run identity
+        if: github.event_name == 'push'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        timeout-minutes: 5
+        with:
+          name: libretro-identity-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/libretro-identity
+      - name: Verify exact Linux Libretro source and run attempt before attesting
+        if: github.event_name == 'push'
+        run: >-
+          python3 scripts/ci/verify_attestation_inputs.py verify
+          --directory build/libretro-release-assets
+          --identity-directory build/libretro-identity
+      - name: Attest exact Linux Libretro archive and inventory
+        if: github.event_name == 'push'
+        timeout-minutes: 5
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: 'build/libretro-release-assets/*.tar.gz,build/libretro-release-assets/inventory.json'
   performance:
     if: github.event_name != 'schedule' && (inputs.native_diagnostic_case == '' || inputs.native_diagnostic_case == 'none')
     runs-on: macos-26

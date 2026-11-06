@@ -8,10 +8,12 @@ import hashlib
 import json
 import os
 import pathlib
+import platform
 import re
 import secrets
 import subprocess
 import sys
+import tempfile
 import time
 from typing import Any
 
@@ -29,6 +31,7 @@ HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 V02_REQUIREMENTS = ("EVID-03", "COMP-02", "PERF-03", "REL-04", "DOC-02")
 V02_PACKET_SCHEMA = "genewhip.v02-publisher-packet.v1"
 V02_PREPUBLICATION_SCOPE = "publisher-readiness"
+V03_RELEASE_VERSIONS = ("0.3.0", "0.3.1")
 
 
 class DeliveryError(RuntimeError):
@@ -344,7 +347,8 @@ def validate_release(release: Any, repository: str, tag: str,
         raise DeliveryError("release-inventory-missing-or-invalid") from None
     if inventory.get("source_revision") != expected_sha:
         raise DeliveryError("release-source-mismatch")
-    expected_schema = (promote.V02_INVENTORY_SCHEMA if version == "0.2.0"
+    expected_schema = ("genewhip.release-inventory.v3" if version in V03_RELEASE_VERSIONS else
+                       promote.V02_INVENTORY_SCHEMA if version == "0.2.0"
                        else "genewhip.release-inventory.v1")
     if inventory.get("version") != version or inventory.get("schema") != expected_schema:
         raise DeliveryError("release-inventory-version-mismatch")
@@ -387,6 +391,112 @@ def validate_release(release: Any, repository: str, tag: str,
                        for name in sorted(digests)], "inventory": inventory}
 
 
+def validate_v03_delivery_record(evidence: Any) -> list[str]:
+    """Check the complete, internally consistent success record; do not reauthenticate GitHub."""
+    if not isinstance(evidence, dict) or evidence.get("schema") != "genewhip-v03-libretro-delivery-v1":
+        return ["libretro-evidence-schema-invalid"]
+    version = evidence.get("version")
+    repository = evidence.get("repository")
+    source_sha = evidence.get("source_sha")
+    if (evidence.get("outcome") != "qualified"
+            or not isinstance(repository, str) or repository != "szTheory/genewhip"
+            or version not in promote.V03_RELEASE_VERSIONS
+            or evidence.get("release_tag") != "v" + str(version)
+            or not SHA_RE.fullmatch(str(source_sha or ""))):
+        return ["libretro-evidence-release-identity-invalid"]
+
+    qualification = evidence.get("qualification")
+    publisher = evidence.get("publisher")
+    if (not isinstance(qualification, dict)
+            or not re.fullmatch(r"[1-9][0-9]*", str(qualification.get("run_id", "")))
+            or type(qualification.get("run_attempt")) is not int or qualification["run_attempt"] < 1
+            or qualification.get("workflow") != ".github/workflows/ci.yml"):
+        return ["libretro-evidence-qualification-identity-invalid"]
+    if (not isinstance(publisher, dict)
+            or not re.fullmatch(r"[1-9][0-9]*", str(publisher.get("run_id", "")))
+            or type(publisher.get("run_attempt")) is not int or publisher["run_attempt"] < 1
+            or publisher.get("workflow") != ".github/workflows/release.yml"
+            or not re.fullmatch(r"[A-Za-z0-9._-]{8,128}", str(publisher.get("correlation_id", "")))):
+        return ["libretro-evidence-publisher-identity-invalid"]
+
+    archive = f"genewhip-{version}-linux-x86_64-libretro.tar.gz"
+    expected_assets = {archive, archive + ".sha256", archive + ".qualification.json",
+                       "inventory.json", "SHA256SUMS"}
+    assets = evidence.get("asset_digests")
+    if (not isinstance(assets, dict) or set(assets) != expected_assets
+            or any(not isinstance(value, str) or not HEX_RE.fullmatch(value)
+                   for value in assets.values())):
+        return ["libretro-evidence-asset-digests-invalid"]
+
+    release = evidence.get("release")
+    expected_url = f"https://github.com/{repository}/releases/tag/v{version}"
+    expected_asset_rows = [{"name": name, "sha256": assets[name],
+                            "url": f"https://github.com/{repository}/releases/download/v{version}/{name}"}
+                           for name in sorted(expected_assets)]
+    if (not isinstance(release, dict)
+            or release.get("tag") != "v" + str(version)
+            or release.get("version") != version
+            or release.get("source_sha") != source_sha
+            or release.get("release_url") != expected_url
+            or release.get("assets") != expected_asset_rows):
+        return ["libretro-evidence-release-assets-invalid"]
+    if evidence.get("downloaded_bytes") != "verified" or evidence.get("linux_adoption") != "pass":
+        return ["libretro-evidence-download-or-adoption-incomplete"]
+
+    adoption = evidence.get("adoption")
+    if (not isinstance(adoption, dict) or adoption.get("outcome") != "pass"
+            or adoption.get("host") != "linux-x86_64-libretro_host"
+            or adoption.get("fixture") != "generated-public-diagnostic"
+            or adoption.get("source_sha") != source_sha
+            or adoption.get("downloaded_archive_sha256") != assets[archive]
+            or not isinstance(adoption.get("downloaded_module_sha256"), str)
+            or not HEX_RE.fullmatch(adoption["downloaded_module_sha256"])
+            or adoption.get("module_sha256") != adoption.get("downloaded_module_sha256")
+            or adoption.get("adoption_workflow") != ".github/workflows/libretro-adoption.yml@refs/heads/main"
+            or not re.fullmatch(r"[1-9][0-9]*", str(adoption.get("adoption_run_id", "")))
+            or int(adoption.get("adoption_run_id", 0)) < 1
+            or not str(adoption.get("adoption_run_attempt", "")).isdigit()
+            or int(adoption.get("adoption_run_attempt", 0)) < 1
+            or adoption.get("qualification_run_id") != str(qualification["run_id"])
+            or adoption.get("qualification_run_attempt") != qualification["run_attempt"]):
+        return ["libretro-evidence-linux-adoption-invalid"]
+    return []
+
+
+def preflight_v03_release_assets(release: Any, repository: str, tag: str,
+                                 version: str) -> None:
+    """Reject a wrong or oversized server-side asset roster before downloading bytes."""
+    if (not isinstance(release, dict) or release.get("tag_name") != tag
+            or release.get("draft") is not False or release.get("prerelease") is not True
+            or release.get("html_url") != f"https://github.com/{repository}/releases/tag/{tag}"):
+        raise DeliveryError("release-visibility-or-tag-invalid")
+    archive = f"genewhip-{version}-linux-x86_64-libretro.tar.gz"
+    limits = {archive: promote.MAX_LIBRETRO_ARCHIVE_BYTES,
+              archive + ".sha256": 256,
+              archive + ".qualification.json": promote.MAX_LIBRETRO_RECEIPT_BYTES,
+              "inventory.json": 1024 * 1024, "SHA256SUMS": 4096}
+    rows = release.get("assets")
+    if not isinstance(rows, list) or len(rows) != len(limits):
+        raise DeliveryError("release-asset-roster-mismatch")
+    observed: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            raise DeliveryError("release-asset-roster-mismatch")
+        name = row.get("name")
+        if not isinstance(name, str) or name not in limits or name in observed:
+            raise DeliveryError("release-asset-roster-mismatch")
+        observed.add(name)
+        size = row.get("size")
+        expected_url = f"https://github.com/{repository}/releases/download/{tag}/{name}"
+        if (type(size) is not int or size < 0 or size > limits[name]
+                or row.get("state") != "uploaded"
+                or row.get("browser_download_url") != expected_url
+                or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(row.get("digest", "")))):
+            raise DeliveryError("release-asset-size-or-state-mismatch")
+    if observed != set(limits):
+        raise DeliveryError("release-asset-roster-mismatch")
+
+
 def self_test() -> dict[str, Any]:
     sha = "a" * 40
     pr = {"state": "OPEN", "isDraft": False, "baseRefName": "main", "baseRefOid": "b" * 40,
@@ -404,7 +514,8 @@ def self_test() -> dict[str, Any]:
 def _safe_path(value: pathlib.Path) -> pathlib.Path:
     path = value if value.is_absolute() else ROOT / value
     path = path.resolve()
-    allowed = ((ROOT / "build" / "phase4").resolve(), (ROOT / "build" / "v02").resolve())
+    allowed = ((ROOT / "build" / "phase4").resolve(), (ROOT / "build" / "v02").resolve(),
+               (ROOT / "build" / "phase9").resolve())
     if not any(root == path or root in path.parents for root in allowed):
         raise DeliveryError("output-path-outside-build")
     return path
@@ -743,6 +854,8 @@ def run_delivery(args: argparse.Namespace) -> dict[str, Any]:
 
 def verify_release(args: argparse.Namespace) -> dict[str, Any]:
     if args.download_only:
+        if args.version in V03_RELEASE_VERSIONS:
+            return verify_v03_download(args)
         return verify_v02_download(args)
     repository = args.repository
     _check_preflight(args.preflight, repository)
@@ -837,6 +950,360 @@ def resolve_v02_download_context(args: argparse.Namespace) -> dict[str, Any]:
     args.packet = packet
     args.authenticated_facts = facts
     return packet
+
+
+def resolve_v03_download_context(args: argparse.Namespace) -> dict[str, Any]:
+    if (args.version not in V03_RELEASE_VERSIONS or args.release_tag != "v" + args.version
+            or not promote.REPO_RE.fullmatch(args.repository or "")
+            or not SHA_RE.fullmatch(args.source_sha or "")
+            or not str(args.run_id or "").isdigit()
+            or type(args.run_attempt) is not int or args.run_attempt < 1):
+        raise DeliveryError("libretro-download-identity-invalid")
+    if args.evidence_out.resolve() == args.download_dir.resolve():
+        raise DeliveryError("libretro-evidence-overwrites-download-directory")
+    run_id, attempt = str(args.run_id), args.run_attempt
+    run = _gh_json(["run", "view", run_id, "--repo", args.repository, "--attempt", str(attempt),
+                    "--json", "attempt,event,headSha,status,conclusion,jobs,databaseId"])
+    if (run.get("event") != "push" or run.get("headSha") != args.source_sha
+            or run.get("status") != "completed" or run.get("conclusion") != "success"
+            or str(run.get("databaseId")) != run_id or run.get("attempt") != attempt):
+        raise DeliveryError("libretro-source-run-identity-invalid")
+    jobs = run.get("jobs")
+    required = {"required-ci", "libretro", "attestation"}
+    if not isinstance(jobs, list):
+        raise DeliveryError("libretro-source-jobs-unavailable")
+    observed: dict[str, list[dict[str, Any]]] = {}
+    for job in jobs:
+        if isinstance(job, dict) and isinstance(job.get("name"), str):
+            observed.setdefault(job["name"], []).append(job)
+    if any(len(observed.get(name, [])) != 1 or observed[name][0].get("status") != "completed"
+           or observed[name][0].get("conclusion") != "success" for name in required):
+        raise DeliveryError("libretro-source-required-job-invalid")
+    identity = _gh_json(["api", f"repos/{args.repository}/actions/runs/{run_id}/attempts/{attempt}"])
+    if validate_workflow_identity(identity, ".github/workflows/ci.yml", args.source_sha, "push"):
+        raise DeliveryError("libretro-source-workflow-identity-invalid")
+    if identity.get("head_branch") != "main" or str(identity.get("id")) != run_id \
+            or identity.get("run_attempt") != attempt:
+        raise DeliveryError("libretro-source-workflow-attempt-invalid")
+    args.source_run = run
+    args.source_workflow = identity
+    return {"run": run, "workflow": identity}
+
+
+def verify_v03_download(args: argparse.Namespace) -> dict[str, Any]:
+    context = getattr(args, "v03_context", None) or resolve_v03_download_context(args)
+    directory = _safe_path(args.download_dir)
+    if directory.exists() and (directory.is_symlink() or any(directory.iterdir())):
+        raise DeliveryError("download-directory-not-empty")
+    directory.mkdir(parents=True, exist_ok=True)
+    release = _gh_json(["api", f"repos/{args.repository}/releases/tags/{args.release_tag}"])
+    preflight_v03_release_assets(release, args.repository, args.release_tag, args.version)
+    publishers = _gh_json(["api", f"repos/{args.repository}/actions/workflows/release.yml/runs?event=workflow_dispatch&branch=main&per_page=100"])
+    matching = []
+    rows = publishers.get("workflow_runs") if isinstance(publishers, dict) else None
+    if isinstance(rows, list):
+        prefix = f"Preview release for {args.source_sha} (qualification {args.run_id} attempt {args.run_attempt}; dispatch "
+        for row in rows:
+            if isinstance(row, dict) and isinstance(row.get("display_title"), str) \
+                    and row["display_title"].startswith(prefix) and row["display_title"].endswith(")"):
+                correlation = row["display_title"][len(prefix):-1]
+                if correlation and re.fullmatch(r"[A-Za-z0-9._-]{8,128}", correlation):
+                    matching.append((row, correlation))
+    if len(matching) != 1:
+        raise DeliveryError("libretro-publisher-run-missing-or-ambiguous")
+    publisher, correlation = matching[0]
+    if (publisher.get("status") != "completed" or publisher.get("conclusion") != "success"
+            or publisher.get("head_branch") != "main" or publisher.get("path") != ".github/workflows/release.yml"):
+        raise DeliveryError("libretro-publisher-run-identity-invalid")
+    publisher_id, publisher_attempt = publisher.get("id"), publisher.get("run_attempt")
+    publisher_identity = _gh_json(["api", f"repos/{args.repository}/actions/runs/{publisher_id}/attempts/{publisher_attempt}"])
+    if (validate_workflow_identity(publisher_identity, ".github/workflows/release.yml",
+                                   publisher.get("head_sha"), "workflow_dispatch")
+            or publisher_identity.get("head_branch") != "main"
+            or str(publisher_identity.get("id")) != str(publisher_id)
+            or publisher_identity.get("run_attempt") != publisher_attempt):
+        raise DeliveryError("libretro-publisher-workflow-identity-invalid")
+    publisher_run = _gh_json(["run", "view", str(publisher_id), "--repo", args.repository,
+                              "--attempt", str(publisher_attempt), "--json",
+                              "attempt,event,headSha,status,conclusion,jobs,displayTitle,databaseId"])
+    problems = validate_publisher_run(publisher_run, publisher.get("head_sha"), str(args.run_id),
+                                      args.run_attempt, correlation,
+                                      qualified_source_sha=args.source_sha)
+    if (problems or str(publisher_run.get("databaseId")) != str(publisher_id)
+            or publisher_run.get("attempt") != publisher_attempt):
+        raise DeliveryError("libretro-publisher-run-qualification-invalid")
+    ref = _gh_json(["api", f"repos/{args.repository}/git/ref/tags/{args.release_tag}"])
+    tag_object = ref.get("object") if isinstance(ref, dict) else None
+    if not isinstance(tag_object, dict) or not isinstance(tag_object.get("sha"), str):
+        raise DeliveryError("release-tag-source-mismatch")
+    tag_sha = tag_object["sha"]
+    if tag_object.get("type") == "tag":
+        annotated = _gh_json(["api", f"repos/{args.repository}/git/tags/{tag_sha}"])
+        target = annotated.get("object") if isinstance(annotated, dict) else None
+        if not isinstance(target, dict) or target.get("type") != "commit":
+            raise DeliveryError("release-tag-target-invalid")
+        tag_sha = target.get("sha")
+    if tag_sha != args.source_sha:
+        raise DeliveryError("release-tag-source-mismatch")
+    archive_name = f"genewhip-{args.version}-linux-x86_64-libretro.tar.gz"
+    _gh(["release", "download", args.release_tag, "--repo", args.repository, "--dir", str(directory),
+         "--pattern", archive_name, "--pattern", archive_name + ".sha256",
+         "--pattern", archive_name + ".qualification.json", "--pattern", "inventory.json",
+         "--pattern", "SHA256SUMS"])
+    expected_files = {archive_name, archive_name + ".sha256", archive_name + ".qualification.json",
+                      "inventory.json", "SHA256SUMS"}
+    try:
+        entries = list(directory.iterdir())
+    except OSError:
+        raise DeliveryError("release-asset-roster-mismatch") from None
+    if (len(entries) != len(expected_files) or {path.name for path in entries} != expected_files
+            or any(path.is_symlink() or not path.is_file() for path in entries)):
+        raise DeliveryError("release-asset-roster-mismatch")
+    limits = {archive_name: promote.MAX_LIBRETRO_ARCHIVE_BYTES,
+              archive_name + ".sha256": 256,
+              archive_name + ".qualification.json": promote.MAX_LIBRETRO_RECEIPT_BYTES,
+              "inventory.json": 1024 * 1024, "SHA256SUMS": 4096}
+    if any(path.stat().st_size > limits[path.name] for path in entries):
+        raise DeliveryError("release-asset-size-limit")
+    inventory_path = directory / "inventory.json"
+    try:
+        inventory_stat = inventory_path.lstat()
+        if inventory_path.is_symlink() or not inventory_path.is_file() or inventory_stat.st_size > 1024 * 1024:
+            raise DeliveryError("release-inventory-missing-or-invalid")
+        inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        raise DeliveryError("release-inventory-missing-or-invalid") from None
+    if (inventory.get("run_id") != str(args.run_id)
+            or inventory.get("run_attempt") != str(args.run_attempt)):
+        raise DeliveryError("libretro-inventory-run-attempt-mismatch")
+    rows = inventory.get("assets")
+    expected_archive = f"genewhip-{args.version}-linux-x86_64-libretro.tar.gz"
+    expected_names = {expected_archive, expected_archive + ".sha256", expected_archive + ".qualification.json"}
+    if not isinstance(rows, dict) or set(rows) != expected_names:
+        raise DeliveryError("inventory-package-roster-incomplete")
+    digest_rows: dict[str, str] = {}
+    for name, row in rows.items():
+        path = directory / name
+        try:
+            info = path.lstat()
+        except OSError:
+            raise DeliveryError("release-asset-missing-or-invalid") from None
+        maximum = (promote.MAX_LIBRETRO_ARCHIVE_BYTES if name.endswith(".tar.gz") else
+                   promote.MAX_LIBRETRO_RECEIPT_BYTES if name.endswith(".json") else 256)
+        if path.is_symlink() or not path.is_file() or info.st_size > maximum:
+            raise DeliveryError("release-asset-missing-or-invalid")
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        if (not isinstance(row, dict) or row.get("sha256") != digest
+                or row.get("size") != info.st_size):
+            raise DeliveryError("release-asset-digest-mismatch")
+        digest_rows[name] = digest
+    asset_paths = [directory / name for name in sorted(digest_rows)] + [inventory_path]
+    for path in asset_paths:
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        try:
+            promote.verify_attestation(path, args.repository, args.source_sha,
+                                       str(args.run_id), args.run_attempt, expected_sha256=digest)
+        except promote.PromotionError as error:
+            raise DeliveryError(str(error)) from None
+    problems = promote.validate_v03_libretro_inventory(directory, inventory, args.source_sha)
+    if problems:
+        raise DeliveryError(problems[0])
+    release_info = validate_release(release, args.repository, args.release_tag,
+                                    directory, args.source_sha, args.version)
+    digest_rows = {row["name"]: row["sha256"] for row in release_info["assets"]}
+    evidence = {"schema": "genewhip-v03-libretro-delivery-v1", "outcome": "qualified",
+                "repository": args.repository, "version": args.version, "release_tag": args.release_tag,
+                "source_sha": args.source_sha, "qualification": {"run_id": str(args.run_id),
+                "run_attempt": args.run_attempt, "workflow": ".github/workflows/ci.yml"},
+                "publisher": {"run_id": str(publisher_id), "run_attempt": publisher_attempt,
+                "workflow": ".github/workflows/release.yml", "correlation_id": correlation},
+                "asset_digests": digest_rows, "release": {"tag": release_info["tag"],
+                    "version": release_info["version"], "source_sha": release_info["source_sha"],
+                    "release_url": release_info["release_url"], "assets": release_info["assets"]},
+                "downloaded_bytes": "verified", "linux_adoption": "not_run"}
+    _write_json(args.evidence_out, evidence)
+    return evidence
+
+
+def validate_v03_download_record(evidence: Any, *, repository: str, version: str,
+                                source_sha: str, run_id: str, run_attempt: int) -> None:
+    """Validate the local handoff from the credentialed download step."""
+    archive = f"genewhip-{version}-linux-x86_64-libretro.tar.gz"
+    expected_assets = {archive, archive + ".sha256", archive + ".qualification.json",
+                       "inventory.json", "SHA256SUMS"}
+    qualification = evidence.get("qualification") if isinstance(evidence, dict) else None
+    publisher = evidence.get("publisher") if isinstance(evidence, dict) else None
+    assets = evidence.get("asset_digests") if isinstance(evidence, dict) else None
+    expected_rows = ([{"name": name, "sha256": assets[name],
+                       "url": f"https://github.com/{repository}/releases/download/v{version}/{name}"}
+                      for name in sorted(expected_assets)]
+                     if isinstance(assets, dict) and set(assets) == expected_assets else None)
+    release = evidence.get("release") if isinstance(evidence, dict) else None
+    if (not isinstance(evidence, dict)
+            or evidence.get("schema") != "genewhip-v03-libretro-delivery-v1"
+            or evidence.get("outcome") != "qualified"
+            or evidence.get("repository") != repository or repository != "szTheory/genewhip"
+            or evidence.get("version") != version or version not in V03_RELEASE_VERSIONS
+            or evidence.get("release_tag") != "v" + version
+            or not SHA_RE.fullmatch(source_sha or "") or evidence.get("source_sha") != source_sha
+            or not re.fullmatch(r"[1-9][0-9]*", run_id)
+            or type(run_attempt) is not int or run_attempt < 1
+            or evidence.get("downloaded_bytes") != "verified"
+            or evidence.get("linux_adoption") != "not_run"
+            or not isinstance(qualification, dict)
+            or qualification.get("run_id") != run_id
+            or qualification.get("run_attempt") != run_attempt
+            or qualification.get("workflow") != ".github/workflows/ci.yml"
+            or not isinstance(publisher, dict)
+            or publisher.get("workflow") != ".github/workflows/release.yml"
+            or not re.fullmatch(r"[1-9][0-9]*", str(publisher.get("run_id", "")))
+            or type(publisher.get("run_attempt")) is not int or publisher["run_attempt"] < 1
+            or not re.fullmatch(r"[A-Za-z0-9._-]{8,128}", str(publisher.get("correlation_id", "")))
+            or expected_rows is None
+            or any(not isinstance(value, str) or not HEX_RE.fullmatch(value)
+                   for value in assets.values())
+            or not isinstance(release, dict)
+            or release.get("tag") != "v" + version or release.get("version") != version
+            or release.get("source_sha") != source_sha
+            or release.get("release_url") != f"https://github.com/{repository}/releases/tag/v{version}"
+            or release.get("assets") != expected_rows):
+        raise DeliveryError("verified-download-record-invalid")
+
+
+def adopt_verified_v03(args: argparse.Namespace) -> dict[str, Any]:
+    """Run the native ABI check from a verified download in a credential-free process."""
+    evidence = _read_json(args.evidence)
+    validate_v03_download_record(evidence, repository=args.repository, version=args.version,
+                                 source_sha=args.source_sha, run_id=str(args.run_id),
+                                 run_attempt=args.run_attempt)
+    directory = _safe_path(args.download_dir)
+    archive = f"genewhip-{args.version}-linux-x86_64-libretro.tar.gz"
+    expected_names = {archive, archive + ".sha256", archive + ".qualification.json",
+                      "inventory.json", "SHA256SUMS"}
+    limits = {archive: promote.MAX_LIBRETRO_ARCHIVE_BYTES,
+              archive + ".sha256": 256,
+              archive + ".qualification.json": promote.MAX_LIBRETRO_RECEIPT_BYTES,
+              "inventory.json": 1024 * 1024, "SHA256SUMS": 4096}
+    try:
+        entries = list(directory.iterdir())
+    except OSError:
+        raise DeliveryError("verified-download-assets-invalid") from None
+    if (directory.is_symlink() or not directory.is_dir() or len(entries) != len(expected_names)
+            or {path.name for path in entries} != expected_names):
+        raise DeliveryError("verified-download-assets-invalid")
+    for path in entries:
+        try:
+            info = path.lstat()
+        except OSError:
+            raise DeliveryError("verified-download-assets-invalid") from None
+        if (path.is_symlink() or not path.is_file() or info.st_size > limits[path.name]
+                or hashlib.sha256(path.read_bytes()).hexdigest() != evidence["asset_digests"][path.name]):
+            raise DeliveryError("verified-download-asset-digest-mismatch")
+    result = dict(evidence)
+    result["adoption"] = run_v03_linux_adoption(args, directory, evidence)
+    result["linux_adoption"] = "pass"
+    problems = validate_v03_delivery_record(result)
+    if problems:
+        raise DeliveryError(problems[0])
+    _write_json(args.evidence_out, result)
+    return result
+
+
+def run_v03_linux_adoption(args: argparse.Namespace, directory: pathlib.Path,
+                           evidence: dict[str, Any]) -> dict[str, Any]:
+    if os.environ.get("GH_TOKEN"):
+        raise DeliveryError("linux-adoption-requires-credential-free-process")
+    if platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"}:
+        raise DeliveryError("linux-adoption-requires-linux-x86_64")
+    # The credentialed download verifier runs separately. Keep this process
+    # and all build/host children free of GitHub API credentials.
+    adoption_env = os.environ.copy()
+    adoption_env.pop("GH_TOKEN", None)
+    source_root_arg = getattr(args, "source_tree", None)
+    source_root = pathlib.Path(source_root_arg) if source_root_arg is not None else ROOT
+    if source_root.is_symlink():
+        raise DeliveryError("linux-adoption-source-checkout-mismatch")
+    try:
+        source_root = _safe_path(source_root)
+    except DeliveryError:
+        raise DeliveryError("linux-adoption-source-checkout-mismatch") from None
+    if not source_root.is_dir():
+        raise DeliveryError("linux-adoption-source-checkout-mismatch")
+    try:
+        source = subprocess.run(["git", "rev-parse", "HEAD"], cwd=source_root, text=True,
+                                 capture_output=True, timeout=10, check=True,
+                                 env=adoption_env).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        raise DeliveryError("linux-adoption-source-identity-unavailable") from None
+    if source != args.source_sha:
+        raise DeliveryError("linux-adoption-source-checkout-mismatch")
+    module = directory / f"genewhip-{args.version}-linux-x86_64-libretro.tar.gz"
+    with tempfile.TemporaryDirectory(prefix="genewhip-v03-adoption-") as temporary:
+        build_dir = pathlib.Path(temporary) / "build"
+        try:
+            subprocess.run(["cmake", "-S", str(source_root), "-B", str(build_dir), "-DBUILD_TESTING=ON",
+                            "-DGENEWHIP_BUILD_LIBRETRO=ON", "-DGENEWHIP_BUILD_DESKTOP=OFF",
+                            "-DCMAKE_BUILD_TYPE=Release"], cwd=source_root,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           timeout=120, check=True, env=adoption_env)
+            subprocess.run(["cmake", "--build", str(build_dir), "--target", "libretro_host",
+                            "--parallel", "2"], cwd=source_root, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL,
+                           timeout=180, check=True, env=adoption_env)
+            extracted = pathlib.Path(temporary) / "genewhip_libretro.so"
+            with __import__("tarfile").open(module, "r:gz") as archive:
+                item = archive.getmember("genewhip_libretro.so")
+                stream = archive.extractfile(item)
+                if stream is None:
+                    raise DeliveryError("linux-adoption-module-missing")
+                module_bytes = stream.read(promote.MAX_LIBRETRO_ARCHIVE_BYTES + 1)
+                if len(module_bytes) > promote.MAX_LIBRETRO_ARCHIVE_BYTES:
+                    raise DeliveryError("linux-adoption-module-size-limit")
+                module_sha256 = hashlib.sha256(module_bytes).hexdigest()
+                extracted.write_bytes(module_bytes)
+            result = subprocess.run([str(build_dir / "libretro_host"), "smoke",
+                                     str(extracted), str(build_dir / "diagnostic.bin")],
+                                    cwd=source_root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                    timeout=30, check=False, env=adoption_env)
+            if result.returncode:
+                raise DeliveryError("downloaded-libretro-adoption-failed")
+        except DeliveryError:
+            raise
+        except (OSError, ValueError, __import__("tarfile").TarError,
+                subprocess.SubprocessError):
+            raise DeliveryError("linux-adoption-host-or-smoke-failed") from None
+    adoption_run_id = os.environ.get("GITHUB_RUN_ID")
+    adoption_attempt = os.environ.get("GITHUB_RUN_ATTEMPT")
+    workflow_ref = os.environ.get("GITHUB_WORKFLOW_REF")
+    if adoption_run_id and not adoption_run_id.isdigit():
+        adoption_run_id = None
+    if adoption_attempt and (not adoption_attempt.isdigit() or int(adoption_attempt) < 1):
+        adoption_attempt = None
+    if workflow_ref != ".github/workflows/libretro-adoption.yml@refs/heads/main":
+        workflow_ref = None
+    return {"outcome": "pass", "host": "linux-x86_64-libretro_host",
+            "fixture": "generated-public-diagnostic", "source_sha": args.source_sha,
+            "downloaded_archive_sha256": evidence["asset_digests"][module.name],
+            "downloaded_module_sha256": module_sha256,
+            "module_sha256": module_sha256,
+            "commands": ["cmake --build <temporary-build> --target libretro_host --parallel 2",
+                         "libretro_host smoke <downloaded-module> <diagnostic-fixture>"],
+            "adoption_workflow": workflow_ref, "adoption_run_id": adoption_run_id,
+            "adoption_run_attempt": adoption_attempt,
+            "qualification_run_id": str(args.run_id), "qualification_run_attempt": args.run_attempt}
+
+
+def make_v03_failure(args: argparse.Namespace, reason: str) -> dict[str, Any]:
+    return {"schema": "genewhip-v03-libretro-delivery-v1", "outcome": "failed",
+            "repository": args.repository if promote.REPO_RE.fullmatch(args.repository or "") else None,
+            "version": args.version if args.version in V03_RELEASE_VERSIONS else None,
+            "release_tag": args.release_tag if re.fullmatch(r"v0\.3\.[01]", args.release_tag or "") else None,
+            "source_sha": args.source_sha if SHA_RE.fullmatch(args.source_sha or "") else None,
+            "qualification": {"run_id": str(args.run_id) if str(args.run_id or "").isdigit() else None,
+                "run_attempt": args.run_attempt if type(args.run_attempt) is int and args.run_attempt > 0 else None,
+                "workflow": ".github/workflows/ci.yml"},
+            "downloaded_bytes": "not_qualified", "linux_adoption": "not_run",
+            "blocker": reason}
 
 
 def make_v02_adoption_failure(packet: dict[str, Any], reason: str, *, published: bool) -> dict[str, Any]:
@@ -940,10 +1407,12 @@ def main() -> int:
     mode.add_argument("--prepare-merge", action="store_true")
     mode.add_argument("--run", action="store_true")
     mode.add_argument("--verify", action="store_true")
+    mode.add_argument("--adopt-verified", action="store_true",
+                      help="run Linux ABI adoption from a credential-free verified download")
     parser.add_argument("--contracts-only", action="store_true")
     parser.add_argument("--download-only", action="store_true")
     parser.add_argument("--require-v02-qualification", action="store_true")
-    parser.add_argument("--version", choices=("0.1.0", "0.2.0"), default="0.1.0")
+    parser.add_argument("--version", choices=("0.1.0", "0.2.0", *V03_RELEASE_VERSIONS), default="0.1.0")
     parser.add_argument("--repository")
     parser.add_argument("--preflight", type=pathlib.Path)
     parser.add_argument("--pull-request", type=int)
@@ -955,19 +1424,42 @@ def main() -> int:
     parser.add_argument("--evidence", type=pathlib.Path,
                         default=pathlib.Path("build/phase4/delivery-evidence.json"))
     parser.add_argument("--source-sha")
+    parser.add_argument("--run-id")
+    parser.add_argument("--run-attempt", type=int)
     parser.add_argument("--release-tag")
     parser.add_argument("--download-dir", type=pathlib.Path,
                         default=pathlib.Path("build/phase4/downloaded-release"))
+    parser.add_argument("--source-tree", type=pathlib.Path,
+                        help="already fetched exact-source checkout used only for Linux adoption")
+    parser.add_argument("--validate-libretro-evidence", type=pathlib.Path)
     args = parser.parse_args()
     try:
-        if not (args.self_test or args.prepare_merge or args.run or args.verify or args.contracts_only):
+        if not (args.self_test or args.prepare_merge or args.run or args.verify or args.adopt_verified
+                or args.contracts_only or args.validate_libretro_evidence):
             parser.error("select --self-test, --prepare-merge, --run, --verify, or --contracts-only")
         if args.release_tag is None:
             args.release_tag = "v" + args.version
+        if args.validate_libretro_evidence:
+            evidence = _read_json(args.validate_libretro_evidence)
+            problems = validate_v03_delivery_record(evidence)
+            if problems:
+                raise DeliveryError(problems[0])
+            print(json.dumps({"valid": True, "record_complete": True,
+                              "external_claims_reverified": False}, sort_keys=True))
+            return 0
         if args.contracts_only:
             result = self_test()
             print(json.dumps(result, sort_keys=True))
             return 0 if result["pass"] else 1
+        if args.adopt_verified:
+            if args.download_only:
+                parser.error("--adopt-verified forbids --download-only")
+            if (args.version not in V03_RELEASE_VERSIONS or not args.repository or not args.source_sha
+                    or not args.run_id or args.run_attempt is None or args.source_tree is None):
+                parser.error("--adopt-verified requires v0.3 identity and --source-tree")
+            result = adopt_verified_v03(args)
+            print(json.dumps(result, sort_keys=True))
+            return 0
         if args.self_test:
             result = self_test()
             print(json.dumps(result, sort_keys=True))
@@ -975,6 +1467,13 @@ def main() -> int:
         if args.download_only:
             if not args.verify:
                 parser.error("--download-only requires --verify")
+            if args.version in V03_RELEASE_VERSIONS:
+                if not args.repository or not args.source_sha or not args.run_id or args.run_attempt is None:
+                    parser.error("v0.3 --download-only requires repository, source SHA, run ID and attempt")
+                args.v03_context = resolve_v03_download_context(args)
+                result = verify_release(args)
+                print(json.dumps(result, sort_keys=True))
+                return 0
             try:
                 resolve_v02_download_context(args)
             except (DeliveryError, OSError, ValueError, TypeError, KeyError) as error:
@@ -1000,7 +1499,14 @@ def main() -> int:
         print(json.dumps(result, sort_keys=True))
         return 0
     except (DeliveryError, OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError) as error:
-        print("BLOCKED: " + (str(error) if isinstance(error, DeliveryError) else type(error).__name__),
+        reason = str(error) if isinstance(error, DeliveryError) else type(error).__name__
+        if ((args.download_only or args.adopt_verified) and args.version in V03_RELEASE_VERSIONS
+                and args.evidence_out is not None):
+            try:
+                _write_json(args.evidence_out, make_v03_failure(args, reason))
+            except (DeliveryError, OSError, ValueError, TypeError):
+                pass
+        print("BLOCKED: " + reason,
               file=sys.stderr)
         return 1
 

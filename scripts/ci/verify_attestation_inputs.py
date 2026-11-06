@@ -68,6 +68,16 @@ def validate_inputs(directory, expected, identity_directory=None):
             return ["attestation-input-inventory-invalid"]
         blockers = promote.validate_v02_inventory(directory, inventory, expected["source_sha"])
         return ["attestation-input-v02-" + blockers[0]] if blockers else []
+    if inventory.get("version") in promote.V03_RELEASE_VERSIONS:
+        if (inventory.get("schema") != "genewhip.release-inventory.v3"
+                or inventory.get("run_id") != expected.get("run_id")
+                or inventory.get("run_attempt") != expected.get("run_attempt")):
+            return ["attestation-input-run-identity-mismatch"]
+        _, blockers = promote.validate_release_inventory(directory, inventory)
+        if blockers:
+            return ["attestation-input-inventory-invalid"]
+        blockers = promote.validate_v03_libretro_inventory(directory, inventory, expected["source_sha"])
+        return ["attestation-input-libretro-" + blockers[0]] if blockers else []
     if (inventory.get("schema") != "genewhip.release-inventory.v1"
             or inventory.get("version") != "0.1.0"):
         return ["attestation-input-inventory-source-mismatch"]

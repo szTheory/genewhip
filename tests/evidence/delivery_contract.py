@@ -158,7 +158,8 @@ class DeliveryContract(unittest.TestCase):
             source = "a" * 40
             assets = {"asset-" + str(index): {"size": 1, "sha256": "0" * 64}
                       for index in range(6)}
-            inventory = {"source_revision": source, "assets": assets}
+            inventory = {"schema": "genewhip.release-inventory.v1", "version": "0.1.0",
+                         "source_revision": source, "assets": assets}
             (directory / "inventory.json").write_text(json.dumps(inventory))
             names = list(assets) + ["inventory.json", "SHA256SUMS"]
             for name in assets:

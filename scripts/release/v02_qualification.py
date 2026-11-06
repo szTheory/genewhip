@@ -93,6 +93,11 @@ LEGACY_BATCH_ROOTS = (pathlib.Path("build/v02/batch-20261031T124319Z"),
                       FRESH_BATCH_POLICY_ROOT)
 
 
+def _direntry_stat_nofollow(entry: os.DirEntry) -> os.stat_result:
+    """Read directory-entry metadata without following a symlink."""
+    return entry.stat(follow_symlinks=False)
+
+
 def _phase7_window_profile(*, scope_sha256: str | None = None,
         scope_path: str | pathlib.Path | None = None,
         authorization_path: str | pathlib.Path | None = None,
@@ -2367,7 +2372,7 @@ def _validate_campaign_resume16(admission: dict[str, Any], campaign: dict[str, A
                 current = pending.pop()
                 with os.scandir(current) as entries:
                     for entry in entries:
-                        info = entry.stat(follow_symlinks=False)
+                        info = _direntry_stat_nofollow(entry)
                         case_entries += 1
                         total_entries += 1
                         if entry.is_symlink() or info.st_uid != os.getuid():
@@ -2720,7 +2725,7 @@ def _validate_failed_attempt1(admission: dict[str, Any], resume: dict[str, Any],
                         if entries > 64:
                             return False, {}
                         item = pathlib.Path(child.path)
-                        item_info = child.stat(follow_symlinks=False)
+                        item_info = _direntry_stat_nofollow(child)
                         if child.is_symlink() or item_info.st_uid != os.getuid():
                             return False, {}
                         if stat.S_ISDIR(item_info.st_mode):
@@ -3003,7 +3008,7 @@ def _validate_failed_attempt2(admission: dict[str, Any], resume: dict[str, Any],
                     if entries > 64:
                         return False
                     item = pathlib.Path(child.path)
-                    info = child.stat(follow_symlinks=False)
+                    info = _direntry_stat_nofollow(child)
                     if child.is_symlink() or info.st_uid != os.getuid():
                         return False
                     if stat.S_ISDIR(info.st_mode):
