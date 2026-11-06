@@ -50,6 +50,7 @@ SAFE_CTEST_DIAGNOSTIC_METHODS = frozenset({
     "NativeParserContract.test_partial_json_cannot_erase_completed_process_receipt",
     "NativeParserContract.test_bounded_malformed_route_matrix_both_clients",
     "NativeParserContract.test_process_group_and_stream_caps_are_enforced",
+    "NativeParserContract.test_monitored_directory_uses_no_follow_direntry_stat",
     "NativeParserContract.test_process_group_is_killed_when_leader_exits_first",
     "NativeParserContract.test_monitored_symlink_is_rejected_before_process_start",
     "NativeParserContract.test_preimport_popen_denial_is_observed_and_sticky",
