@@ -150,7 +150,7 @@ class AggregateContract(unittest.TestCase):
                 reasons = module.validate_lanes(needs, "pull_request", SOURCE_SHA, HEAD_SHA, BASE_SHA)
                 self.assertIn(f"{reason}:desktop", reasons)
 
-    def test_new_required_lanes_reject_wrong_event_run_and_attempt(self):
+    def test_new_required_lanes_reject_wrong_event_run_and_future_or_invalid_attempt(self):
         module = load_aggregate(self)
         needs = passing_needs()
         for lane in ("product-smoke", "phase7-fast"):
@@ -158,12 +158,28 @@ class AggregateContract(unittest.TestCase):
                                            event_name="pull_request")
         self.assertEqual(module.validate_lanes(needs, "pull_request", SOURCE_SHA, HEAD_SHA, BASE_SHA,
                                                "refs/pull/7/merge", "123", "2"), [])
-        for field, value in (("run_id", "124"), ("run_attempt", "1"), ("event_name", "push")):
+        for field, value in (("run_id", "124"), ("run_attempt", "3"),
+                             ("run_attempt", "0"), ("run_attempt", "invalid"),
+                             ("event_name", "push")):
             changed = json.loads(json.dumps(needs))
             changed["product-smoke"]["outputs"][field] = value
             self.assertIn(f"lane-event-identity-mismatch:product-smoke:{field}", module.validate_lanes(
                 changed, "pull_request", SOURCE_SHA, HEAD_SHA, BASE_SHA,
                 "refs/pull/7/merge", "123", "2"))
+
+    def test_successful_run_bound_lanes_reuse_earlier_attempts_only_within_same_run(self):
+        module = load_aggregate(self)
+        needs = passing_needs()
+        for lane in ("product-smoke", "phase7-fast", LIBRETRO_LANE):
+            needs[lane]["outputs"].update(run_id="123", run_attempt="1",
+                                           event_name="pull_request")
+        self.assertEqual(module.validate_lanes(needs, "pull_request", SOURCE_SHA, HEAD_SHA, BASE_SHA,
+                                               "refs/pull/7/merge", "123", "2"), [])
+        changed = json.loads(json.dumps(needs))
+        changed["libretro"]["outputs"]["run_id"] = "124"
+        self.assertIn("lane-event-identity-mismatch:libretro:run_id", module.validate_lanes(
+            changed, "pull_request", SOURCE_SHA, HEAD_SHA, BASE_SHA,
+            "refs/pull/7/merge", "123", "2"))
 
     def test_libretro_is_required_on_normal_events_and_binds_all_identities(self):
         module = load_aggregate(self)
@@ -203,7 +219,7 @@ class AggregateContract(unittest.TestCase):
             "refs/pull/7/merge", "123", "2"))
         for field, value in (("source_sha", "4" * 40), ("head_sha", "5" * 40),
                              ("base_sha", "6" * 40), ("run_id", "124"),
-                             ("run_attempt", "1"), ("event_name", "push")):
+                             ("run_attempt", "3"), ("event_name", "push")):
             mutated = json.loads(json.dumps(needs))
             mutated[LIBRETRO_LANE]["outputs"][field] = value
             reasons = module.validate_lanes(mutated, "pull_request", SOURCE_SHA, HEAD_SHA,
