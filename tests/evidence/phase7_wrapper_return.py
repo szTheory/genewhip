@@ -356,7 +356,7 @@ def check_owned_tree(root: Path, *, byte_cap=4 * 1024 * 1024, entry_cap=None):
         with os.scandir(current) as entries:
             for entry in entries:
                 item = Path(entry.path)
-                info = entry.lstat()
+                info = entry.stat(follow_symlinks=False)
                 count += 1
                 if entry.is_symlink() or info.st_uid != os.getuid():
                     raise ValueError("return-owned-tree-entry-invalid")

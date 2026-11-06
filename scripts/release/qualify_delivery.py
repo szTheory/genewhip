@@ -1121,20 +1121,118 @@ def verify_v03_download(args: argparse.Namespace) -> dict[str, Any]:
                     "version": release_info["version"], "source_sha": release_info["source_sha"],
                     "release_url": release_info["release_url"], "assets": release_info["assets"]},
                 "downloaded_bytes": "verified", "linux_adoption": "not_run"}
-    if args.linux_adoption:
-        evidence["adoption"] = run_v03_linux_adoption(args, directory, evidence)
-        evidence["linux_adoption"] = "pass"
     _write_json(args.evidence_out, evidence)
     return evidence
 
 
+def validate_v03_download_record(evidence: Any, *, repository: str, version: str,
+                                source_sha: str, run_id: str, run_attempt: int) -> None:
+    """Validate the local handoff from the credentialed download step."""
+    archive = f"genewhip-{version}-linux-x86_64-libretro.tar.gz"
+    expected_assets = {archive, archive + ".sha256", archive + ".qualification.json",
+                       "inventory.json", "SHA256SUMS"}
+    qualification = evidence.get("qualification") if isinstance(evidence, dict) else None
+    publisher = evidence.get("publisher") if isinstance(evidence, dict) else None
+    assets = evidence.get("asset_digests") if isinstance(evidence, dict) else None
+    expected_rows = ([{"name": name, "sha256": assets[name],
+                       "url": f"https://github.com/{repository}/releases/download/v{version}/{name}"}
+                      for name in sorted(expected_assets)]
+                     if isinstance(assets, dict) and set(assets) == expected_assets else None)
+    release = evidence.get("release") if isinstance(evidence, dict) else None
+    if (not isinstance(evidence, dict)
+            or evidence.get("schema") != "genewhip-v03-libretro-delivery-v1"
+            or evidence.get("outcome") != "qualified"
+            or evidence.get("repository") != repository or repository != "szTheory/genewhip"
+            or evidence.get("version") != version or version not in V03_RELEASE_VERSIONS
+            or evidence.get("release_tag") != "v" + version
+            or not SHA_RE.fullmatch(source_sha or "") or evidence.get("source_sha") != source_sha
+            or not re.fullmatch(r"[1-9][0-9]*", run_id)
+            or type(run_attempt) is not int or run_attempt < 1
+            or evidence.get("downloaded_bytes") != "verified"
+            or evidence.get("linux_adoption") != "not_run"
+            or not isinstance(qualification, dict)
+            or qualification.get("run_id") != run_id
+            or qualification.get("run_attempt") != run_attempt
+            or qualification.get("workflow") != ".github/workflows/ci.yml"
+            or not isinstance(publisher, dict)
+            or publisher.get("workflow") != ".github/workflows/release.yml"
+            or not re.fullmatch(r"[1-9][0-9]*", str(publisher.get("run_id", "")))
+            or type(publisher.get("run_attempt")) is not int or publisher["run_attempt"] < 1
+            or not re.fullmatch(r"[A-Za-z0-9._-]{8,128}", str(publisher.get("correlation_id", "")))
+            or expected_rows is None
+            or any(not isinstance(value, str) or not HEX_RE.fullmatch(value)
+                   for value in assets.values())
+            or not isinstance(release, dict)
+            or release.get("tag") != "v" + version or release.get("version") != version
+            or release.get("source_sha") != source_sha
+            or release.get("release_url") != f"https://github.com/{repository}/releases/tag/v{version}"
+            or release.get("assets") != expected_rows):
+        raise DeliveryError("verified-download-record-invalid")
+
+
+def adopt_verified_v03(args: argparse.Namespace) -> dict[str, Any]:
+    """Run the native ABI check from a verified download in a credential-free process."""
+    evidence = _read_json(args.evidence)
+    validate_v03_download_record(evidence, repository=args.repository, version=args.version,
+                                 source_sha=args.source_sha, run_id=str(args.run_id),
+                                 run_attempt=args.run_attempt)
+    directory = _safe_path(args.download_dir)
+    archive = f"genewhip-{args.version}-linux-x86_64-libretro.tar.gz"
+    expected_names = {archive, archive + ".sha256", archive + ".qualification.json",
+                      "inventory.json", "SHA256SUMS"}
+    limits = {archive: promote.MAX_LIBRETRO_ARCHIVE_BYTES,
+              archive + ".sha256": 256,
+              archive + ".qualification.json": promote.MAX_LIBRETRO_RECEIPT_BYTES,
+              "inventory.json": 1024 * 1024, "SHA256SUMS": 4096}
+    try:
+        entries = list(directory.iterdir())
+    except OSError:
+        raise DeliveryError("verified-download-assets-invalid") from None
+    if (directory.is_symlink() or not directory.is_dir() or len(entries) != len(expected_names)
+            or {path.name for path in entries} != expected_names):
+        raise DeliveryError("verified-download-assets-invalid")
+    for path in entries:
+        try:
+            info = path.lstat()
+        except OSError:
+            raise DeliveryError("verified-download-assets-invalid") from None
+        if (path.is_symlink() or not path.is_file() or info.st_size > limits[path.name]
+                or hashlib.sha256(path.read_bytes()).hexdigest() != evidence["asset_digests"][path.name]):
+            raise DeliveryError("verified-download-asset-digest-mismatch")
+    result = dict(evidence)
+    result["adoption"] = run_v03_linux_adoption(args, directory, evidence)
+    result["linux_adoption"] = "pass"
+    problems = validate_v03_delivery_record(result)
+    if problems:
+        raise DeliveryError(problems[0])
+    _write_json(args.evidence_out, result)
+    return result
+
+
 def run_v03_linux_adoption(args: argparse.Namespace, directory: pathlib.Path,
                            evidence: dict[str, Any]) -> dict[str, Any]:
+    if os.environ.get("GH_TOKEN"):
+        raise DeliveryError("linux-adoption-requires-credential-free-process")
     if platform.system() != "Linux" or platform.machine().lower() not in {"x86_64", "amd64"}:
         raise DeliveryError("linux-adoption-requires-linux-x86_64")
+    # The credentialed download verifier runs separately. Keep this process
+    # and all build/host children free of GitHub API credentials.
+    adoption_env = os.environ.copy()
+    adoption_env.pop("GH_TOKEN", None)
+    source_root_arg = getattr(args, "source_tree", None)
+    source_root = pathlib.Path(source_root_arg) if source_root_arg is not None else ROOT
+    if source_root.is_symlink():
+        raise DeliveryError("linux-adoption-source-checkout-mismatch")
     try:
-        source = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True,
-                                 capture_output=True, timeout=10, check=True).stdout.strip()
+        source_root = _safe_path(source_root)
+    except DeliveryError:
+        raise DeliveryError("linux-adoption-source-checkout-mismatch") from None
+    if not source_root.is_dir():
+        raise DeliveryError("linux-adoption-source-checkout-mismatch")
+    try:
+        source = subprocess.run(["git", "rev-parse", "HEAD"], cwd=source_root, text=True,
+                                 capture_output=True, timeout=10, check=True,
+                                 env=adoption_env).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         raise DeliveryError("linux-adoption-source-identity-unavailable") from None
     if source != args.source_sha:
@@ -1143,15 +1241,15 @@ def run_v03_linux_adoption(args: argparse.Namespace, directory: pathlib.Path,
     with tempfile.TemporaryDirectory(prefix="genewhip-v03-adoption-") as temporary:
         build_dir = pathlib.Path(temporary) / "build"
         try:
-            subprocess.run(["cmake", "-S", str(ROOT), "-B", str(build_dir), "-DBUILD_TESTING=ON",
+            subprocess.run(["cmake", "-S", str(source_root), "-B", str(build_dir), "-DBUILD_TESTING=ON",
                             "-DGENEWHIP_BUILD_LIBRETRO=ON", "-DGENEWHIP_BUILD_DESKTOP=OFF",
-                            "-DCMAKE_BUILD_TYPE=Release"], cwd=ROOT,
+                            "-DCMAKE_BUILD_TYPE=Release"], cwd=source_root,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                           timeout=120, check=True)
+                           timeout=120, check=True, env=adoption_env)
             subprocess.run(["cmake", "--build", str(build_dir), "--target", "libretro_host",
-                            "--parallel", "2"], cwd=ROOT, stdout=subprocess.DEVNULL,
+                            "--parallel", "2"], cwd=source_root, stdout=subprocess.DEVNULL,
                            stderr=subprocess.DEVNULL,
-                           timeout=180, check=True)
+                           timeout=180, check=True, env=adoption_env)
             extracted = pathlib.Path(temporary) / "genewhip_libretro.so"
             with __import__("tarfile").open(module, "r:gz") as archive:
                 item = archive.getmember("genewhip_libretro.so")
@@ -1165,8 +1263,8 @@ def run_v03_linux_adoption(args: argparse.Namespace, directory: pathlib.Path,
                 extracted.write_bytes(module_bytes)
             result = subprocess.run([str(build_dir / "libretro_host"), "smoke",
                                      str(extracted), str(build_dir / "diagnostic.bin")],
-                                    cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                    timeout=30, check=False)
+                                    cwd=source_root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                    timeout=30, check=False, env=adoption_env)
             if result.returncode:
                 raise DeliveryError("downloaded-libretro-adoption-failed")
         except DeliveryError:
@@ -1309,6 +1407,8 @@ def main() -> int:
     mode.add_argument("--prepare-merge", action="store_true")
     mode.add_argument("--run", action="store_true")
     mode.add_argument("--verify", action="store_true")
+    mode.add_argument("--adopt-verified", action="store_true",
+                      help="run Linux ABI adoption from a credential-free verified download")
     parser.add_argument("--contracts-only", action="store_true")
     parser.add_argument("--download-only", action="store_true")
     parser.add_argument("--require-v02-qualification", action="store_true")
@@ -1329,12 +1429,13 @@ def main() -> int:
     parser.add_argument("--release-tag")
     parser.add_argument("--download-dir", type=pathlib.Path,
                         default=pathlib.Path("build/phase4/downloaded-release"))
-    parser.add_argument("--linux-adoption", action="store_true")
+    parser.add_argument("--source-tree", type=pathlib.Path,
+                        help="already fetched exact-source checkout used only for Linux adoption")
     parser.add_argument("--validate-libretro-evidence", type=pathlib.Path)
     args = parser.parse_args()
     try:
-        if not (args.self_test or args.prepare_merge or args.run or args.verify or args.contracts_only
-                or args.validate_libretro_evidence):
+        if not (args.self_test or args.prepare_merge or args.run or args.verify or args.adopt_verified
+                or args.contracts_only or args.validate_libretro_evidence):
             parser.error("select --self-test, --prepare-merge, --run, --verify, or --contracts-only")
         if args.release_tag is None:
             args.release_tag = "v" + args.version
@@ -1350,6 +1451,15 @@ def main() -> int:
             result = self_test()
             print(json.dumps(result, sort_keys=True))
             return 0 if result["pass"] else 1
+        if args.adopt_verified:
+            if args.download_only:
+                parser.error("--adopt-verified forbids --download-only")
+            if (args.version not in V03_RELEASE_VERSIONS or not args.repository or not args.source_sha
+                    or not args.run_id or args.run_attempt is None or args.source_tree is None):
+                parser.error("--adopt-verified requires v0.3 identity and --source-tree")
+            result = adopt_verified_v03(args)
+            print(json.dumps(result, sort_keys=True))
+            return 0
         if args.self_test:
             result = self_test()
             print(json.dumps(result, sort_keys=True))
@@ -1390,7 +1500,7 @@ def main() -> int:
         return 0
     except (DeliveryError, OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError) as error:
         reason = str(error) if isinstance(error, DeliveryError) else type(error).__name__
-        if (args.download_only and args.version in V03_RELEASE_VERSIONS
+        if ((args.download_only or args.adopt_verified) and args.version in V03_RELEASE_VERSIONS
                 and args.evidence_out is not None):
             try:
                 _write_json(args.evidence_out, make_v03_failure(args, reason))

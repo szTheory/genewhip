@@ -96,6 +96,104 @@ class LibretroDeliveryContract(unittest.TestCase):
             self.assertEqual(parsed.run_id, "12345")
             self.assertEqual(parsed.run_attempt, 2)
 
+    def test_v03_adoption_subprocesses_do_not_receive_github_token(self):
+        import argparse
+        import io
+        import tarfile
+        from unittest import mock
+        (qualify_delivery.ROOT / "build/phase9").mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=qualify_delivery.ROOT / "build/phase9") as temporary:
+            root = pathlib.Path(temporary)
+            download_dir = root / "download"
+            download_dir.mkdir()
+            archive_path = download_dir / "genewhip-0.3.0-linux-x86_64-libretro.tar.gz"
+            with tarfile.open(archive_path, "w:gz") as archive:
+                payload = b"fixture module bytes"
+                member = tarfile.TarInfo("genewhip_libretro.so")
+                member.size = len(payload)
+                archive.addfile(member, io.BytesIO(payload))
+            evidence = qualified_delivery_record()
+            evidence["linux_adoption"] = "not_run"
+            evidence.pop("adoption")
+            expected_assets = set(evidence["asset_digests"])
+            for name in expected_assets - {archive_path.name}:
+                (download_dir / name).write_bytes(("verified " + name).encode())
+            evidence["asset_digests"] = {
+                path.name: __import__("hashlib").sha256(path.read_bytes()).hexdigest()
+                for path in download_dir.iterdir()}
+            evidence["release"]["assets"] = [
+                {"name": name, "sha256": evidence["asset_digests"][name],
+                 "url": f"https://github.com/szTheory/genewhip/releases/download/v0.3.0/{name}"}
+                for name in sorted(expected_assets)]
+            download_evidence = root / "download-evidence.json"
+            evidence_out = root / "adoption.json"
+            download_evidence.write_text(qualify_delivery.json.dumps(evidence))
+            source_tree = root / "source"
+            source_tree.mkdir()
+            args = argparse.Namespace(version="0.3.0", release_tag="v0.3.0",
+                repository="szTheory/genewhip", source_sha=SOURCE, run_id="12345",
+                run_attempt=2, source_tree=source_tree, evidence=download_evidence,
+                evidence_out=evidence_out, download_dir=download_dir)
+            calls = []
+            def fake_run(command, **kwargs):
+                calls.append(kwargs)
+                if command[:2] == ["git", "rev-parse"]:
+                    return type("Result", (), {"stdout": SOURCE})()
+                return type("Result", (), {"returncode": 0})()
+            with mock.patch.dict(qualify_delivery.os.environ,
+                                 {"GH_TOKEN": "test-token", "GITHUB_RUN_ID": "88",
+                                  "GITHUB_RUN_ATTEMPT": "1",
+                                  "GITHUB_WORKFLOW_REF": ".github/workflows/libretro-adoption.yml@refs/heads/main"}), \
+                 mock.patch.object(qualify_delivery.platform, "system", return_value="Linux"), \
+                 mock.patch.object(qualify_delivery.platform, "machine", return_value="x86_64"):
+                with self.assertRaisesRegex(qualify_delivery.DeliveryError,
+                                            "linux-adoption-requires-credential-free-process"):
+                    qualify_delivery.run_v03_linux_adoption(args, download_dir, evidence)
+            self.assertEqual(calls, [], "credentialed process must not launch native code")
+            calls.clear()
+            clean_env = {key: value for key, value in qualify_delivery.os.environ.items()
+                         if key != "GH_TOKEN"}
+            clean_env.update({"GITHUB_RUN_ID": "88", "GITHUB_RUN_ATTEMPT": "1",
+                              "GITHUB_WORKFLOW_REF": ".github/workflows/libretro-adoption.yml@refs/heads/main"})
+            with mock.patch.dict(qualify_delivery.os.environ, clean_env, clear=True), \
+                 mock.patch.object(qualify_delivery.platform, "system", return_value="Linux"), \
+                 mock.patch.object(qualify_delivery.platform, "machine", return_value="x86_64"), \
+                 mock.patch.object(qualify_delivery.subprocess, "run", side_effect=fake_run), \
+                 mock.patch.object(qualify_delivery, "_gh", side_effect=AssertionError("network not allowed")), \
+                 mock.patch.object(qualify_delivery, "_gh_json", side_effect=AssertionError("network not allowed")):
+                receipt = qualify_delivery.adopt_verified_v03(args)
+            self.assertEqual(receipt["linux_adoption"], "pass")
+            self.assertEqual(receipt["outcome"], "qualified")
+            self.assertEqual(len(calls), 4)
+            self.assertTrue(all("GH_TOKEN" not in call["env"] for call in calls))
+            self.assertTrue(evidence_out.is_file())
+            (download_dir / "SHA256SUMS").write_text("tampered", encoding="utf-8")
+            calls.clear()
+            with self.assertRaisesRegex(qualify_delivery.DeliveryError,
+                                        "verified-download-asset-digest-mismatch"):
+                qualify_delivery.adopt_verified_v03(args)
+            self.assertEqual(calls, [], "tampered-download-must-be-rejected-before-build")
+
+    def test_v03_adopt_verified_cli_uses_local_identity_and_source_tree(self):
+        from unittest import mock
+        args = ["qualify_delivery.py", "--adopt-verified", "--version", "0.3.0",
+                "--release-tag", "v0.3.0", "--repository", "szTheory/genewhip",
+                "--source-sha", SOURCE, "--run-id", "12345", "--run-attempt", "2",
+                "--source-tree", "build/phase9/source",
+                "--download-dir", "build/phase9/downloaded-release",
+                "--evidence", "build/phase9/downloaded-release-evidence.json",
+                "--evidence-out", "build/phase9/libretro-adoption.json"]
+        with mock.patch.object(sys, "argv", args), \
+             mock.patch.object(qualify_delivery, "adopt_verified_v03",
+                               return_value={"outcome": "qualified"}) as adopt, \
+             mock.patch("builtins.print"):
+            self.assertEqual(qualify_delivery.main(), 0)
+        received = adopt.call_args.args[0]
+        self.assertEqual(received.repository, "szTheory/genewhip")
+        self.assertEqual(received.source_sha, SOURCE)
+        self.assertEqual(received.source_tree, pathlib.Path("build/phase9/source"))
+        self.assertTrue(received.adopt_verified)
+
     def test_v03_source_run_requires_exact_push_source_and_single_successful_jobs(self):
         args = type("Args", (), {"version": "0.3.0", "release_tag": "v0.3.0",
                                   "repository": "example/genewhip", "source_sha": SOURCE,

@@ -31,9 +31,9 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ inputs.source_sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Qualify exact downloaded release bytes before ABI execution
+      - name: Verify exact downloaded release bytes
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.release_tag }}
@@ -47,11 +47,37 @@ jobs:
             *) echo "Unsupported release tag" >&2; exit 2 ;;
           esac
           python3 -I scripts/release/qualify_delivery.py \
-            --verify --download-only --linux-adoption \
+            --verify --download-only \
             --version "$VERSION" --release-tag "$RELEASE_TAG" \
             --repository "$GITHUB_REPOSITORY" --source-sha "$SOURCE_SHA" \
             --run-id "$RUN_ID" --run-attempt "$RUN_ATTEMPT" \
             --download-dir build/phase9/downloaded-release \
+            --evidence-out build/phase9/downloaded-release-evidence.json
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.source_sha }}
+          path: build/phase9/source
+          persist-credentials: false
+      - name: Run downloaded module ABI smoke without credentials
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          RUN_ID: ${{ inputs.run_id }}
+          RUN_ATTEMPT: ${{ inputs.run_attempt }}
+        run: |
+          case "$RELEASE_TAG" in
+            v0.3.0) VERSION=0.3.0 ;;
+            v0.3.1) VERSION=0.3.1 ;;
+            *) echo "Unsupported release tag" >&2; exit 2 ;;
+          esac
+          python3 -I scripts/release/qualify_delivery.py \
+            --adopt-verified \
+            --version "$VERSION" --release-tag "$RELEASE_TAG" \
+            --repository "$GITHUB_REPOSITORY" --source-sha "$SOURCE_SHA" \
+            --run-id "$RUN_ID" --run-attempt "$RUN_ATTEMPT" \
+            --download-dir build/phase9/downloaded-release \
+            --evidence build/phase9/downloaded-release-evidence.json \
+            --source-tree build/phase9/source \
             --evidence-out build/phase9/libretro-adoption.json
       - name: Upload bounded sanitized adoption receipt
         if: always() && hashFiles('build/phase9/libretro-adoption.json') != ''

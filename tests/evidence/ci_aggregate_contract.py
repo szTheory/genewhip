@@ -293,7 +293,28 @@ class AggregateContract(unittest.TestCase):
         self.assertRegex(adoption, r"(?m)^permissions:\n  contents: read\n  actions: read\n  attestations: read\s*$")
         self.assertRegex(adoption, r"(?ms)^jobs:\n  adopt:\n    if: github\.ref == 'refs/heads/main'.*?timeout-minutes: 10")
         self.assertIn("persist-credentials: false", adoption)
-        self.assertIn("--linux-adoption", adoption)
+        checkout_steps = adoption.split("      - uses: actions/checkout@")
+        self.assertEqual(len(checkout_steps), 3,
+                         "adoption-needs-trusted-verifier-and-exact-source-checkouts")
+        verifier_checkout = checkout_steps[1].split("      - name: Verify exact downloaded release bytes", 1)[0]
+        source_checkout = checkout_steps[2].split("      - name: Run downloaded module ABI smoke without credentials", 1)[0]
+        self.assertIn("ref: ${{ github.sha }}", verifier_checkout)
+        self.assertNotIn("inputs.source_sha", verifier_checkout,
+                         "untrusted-source-selected-adoption-verifier")
+        self.assertIn("ref: ${{ inputs.source_sha }}", source_checkout)
+        self.assertIn("path: build/phase9/source", source_checkout)
+        self.assertLess(adoption.index("--verify --download-only"), adoption.index("ref: ${{ inputs.source_sha }}"),
+                        "candidate-source-fetched-before-release-verification")
+        self.assertIn("--source-tree build/phase9/source", adoption)
+        verify_step = adoption.split("- name: Verify exact downloaded release bytes", 1)[1].split(
+            "- uses: actions/checkout@", 1)[0]
+        adopt_step = adoption.split("- name: Run downloaded module ABI smoke without credentials", 1)[1].split(
+            "- name: Upload bounded sanitized adoption receipt", 1)[0]
+        self.assertIn("GH_TOKEN:", verify_step)
+        self.assertNotIn("GH_TOKEN", adopt_step, "adoption-step-receives-github-token")
+        self.assertIn("--adopt-verified", adopt_step)
+        self.assertNotIn("--linux-adoption", adoption,
+                         "credentialed-download-mode-must-not-launch-native-code")
         self.assertIn("--download-only", adoption)
         self.assertNotRegex(adoption, r"(?m)^\s+(?:contents|actions|attestations): write\s*$")
         for action in re.findall(r"uses:\s*([^\s]+)", adoption):

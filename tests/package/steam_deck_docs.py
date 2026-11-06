@@ -36,6 +36,13 @@ def main():
                    "--filesystem=", "--nofilesystem=", "RECURSION94", "no-SRAM",
                    "controls", "progress", "audio", "unknown", "no physical observation"):
         check(phrase.lower() in doc.lower(), f"missing required setup/privacy/evidence text: {phrase}")
+    attestation = re.search(r"```sh\n(?P<command>gh attestation verify .*?)\n```", doc, re.DOTALL)
+    check(attestation is not None, "attestation verification command is missing")
+    command_lines = attestation.group("command").splitlines()
+    slash = chr(92)
+    check(all(line.endswith(slash) and not line.endswith(slash * 2)
+              for line in command_lines[:-1]) and not command_lines[-1].endswith(slash),
+          "attestation command must use one shell continuation per continued line")
     check(not re.search(r"(?:/Users/|/home/[A-Za-z0-9_-]+/|/Users/[A-Za-z0-9_-]+/)", doc),
           "documentation must not contain personal absolute paths")
     check("--filesystem=host" not in doc and "--filesystem=home" not in doc,

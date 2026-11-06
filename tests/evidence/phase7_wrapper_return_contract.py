@@ -53,6 +53,17 @@ def create_admission_fixture(root: Path) -> str:
 
 
 class ReturnContracts(unittest.TestCase):
+    def test_owned_tree_uses_nofollow_direntry_metadata(self):
+        (ROOT / "build/phase9").mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=ROOT / "build/phase9") as temporary:
+            root = Path(temporary)
+            payload = root / "payload"
+            payload.write_text("owned", encoding="utf-8")
+            self.assertEqual(probe.check_owned_tree(root), {"entries": 1, "bytes": 5})
+            (root / "link").symlink_to(payload)
+            with self.assertRaisesRegex(ValueError, "return-owned-tree-entry-invalid"):
+                probe.check_owned_tree(root)
+
     def test_hosted_cli_threads_selected_journal(self):
         seen = []
         def hosted(*args):
