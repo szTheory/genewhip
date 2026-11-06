@@ -1,0 +1,2511 @@
+{
+  "base_sha": null,
+  "cohorts": {
+    "merge_group": {
+      "attempts": 0,
+      "run_ids": []
+    },
+    "other": {
+      "attempts": 0,
+      "run_ids": []
+    },
+    "pull_request": {
+      "attempts": 0,
+      "run_ids": []
+    },
+    "push": {
+      "attempts": 1,
+      "run_ids": [
+        42252014332
+      ]
+    },
+    "schedule": {
+      "attempts": 0,
+      "run_ids": []
+    },
+    "workflow_dispatch": {
+      "attempts": 0,
+      "run_ids": []
+    }
+  },
+  "collection_status": "complete",
+  "collection_time": "2026-11-06T16:56:52Z",
+  "errors": [],
+  "graph": {
+    "status": "complete",
+    "versions": [
+      {
+        "errors": [],
+        "graph_sha256": "91dd0ee5c2c00005d11083db7a289de9a1f50ead0f0da1d42175eed404b675ee",
+        "jobs": {
+          "attestation": {
+            "id": "attestation",
+            "matrix": false,
+            "name": "attestation",
+            "needs": [
+              "package",
+              "v02-package",
+              "v02-release-qualification",
+              "libretro"
+            ]
+          },
+          "desktop": {
+            "id": "desktop",
+            "matrix": false,
+            "name": "desktop",
+            "needs": []
+          },
+          "extended": {
+            "id": "extended",
+            "matrix": false,
+            "name": "extended",
+            "needs": []
+          },
+          "gameplay": {
+            "id": "gameplay",
+            "matrix": false,
+            "name": "gameplay",
+            "needs": []
+          },
+          "libretro": {
+            "id": "libretro",
+            "matrix": false,
+            "name": "libretro",
+            "needs": []
+          },
+          "package": {
+            "id": "package",
+            "matrix": false,
+            "name": "package",
+            "needs": []
+          },
+          "performance": {
+            "id": "performance",
+            "matrix": false,
+            "name": "performance",
+            "needs": []
+          },
+          "phase7-fast": {
+            "id": "phase7-fast",
+            "matrix": false,
+            "name": "phase7-fast",
+            "needs": []
+          },
+          "product-smoke": {
+            "id": "product-smoke",
+            "matrix": false,
+            "name": "product-smoke",
+            "needs": []
+          },
+          "required-aggregate": {
+            "id": "required-aggregate",
+            "matrix": false,
+            "name": "required-ci",
+            "needs": [
+              "safety",
+              "gameplay",
+              "desktop",
+              "package",
+              "performance",
+              "product-smoke",
+              "phase7-fast",
+              "v02-release-qualification",
+              "attestation",
+              "libretro"
+            ]
+          },
+          "safety": {
+            "id": "safety",
+            "matrix": false,
+            "name": "safety",
+            "needs": []
+          },
+          "v02-benchmark-control": {
+            "id": "v02-benchmark-control",
+            "matrix": false,
+            "name": "v02-benchmark-control",
+            "needs": []
+          },
+          "v02-benchmark-recursion94": {
+            "id": "v02-benchmark-recursion94",
+            "matrix": false,
+            "name": "v02-benchmark-recursion94",
+            "needs": [
+              "v02-benchmark-control"
+            ]
+          },
+          "v02-benchmark-tank-battle": {
+            "id": "v02-benchmark-tank-battle",
+            "matrix": false,
+            "name": "v02-benchmark-tank-battle",
+            "needs": [
+              "v02-benchmark-recursion94"
+            ]
+          },
+          "v02-package": {
+            "id": "v02-package",
+            "matrix": false,
+            "name": "v02-package",
+            "needs": [
+              "v02-runtime",
+              "v02-benchmark-control",
+              "v02-benchmark-recursion94",
+              "v02-benchmark-tank-battle"
+            ]
+          },
+          "v02-release-qualification": {
+            "id": "v02-release-qualification",
+            "matrix": false,
+            "name": "v02-release-qualification",
+            "needs": [
+              "v02-runtime",
+              "v02-benchmark-control",
+              "v02-benchmark-recursion94",
+              "v02-benchmark-tank-battle",
+              "v02-package"
+            ]
+          },
+          "v02-runtime": {
+            "id": "v02-runtime",
+            "matrix": false,
+            "name": "v02-runtime",
+            "needs": []
+          }
+        },
+        "status": "complete",
+        "workflow_blob_sha": "030a45c86a0083f12fb561a6280eaf28081e92fb",
+        "workflow_sha256": "7414c8e075e22fa4c714cc943b8e251bb527c0170cdc0143761c2308d3fbff00",
+        "workflow_source_sha": "f951a3d5b409ea7b291964e2dd4d3dd67e228698"
+      }
+    ]
+  },
+  "head_sha": "f951a3d5b409ea7b291964e2dd4d3dd67e228698",
+  "limits": {
+    "api_requests": 5,
+    "max_attempts_per_run": 1,
+    "max_collection_seconds": 180,
+    "max_jobs_per_attempt": 100,
+    "max_report_bytes": 1048576,
+    "max_request_seconds": 30,
+    "max_response_bytes": 1048576,
+    "max_runs": 1,
+    "max_steps_per_job": 100
+  },
+  "observations": [
+    "bounded-run-window:1",
+    "bounded-attempt-window:1"
+  ],
+  "repository": "szTheory/genewhip",
+  "requested_run_attempt": 1,
+  "requested_run_id": 42252014332,
+  "requested_source_sha": "f951a3d5b409ea7b291964e2dd4d3dd67e228698",
+  "runs": [
+    {
+      "base_sha": null,
+      "billing": {
+        "reason": "public-standard-github-hosted",
+        "status": "not_applicable"
+      },
+      "completed_at": null,
+      "conclusion": "success",
+      "created_at": "2026-11-06T16:24:03Z",
+      "critical_path": {
+        "errors": [],
+        "graph_sha256": "91dd0ee5c2c00005d11083db7a289de9a1f50ead0f0da1d42175eed404b675ee",
+        "observed_weighted_seconds": 784.0,
+        "path": [
+          "desktop",
+          "required-aggregate"
+        ],
+        "status": "complete",
+        "unavailable_gaps_seconds": 2.0,
+        "unknown_job_ids": [],
+        "wall_span_seconds": 786.0
+      },
+      "errors": [],
+      "event": "push",
+      "graph_sha256": "91dd0ee5c2c00005d11083db7a289de9a1f50ead0f0da1d42175eed404b675ee",
+      "head_sha": "f951a3d5b409ea7b291964e2dd4d3dd67e228698",
+      "jobs": [
+        {
+          "completed_at": "2026-11-06T16:26:46Z",
+          "conclusion": "success",
+          "elapsed_seconds": 160.0,
+          "job_id": 128009292579,
+          "job_queue": {
+            "reason": "api-does-not-expose-job-queue",
+            "seconds": null,
+            "status": "unknown"
+          },
+          "name": "gameplay",
+          "needs": [],
+          "needs_status": "resolved",
+          "runner": {
+            "labels": [
+              "macos-26"
+            ],
+            "os": "macos",
+            "type": "github-hosted-standard"
+          },
+          "started_at": "2026-11-06T16:24:06Z",
+          "status": "completed",
+          "steps": [
+            {
+              "category": "setup",
+              "completed_at": "2026-11-06T16:24:08Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 1,
+              "started_at": "2026-11-06T16:24:07Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:24:13Z",
+              "conclusion": "success",
+              "elapsed_seconds": 5.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 2,
+              "started_at": "2026-11-06T16:24:08Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:24:15Z",
+              "conclusion": "success",
+              "elapsed_seconds": 2.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 3,
+              "started_at": "2026-11-06T16:24:13Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:24:15Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 4,
+              "started_at": "2026-11-06T16:24:15Z",
+              "status": "completed"
+            },
+            {
+              "category": "build",
+              "completed_at": "2026-11-06T16:26:20Z",
+              "conclusion": "success",
+              "elapsed_seconds": 125.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 5,
+              "started_at": "2026-11-06T16:24:15Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:26:39Z",
+              "conclusion": "success",
+              "elapsed_seconds": 19.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 6,
+              "started_at": "2026-11-06T16:26:20Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:26:41Z",
+              "conclusion": "success",
+              "elapsed_seconds": 2.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 7,
+              "started_at": "2026-11-06T16:26:39Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:26:42Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 14,
+              "started_at": "2026-11-06T16:26:41Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:26:44Z",
+              "conclusion": "success",
+              "elapsed_seconds": 2.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 15,
+              "started_at": "2026-11-06T16:26:42Z",
+              "status": "completed"
+            }
+          ]
+        },
+        {
+          "completed_at": "2026-11-06T16:28:34Z",
+          "conclusion": "success",
+          "elapsed_seconds": 268.0,
+          "job_id": 128009292910,
+          "job_queue": {
+            "reason": "api-does-not-expose-job-queue",
+            "seconds": null,
+            "status": "unknown"
+          },
+          "name": "product-smoke",
+          "needs": [],
+          "needs_status": "resolved",
+          "runner": {
+            "labels": [
+              "macos-26"
+            ],
+            "os": "macos",
+            "type": "github-hosted-standard"
+          },
+          "started_at": "2026-11-06T16:24:06Z",
+          "status": "completed",
+          "steps": [
+            {
+              "category": "setup",
+              "completed_at": "2026-11-06T16:24:07Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 1,
+              "started_at": "2026-11-06T16:24:06Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:24:12Z",
+              "conclusion": "success",
+              "elapsed_seconds": 5.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 2,
+              "started_at": "2026-11-06T16:24:07Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:24:13Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 3,
+              "started_at": "2026-11-06T16:24:12Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:24:13Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 4,
+              "started_at": "2026-11-06T16:24:13Z",
+              "status": "completed"
+            },
+            {
+              "category": "build",
+              "completed_at": "2026-11-06T16:25:50Z",
+              "conclusion": "success",
+              "elapsed_seconds": 97.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 5,
+              "started_at": "2026-11-06T16:24:13Z",
+              "status": "completed"
+            },
+            {
+              "category": "test",
+              "completed_at": "2026-11-06T16:28:27Z",
+              "conclusion": "success",
+              "elapsed_seconds": 157.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 6,
+              "started_at": "2026-11-06T16:25:50Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:28:28Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 12,
+              "started_at": "2026-11-06T16:28:27Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:28:32Z",
+              "conclusion": "success",
+              "elapsed_seconds": 4.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 13,
+              "started_at": "2026-11-06T16:28:28Z",
+              "status": "completed"
+            }
+          ]
+        },
+        {
+          "completed_at": "2026-11-06T16:37:02Z",
+          "conclusion": "success",
+          "elapsed_seconds": 776.0,
+          "job_id": 128009292950,
+          "job_queue": {
+            "reason": "api-does-not-expose-job-queue",
+            "seconds": null,
+            "status": "unknown"
+          },
+          "name": "desktop",
+          "needs": [],
+          "needs_status": "resolved",
+          "runner": {
+            "labels": [
+              "macos-26"
+            ],
+            "os": "macos",
+            "type": "github-hosted-standard"
+          },
+          "started_at": "2026-11-06T16:24:06Z",
+          "status": "completed",
+          "steps": [
+            {
+              "category": "setup",
+              "completed_at": "2026-11-06T16:24:08Z",
+              "conclusion": "success",
+              "elapsed_seconds": 2.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 1,
+              "started_at": "2026-11-06T16:24:06Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:24:13Z",
+              "conclusion": "success",
+              "elapsed_seconds": 5.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 2,
+              "started_at": "2026-11-06T16:24:08Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:24:14Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 3,
+              "started_at": "2026-11-06T16:24:13Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:24:14Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 4,
+              "started_at": "2026-11-06T16:24:14Z",
+              "status": "completed"
+            },
+            {
+              "category": "dependency_preparation",
+              "completed_at": "2026-11-06T16:30:33Z",
+              "conclusion": "success",
+              "elapsed_seconds": 379.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 5,
+              "started_at": "2026-11-06T16:24:14Z",
+              "status": "completed"
+            },
+            {
+              "category": "build",
+              "completed_at": "2026-11-06T16:32:06Z",
+              "conclusion": "success",
+              "elapsed_seconds": 93.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 6,
+              "started_at": "2026-11-06T16:30:33Z",
+              "status": "completed"
+            },
+            {
+              "category": "test",
+              "completed_at": "2026-11-06T16:36:31Z",
+              "conclusion": "success",
+              "elapsed_seconds": 265.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 7,
+              "started_at": "2026-11-06T16:32:06Z",
+              "status": "completed"
+            },
+            {
+              "category": "test",
+              "completed_at": "2026-11-06T16:36:32Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 8,
+              "started_at": "2026-11-06T16:36:31Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:36:57Z",
+              "conclusion": "success",
+              "elapsed_seconds": 25.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 9,
+              "started_at": "2026-11-06T16:36:32Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:36:57Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 10,
+              "started_at": "2026-11-06T16:36:57Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:36:58Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 11,
+              "started_at": "2026-11-06T16:36:57Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:36:58Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 22,
+              "started_at": "2026-11-06T16:36:58Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:37:01Z",
+              "conclusion": "success",
+              "elapsed_seconds": 3.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 23,
+              "started_at": "2026-11-06T16:36:58Z",
+              "status": "completed"
+            }
+          ]
+        },
+        {
+          "completed_at": "2026-11-06T16:36:23Z",
+          "conclusion": "success",
+          "elapsed_seconds": 737.0,
+          "job_id": 128009292998,
+          "job_queue": {
+            "reason": "api-does-not-expose-job-queue",
+            "seconds": null,
+            "status": "unknown"
+          },
+          "name": "safety",
+          "needs": [],
+          "needs_status": "resolved",
+          "runner": {
+            "labels": [
+              "macos-26"
+            ],
+            "os": "macos",
+            "type": "github-hosted-standard"
+          },
+          "started_at": "2026-11-06T16:24:06Z",
+          "status": "completed",
+          "steps": [
+            {
+              "category": "setup",
+              "completed_at": "2026-11-06T16:24:08Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 1,
+              "started_at": "2026-11-06T16:24:07Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:24:12Z",
+              "conclusion": "success",
+              "elapsed_seconds": 4.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 2,
+              "started_at": "2026-11-06T16:24:08Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:24:13Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 3,
+              "started_at": "2026-11-06T16:24:12Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:24:14Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 4,
+              "started_at": "2026-11-06T16:24:13Z",
+              "status": "completed"
+            },
+            {
+              "category": "dependency_preparation",
+              "completed_at": "2026-11-06T16:29:31Z",
+              "conclusion": "success",
+              "elapsed_seconds": 317.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 5,
+              "started_at": "2026-11-06T16:24:14Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:36:07Z",
+              "conclusion": "success",
+              "elapsed_seconds": 396.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 6,
+              "started_at": "2026-11-06T16:29:31Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:36:07Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 7,
+              "started_at": "2026-11-06T16:36:07Z",
+              "status": "completed"
+            },
+            {
+              "category": "test",
+              "completed_at": "2026-11-06T16:36:17Z",
+              "conclusion": "success",
+              "elapsed_seconds": 10.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 8,
+              "started_at": "2026-11-06T16:36:07Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:36:17Z",
+              "conclusion": "skipped",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 9,
+              "started_at": "2026-11-06T16:36:17Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:36:17Z",
+              "conclusion": "skipped",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 10,
+              "started_at": "2026-11-06T16:36:17Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:36:18Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 11,
+              "started_at": "2026-11-06T16:36:17Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:36:19Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 22,
+              "started_at": "2026-11-06T16:36:18Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:36:21Z",
+              "conclusion": "success",
+              "elapsed_seconds": 2.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 23,
+              "started_at": "2026-11-06T16:36:19Z",
+              "status": "completed"
+            }
+          ]
+        },
+        {
+          "completed_at": "2026-11-06T16:26:00Z",
+          "conclusion": "success",
+          "elapsed_seconds": 113.0,
+          "job_id": 128009293079,
+          "job_queue": {
+            "reason": "api-does-not-expose-job-queue",
+            "seconds": null,
+            "status": "unknown"
+          },
+          "name": "phase7-fast",
+          "needs": [],
+          "needs_status": "resolved",
+          "runner": {
+            "labels": [
+              "macos-26"
+            ],
+            "os": "macos",
+            "type": "github-hosted-standard"
+          },
+          "started_at": "2026-11-06T16:24:07Z",
+          "status": "completed",
+          "steps": [
+            {
+              "category": "setup",
+              "completed_at": "2026-11-06T16:24:09Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 1,
+              "started_at": "2026-11-06T16:24:08Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:24:12Z",
+              "conclusion": "success",
+              "elapsed_seconds": 3.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 2,
+              "started_at": "2026-11-06T16:24:09Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:24:13Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 3,
+              "started_at": "2026-11-06T16:24:12Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:24:13Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 4,
+              "started_at": "2026-11-06T16:24:13Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:25:54Z",
+              "conclusion": "success",
+              "elapsed_seconds": 101.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 5,
+              "started_at": "2026-11-06T16:24:13Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:25:55Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 10,
+              "started_at": "2026-11-06T16:25:54Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:25:57Z",
+              "conclusion": "success",
+              "elapsed_seconds": 2.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 11,
+              "started_at": "2026-11-06T16:25:55Z",
+              "status": "completed"
+            }
+          ]
+        },
+        {
+          "completed_at": "2026-11-06T16:24:45Z",
+          "conclusion": "success",
+          "elapsed_seconds": 39.0,
+          "job_id": 128009293100,
+          "job_queue": {
+            "reason": "api-does-not-expose-job-queue",
+            "seconds": null,
+            "status": "unknown"
+          },
+          "name": "libretro",
+          "needs": [],
+          "needs_status": "resolved",
+          "runner": {
+            "labels": [
+              "ubuntu-24.04"
+            ],
+            "os": "linux",
+            "type": "github-hosted-standard"
+          },
+          "started_at": "2026-11-06T16:24:06Z",
+          "status": "completed",
+          "steps": [
+            {
+              "category": "setup",
+              "completed_at": "2026-11-06T16:24:07Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 1,
+              "started_at": "2026-11-06T16:24:06Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:24:10Z",
+              "conclusion": "success",
+              "elapsed_seconds": 3.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 2,
+              "started_at": "2026-11-06T16:24:07Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:24:10Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 3,
+              "started_at": "2026-11-06T16:24:10Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:24:10Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": true,
+                "undefined_sanitizer": false
+              },
+              "number": 4,
+              "started_at": "2026-11-06T16:24:10Z",
+              "status": "completed"
+            },
+            {
+              "category": "setup",
+              "completed_at": "2026-11-06T16:24:14Z",
+              "conclusion": "success",
+              "elapsed_seconds": 4.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 5,
+              "started_at": "2026-11-06T16:24:10Z",
+              "status": "completed"
+            },
+            {
+              "category": "build",
+              "completed_at": "2026-11-06T16:24:23Z",
+              "conclusion": "success",
+              "elapsed_seconds": 9.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 6,
+              "started_at": "2026-11-06T16:24:14Z",
+              "status": "completed"
+            },
+            {
+              "category": "test",
+              "completed_at": "2026-11-06T16:24:25Z",
+              "conclusion": "success",
+              "elapsed_seconds": 2.0,
+              "evidence": {
+                "actual_module": true,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 7,
+              "started_at": "2026-11-06T16:24:23Z",
+              "status": "completed"
+            },
+            {
+              "category": "test",
+              "completed_at": "2026-11-06T16:24:28Z",
+              "conclusion": "success",
+              "elapsed_seconds": 3.0,
+              "evidence": {
+                "actual_module": true,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 8,
+              "started_at": "2026-11-06T16:24:25Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:24:28Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 9,
+              "started_at": "2026-11-06T16:24:28Z",
+              "status": "completed"
+            },
+            {
+              "category": "setup",
+              "completed_at": "2026-11-06T16:24:29Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": true
+              },
+              "number": 10,
+              "started_at": "2026-11-06T16:24:28Z",
+              "status": "completed"
+            },
+            {
+              "category": "build",
+              "completed_at": "2026-11-06T16:24:36Z",
+              "conclusion": "success",
+              "elapsed_seconds": 7.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 11,
+              "started_at": "2026-11-06T16:24:29Z",
+              "status": "completed"
+            },
+            {
+              "category": "test",
+              "completed_at": "2026-11-06T16:24:39Z",
+              "conclusion": "success",
+              "elapsed_seconds": 3.0,
+              "evidence": {
+                "actual_module": true,
+                "address_sanitizer": true,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": true
+              },
+              "number": 12,
+              "started_at": "2026-11-06T16:24:36Z",
+              "status": "completed"
+            },
+            {
+              "category": "test",
+              "completed_at": "2026-11-06T16:24:40Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 13,
+              "started_at": "2026-11-06T16:24:39Z",
+              "status": "completed"
+            },
+            {
+              "category": "test",
+              "completed_at": "2026-11-06T16:24:40Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 14,
+              "started_at": "2026-11-06T16:24:40Z",
+              "status": "completed"
+            },
+            {
+              "category": "test",
+              "completed_at": "2026-11-06T16:24:40Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": true,
+                "undefined_sanitizer": false
+              },
+              "number": 15,
+              "started_at": "2026-11-06T16:24:40Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:24:41Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 16,
+              "started_at": "2026-11-06T16:24:40Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:24:41Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 17,
+              "started_at": "2026-11-06T16:24:41Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:24:42Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 18,
+              "started_at": "2026-11-06T16:24:41Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:24:43Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 19,
+              "started_at": "2026-11-06T16:24:42Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:24:43Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 38,
+              "started_at": "2026-11-06T16:24:43Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:24:43Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 39,
+              "started_at": "2026-11-06T16:24:43Z",
+              "status": "completed"
+            }
+          ]
+        },
+        {
+          "completed_at": "2026-11-06T16:29:12Z",
+          "conclusion": "success",
+          "elapsed_seconds": 190.0,
+          "job_id": 128009293259,
+          "job_queue": {
+            "reason": "api-does-not-expose-job-queue",
+            "seconds": null,
+            "status": "unknown"
+          },
+          "name": "package",
+          "needs": [],
+          "needs_status": "resolved",
+          "runner": {
+            "labels": [
+              "macos-15"
+            ],
+            "os": "macos",
+            "type": "github-hosted-standard"
+          },
+          "started_at": "2026-11-06T16:26:02Z",
+          "status": "completed",
+          "steps": [
+            {
+              "category": "setup",
+              "completed_at": "2026-11-06T16:26:04Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 1,
+              "started_at": "2026-11-06T16:26:03Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:26:08Z",
+              "conclusion": "success",
+              "elapsed_seconds": 4.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 2,
+              "started_at": "2026-11-06T16:26:04Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:26:09Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 3,
+              "started_at": "2026-11-06T16:26:08Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:26:09Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 4,
+              "started_at": "2026-11-06T16:26:09Z",
+              "status": "completed"
+            },
+            {
+              "category": "build",
+              "completed_at": "2026-11-06T16:26:10Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 5,
+              "started_at": "2026-11-06T16:26:09Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:26:27Z",
+              "conclusion": "success",
+              "elapsed_seconds": 17.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 6,
+              "started_at": "2026-11-06T16:26:10Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:28:33Z",
+              "conclusion": "success",
+              "elapsed_seconds": 126.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 7,
+              "started_at": "2026-11-06T16:26:27Z",
+              "status": "completed"
+            },
+            {
+              "category": "build",
+              "completed_at": "2026-11-06T16:28:34Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 8,
+              "started_at": "2026-11-06T16:28:33Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:28:35Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 9,
+              "started_at": "2026-11-06T16:28:34Z",
+              "status": "completed"
+            },
+            {
+              "category": "test",
+              "completed_at": "2026-11-06T16:29:05Z",
+              "conclusion": "success",
+              "elapsed_seconds": 30.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 10,
+              "started_at": "2026-11-06T16:28:35Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:29:05Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 11,
+              "started_at": "2026-11-06T16:29:05Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:29:05Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 12,
+              "started_at": "2026-11-06T16:29:05Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:29:07Z",
+              "conclusion": "success",
+              "elapsed_seconds": 2.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 13,
+              "started_at": "2026-11-06T16:29:05Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:29:08Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 14,
+              "started_at": "2026-11-06T16:29:07Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:29:08Z",
+              "conclusion": "skipped",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 15,
+              "started_at": "2026-11-06T16:29:08Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:29:08Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 30,
+              "started_at": "2026-11-06T16:29:08Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:29:10Z",
+              "conclusion": "success",
+              "elapsed_seconds": 2.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 31,
+              "started_at": "2026-11-06T16:29:08Z",
+              "status": "completed"
+            }
+          ]
+        },
+        {
+          "completed_at": "2026-11-06T16:27:12Z",
+          "conclusion": "success",
+          "elapsed_seconds": 23.0,
+          "job_id": 128009293447,
+          "job_queue": {
+            "reason": "api-does-not-expose-job-queue",
+            "seconds": null,
+            "status": "unknown"
+          },
+          "name": "performance",
+          "needs": [],
+          "needs_status": "resolved",
+          "runner": {
+            "labels": [
+              "macos-26"
+            ],
+            "os": "macos",
+            "type": "github-hosted-standard"
+          },
+          "started_at": "2026-11-06T16:26:49Z",
+          "status": "completed",
+          "steps": [
+            {
+              "category": "setup",
+              "completed_at": "2026-11-06T16:26:51Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 1,
+              "started_at": "2026-11-06T16:26:50Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:26:55Z",
+              "conclusion": "success",
+              "elapsed_seconds": 4.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 2,
+              "started_at": "2026-11-06T16:26:51Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:26:56Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 3,
+              "started_at": "2026-11-06T16:26:55Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:26:56Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 4,
+              "started_at": "2026-11-06T16:26:56Z",
+              "status": "completed"
+            },
+            {
+              "category": "build",
+              "completed_at": "2026-11-06T16:27:05Z",
+              "conclusion": "success",
+              "elapsed_seconds": 9.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 5,
+              "started_at": "2026-11-06T16:26:56Z",
+              "status": "completed"
+            },
+            {
+              "category": "test",
+              "completed_at": "2026-11-06T16:27:08Z",
+              "conclusion": "success",
+              "elapsed_seconds": 3.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 6,
+              "started_at": "2026-11-06T16:27:05Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:27:08Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 7,
+              "started_at": "2026-11-06T16:27:08Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:27:09Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 14,
+              "started_at": "2026-11-06T16:27:08Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:27:09Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 15,
+              "started_at": "2026-11-06T16:27:09Z",
+              "status": "completed"
+            }
+          ]
+        },
+        {
+          "completed_at": "2026-11-06T16:24:03Z",
+          "conclusion": "skipped",
+          "elapsed_seconds": null,
+          "job_id": 128009295170,
+          "job_queue": {
+            "reason": "api-does-not-expose-job-queue",
+            "seconds": null,
+            "status": "unknown"
+          },
+          "name": "v02-runtime",
+          "needs": [],
+          "needs_status": "resolved",
+          "runner": {
+            "labels": [
+              "macos-15"
+            ],
+            "os": "macos",
+            "type": "github-hosted-standard"
+          },
+          "started_at": "2026-11-06T16:24:04Z",
+          "status": "completed",
+          "steps": []
+        },
+        {
+          "completed_at": "2026-11-06T16:24:03Z",
+          "conclusion": "skipped",
+          "elapsed_seconds": null,
+          "job_id": 128009295270,
+          "job_queue": {
+            "reason": "api-does-not-expose-job-queue",
+            "seconds": null,
+            "status": "unknown"
+          },
+          "name": "extended",
+          "needs": [],
+          "needs_status": "resolved",
+          "runner": {
+            "labels": [
+              "macos-26"
+            ],
+            "os": "macos",
+            "type": "github-hosted-standard"
+          },
+          "started_at": "2026-11-06T16:24:04Z",
+          "status": "completed",
+          "steps": []
+        },
+        {
+          "completed_at": "2026-11-06T16:24:03Z",
+          "conclusion": "skipped",
+          "elapsed_seconds": null,
+          "job_id": 128009295534,
+          "job_queue": {
+            "reason": "api-does-not-expose-job-queue",
+            "seconds": null,
+            "status": "unknown"
+          },
+          "name": "v02-benchmark-recursion94",
+          "needs": [
+            "v02-benchmark-control"
+          ],
+          "needs_status": "resolved",
+          "runner": {
+            "labels": [
+              "macos-15"
+            ],
+            "os": "macos",
+            "type": "github-hosted-standard"
+          },
+          "started_at": "2026-11-06T16:24:04Z",
+          "status": "completed",
+          "steps": []
+        },
+        {
+          "completed_at": "2026-11-06T16:24:03Z",
+          "conclusion": "skipped",
+          "elapsed_seconds": null,
+          "job_id": 128009295890,
+          "job_queue": {
+            "reason": "api-does-not-expose-job-queue",
+            "seconds": null,
+            "status": "unknown"
+          },
+          "name": "v02-benchmark-control",
+          "needs": [],
+          "needs_status": "resolved",
+          "runner": {
+            "labels": [
+              "macos-15"
+            ],
+            "os": "macos",
+            "type": "github-hosted-standard"
+          },
+          "started_at": "2026-11-06T16:24:04Z",
+          "status": "completed",
+          "steps": []
+        },
+        {
+          "completed_at": "2026-11-06T16:24:04Z",
+          "conclusion": "skipped",
+          "elapsed_seconds": null,
+          "job_id": 128009296253,
+          "job_queue": {
+            "reason": "api-does-not-expose-job-queue",
+            "seconds": null,
+            "status": "unknown"
+          },
+          "name": "v02-benchmark-tank-battle",
+          "needs": [
+            "v02-benchmark-recursion94"
+          ],
+          "needs_status": "resolved",
+          "runner": {
+            "labels": [
+              "macos-15"
+            ],
+            "os": "macos",
+            "type": "github-hosted-standard"
+          },
+          "started_at": "2026-11-06T16:24:04Z",
+          "status": "completed",
+          "steps": []
+        },
+        {
+          "completed_at": "2026-11-06T16:24:04Z",
+          "conclusion": "skipped",
+          "elapsed_seconds": null,
+          "job_id": 128009297682,
+          "job_queue": {
+            "reason": "api-does-not-expose-job-queue",
+            "seconds": null,
+            "status": "unknown"
+          },
+          "name": "v02-package",
+          "needs": [
+            "v02-runtime",
+            "v02-benchmark-control",
+            "v02-benchmark-recursion94",
+            "v02-benchmark-tank-battle"
+          ],
+          "needs_status": "resolved",
+          "runner": {
+            "labels": [
+              "macos-15"
+            ],
+            "os": "macos",
+            "type": "github-hosted-standard"
+          },
+          "started_at": "2026-11-06T16:24:04Z",
+          "status": "completed",
+          "steps": []
+        },
+        {
+          "completed_at": "2026-11-06T16:24:04Z",
+          "conclusion": "skipped",
+          "elapsed_seconds": null,
+          "job_id": 128009299358,
+          "job_queue": {
+            "reason": "api-does-not-expose-job-queue",
+            "seconds": null,
+            "status": "unknown"
+          },
+          "name": "v02-release-qualification",
+          "needs": [
+            "v02-runtime",
+            "v02-benchmark-control",
+            "v02-benchmark-recursion94",
+            "v02-benchmark-tank-battle",
+            "v02-package"
+          ],
+          "needs_status": "resolved",
+          "runner": {
+            "labels": [
+              "macos-15"
+            ],
+            "os": "macos",
+            "type": "github-hosted-standard"
+          },
+          "started_at": "2026-11-06T16:24:04Z",
+          "status": "completed",
+          "steps": []
+        },
+        {
+          "completed_at": "2026-11-06T16:34:22Z",
+          "conclusion": "success",
+          "elapsed_seconds": 26.0,
+          "job_id": 128012067852,
+          "job_queue": {
+            "reason": "api-does-not-expose-job-queue",
+            "seconds": null,
+            "status": "unknown"
+          },
+          "name": "attestation",
+          "needs": [
+            "package",
+            "v02-package",
+            "v02-release-qualification",
+            "libretro"
+          ],
+          "needs_status": "resolved",
+          "runner": {
+            "labels": [
+              "macos-26"
+            ],
+            "os": "macos",
+            "type": "github-hosted-standard"
+          },
+          "started_at": "2026-11-06T16:33:56Z",
+          "status": "completed",
+          "steps": [
+            {
+              "category": "setup",
+              "completed_at": "2026-11-06T16:33:59Z",
+              "conclusion": "success",
+              "elapsed_seconds": 2.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 1,
+              "started_at": "2026-11-06T16:33:57Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:34:04Z",
+              "conclusion": "success",
+              "elapsed_seconds": 5.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 2,
+              "started_at": "2026-11-06T16:33:59Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:34:05Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 3,
+              "started_at": "2026-11-06T16:34:04Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:34:07Z",
+              "conclusion": "success",
+              "elapsed_seconds": 2.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 4,
+              "started_at": "2026-11-06T16:34:05Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:34:07Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 5,
+              "started_at": "2026-11-06T16:34:07Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:34:09Z",
+              "conclusion": "success",
+              "elapsed_seconds": 2.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 6,
+              "started_at": "2026-11-06T16:34:07Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:34:09Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 7,
+              "started_at": "2026-11-06T16:34:09Z",
+              "status": "completed"
+            },
+            {
+              "category": "test",
+              "completed_at": "2026-11-06T16:34:09Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 8,
+              "started_at": "2026-11-06T16:34:09Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:34:10Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 9,
+              "started_at": "2026-11-06T16:34:09Z",
+              "status": "completed"
+            },
+            {
+              "category": "test",
+              "completed_at": "2026-11-06T16:34:13Z",
+              "conclusion": "success",
+              "elapsed_seconds": 3.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 10,
+              "started_at": "2026-11-06T16:34:10Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:34:14Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 11,
+              "started_at": "2026-11-06T16:34:13Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:34:15Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 12,
+              "started_at": "2026-11-06T16:34:14Z",
+              "status": "completed"
+            },
+            {
+              "category": "test",
+              "completed_at": "2026-11-06T16:34:15Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 13,
+              "started_at": "2026-11-06T16:34:15Z",
+              "status": "completed"
+            },
+            {
+              "category": "test",
+              "completed_at": "2026-11-06T16:34:18Z",
+              "conclusion": "success",
+              "elapsed_seconds": 3.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 14,
+              "started_at": "2026-11-06T16:34:15Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:34:18Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 28,
+              "started_at": "2026-11-06T16:34:18Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:34:19Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 29,
+              "started_at": "2026-11-06T16:34:18Z",
+              "status": "completed"
+            }
+          ]
+        },
+        {
+          "completed_at": "2026-11-06T16:37:12Z",
+          "conclusion": "success",
+          "elapsed_seconds": 8.0,
+          "job_id": 128016384111,
+          "job_queue": {
+            "reason": "api-does-not-expose-job-queue",
+            "seconds": null,
+            "status": "unknown"
+          },
+          "name": "required-aggregate",
+          "needs": [
+            "safety",
+            "gameplay",
+            "desktop",
+            "package",
+            "performance",
+            "product-smoke",
+            "phase7-fast",
+            "v02-release-qualification",
+            "attestation",
+            "libretro"
+          ],
+          "needs_status": "resolved",
+          "runner": {
+            "labels": [
+              "ubuntu-24.04"
+            ],
+            "os": "linux",
+            "type": "github-hosted-standard"
+          },
+          "started_at": "2026-11-06T16:37:04Z",
+          "status": "completed",
+          "steps": [
+            {
+              "category": "setup",
+              "completed_at": "2026-11-06T16:37:06Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 1,
+              "started_at": "2026-11-06T16:37:05Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:37:07Z",
+              "conclusion": "success",
+              "elapsed_seconds": 1.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 2,
+              "started_at": "2026-11-06T16:37:06Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:37:10Z",
+              "conclusion": "success",
+              "elapsed_seconds": 3.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 3,
+              "started_at": "2026-11-06T16:37:07Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:37:10Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 4,
+              "started_at": "2026-11-06T16:37:10Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:37:10Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 5,
+              "started_at": "2026-11-06T16:37:10Z",
+              "status": "completed"
+            },
+            {
+              "category": "checkout",
+              "completed_at": "2026-11-06T16:37:10Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 10,
+              "started_at": "2026-11-06T16:37:10Z",
+              "status": "completed"
+            },
+            {
+              "category": "other",
+              "completed_at": "2026-11-06T16:37:10Z",
+              "conclusion": "success",
+              "elapsed_seconds": 0.0,
+              "evidence": {
+                "actual_module": false,
+                "address_sanitizer": false,
+                "linux_x86_64_runner": false,
+                "undefined_sanitizer": false
+              },
+              "number": 11,
+              "started_at": "2026-11-06T16:37:10Z",
+              "status": "completed"
+            }
+          ]
+        }
+      ],
+      "observed_job_span": {
+        "completed_at": "2026-11-06T16:37:12Z",
+        "elapsed_seconds": 786.0,
+        "started_at": "2026-11-06T16:24:06Z"
+      },
+      "pull_request_number": null,
+      "queue_seconds": 0.0,
+      "ref": "refs/heads/main",
+      "run_attempt": 1,
+      "run_id": 42252014332,
+      "run_started_at": "2026-11-06T16:24:03Z",
+      "runner_seconds_by_os": {
+        "linux": 47.0,
+        "macos": 2293.0
+      },
+      "status": "completed",
+      "wall_seconds": null,
+      "workflow_blob_sha": "030a45c86a0083f12fb561a6280eaf28081e92fb",
+      "workflow_sha256": "7414c8e075e22fa4c714cc943b8e251bb527c0170cdc0143761c2308d3fbff00",
+      "workflow_source_sha": "f951a3d5b409ea7b291964e2dd4d3dd67e228698"
+    }
+  ],
+  "schema_version": "genewhip-ci-baseline.v1",
+  "source_sha": "f951a3d5b409ea7b291964e2dd4d3dd67e228698",
+  "unknowns": [
+    "workflow-terminal-time-unavailable"
+  ],
+  "visibility": "public",
+  "workflow_blob_sha": "030a45c86a0083f12fb561a6280eaf28081e92fb",
+  "workflow_path": ".github/workflows/ci.yml",
+  "workflow_sha256": "7414c8e075e22fa4c714cc943b8e251bb527c0170cdc0143761c2308d3fbff00"
+}

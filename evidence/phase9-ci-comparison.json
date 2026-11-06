@@ -1,0 +1,258 @@
+{
+  "after": {
+    "observations": [],
+    "reports": [],
+    "status": "not_applicable"
+  },
+  "analysis": {
+    "after_count": 0,
+    "before_count": 1,
+    "critical_path_delta_seconds": null,
+    "pairs": [],
+    "reason": "no-ci-workflow-change-no-after-run-applicable",
+    "runner_seconds_delta_by_os": {},
+    "status": "insufficient"
+  },
+  "before": {
+    "observations": [
+      {
+        "base_sha": null,
+        "conclusion": "success",
+        "critical_path_jobs": [
+          "desktop",
+          "required-aggregate"
+        ],
+        "critical_path_seconds": 784.0,
+        "dependency_preparation_by_job": [
+          {
+            "job": "desktop",
+            "runner_os": "macos",
+            "seconds": 379.0
+          },
+          {
+            "job": "safety",
+            "runner_os": "macos",
+            "seconds": 317.0
+          }
+        ],
+        "event": "push",
+        "graph_sha256": "91dd0ee5c2c00005d11083db7a289de9a1f50ead0f0da1d42175eed404b675ee",
+        "head_sha": "f951a3d5b409ea7b291964e2dd4d3dd67e228698",
+        "required_jobs": [
+          "attestation",
+          "desktop",
+          "gameplay",
+          "libretro",
+          "package",
+          "performance",
+          "phase7-fast",
+          "product-smoke",
+          "required-aggregate",
+          "safety"
+        ],
+        "run_attempt": 1,
+        "run_id": 42252014332,
+        "runner_os": [
+          "linux",
+          "macos"
+        ],
+        "runner_seconds_by_os": {
+          "linux": 47.0,
+          "macos": 2293.0
+        },
+        "source_sha": "f951a3d5b409ea7b291964e2dd4d3dd67e228698",
+        "status": "completed",
+        "unknowns": [
+          "job-queue-unavailable",
+          "workflow-terminal-time-unavailable"
+        ],
+        "workflow_queue_seconds": 0.0,
+        "workflow_sha256": "7414c8e075e22fa4c714cc943b8e251bb527c0170cdc0143761c2308d3fbff00",
+        "workflow_wall_seconds": null
+      }
+    ],
+    "reports": [
+      {
+        "attempts": [
+          {
+            "base_sha": null,
+            "conclusion": "success",
+            "errors": [],
+            "event": "push",
+            "head_sha": "f951a3d5b409ea7b291964e2dd4d3dd67e228698",
+            "run_attempt": 1,
+            "run_id": 42252014332,
+            "status": "completed",
+            "workflow_source_sha": "f951a3d5b409ea7b291964e2dd4d3dd67e228698"
+          }
+        ],
+        "collection_status": "complete",
+        "errors": [],
+        "events": [
+          "push"
+        ],
+        "observation_count": 1,
+        "report_name": "phase9-ci-before.json",
+        "report_sha256": "708651886f248ac654ddbc61a300ec5563ee4e6183ab5b4f35acc311a178a32c",
+        "run_ids": [
+          42252014332
+        ],
+        "source_sha": "f951a3d5b409ea7b291964e2dd4d3dd67e228698",
+        "validation_status": "complete",
+        "workflow_path": ".github/workflows/ci.yml"
+      }
+    ],
+    "status": "insufficient"
+  },
+  "candidate_assessment": {
+    "candidate": "Share pinned evidence preparation between isolated safety and desktop jobs",
+    "critical_path_comparison_status": "insufficient",
+    "decision": "no-change",
+    "measured_dependency_preparation": [
+      {
+        "dependency_preparation_seconds": 379.0,
+        "job": "desktop",
+        "run_attempt": 1,
+        "run_id": 42252014332,
+        "runner_os": "macos"
+      },
+      {
+        "dependency_preparation_seconds": 317.0,
+        "job": "safety",
+        "run_attempt": 1,
+        "run_id": 42252014332,
+        "runner_os": "macos"
+      }
+    ],
+    "measured_saving_claimed": false,
+    "observed_critical_paths": [
+      {
+        "jobs": [
+          "desktop",
+          "required-aggregate"
+        ],
+        "run_attempt": 1,
+        "run_id": 42252014332
+      }
+    ],
+    "reason": "No comparable before/after optimization evidence exists. The observed preparation runs on separate macOS jobs in parallel; sharing its outputs would add a producer/consumer artifact boundary that is not currently present or identity-validated. Do not alter the required graph without proof of net critical-path or runner savings.",
+    "workflow_changed": false
+  },
+  "decision": "no-change",
+  "first_release": {
+    "adoption_run_attempt": 1,
+    "adoption_run_id": "42255702598",
+    "publisher_run_attempt": 1,
+    "publisher_run_id": "42248415370",
+    "qualification_run_attempt": 1,
+    "qualification_run_id": "42245809297",
+    "release_tag": "v0.3.0",
+    "source_sha": "a15194ed9c6f49dc3c2432c095117f91a6fe1d54"
+  },
+  "later_release": "not_applicable",
+  "phase8_baseline": {
+    "critical_path_seconds": 901.0,
+    "job_queue": "unknown",
+    "public_standard_runner_billing": "not_applicable",
+    "run_attempt": 1,
+    "run_id": 42118267359,
+    "source_sha": "79efa8c5c82ca36e3bbf1fa6c8a3c71fd5f11bf0",
+    "workflow_queue_seconds": 0.0,
+    "workflow_wall_seconds": null
+  },
+  "phase9_ci_after": "not_applicable",
+  "rejected_reports": [
+    {
+      "attempts": [
+        {
+          "base_sha": null,
+          "conclusion": "success",
+          "errors": [
+            "pull-request-identity-missing"
+          ],
+          "event": "pull_request",
+          "head_sha": "cbbfa5b39be41638a29b8cc6b112064b878c1674",
+          "run_attempt": 1,
+          "run_id": 42249764178,
+          "status": "completed",
+          "workflow_source_sha": "498ad563cf08b78d8d1dfc7f4042a829e7a7b768"
+        }
+      ],
+      "collection_status": "incomplete",
+      "errors": [
+        "collection-errors-present",
+        "collection-incomplete",
+        "critical-path-mismatch",
+        "libretro-qualification-missing",
+        "pull-request-base-sha-invalid",
+        "pull-request-base-sha-mismatch",
+        "pull-request-number-invalid",
+        "pull-request-ref-mismatch",
+        "run-workflow-blob-unbound",
+        "run-workflow-content-unbound",
+        "run-workflow-graph-unbound",
+        "workflow-graph-missing",
+        "workflow-graph-status-mismatch"
+      ],
+      "events": [
+        "pull_request"
+      ],
+      "observation_count": 0,
+      "report_name": "ci-before-pr90-42249764178.json",
+      "report_sha256": "6f02fd4aac2ea1621b72f9d266359d357cc2c8684b2a522ea58461efc366eb33",
+      "run_ids": [
+        42249764178
+      ],
+      "source_sha": "498ad563cf08b78d8d1dfc7f4042a829e7a7b768",
+      "validation_status": "incomplete",
+      "workflow_path": ".github/workflows/ci.yml"
+    },
+    {
+      "attempts": [
+        {
+          "base_sha": null,
+          "conclusion": "success",
+          "errors": [
+            "pull-request-identity-missing"
+          ],
+          "event": "pull_request",
+          "head_sha": "b28e28500082ed0bb8b6d120ed72ee670a46e2f0",
+          "run_attempt": 1,
+          "run_id": 42252598866,
+          "status": "completed",
+          "workflow_source_sha": "06fe963c901d7e9705a08ff09ca5f9f552f39eff"
+        }
+      ],
+      "collection_status": "incomplete",
+      "errors": [
+        "collection-errors-present",
+        "collection-incomplete",
+        "critical-path-mismatch",
+        "libretro-qualification-missing",
+        "pull-request-base-sha-invalid",
+        "pull-request-base-sha-mismatch",
+        "pull-request-number-invalid",
+        "pull-request-ref-mismatch",
+        "run-workflow-blob-unbound",
+        "run-workflow-content-unbound",
+        "run-workflow-graph-unbound",
+        "workflow-graph-missing",
+        "workflow-graph-status-mismatch"
+      ],
+      "events": [
+        "pull_request"
+      ],
+      "observation_count": 0,
+      "report_name": "ci-before-pr91-42252598866.json",
+      "report_sha256": "a695a2923e23e544b8b1f860af04b1d078e235a45f3fc5a9afea31e56889fd69",
+      "run_ids": [
+        42252598866
+      ],
+      "source_sha": "06fe963c901d7e9705a08ff09ca5f9f552f39eff",
+      "validation_status": "incomplete",
+      "workflow_path": ".github/workflows/ci.yml"
+    }
+  ],
+  "repository": "szTheory/genewhip",
+  "schema_version": "genewhip-ci-comparison.v1"
+}

@@ -1,0 +1,54 @@
+{
+  "copy_availability": "unknown",
+  "device": {
+    "conditions": "unknown",
+    "es_de": "unknown",
+    "flatpak": "unknown",
+    "model": "unknown",
+    "retroarch": "unknown",
+    "steamos": "unknown"
+  },
+  "launches": [
+    {
+      "outcomes": {
+        "audio": "unknown",
+        "close": "unknown",
+        "controls": "unknown",
+        "progress": "unknown",
+        "relaunch": "unknown"
+      },
+      "path": "direct-retroarch"
+    },
+    {
+      "outcomes": {
+        "audio": "unknown",
+        "close": "unknown",
+        "controls": "unknown",
+        "progress": "unknown",
+        "relaunch": "unknown"
+      },
+      "path": "es-de"
+    }
+  ],
+  "release": {
+    "archive_sha256": "964382c780325d8d9fedcd1fd6bc29c2f2475aa3ec070bc5c1bc98e7874ffc1b",
+    "core_sha256": "234027315e2bc32870b6ca9b336ffa4ec3f531e20d19b88bae6b2dd63d88e0c2",
+    "publisher_run_attempt": "1",
+    "publisher_run_id": "42248415370",
+    "publisher_workflow": ".github/workflows/release.yml",
+    "repository": "szTheory/genewhip",
+    "source_run_attempt": "1",
+    "source_run_id": "42245809297",
+    "source_sha": "a15194ed9c6f49dc3c2432c095117f91a6fe1d54",
+    "source_workflow": ".github/workflows/ci.yml",
+    "tag": "v0.3.0"
+  },
+  "route": {
+    "map_id": "recursion94-genewhip-public-client-v1",
+    "route_id": "recursion94-personal-no-sram",
+    "route_map_sha256": "61768d626c34b04887955a7f0f71c081d21c2ae4779d49c14dbc4a09bd00d596",
+    "title_id": "recursion94"
+  },
+  "schema": "genewhip.deck-route-observation.v1",
+  "status": "unknown"
+}

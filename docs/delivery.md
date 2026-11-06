@@ -40,6 +40,35 @@ does not rerun guest workloads. That job establishes prepublication readiness;
 the protected publication and separate exact-download adoption subsequently
 passed as recorded above.
 
+## v0.3.0 Linux prerelease and downloaded adoption
+
+The [v0.3.0 prerelease](https://github.com/szTheory/genewhip/releases/tag/v0.3.0)
+was published on 2026-11-06 from source
+[`a15194ed9c6f49dc3c2432c095117f91a6fe1d54`](https://github.com/szTheory/genewhip/commit/a15194ed9c6f49dc3c2432c095117f91a6fe1d54).
+Exact-source qualification passed in [CI run 42245809297, attempt 1](https://github.com/szTheory/genewhip/actions/runs/42245809297/attempts/1);
+the protected publisher completed in [run 42248415370, attempt 1](https://github.com/szTheory/genewhip/actions/runs/42248415370/attempts/1).
+The published Linux archive SHA-256 is
+`964382c780325d8d9fedcd1fd6bc29c2f2475aa3ec070bc5c1bc98e7874ffc1b`.
+
+The independent adopter downloaded and checked all five release assets,
+verified the archive and inventory attestations against the exact qualification
+source/run/attempt, and executed the downloaded module through the Linux ABI
+smoke host in [adoption run 42255702598, attempt 1](https://github.com/szTheory/genewhip/actions/runs/42255702598/attempts/1).
+The downloaded module digest is
+`234027315e2bc32870b6ca9b336ffa4ec3f531e20d19b88bae6b2dd63d88e0c2`. The
+adoption uses a generated diagnostic fixture and establishes package origin,
+byte integrity, and the named ABI smoke only.
+
+GitHub currently reports the release as mutable (`immutable: false`). GitHub
+CLI 2.101.0 provides release-attestation commands, but `gh release verify`
+reported no attestation for the v0.3.0 release tag. The package attestation
+verification above is separate evidence for the archive and inventory; it does
+not make the release immutable or signed. v0.3.0 remains unsigned and
+unnotarized. The physical Steam Deck route and availability of the lawful
+no-SRAM RECURSION94 copy are still unknown. The sanitized source-bound record
+and all asset digests are in
+[`evidence/phase9-release.json`](../evidence/phase9-release.json).
+
 ## Local repository preflight
 
 ### Phase 7 v0.2 sanitized source preparation
