@@ -15,8 +15,8 @@ A matching checksum establishes byte consistency between the archive and checksu
 ```sh
 gh attestation verify genewhip-linux-x86_64.tar.gz \
   --repo szTheory/genewhip \
-  --signer-workflow szTheory/genewhip/.github/workflows/ci.yml \\
-  --source-digest <full-source-commit-sha> \\
+  --signer-workflow szTheory/genewhip/.github/workflows/ci.yml \
+  --source-digest <full-source-commit-sha> \
   --format=json
 ```
 
