@@ -42,7 +42,7 @@ def qualified_delivery_record():
                          "fixture": "generated-public-diagnostic", "source_sha": SOURCE,
                          "downloaded_archive_sha256": hashes[archive],
                          "downloaded_module_sha256": "f" * 64, "module_sha256": "f" * 64,
-                         "adoption_workflow": ".github/workflows/libretro-adoption.yml@refs/heads/main",
+                         "adoption_workflow": "szTheory/genewhip/.github/workflows/libretro-adoption.yml@refs/heads/main",
                          "adoption_run_id": "88", "adoption_run_attempt": "1",
                          "qualification_run_id": "12345", "qualification_run_attempt": 2}}
 
@@ -185,7 +185,7 @@ class LibretroDeliveryContract(unittest.TestCase):
             with mock.patch.dict(qualify_delivery.os.environ,
                                  {"GH_TOKEN": "test-token", "GITHUB_RUN_ID": "88",
                                   "GITHUB_RUN_ATTEMPT": "1",
-                                  "GITHUB_WORKFLOW_REF": ".github/workflows/libretro-adoption.yml@refs/heads/main"}), \
+                                  "GITHUB_WORKFLOW_REF": "szTheory/genewhip/.github/workflows/libretro-adoption.yml@refs/heads/main"}), \
                  mock.patch.object(qualify_delivery.platform, "system", return_value="Linux"), \
                  mock.patch.object(qualify_delivery.platform, "machine", return_value="x86_64"):
                 with self.assertRaisesRegex(qualify_delivery.DeliveryError,
@@ -196,7 +196,7 @@ class LibretroDeliveryContract(unittest.TestCase):
             clean_env = {key: value for key, value in qualify_delivery.os.environ.items()
                          if key != "GH_TOKEN"}
             clean_env.update({"GITHUB_RUN_ID": "88", "GITHUB_RUN_ATTEMPT": "1",
-                              "GITHUB_WORKFLOW_REF": ".github/workflows/libretro-adoption.yml@refs/heads/main"})
+                              "GITHUB_WORKFLOW_REF": "szTheory/genewhip/.github/workflows/libretro-adoption.yml@refs/heads/main"})
             with mock.patch.dict(qualify_delivery.os.environ, clean_env, clear=True), \
                  mock.patch.object(qualify_delivery.platform, "system", return_value="Linux"), \
                  mock.patch.object(qualify_delivery.platform, "machine", return_value="x86_64"), \
@@ -206,6 +206,10 @@ class LibretroDeliveryContract(unittest.TestCase):
                 receipt = qualify_delivery.adopt_verified_v03(args)
             self.assertEqual(receipt["linux_adoption"], "pass")
             self.assertEqual(receipt["outcome"], "qualified")
+            self.assertEqual(receipt["adoption"]["adoption_workflow"],
+                             "szTheory/genewhip/.github/workflows/libretro-adoption.yml@refs/heads/main")
+            self.assertEqual(receipt["adoption"]["adoption_run_id"], "88")
+            self.assertEqual(receipt["adoption"]["adoption_run_attempt"], "1")
             self.assertEqual(len(calls), 4)
             self.assertTrue(all("GH_TOKEN" not in call["env"] for call in calls))
             self.assertTrue(evidence_out.is_file())

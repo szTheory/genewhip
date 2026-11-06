@@ -488,7 +488,8 @@ def validate_v03_delivery_record(evidence: Any) -> list[str]:
             or not isinstance(adoption.get("downloaded_module_sha256"), str)
             or not HEX_RE.fullmatch(adoption["downloaded_module_sha256"])
             or adoption.get("module_sha256") != adoption.get("downloaded_module_sha256")
-            or adoption.get("adoption_workflow") != ".github/workflows/libretro-adoption.yml@refs/heads/main"
+            or adoption.get("adoption_workflow") !=
+               f"{repository}/.github/workflows/libretro-adoption.yml@refs/heads/main"
             or not re.fullmatch(r"[1-9][0-9]*", str(adoption.get("adoption_run_id", "")))
             or int(adoption.get("adoption_run_id", 0)) < 1
             or not str(adoption.get("adoption_run_attempt", "")).isdigit()
@@ -1303,11 +1304,13 @@ def run_v03_linux_adoption(args: argparse.Namespace, directory: pathlib.Path,
     adoption_run_id = os.environ.get("GITHUB_RUN_ID")
     adoption_attempt = os.environ.get("GITHUB_RUN_ATTEMPT")
     workflow_ref = os.environ.get("GITHUB_WORKFLOW_REF")
+    expected_workflow_ref = (
+        f"{args.repository}/.github/workflows/libretro-adoption.yml@refs/heads/main")
     if adoption_run_id and not adoption_run_id.isdigit():
         adoption_run_id = None
     if adoption_attempt and (not adoption_attempt.isdigit() or int(adoption_attempt) < 1):
         adoption_attempt = None
-    if workflow_ref != ".github/workflows/libretro-adoption.yml@refs/heads/main":
+    if workflow_ref != expected_workflow_ref:
         workflow_ref = None
     return {"outcome": "pass", "host": "linux-x86_64-libretro_host",
             "fixture": "generated-public-diagnostic", "source_sha": args.source_sha,
