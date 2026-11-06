@@ -372,6 +372,23 @@ class NativeParserContract(unittest.TestCase):
             else:
                 self.fail("watchdog left a spawned process running outside its process group")
 
+    @mock.patch.dict(os.environ, {"GENEWHIP_PROCESS_CONTEXT": HOST_PROCESS_CONTEXT})
+    def test_monitored_directory_uses_no_follow_direntry_stat(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gw-monitored-directory-") as directory:
+            root = pathlib.Path(directory)
+            media = root / "media"
+            media.mkdir()
+            output = media / "capture.raw"
+            code = f"import pathlib; pathlib.Path({str(output)!r}).write_bytes(b'capture')"
+            before = len(self.runs)
+            result = _run_client(pathlib.Path(sys.executable),
+                [sys.executable, "-c", code], self.runs, report=root / "none.json",
+                timeout=10, cwd=root, monitored_directories=((media, 1, 1024),))
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(len(self.runs), before + 1)
+            self.assertEqual(output.read_bytes(), b"capture")
+            self.assertFalse(self.runs[-1]["bound_violation"])
+
     def test_process_group_is_killed_when_leader_exits_first(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gw-process-leader-exit-") as directory:
             root = pathlib.Path(directory)
@@ -1561,7 +1578,7 @@ def _run_client_owned(client: pathlib.Path, command: list[str], runs: list[dict[
                         bound_violation = f"monitored output file count exceeded: {directory.name}"
                         return
                     for item in entries:
-                        info = item.lstat()
+                        info = item.stat(follow_symlinks=False)
                         if (item.is_symlink() or not item.is_file(follow_symlinks=False) or
                                 info.st_uid != os.getuid() or info.st_nlink != 1):
                             bound_violation = f"unsafe monitored output entry: {item.name}"
