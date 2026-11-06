@@ -1,5 +1,9 @@
 # Libretro core
 
+For the downloaded Steam Deck Flatpak and ES-DE setup path, see
+[Steam Deck setup](steam-deck.md). That guide documents configured RetroArch
+directories and does not claim physical-device qualification.
+
 Genewhip provides an optional, private Libretro API-version-1 shared core. It
 uses the existing C17 machine API; it does not add Libretro symbols to the
 public Genewhip SDK.
@@ -24,6 +28,57 @@ The Linux x86_64 CI lane loads the just-built shared object through
 and callback contracts. The macOS build is useful for local development but
 does not establish Linux support. The private ABI header and adapter are not
 installed with the public core SDK.
+
+## Local Linux package tracer
+
+On macOS arm64 or another host without Linux x86_64, run the complete production
+package and recorded publisher-closure tracer in Docker:
+
+```sh
+python3 -I scripts/ci/run_libretro_tracer_container.py
+```
+
+The host needs only its existing Python standard library and a running Docker
+Engine that can run `linux/amd64` containers. Docker image preparation downloads
+the pinned public inputs when they are not cached; the tracer container itself
+has no network. Its build context is restricted to
+`tools/containers/libretro-tracer`, and it mounts the checkout read-only at
+`/work/source`. The host resolves the checkout commit and passes that SHA to
+the tracer, so the mounted worktree does not need to expose Git's host-only
+metadata. The container writes build output and caches only to its
+disposable `/tmp`; it receives no Docker socket, host home, credentials, SSH
+agent, or forwarded environment secrets.
+
+The toolchain uses `gcc@sha256:435c3cbc2ad1c25fbc1684c367808ff0ca2035a1bed56734a40165ab5cd7e3bd`
+for Linux amd64, Debian snapshot `20261020T213255Z`, and CMake package
+`3.31.6-2`. Snapshot Release signatures remain checked; only the historical
+`Valid-Until` freshness check is disabled. To update a pin, review the official
+base image digest and a specific Debian snapshot, confirm the exact CMake
+package version there, then update the Dockerfile, launcher contract and this
+documentation together. Rebuild and run the portable contracts and the real
+tracer before accepting the update. These fixed inputs make the recipe
+repeatable; they do not claim byte-identical OCI image layers.
+
+The runner uses a non-root host UID/GID, a read-only root filesystem, no network,
+dropped capabilities and `no-new-privileges`. It limits the tracer to 2 CPUs,
+2 GiB memory with no extra swap, 256 PIDs, and an executable 2 GiB `/tmp`
+tmpfs. Image build and tracer run each have separate deadlines of 900 seconds.
+Docker engine prerequisites and each cleanup command have a 15-second deadline.
+Interruption stops only the runner's Docker CLI process group and
+removes only its uniquely named container and image tag; it never prunes other
+Docker resources.
+
+On a native Linux x86_64 CI runner, use the already-tested Release module
+directly, without another CMake build:
+
+```sh
+python3 -I scripts/package_libretro.py --self-test --tracer --library build/libretro/genewhip_libretro.so
+```
+
+Both local paths exercise the production package validators and recorded
+publisher closure without publishing. They do not establish hosted exact-source
+release qualification, Steam Deck behavior, or physical display/audio quality;
+matching checksums alone do not prove build origin.
 
 `fixtures/independent-game-v2/build.sh --validate-only` checks the admitted
 fixture and pinned toolchain lock without depending on an existing diagnostic

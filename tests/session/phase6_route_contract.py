@@ -1561,7 +1561,7 @@ def _run_client_owned(client: pathlib.Path, command: list[str], runs: list[dict[
                         bound_violation = f"monitored output file count exceeded: {directory.name}"
                         return
                     for item in entries:
-                        info = item.stat(follow_symlinks=False)
+                        info = item.lstat()
                         if (item.is_symlink() or not item.is_file(follow_symlinks=False) or
                                 info.st_uid != os.getuid() or info.st_nlink != 1):
                             bound_violation = f"unsafe monitored output entry: {item.name}"

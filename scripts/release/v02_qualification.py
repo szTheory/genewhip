@@ -2367,7 +2367,7 @@ def _validate_campaign_resume16(admission: dict[str, Any], campaign: dict[str, A
                 current = pending.pop()
                 with os.scandir(current) as entries:
                     for entry in entries:
-                        info = entry.stat(follow_symlinks=False)
+                        info = entry.lstat()
                         case_entries += 1
                         total_entries += 1
                         if entry.is_symlink() or info.st_uid != os.getuid():
@@ -2720,7 +2720,7 @@ def _validate_failed_attempt1(admission: dict[str, Any], resume: dict[str, Any],
                         if entries > 64:
                             return False, {}
                         item = pathlib.Path(child.path)
-                        item_info = child.stat(follow_symlinks=False)
+                        item_info = child.lstat()
                         if child.is_symlink() or item_info.st_uid != os.getuid():
                             return False, {}
                         if stat.S_ISDIR(item_info.st_mode):
@@ -3003,7 +3003,7 @@ def _validate_failed_attempt2(admission: dict[str, Any], resume: dict[str, Any],
                     if entries > 64:
                         return False
                     item = pathlib.Path(child.path)
-                    info = child.stat(follow_symlinks=False)
+                    info = child.lstat()
                     if child.is_symlink() or info.st_uid != os.getuid():
                         return False
                     if stat.S_ISDIR(info.st_mode):

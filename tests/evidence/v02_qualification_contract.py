@@ -3831,7 +3831,9 @@ with (root/'runner-receipt.json').open('x+', encoding='utf-8') as receipt:
         self.assertIn("name: release-input-${{ github.run_id }}-${{ github.run_attempt }}", v02_package)
         self.assertIn("path: build/v02/package-transfer/payload/artifacts/release-assets/*", v02_package)
         attestation = workflow.split("  attestation:\n", 1)[1].split("  performance:\n", 1)[0]
-        self.assertIn("needs: [package, v02-package, v02-release-qualification]", attestation)
+        self.assertIn("needs: [package, v02-package, v02-release-qualification, libretro]", attestation)
+        self.assertIn("needs.libretro.result == 'success'", attestation)
+        self.assertIn("needs.v02-release-qualification.result == 'success'", attestation)
         self.assertIn("name: release-input-${{ github.run_id }}-${{ github.run_attempt }}", attestation)
         self.assertIn("name: release-identity-${{ github.run_id }}-${{ github.run_attempt }}", attestation)
         self.assertIn("verify_attestation_inputs.py verify", attestation)

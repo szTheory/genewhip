@@ -8096,7 +8096,9 @@ def phase7_window_validate_git_blob_pins(root: Path, source_head: str, pins: Any
     output = result.stdout
     cursor = 0
     validated = {}
-    for name, (expected_oid, expected_size) in zip(names, blob_sizes, strict=True):
+    if len(names) != len(blob_sizes):
+        raise ValueError(label)
+    for name, (expected_oid, expected_size) in zip(names, blob_sizes):
         header_end = output.find(b"\n", cursor)
         if header_end < 0:
             raise ValueError(label)

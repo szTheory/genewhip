@@ -263,6 +263,26 @@ class AggregateContract(unittest.TestCase):
         self.assertRegex(text, r"(?m)^  merge_group:\s*$", "merge-group-trigger-missing")
         self.assertRegex(text, r"(?m)^  pull_request:\s*$", "pull-request-trigger-missing")
 
+    def test_linux_delivery_contracts_remain_in_required_lane_and_read_only_adoption_is_pinned(self):
+        text = WORKFLOW.read_text()
+        libretro = re.search(r"(?ms)^  libretro:\n(?P<body>.*?)(?=^  [a-z0-9_-]+:\n|\Z)", text)
+        self.assertIsNotNone(libretro)
+        self.assertIn("python3 -I tests/evidence/delivery_contract.py", libretro["body"])
+        self.assertIn("python3 -I tests/evidence/libretro_delivery_contract.py", libretro["body"])
+        self.assertIn("python3 -I tests/evidence/promotion_contract.py", libretro["body"])
+        adoption_path = ROOT / ".github/workflows/libretro-adoption.yml"
+        self.assertTrue(adoption_path.is_file(), "downloaded-linux-adoption-workflow-missing")
+        adoption = adoption_path.read_text()
+        self.assertIn("workflow_dispatch:", adoption)
+        self.assertRegex(adoption, r"(?m)^permissions:\n  contents: read\n  actions: read\n  attestations: read\s*$")
+        self.assertRegex(adoption, r"(?ms)^jobs:\n  adopt:\n    if: github\.ref == 'refs/heads/main'.*?timeout-minutes: 10")
+        self.assertIn("persist-credentials: false", adoption)
+        self.assertIn("--linux-adoption", adoption)
+        self.assertIn("--download-only", adoption)
+        self.assertNotRegex(adoption, r"(?m)^\s+(?:contents|actions|attestations): write\s*$")
+        for action in re.findall(r"uses:\s*([^\s]+)", adoption):
+            self.assertRegex(action, r"@[0-9a-f]{40}(?:\s|$)", f"adoption-action-not-pinned:{action}")
+
     def test_untrusted_workflow_has_read_only_token_and_pinned_actions(self):
         text = WORKFLOW.read_text()
         self.assertNotIn("pull_request_target", text, "privileged-fork-event-present")
@@ -295,8 +315,8 @@ class AggregateContract(unittest.TestCase):
                       "attestation-not-main-push-bound")
         self.assertIn("github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'", attest_body,
                       "attestation-not-main-dispatch-bound")
-        self.assertIn("needs: [package, v02-package, v02-release-qualification]", attest_body,
-                      "attestation-does-not-depend-on-qualified-v02-producer")
+        self.assertIn("needs: [package, v02-package, v02-release-qualification, libretro]", attest_body,
+                      "attestation-does-not-depend-on-qualified-package-producers")
         self.assertIn("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093", attest_body,
                       "attestation-does-not-download-producer-artifact")
         self.assertIn("verify_attestation_inputs.py verify", attest_body,
