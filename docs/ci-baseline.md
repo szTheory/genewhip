@@ -1,5 +1,58 @@
 # CI timing baseline
 
+## Phase 9 observation and no-change decision
+
+After v0.3.0 was published, the read-only collector validated one exact-source
+main-push observation: [run 42252014332, attempt 1](https://github.com/szTheory/genewhip/actions/runs/42252014332/attempts/1),
+source `f951a3d5b409ea7b291964e2dd4d3dd67e228698`. Its workflow and graph
+digests are recorded in
+[`evidence/phase9-ci-before.json`](../evidence/phase9-ci-before.json). The run
+had a 784-second observed weighted path (`desktop` → `required-aggregate`),
+2,293 macOS and 47 Linux runner seconds. The workflow completion time was
+unavailable from the API; job queue time remains unknown. These public standard
+runner seconds are not a cost estimate.
+
+Two successful post-release pull-request runs were also queried:
+[PR #90 run 42249764178](https://github.com/szTheory/genewhip/actions/runs/42249764178)
+and [PR #91 run 42252598866](https://github.com/szTheory/genewhip/actions/runs/42252598866).
+Their workflow artifacts retained their exact merge-checkout source identities,
+but the later read-only Actions API responses no longer included the associated
+pull-request identity. The collector therefore marked both reports incomplete
+(`pull-request-identity-missing`) instead of treating the current squash merge
+SHA as the original run source. Their report digests, run identities, and
+rejection reasons are retained in
+[`evidence/phase9-ci-comparison.json`](../evidence/phase9-ci-comparison.json).
+No PR timing sample was accepted from those incomplete reports.
+
+The observed repeated setup candidate runs the same
+`bash scripts/ci/prepare_evidence_dependencies.sh` command: safety recorded 317
+seconds and desktop recorded 379 seconds in separate macOS jobs in run 42252014332. The
+safety job was not on that run's measured weighted path; the path was desktop
+followed by the aggregate. Sharing those outputs would require a new
+cross-job artifact producer/consumer boundary and source-bound byte checks.
+The workflow has no existing validated transfer boundary for these inputs, and
+one run cannot establish net path savings from introducing one. No cache,
+dependency, concurrency, or job-graph change was made; `.github/workflows/ci.yml`
+is unchanged. The recorded outcome is `no-change`: `phase9-ci-after.json` and a
+second release are not applicable.
+
+After the adoption-workflow receipt fix merged, [main run 42255692443](https://github.com/szTheory/genewhip/actions/runs/42255692443)
+passed the required lanes at source `9b638f5b16236c28da874cd5f53a1294c99484b9`,
+including the Linux container-runner contracts and production package tracer.
+It is retained as merge verification, not as an optimization-after sample.
+
+The Phase 8 observation remains unchanged: one pull-request run, 901 weighted
+seconds, unavailable workflow completion and job queue times, and public
+standard-runner billing marked not applicable. Validate the Phase 9 decision
+and its release link with:
+
+```sh
+python3 -I tests/evidence/ci_comparison_contract.py
+python3 -I scripts/evidence/ci_comparison.py validate \
+  --input evidence/phase9-ci-comparison.json \
+  --require-first-release evidence/phase9-release.json
+```
+
 `scripts/evidence/ci_baseline.py` reads completed GitHub Actions workflow runs and
 writes a bounded report for analysis. Collection happens after the measured run;
 the collector sends only `GET` requests and never dispatches, reruns, cancels, or

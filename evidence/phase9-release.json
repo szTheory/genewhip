@@ -1,0 +1,97 @@
+{
+  "schema": "genewhip-v03-libretro-delivery-v1",
+  "outcome": "qualified",
+  "repository": "szTheory/genewhip",
+  "version": "0.3.0",
+  "release_tag": "v0.3.0",
+  "source_sha": "a15194ed9c6f49dc3c2432c095117f91a6fe1d54",
+  "qualification": {
+    "run_id": "42245809297",
+    "run_attempt": 1,
+    "workflow": ".github/workflows/ci.yml"
+  },
+  "publisher": {
+    "run_id": "42248415370",
+    "run_attempt": 1,
+    "workflow": ".github/workflows/release.yml",
+    "correlation_id": "phase9-v030-resume-a15194ed9c6f49dc3c2432c095117f91a6fe1d54-20261106T1600Z"
+  },
+  "asset_digests": {
+    "SHA256SUMS": "b7559f1e78bebb41eaa09cc3c1794545d5ae229d5f7733701705e4ec907dc077",
+    "genewhip-0.3.0-linux-x86_64-libretro.tar.gz": "964382c780325d8d9fedcd1fd6bc29c2f2475aa3ec070bc5c1bc98e7874ffc1b",
+    "genewhip-0.3.0-linux-x86_64-libretro.tar.gz.qualification.json": "79fbab18e8ec560724e3c44552d16c33ba440b408197a2e382a353b08d12dd43",
+    "genewhip-0.3.0-linux-x86_64-libretro.tar.gz.sha256": "eaa141a5f71ef95101b7c5314bfea4ce59dc1f731c2123c509108c91b88502cc",
+    "inventory.json": "6e720bf72df0da2fe64fc7a0ea270ec2bc5eea680c83c74e551e529fc449ffae"
+  },
+  "release": {
+    "tag": "v0.3.0",
+    "version": "0.3.0",
+    "source_sha": "a15194ed9c6f49dc3c2432c095117f91a6fe1d54",
+    "release_url": "https://github.com/szTheory/genewhip/releases/tag/v0.3.0",
+    "assets": [
+      {
+        "name": "SHA256SUMS",
+        "sha256": "b7559f1e78bebb41eaa09cc3c1794545d5ae229d5f7733701705e4ec907dc077",
+        "url": "https://github.com/szTheory/genewhip/releases/download/v0.3.0/SHA256SUMS"
+      },
+      {
+        "name": "genewhip-0.3.0-linux-x86_64-libretro.tar.gz",
+        "sha256": "964382c780325d8d9fedcd1fd6bc29c2f2475aa3ec070bc5c1bc98e7874ffc1b",
+        "url": "https://github.com/szTheory/genewhip/releases/download/v0.3.0/genewhip-0.3.0-linux-x86_64-libretro.tar.gz"
+      },
+      {
+        "name": "genewhip-0.3.0-linux-x86_64-libretro.tar.gz.qualification.json",
+        "sha256": "79fbab18e8ec560724e3c44552d16c33ba440b408197a2e382a353b08d12dd43",
+        "url": "https://github.com/szTheory/genewhip/releases/download/v0.3.0/genewhip-0.3.0-linux-x86_64-libretro.tar.gz.qualification.json"
+      },
+      {
+        "name": "genewhip-0.3.0-linux-x86_64-libretro.tar.gz.sha256",
+        "sha256": "eaa141a5f71ef95101b7c5314bfea4ce59dc1f731c2123c509108c91b88502cc",
+        "url": "https://github.com/szTheory/genewhip/releases/download/v0.3.0/genewhip-0.3.0-linux-x86_64-libretro.tar.gz.sha256"
+      },
+      {
+        "name": "inventory.json",
+        "sha256": "6e720bf72df0da2fe64fc7a0ea270ec2bc5eea680c83c74e551e529fc449ffae",
+        "url": "https://github.com/szTheory/genewhip/releases/download/v0.3.0/inventory.json"
+      }
+    ]
+  },
+  "downloaded_bytes": "verified",
+  "linux_adoption": "pass",
+  "adoption": {
+    "outcome": "pass",
+    "host": "linux-x86_64-libretro_host",
+    "fixture": "generated-public-diagnostic",
+    "source_sha": "a15194ed9c6f49dc3c2432c095117f91a6fe1d54",
+    "downloaded_archive_sha256": "964382c780325d8d9fedcd1fd6bc29c2f2475aa3ec070bc5c1bc98e7874ffc1b",
+    "downloaded_module_sha256": "234027315e2bc32870b6ca9b336ffa4ec3f531e20d19b88bae6b2dd63d88e0c2",
+    "module_sha256": "234027315e2bc32870b6ca9b336ffa4ec3f531e20d19b88bae6b2dd63d88e0c2",
+    "commands": [
+      "cmake --build <temporary-build> --target libretro_host --parallel 2",
+      "libretro_host smoke <downloaded-module> <diagnostic-fixture>"
+    ],
+    "adoption_workflow": "szTheory/genewhip/.github/workflows/libretro-adoption.yml@refs/heads/main",
+    "adoption_run_id": "42255702598",
+    "adoption_run_attempt": "1",
+    "qualification_run_id": "42245809297",
+    "qualification_run_attempt": 1
+  },
+  "release_verification": {
+    "queried_at": "2026-11-06T16:58:00Z",
+    "server_release_immutable": false,
+    "github_cli_version": "2.101.0",
+    "release_verify_command_supported": true,
+    "release_verify_asset_command_supported": true,
+    "release_tag_attestation": "not_present",
+    "release_verify_result": "no_attestation_for_tag",
+    "immutable_asset_verification": "not_applicable_mutable_release",
+    "package_attestation_subjects": [
+      "genewhip-0.3.0-linux-x86_64-libretro.tar.gz",
+      "inventory.json"
+    ],
+    "package_attestation_verification": "verified_against_exact_source_run_and_attempt"
+  },
+  "physical_deck_status": "unknown",
+  "lawful_recursion94_copy_availability": "unknown",
+  "release_signature_status": "unsigned_and_unnotarized"
+}

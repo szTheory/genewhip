@@ -4,23 +4,33 @@ This guide describes how to use the downloaded Linux x86_64 core with RetroArch 
 
 ## Verify the downloaded release
 
-Download the Linux x86_64 archive and `SHA256SUMS` from the same versioned Genewhip prerelease. Before extracting or running anything, compare the archive bytes with the published checksum:
+The selected release for this checklist is [v0.3.0](https://github.com/szTheory/genewhip/releases/tag/v0.3.0), qualified from source `a15194ed9c6f49dc3c2432c095117f91a6fe1d54`. Download the complete release asset set into one directory so the checksum manifest can validate every file:
 
 ```sh
+gh release download v0.3.0 --repo szTheory/genewhip --dir genewhip-v0.3.0
+cd genewhip-v0.3.0
 sha256sum --check SHA256SUMS
 ```
 
-A matching checksum establishes byte consistency between the archive and checksum file, but it does not establish artifact origin or who produced either file. Verify the archive's GitHub build attestation separately, substituting the versioned archive filename:
+A matching checksum establishes byte consistency, but does not establish artifact origin. Verify the two subjects covered by the source-bound package attestation:
 
 ```sh
-gh attestation verify genewhip-linux-x86_64.tar.gz \
+gh attestation verify genewhip-0.3.0-linux-x86_64-libretro.tar.gz \
   --repo szTheory/genewhip \
   --signer-workflow szTheory/genewhip/.github/workflows/ci.yml \
-  --source-digest <full-source-commit-sha> \
+  --source-digest a15194ed9c6f49dc3c2432c095117f91a6fe1d54 \
   --format=json
 ```
 
-Replace the source SHA placeholder with the full source commit listed for that release. Review the JSON result: it must identify the expected Genewhip repository, `.github/workflows/ci.yml`, that source revision, the successful source run and attempt, and the archive subject digest described on the release page. Stop if any value differs. This verifies provenance separately from checksum byte consistency. The project does not require `gh release verify` or `gh release verify-asset`; use only commands supported by your installed GitHub CLI.
+```sh
+gh attestation verify inventory.json \
+  --repo szTheory/genewhip \
+  --signer-workflow szTheory/genewhip/.github/workflows/ci.yml \
+  --source-digest a15194ed9c6f49dc3c2432c095117f91a6fe1d54 \
+  --format=json
+```
+
+Review both JSON results: they must identify the expected Genewhip repository, `.github/workflows/ci.yml`, the source revision above, and the successful source run/attempt. The archive digest must match the release asset; `inventory.json` binds the checksum sidecars and qualification receipt. The server currently reports this release as mutable and `gh release verify v0.3.0` found no release-tag attestation. Do not treat that command as package verification; the two artifact attestations above are the package-origin checks.
 
 Extract the verified archive. It contains `genewhip_libretro.so` and the matching `genewhip_libretro.info`. Keep the pair from the same archive.
 
@@ -58,7 +68,7 @@ Ensure the game directory is visible to both ES-DE and RetroArch. If the RetroAr
 
 The project has no lawful game copy to distribute. The selected route is a personally supplied lawful no-SRAM copy of **RECURSION94**; the Phase 8 authored fixture is not a substitute. If that copy is missing, unavailable, not the selected route, or cannot be lawfully used, stop: record the route as unavailable/unknown and resolve the route decision before claiming the physical acceptance requirement. Keep the game bytes, checksums/fingerprints, save data, personal account details, and local paths private.
 
-Use the Deck evidence record template with the exact downloaded release archive and core digests, repository/source/workflow/run/attempt identity, route-map identity, device and SteamOS versions, RetroArch Flatpak and ES-DE versions, and relevant display/controller/audio conditions. Record direct RetroArch and ES-DE launch outcomes separately. For each path, record controls, visible progress, continuous audio, clean close, and relaunch as `pass`, `fail`, or `unknown`; add concise observations without private paths or content.
+Use the [Deck evidence record template](../evidence/phase9-deck-route.json), already bound to the exact v0.3.0 archive/core and accepted route-map digests. Fill in only the device and app versions, conditions, lawful-copy availability, and observed outcomes. Record direct RetroArch and ES-DE launch outcomes separately. For each path, record controls, visible progress, continuous audio, clean close, and relaunch as `pass`, `fail`, or `unknown`; add concise observations without private paths or content.
 
 For the RECURSION94 route, follow the accepted source input mapping: press Start to enter the run, then use the defined Right action to advance through the route. Look for the bounded source-defined **40-field start-move marker checkpoint** documented in the route map; do not require frame-exact manual presses or infer that a manual observation reproduces the automated route. Observe continuous output, close the core cleanly, and relaunch it once through each launch path. Record unknown when the game or observation cannot establish a result. A schema validator checks the record's shape and identity fields only; it cannot establish that a human observed the device or that an outcome is true.
 
